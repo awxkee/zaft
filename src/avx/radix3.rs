@@ -224,6 +224,44 @@ impl AvxFmaRadix3<f32> {
                 for data in in_place.chunks_exact_mut(len) {
                     let mut j = 0usize;
 
+                    while j + 4 < third {
+                        let u0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
+                        let u1 = _m256s_mul_complex(
+                            _mm256_loadu_ps(data.get_unchecked(j + third..).as_ptr().cast()),
+                            _mm256_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
+                        );
+                        let u2 = _m256s_mul_complex(
+                            _mm256_loadu_ps(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
+                            _mm256_loadu_ps(m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast()),
+                        );
+
+                        // Radix-3 butterfly
+                        let xp_0 = _mm256_add_ps(u1, u2);
+                        let xn_0 = _mm256_sub_ps(u1, u2);
+                        let sum_0 = _mm256_add_ps(u0, xp_0);
+
+                        const SH: i32 = shuffle(2, 3, 0, 1);
+
+                        let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
+                        let vw_2_1 = _mm256_mul_ps(twiddle_w_2, _mm256_permute_ps::<SH>(xn_0));
+
+                        let vy0 = sum_0;
+                        let vy1 = _mm256_add_ps(vw_1_1, vw_2_1);
+                        let vy2 = _mm256_sub_ps(vw_1_1, vw_2_1);
+
+                        _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
+                            vy1,
+                        );
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
+                            vy2,
+                        );
+
+                        j += 4;
+                    }
+
                     while j + 3 < third {
                         let u0 = _mm256_insertf128_ps::<1>(
                             _mm256_castps128_ps256(_mm_loadu_ps(
