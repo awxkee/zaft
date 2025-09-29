@@ -1,0 +1,212 @@
+/*
+ * // Copyright (c) Radzivon Bartoshyk 9/2025. All rights reserved.
+ * //
+ * // Redistribution and use in source and binary forms, with or without modification,
+ * // are permitted provided that the following conditions are met:
+ * //
+ * // 1.  Redistributions of source code must retain the above copyright notice, this
+ * // list of conditions and the following disclaimer.
+ * //
+ * // 2.  Redistributions in binary form must reproduce the above copyright notice,
+ * // this list of conditions and the following disclaimer in the documentation
+ * // and/or other materials provided with the distribution.
+ * //
+ * // 3.  Neither the name of the copyright holder nor the names of its
+ * // contributors may be used to endorse or promote products derived from
+ * // this software without specific prior written permission.
+ * //
+ * // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * // FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * // DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+use crate::complex_fma::c_mul_fast;
+use crate::mla::fmla;
+use crate::traits::FftTrigonometry;
+use crate::util::{compute_twiddle, digit_reverse_indices, permute_inplace};
+use crate::{FftDirection, FftExecutor, ZaftError};
+use num_complex::Complex;
+use num_traits::{AsPrimitive, Float, MulAdd, Num};
+use std::ops::{Add, Mul, Neg, Sub};
+
+#[allow(unused)]
+pub(crate) struct Radix3<T> {
+    twiddles: Vec<Complex<T>>,
+    permutations: Vec<usize>,
+    execution_length: usize,
+    twiddle: Complex<T>,
+}
+
+pub(crate) trait Radix3Twiddles {
+    fn make_twiddles(
+        size: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Vec<Complex<Self>>, ZaftError>
+    where
+        Self: Sized;
+}
+
+fn radix3_floating_twiddles<
+    T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,
+>(
+    size: usize,
+    fft_direction: FftDirection,
+) -> Result<Vec<Complex<T>>, ZaftError>
+where
+    usize: AsPrimitive<T>,
+    f64: AsPrimitive<T>,
+{
+    let mut len = 3;
+
+    let mut twiddles = Vec::new();
+    twiddles
+        .try_reserve_exact(size - 1)
+        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+    while len <= size {
+        let one_third = len / 3;
+        for k in 0..one_third {
+            // In Radix-3, we need twiddle factors W_N^k and W_N^{2k}
+            for i in 1..3 {
+                let w1 = compute_twiddle::<T>(k * i, len, fft_direction);
+                twiddles.push(w1); // W_N^k
+            }
+        }
+
+        len *= 3;
+    }
+
+    Ok(twiddles)
+}
+
+impl Radix3Twiddles for f64 {
+    fn make_twiddles(
+        size: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Vec<Complex<f64>>, ZaftError> {
+        radix3_floating_twiddles(size, fft_direction)
+    }
+}
+
+impl Radix3Twiddles for f32 {
+    fn make_twiddles(
+        size: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Vec<Complex<f32>>, ZaftError> {
+        radix3_floating_twiddles(size, fft_direction)
+    }
+}
+
+#[allow(unused)]
+impl<T: Default + Clone + Radix3Twiddles + 'static + Copy + FftTrigonometry + Float> Radix3<T>
+where
+    f64: AsPrimitive<T>,
+{
+    pub fn new(size: usize, fft_direction: FftDirection) -> Result<Radix3<T>, ZaftError> {
+        assert!(
+            size.is_power_of_two() || size % 3 == 0,
+            "Input length must be divisible by 3"
+        );
+
+        let twiddles = T::make_twiddles(size, fft_direction)?;
+        let rev = digit_reverse_indices(size, 3)?;
+
+        Ok(Radix3 {
+            permutations: rev,
+            execution_length: size,
+            twiddles,
+            twiddle: compute_twiddle::<T>(1, 3, fft_direction),
+        })
+    }
+}
+
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Default
+        + FftTrigonometry
+        + std::fmt::Debug,
+> FftExecutor<T> for Radix3<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if self.execution_length != in_place.len() {
+            return Err(ZaftError::InvalidInPlaceLength(
+                self.execution_length,
+                in_place.len(),
+            ));
+        }
+
+        // Trit-reversal permutation
+        permute_inplace(in_place, &self.permutations);
+
+        let mut len = 3;
+
+        unsafe {
+            let mut m_twiddles = self.twiddles.as_slice();
+
+            while len <= self.execution_length {
+                let third = len / 3;
+                for data in in_place.chunks_exact_mut(len) {
+                    for j in 0..third {
+                        let u0 = *data.get_unchecked(j);
+                        let u1 = c_mul_fast(
+                            *data.get_unchecked(j + third),
+                            *m_twiddles.get_unchecked(2 * j),
+                        );
+                        let u2 = c_mul_fast(
+                            *data.get_unchecked(j + 2 * third),
+                            *m_twiddles.get_unchecked(2 * j + 1),
+                        );
+
+                        // Radix-3 butterfly
+                        let xp = u1 + u2;
+                        let xn = u1 - u2;
+                        let sum = u0 + xp;
+
+                        let w_1 = Complex {
+                            re: fmla(self.twiddle.re, xp.re, u0.re),
+                            im: fmla(self.twiddle.re, xp.im, u0.im),
+                        };
+                        // let w_2 = ZComplex {
+                        //     re: -self.twiddle.im * xn.im,
+                        //     im: self.twiddle.im * xn.re,
+                        // };
+
+                        let y0 = sum;
+                        let y1 = Complex {
+                            re: fmla(-self.twiddle.im, xn.im, w_1.re),
+                            im: fmla(self.twiddle.im, xn.re, w_1.im),
+                        }; //w_1 + w_2;
+                        let y2 = Complex {
+                            re: fmla(self.twiddle.im, xn.im, w_1.re),
+                            im: fmla(-self.twiddle.im, xn.re, w_1.im),
+                        }; //w_1 - w_2;
+                        // let y2 = w_1 - w_2;
+
+                        *data.get_unchecked_mut(j) = y0;
+                        *data.get_unchecked_mut(j + third) = y1;
+                        *data.get_unchecked_mut(j + 2 * third) = y2;
+                    }
+                }
+
+                m_twiddles = &m_twiddles[third * 2..];
+                len *= 3;
+            }
+        }
+        Ok(())
+    }
+}

@@ -1,0 +1,17 @@
+workspace = { members = ["app"] }
+
+[package]
+name = "zaft"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+num-complex = "0.4"
+num-traits = "0.2"
+pxfm = "^0.1.3"
+
+[features]
+default = ["neon"]
+neon = []
+fcma = ["neon"]
+avx = []

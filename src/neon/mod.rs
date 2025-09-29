@@ -1,0 +1,61 @@
+/*
+ * // Copyright (c) Radzivon Bartoshyk 9/2025. All rights reserved.
+ * //
+ * // Redistribution and use in source and binary forms, with or without modification,
+ * // are permitted provided that the following conditions are met:
+ * //
+ * // 1.  Redistributions of source code must retain the above copyright notice, this
+ * // list of conditions and the following disclaimer.
+ * //
+ * // 2.  Redistributions in binary form must reproduce the above copyright notice,
+ * // this list of conditions and the following disclaimer in the documentation
+ * // and/or other materials provided with the distribution.
+ * //
+ * // 3.  Neither the name of the copyright holder nor the names of its
+ * // contributors may be used to endorse or promote products derived from
+ * // this software without specific prior written permission.
+ * //
+ * // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * // AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * // IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * // DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * // FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * // DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * // SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * // CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+mod butterflies;
+mod radix2;
+#[cfg(feature = "fcma")]
+mod radix2_fcma;
+mod radix3;
+#[cfg(feature = "fcma")]
+mod radix3_fcma;
+mod radix4;
+#[cfg(feature = "fcma")]
+mod radix4_fcma;
+mod radix5;
+#[cfg(feature = "fcma")]
+mod radix5_fcma;
+mod radix6;
+#[cfg(feature = "fcma")]
+mod radix6_fcma;
+mod util;
+
+pub(crate) use radix2::NeonRadix2;
+#[cfg(feature = "fcma")]
+pub(crate) use radix2_fcma::NeonFcmaRadix2;
+pub(crate) use radix3::NeonRadix3;
+#[cfg(feature = "fcma")]
+pub(crate) use radix3_fcma::NeonFcmaRadix3;
+pub(crate) use radix4::NeonRadix4;
+#[cfg(feature = "fcma")]
+pub(crate) use radix4_fcma::NeonFcmaRadix4;
+pub(crate) use radix5::NeonRadix5;
+#[cfg(feature = "fcma")]
+pub(crate) use radix5_fcma::NeonFcmaRadix5;
+pub(crate) use radix6::NeonRadix6;
+#[cfg(feature = "fcma")]
+pub(crate) use radix6_fcma::NeonFcmaRadix6;

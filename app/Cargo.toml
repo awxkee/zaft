@@ -1,0 +1,17 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rustfft = { version = "6.4", default-features = false, features = ["neon", "avx"] }
+zaft = {path = "../", features = ["fcma", "avx"]}
+num-complex = "0.4.6"
+
+[dev-dependencies]
+criterion = "0.7.0"
+rand = "0.9"
+
+[[bench]]
+name = "fft"
+harness = false
