@@ -68,8 +68,8 @@ fn main() {
 
     let mut cvt = data.clone();
 
-    let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
-    let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
+    let forward = Zaft::make_forward_fft_f64(cvt.len()).unwrap();
+    let inverse = Zaft::make_inverse_fft_f64(cvt.len()).unwrap();
 
     forward.execute(&mut data).unwrap();
 
@@ -77,7 +77,7 @@ fn main() {
         println!("X[{}] = {}", i, val);
     }
 
-    let mut planner = FftPlanner::<f32>::new();
+    let mut planner = FftPlanner::<f64>::new();
 
     let planned_fft = planner.plan_fft_forward(data.len());
     let planned_fft_inv = planner.plan_fft_inverse(data.len());
@@ -92,11 +92,11 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
         .collect();
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
         .collect();
 
     println!("Mine inverse -----");
@@ -107,7 +107,7 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
         .collect();
 
     data.iter().zip(o_data).for_each(|(a, b)| {
@@ -124,7 +124,7 @@ fn main() {
     planned_fft_inv.process(&mut cvt);
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
         .collect();
 
     for (i, val) in cvt.iter().enumerate() {

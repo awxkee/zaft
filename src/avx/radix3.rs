@@ -110,17 +110,11 @@ impl AvxFmaRadix3<f64> {
                         let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
                         let u1 = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast()),
-                            _mm256_loadu2_m128d(
-                                m_twiddles.get_unchecked(2 * (j + 1)..).as_ptr().cast(),
-                                m_twiddles.get_unchecked(2 * j..).as_ptr().cast(),
-                            ),
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
                         );
                         let u2 = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
-                            _mm256_loadu2_m128d(
-                                m_twiddles.get_unchecked(2 * (j + 1) + 1..).as_ptr().cast(),
-                                m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast(),
-                            ),
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast()),
                         );
 
                         // Radix-3 butterfly
