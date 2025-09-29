@@ -164,21 +164,10 @@ impl AvxFmaRadix2<f32> {
                         let y0 = _mm256_add_ps(u0_0, t_0);
                         let y1 = _mm256_sub_ps(u0_0, t_0);
 
-                        _mm_storeu_ps(
-                            data.get_unchecked_mut(j..).as_mut_ptr().cast(),
-                            _mm256_castps256_ps128(y0),
-                        );
-                        _mm_storeu_ps(
+                        _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                        _mm256_storeu_ps(
                             data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
-                            _mm256_castps256_ps128(y1),
-                        );
-                        _mm_storeu_ps(
-                            data.get_unchecked_mut(j + 2..).as_mut_ptr().cast(),
-                            _mm256_extractf128_ps::<1>(y0),
-                        );
-                        _mm_storeu_ps(
-                            data.get_unchecked_mut(j + half + 2..).as_mut_ptr().cast(),
-                            _mm256_extractf128_ps::<1>(y1),
+                            y1,
                         );
 
                         j += 4;
