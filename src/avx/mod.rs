@@ -30,7 +30,9 @@ mod radix2;
 mod radix3;
 mod radix4;
 mod util;
+mod radix5;
 
 pub(crate) use radix2::AvxFmaRadix2;
 pub(crate) use radix3::AvxFmaRadix3;
 pub(crate) use radix4::AvxFmaRadix4;
+pub(crate) use radix5::AvxFmaRadix5;

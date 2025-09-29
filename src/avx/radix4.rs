@@ -92,35 +92,23 @@ impl AvxFmaRadix4<f64> {
                         let a = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
                         let b = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                            _mm256_insertf128_pd::<1>(
-                                _mm256_castpd128_pd256(_mm_loadu_pd(
-                                    m_twiddles.get_unchecked(3 * j..).as_ptr().cast(),
-                                )),
-                                _mm_loadu_pd(
-                                    m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast(),
-                                ),
+                            _mm256_loadu2_m128d(
+                                m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(3 * j..).as_ptr().cast(),
                             ),
                         );
                         let c = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
-                            _mm256_insertf128_pd::<1>(
-                                _mm256_castpd128_pd256(_mm_loadu_pd(
-                                    m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
-                                )),
-                                _mm_loadu_pd(
-                                    m_twiddles.get_unchecked(3 * (j + 1) + 1..).as_ptr().cast(),
-                                ),
+                            _mm256_loadu2_m128d(
+                                m_twiddles.get_unchecked(3 * (j + 1) + 1..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
                             ),
                         );
                         let d = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
-                            _mm256_insertf128_pd::<1>(
-                                _mm256_castpd128_pd256(_mm_loadu_pd(
-                                    m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
-                                )),
-                                _mm_loadu_pd(
-                                    m_twiddles.get_unchecked(3 * (j + 1) + 2..).as_ptr().cast(),
-                                ),
+                            _mm256_loadu2_m128d(
+                                m_twiddles.get_unchecked(3 * (j + 1) + 2..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
                             ),
                         );
 
@@ -253,36 +241,24 @@ impl AvxFmaRadix4<f32> {
                         let a0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
                         let b0 = _m256s_mul_complex(
                             _mm256_loadu_ps(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                            _mm256_insertf128_ps::<1>(
-                                _mm256_castps128_ps256(_mm_loadu_ps(
-                                    m_twiddles.get_unchecked(3 * j..).as_ptr().cast(),
-                                )),
-                                _mm_loadu_ps(
-                                    m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast(),
-                                ),
+                            _mm256_loadu2_m128(
+                                m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(3 * j..).as_ptr().cast(),
                             ),
                         );
                         let c0 = _m256s_mul_complex(
                             _mm256_loadu_ps(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
-                            _mm256_insertf128_ps::<1>(
-                                _mm256_castps128_ps256(_mm_loadu_ps(
-                                    m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
-                                )),
-                                _mm_loadu_ps(
-                                    m_twiddles.get_unchecked(3 * (j + 1) + 1..).as_ptr().cast(),
-                                ),
+                            _mm256_loadu2_m128(
+                                m_twiddles.get_unchecked(3 * (j + 1) + 1..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
                             ),
                         );
 
                         let d0 = _m256s_mul_complex(
                             _mm256_loadu_ps(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
-                            _mm256_insertf128_ps::<1>(
-                                _mm256_castps128_ps256(_mm_loadu_ps(
-                                    m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
-                                )),
-                                _mm_loadu_ps(
-                                    m_twiddles.get_unchecked(3 * (j + 1) + 2..).as_ptr().cast(),
-                                ),
+                            _mm256_loadu2_m128(
+                                m_twiddles.get_unchecked(3 * (j + 1) + 2..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
                             ),
                         );
 

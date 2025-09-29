@@ -121,6 +121,16 @@ impl Zaft {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxFmaRadix5;
+                    return AvxFmaRadix5::new(n, fft_direction)
+                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                }
+            }
             use crate::radix5::Radix5;
             Radix5::new(n, fft_direction)
                 .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
@@ -295,6 +305,16 @@ impl Zaft {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxFmaRadix5;
+                    return AvxFmaRadix5::new(n, fft_direction)
+                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
+                }
+            }
             use crate::radix5::Radix5;
             Radix5::new(n, fft_direction)
                 .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
