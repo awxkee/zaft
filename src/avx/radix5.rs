@@ -27,7 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2, shuffle,
+    _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
+    _m256d_mul_complex, _mm_unpacklo_ps64, shuffle,
 };
 use crate::radix5::Radix5Twiddles;
 use crate::traits::FftTrigonometry;
@@ -82,17 +83,100 @@ impl FftExecutor<f64> for AvxFmaRadix5<f64> {
         unsafe {
             let mut m_twiddles = self.twiddles.as_slice();
 
-            let tw1_re = _mm_set1_pd(self.twiddle1.re);
-            let tw1_im = _mm_set1_pd(self.twiddle1.im);
-            let tw2_re = _mm_set1_pd(self.twiddle2.re);
-            let tw2_im = _mm_set1_pd(self.twiddle2.im);
-            let rot_sign = _mm_loadu_pd([-0.0f64, 0.0, -0.0f64, 0.0].as_ptr());
+            let tw1_re = _mm256_set1_pd(self.twiddle1.re);
+            let tw1_im = _mm256_set1_pd(self.twiddle1.im);
+            let tw2_re = _mm256_set1_pd(self.twiddle2.re);
+            let tw2_im = _mm256_set1_pd(self.twiddle2.im);
+            let rot_sign =
+                _mm256_loadu_pd([-0.0f64, 0.0, -0.0f64, 0.0, -0.0f64, 0.0, -0.0f64, 0.0].as_ptr());
 
             while len <= self.execution_length {
                 let fifth = len / 5;
 
                 for data in in_place.chunks_exact_mut(len) {
-                    for j in 0..fifth {
+                    let mut j = 0usize;
+                    while j + 2 < fifth {
+                        let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+                        let u1 = _m256d_mul_complex(
+                            _mm256_loadu_pd(data.get_unchecked(j + fifth..).as_ptr().cast()),
+                            _mm256_loadu2_m128d(
+                                m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(4 * j..).as_ptr().cast(),
+                            ),
+                        );
+                        let u2 = _m256d_mul_complex(
+                            _mm256_loadu_pd(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
+                            _mm256_loadu2_m128d(
+                                m_twiddles.get_unchecked(4 * (j + 1) + 1..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(4 * j + 1..).as_ptr().cast(),
+                            ),
+                        );
+                        let u3 = _m256d_mul_complex(
+                            _mm256_loadu_pd(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
+                            _mm256_loadu2_m128d(
+                                m_twiddles.get_unchecked(4 * (j + 1) + 2..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast(),
+                            ),
+                        );
+                        let u4 = _m256d_mul_complex(
+                            _mm256_loadu_pd(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
+                            _mm256_loadu2_m128d(
+                                m_twiddles.get_unchecked(4 * (j + 1) + 3..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(4 * j + 3..).as_ptr().cast(),
+                            ),
+                        );
+
+                        // Radix-5 butterfly
+
+                        let x14p = _mm256_add_pd(u1, u4);
+                        let x14n = _mm256_sub_pd(u1, u4);
+                        let x23p = _mm256_add_pd(u2, u3);
+                        let x23n = _mm256_sub_pd(u2, u3);
+                        let y0 = _mm256_add_pd(_mm256_add_pd(u0, x14p), x23p);
+
+                        let temp_b1_1 = _mm256_mul_pd(tw1_im, x14n);
+                        let temp_b2_1 = _mm256_mul_pd(tw2_im, x14n);
+
+                        let temp_a1 =
+                            _mm256_fmadd_pd(tw2_re, x23p, _mm256_fmadd_pd(tw1_re, x14p, u0));
+                        let temp_a2 =
+                            _mm256_fmadd_pd(tw1_re, x23p, _mm256_fmadd_pd(tw2_re, x14p, u0));
+
+                        let temp_b1 = _mm256_fmadd_pd(tw2_im, x23n, temp_b1_1);
+                        let temp_b2 = _mm256_fnmadd_pd(tw1_im, x23n, temp_b2_1);
+
+                        let temp_b1_rot =
+                            _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b1), rot_sign);
+                        let temp_b2_rot =
+                            _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b2), rot_sign);
+
+                        let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
+                        let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);
+                        let y3 = _mm256_sub_pd(temp_a2, temp_b2_rot);
+                        let y4 = _mm256_sub_pd(temp_a1, temp_b1_rot);
+
+                        _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + fifth..).as_mut_ptr().cast(),
+                            y1,
+                        );
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + 2 * fifth..).as_mut_ptr().cast(),
+                            y2,
+                        );
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + 3 * fifth..).as_mut_ptr().cast(),
+                            y3,
+                        );
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + 4 * fifth..).as_mut_ptr().cast(),
+                            y4,
+                        );
+
+                        j += 2;
+                    }
+
+                    for j in j..fifth {
                         let u0 = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
                         let u1 = _m128d_fma_mul_complex(
                             _mm_loadu_pd(data.get_unchecked(j + fifth..).as_ptr().cast()),
@@ -119,19 +203,32 @@ impl FftExecutor<f64> for AvxFmaRadix5<f64> {
                         let x23n = _mm_sub_pd(u2, u3);
                         let y0 = _mm_add_pd(_mm_add_pd(u0, x14p), x23p);
 
-                        let temp_b1_1 = _mm_mul_pd(tw1_im, x14n);
-                        let temp_b2_1 = _mm_mul_pd(tw2_im, x14n);
+                        let temp_b1_1 = _mm_mul_pd(_mm256_castpd256_pd128(tw1_im), x14n);
+                        let temp_b2_1 = _mm_mul_pd(_mm256_castpd256_pd128(tw2_im), x14n);
 
-                        let temp_a1 = _mm_fmadd_pd(tw2_re, x23p, _mm_fmadd_pd(tw1_re, x14p, u0));
-                        let temp_a2 = _mm_fmadd_pd(tw1_re, x23p, _mm_fmadd_pd(tw2_re, x14p, u0));
+                        let temp_a1 = _mm_fmadd_pd(
+                            _mm256_castpd256_pd128(tw2_re),
+                            x23p,
+                            _mm_fmadd_pd(_mm256_castpd256_pd128(tw1_re), x14p, u0),
+                        );
+                        let temp_a2 = _mm_fmadd_pd(
+                            _mm256_castpd256_pd128(tw1_re),
+                            x23p,
+                            _mm_fmadd_pd(_mm256_castpd256_pd128(tw2_re), x14p, u0),
+                        );
 
-                        let temp_b1 = _mm_fmadd_pd(tw2_im, x23n, temp_b1_1);
-                        let temp_b2 = _mm_fnmadd_pd(tw1_im, x23n, temp_b2_1);
+                        let temp_b1 = _mm_fmadd_pd(_mm256_castpd256_pd128(tw2_im), x23n, temp_b1_1);
+                        let temp_b2 =
+                            _mm_fnmadd_pd(_mm256_castpd256_pd128(tw1_im), x23n, temp_b2_1);
 
-                        let temp_b1_rot =
-                            _mm_xor_pd(_mm_shuffle_pd::<0b01>(temp_b1, temp_b1), rot_sign);
-                        let temp_b2_rot =
-                            _mm_xor_pd(_mm_shuffle_pd::<0b01>(temp_b2, temp_b2), rot_sign);
+                        let temp_b1_rot = _mm_xor_pd(
+                            _mm_shuffle_pd::<0b01>(temp_b1, temp_b1),
+                            _mm256_castpd256_pd128(rot_sign),
+                        );
+                        let temp_b2_rot = _mm_xor_pd(
+                            _mm_shuffle_pd::<0b01>(temp_b2, temp_b2),
+                            _mm256_castpd256_pd128(rot_sign),
+                        );
 
                         let y1 = _mm_add_pd(temp_a1, temp_b1_rot);
                         let y2 = _mm_add_pd(temp_a2, temp_b2_rot);
@@ -180,11 +277,12 @@ impl FftExecutor<f32> for AvxFmaRadix5<f32> {
         unsafe {
             let mut m_twiddles = self.twiddles.as_slice();
 
-            let tw1_re = _mm_set1_ps(self.twiddle1.re);
-            let tw1_im = _mm_set1_ps(self.twiddle1.im);
-            let tw2_re = _mm_set1_ps(self.twiddle2.re);
-            let tw2_im = _mm_set1_ps(self.twiddle2.im);
-            let rot_sign = _mm_loadu_ps([-0.0f32, 0.0, -0.0, 0.0].as_ptr());
+            let tw1_re = _mm256_set1_ps(self.twiddle1.re);
+            let tw1_im = _mm256_set1_ps(self.twiddle1.im);
+            let tw2_re = _mm256_set1_ps(self.twiddle2.re);
+            let tw2_im = _mm256_set1_ps(self.twiddle2.im);
+            let rot_sign =
+                _mm256_loadu_ps([-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0].as_ptr());
 
             while len <= self.execution_length {
                 let fifth = len / 5;
@@ -192,85 +290,110 @@ impl FftExecutor<f32> for AvxFmaRadix5<f32> {
                 for data in in_place.chunks_exact_mut(len) {
                     let mut j = 0usize;
 
-                    // while j + 2 < fifth {
-                    //     let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
-                    //     let u1 = mul_complex_f32(
-                    //         vld1q_f32(data.get_unchecked(j + fifth..).as_ptr().cast()),
-                    //         vcombine_f32(
-                    //             vld1_f32(m_twiddles.get_unchecked(4 * j..).as_ptr().cast()),
-                    //             vld1_f32(m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast()),
-                    //         ),
-                    //     );
-                    //     let u2 = mul_complex_f32(
-                    //         vld1q_f32(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
-                    //         vcombine_f32(
-                    //             vld1_f32(m_twiddles.get_unchecked(4 * j + 1..).as_ptr().cast()),
-                    //             vld1_f32(
-                    //                 m_twiddles.get_unchecked(4 * (j + 1) + 1..).as_ptr().cast(),
-                    //             ),
-                    //         ),
-                    //     );
-                    //     let u3 = mul_complex_f32(
-                    //         vld1q_f32(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
-                    //         vcombine_f32(
-                    //             vld1_f32(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast()),
-                    //             vld1_f32(
-                    //                 m_twiddles.get_unchecked(4 * (j + 1) + 2..).as_ptr().cast(),
-                    //             ),
-                    //         ),
-                    //     );
-                    //     let u4 = mul_complex_f32(
-                    //         vld1q_f32(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
-                    //         vcombine_f32(
-                    //             vld1_f32(m_twiddles.get_unchecked(4 * j + 3..).as_ptr().cast()),
-                    //             vld1_f32(
-                    //                 m_twiddles.get_unchecked(4 * (j + 1) + 3..).as_ptr().cast(),
-                    //             ),
-                    //         ),
-                    //     );
-                    //
-                    //     // Radix-5 butterfly
-                    //
-                    //     let x14p = vaddq_f32(u1, u4);
-                    //     let x14n = vsubq_f32(u1, u4);
-                    //     let x23p = vaddq_f32(u2, u3);
-                    //     let x23n = vsubq_f32(u2, u3);
-                    //     let y0 = vaddq_f32(vaddq_f32(u0, x14p), x23p);
-                    //
-                    //     let temp_b1_1 = vmulq_f32(tw1_im, x14n);
-                    //     let temp_b2_1 = vmulq_f32(tw2_im, x14n);
-                    //
-                    //     let temp_a1 = vfmaq_f32(vfmaq_f32(u0, tw1_re, x14p), tw2_re, x23p);
-                    //     let temp_a2 = vfmaq_f32(vfmaq_f32(u0, tw2_re, x14p), tw1_re, x23p);
-                    //
-                    //     let temp_b1 = vfmaq_f32(temp_b1_1, tw2_im, x23n);
-                    //     let temp_b2 = vfmsq_f32(temp_b2_1, tw1_im, x23n);
-                    //
-                    //     let temp_b1_rot = v_rotate90_f32(temp_b1, rot_sign);
-                    //     let temp_b2_rot = v_rotate90_f32(temp_b2, rot_sign);
-                    //
-                    //     let y1 = vaddq_f32(temp_a1, temp_b1_rot);
-                    //     let y2 = vaddq_f32(temp_a2, temp_b2_rot);
-                    //     let y3 = vsubq_f32(temp_a2, temp_b2_rot);
-                    //     let y4 = vsubq_f32(temp_a1, temp_b1_rot);
-                    //
-                    //     vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                    //     vst1q_f32(data.get_unchecked_mut(j + fifth..).as_mut_ptr().cast(), y1);
-                    //     vst1q_f32(
-                    //         data.get_unchecked_mut(j + 2 * fifth..).as_mut_ptr().cast(),
-                    //         y2,
-                    //     );
-                    //     vst1q_f32(
-                    //         data.get_unchecked_mut(j + 3 * fifth..).as_mut_ptr().cast(),
-                    //         y3,
-                    //     );
-                    //     vst1q_f32(
-                    //         data.get_unchecked_mut(j + 4 * fifth..).as_mut_ptr().cast(),
-                    //         y4,
-                    //     );
-                    //
-                    //     j += 2;
-                    // }
+                    while j + 2 < fifth {
+                        let u0 = _mm_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
+                        let u1 = _m128s_fma_mul_complex(
+                            _mm_loadu_ps(data.get_unchecked(j + fifth..).as_ptr().cast()),
+                            _mm_unpacklo_ps64(
+                                _m128s_load_f32x2(
+                                    m_twiddles.get_unchecked(4 * j..).as_ptr().cast(),
+                                ),
+                                _m128s_load_f32x2(
+                                    m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast(),
+                                ),
+                            ),
+                        );
+                        let u2 = _m128s_fma_mul_complex(
+                            _mm_loadu_ps(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
+                            _mm_unpacklo_ps64(
+                                _m128s_load_f32x2(
+                                    m_twiddles.get_unchecked(4 * j + 1..).as_ptr().cast(),
+                                ),
+                                _m128s_load_f32x2(
+                                    m_twiddles.get_unchecked(4 * (j + 1) + 1..).as_ptr().cast(),
+                                ),
+                            ),
+                        );
+                        let u3 = _m128s_fma_mul_complex(
+                            _mm_loadu_ps(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
+                            _mm_unpacklo_ps64(
+                                _m128s_load_f32x2(
+                                    m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast(),
+                                ),
+                                _m128s_load_f32x2(
+                                    m_twiddles.get_unchecked(4 * (j + 1) + 2..).as_ptr().cast(),
+                                ),
+                            ),
+                        );
+                        let u4 = _m128s_fma_mul_complex(
+                            _mm_loadu_ps(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
+                            _mm_unpacklo_ps64(
+                                _m128s_load_f32x2(
+                                    m_twiddles.get_unchecked(4 * j + 3..).as_ptr().cast(),
+                                ),
+                                _m128s_load_f32x2(
+                                    m_twiddles.get_unchecked(4 * (j + 1) + 3..).as_ptr().cast(),
+                                ),
+                            ),
+                        );
+
+                        // Radix-5 butterfly
+
+                        let x14p = _mm_add_ps(u1, u4);
+                        let x14n = _mm_sub_ps(u1, u4);
+                        let x23p = _mm_add_ps(u2, u3);
+                        let x23n = _mm_sub_ps(u2, u3);
+                        let y0 = _mm_add_ps(_mm_add_ps(u0, x14p), x23p);
+
+                        let temp_b1_1 = _mm_mul_ps(_mm256_castps256_ps128(tw1_im), x14n);
+                        let temp_b2_1 = _mm_mul_ps(_mm256_castps256_ps128(tw2_im), x14n);
+
+                        let temp_a1 = _mm_fmadd_ps(
+                            _mm256_castps256_ps128(tw2_re),
+                            x23p,
+                            _mm_fmadd_ps(_mm256_castps256_ps128(tw1_re), x14p, u0),
+                        );
+                        let temp_a2 = _mm_fmadd_ps(
+                            _mm256_castps256_ps128(tw1_re),
+                            x23p,
+                            _mm_fmadd_ps(_mm256_castps256_ps128(tw2_re), x14p, u0),
+                        );
+
+                        let temp_b1 = _mm_fmadd_ps(_mm256_castps256_ps128(tw2_im), x23n, temp_b1_1);
+                        let temp_b2 =
+                            _mm_fnmadd_ps(_mm256_castps256_ps128(tw1_im), x23n, temp_b2_1);
+
+                        const SH: i32 = shuffle(2, 3, 0, 1);
+                        let temp_b1_rot = _mm_xor_ps(
+                            _mm_shuffle_ps::<SH>(temp_b1, temp_b1),
+                            _mm256_castps256_ps128(rot_sign),
+                        );
+                        let temp_b2_rot = _mm_xor_ps(
+                            _mm_shuffle_ps::<SH>(temp_b2, temp_b2),
+                            _mm256_castps256_ps128(rot_sign),
+                        );
+
+                        let y1 = _mm_add_ps(temp_a1, temp_b1_rot);
+                        let y2 = _mm_add_ps(temp_a2, temp_b2_rot);
+                        let y3 = _mm_sub_ps(temp_a2, temp_b2_rot);
+                        let y4 = _mm_sub_ps(temp_a1, temp_b1_rot);
+
+                        _mm_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                        _mm_storeu_ps(data.get_unchecked_mut(j + fifth..).as_mut_ptr().cast(), y1);
+                        _mm_storeu_ps(
+                            data.get_unchecked_mut(j + 2 * fifth..).as_mut_ptr().cast(),
+                            y2,
+                        );
+                        _mm_storeu_ps(
+                            data.get_unchecked_mut(j + 3 * fifth..).as_mut_ptr().cast(),
+                            y3,
+                        );
+                        _mm_storeu_ps(
+                            data.get_unchecked_mut(j + 4 * fifth..).as_mut_ptr().cast(),
+                            y4,
+                        );
+                        j += 2;
+                    }
 
                     for j in j..fifth {
                         let u0 = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
@@ -305,20 +428,33 @@ impl FftExecutor<f32> for AvxFmaRadix5<f32> {
                         let x23n = _mm_sub_ps(u2, u3);
                         let y0 = _mm_add_ps(_mm_add_ps(u0, x14p), x23p);
 
-                        let temp_b1_1 = _mm_mul_ps(tw1_im, x14n);
-                        let temp_b2_1 = _mm_mul_ps(tw2_im, x14n);
+                        let temp_b1_1 = _mm_mul_ps(_mm256_castps256_ps128(tw1_im), x14n);
+                        let temp_b2_1 = _mm_mul_ps(_mm256_castps256_ps128(tw2_im), x14n);
 
-                        let temp_a1 = _mm_fmadd_ps(tw2_re, x23p, _mm_fmadd_ps(tw1_re, x14p, u0));
-                        let temp_a2 = _mm_fmadd_ps(tw1_re, x23p, _mm_fmadd_ps(tw2_re, x14p, u0));
+                        let temp_a1 = _mm_fmadd_ps(
+                            _mm256_castps256_ps128(tw2_re),
+                            x23p,
+                            _mm_fmadd_ps(_mm256_castps256_ps128(tw1_re), x14p, u0),
+                        );
+                        let temp_a2 = _mm_fmadd_ps(
+                            _mm256_castps256_ps128(tw1_re),
+                            x23p,
+                            _mm_fmadd_ps(_mm256_castps256_ps128(tw2_re), x14p, u0),
+                        );
 
-                        let temp_b1 = _mm_fmadd_ps(tw2_im, x23n, temp_b1_1);
-                        let temp_b2 = _mm_fnmadd_ps(tw1_im, x23n, temp_b2_1);
+                        let temp_b1 = _mm_fmadd_ps(_mm256_castps256_ps128(tw2_im), x23n, temp_b1_1);
+                        let temp_b2 =
+                            _mm_fnmadd_ps(_mm256_castps256_ps128(tw1_im), x23n, temp_b2_1);
 
                         const SH: i32 = shuffle(2, 3, 0, 1);
-                        let temp_b1_rot =
-                            _mm_xor_ps(_mm_shuffle_ps::<SH>(temp_b1, temp_b1), rot_sign);
-                        let temp_b2_rot =
-                            _mm_xor_ps(_mm_shuffle_ps::<SH>(temp_b2, temp_b2), rot_sign);
+                        let temp_b1_rot = _mm_xor_ps(
+                            _mm_shuffle_ps::<SH>(temp_b1, temp_b1),
+                            _mm256_castps256_ps128(rot_sign),
+                        );
+                        let temp_b2_rot = _mm_xor_ps(
+                            _mm_shuffle_ps::<SH>(temp_b2, temp_b2),
+                            _mm256_castps256_ps128(rot_sign),
+                        );
 
                         let y1 = _mm_add_ps(temp_a1, temp_b1_rot);
                         let y2 = _mm_add_ps(temp_a2, temp_b2_rot);
