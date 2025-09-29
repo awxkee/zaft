@@ -66,8 +66,9 @@ where
     }
 }
 
-impl FftExecutor<f64> for AvxFmaRadix5<f64> {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+impl AvxFmaRadix5<f64> {
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if self.execution_length != in_place.len() {
             return Err(ZaftError::InvalidInPlaceLength(
                 self.execution_length,
@@ -260,8 +261,15 @@ impl FftExecutor<f64> for AvxFmaRadix5<f64> {
     }
 }
 
-impl FftExecutor<f32> for AvxFmaRadix5<f32> {
-    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+impl FftExecutor<f64> for AvxFmaRadix5<f64> {
+    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_f64(in_place) }
+    }
+}
+
+impl AvxFmaRadix5<f32> {
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if self.execution_length != in_place.len() {
             return Err(ZaftError::InvalidInPlaceLength(
                 self.execution_length,
@@ -486,5 +494,11 @@ impl FftExecutor<f32> for AvxFmaRadix5<f32> {
             }
         }
         Ok(())
+    }
+}
+
+impl FftExecutor<f32> for AvxFmaRadix5<f32> {
+    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_f32(in_place) }
     }
 }
