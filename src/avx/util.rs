@@ -103,6 +103,28 @@ pub(crate) unsafe fn _mm_unpacklo_ps64(a: __m128, b: __m128) -> __m128 {
     _mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(a), _mm_castps_pd(b)))
 }
 
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm256_load4_f32x2(
+    a: &[Complex<f32>],
+    b: &[Complex<f32>],
+    c: &[Complex<f32>],
+    d: &[Complex<f32>],
+) -> __m256 {
+    unsafe {
+        _mm256_insertf128_ps::<1>(
+            _mm256_castps128_ps256(_mm_unpacklo_ps64(
+                _m128s_load_f32x2(a.as_ptr().cast()),
+                _m128s_load_f32x2(b.as_ptr().cast()),
+            )),
+            _mm_unpacklo_ps64(
+                _m128s_load_f32x2(c.as_ptr().cast()),
+                _m128s_load_f32x2(d.as_ptr().cast()),
+            ),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -28,7 +28,7 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _mm_unpacklo_ps64, shuffle,
+    _m256d_mul_complex, _m256s_mul_complex, _mm_unpacklo_ps64, _mm256_load4_f32x2, shuffle,
 };
 use crate::radix5::Radix5Twiddles;
 use crate::traits::FftTrigonometry;
@@ -297,6 +297,95 @@ impl AvxFmaRadix5<f32> {
 
                 for data in in_place.chunks_exact_mut(len) {
                     let mut j = 0usize;
+
+                    while j + 4 < fifth {
+                        let u0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
+                        let u1 = _m256s_mul_complex(
+                            _mm256_loadu_ps(data.get_unchecked(j + fifth..).as_ptr().cast()),
+                            _mm256_load4_f32x2(
+                                m_twiddles.get_unchecked(4 * j..),
+                                m_twiddles.get_unchecked(4 * (j + 1)..),
+                                m_twiddles.get_unchecked(4 * (j + 2)..),
+                                m_twiddles.get_unchecked(4 * (j + 3)..),
+                            ),
+                        );
+                        let u2 = _m256s_mul_complex(
+                            _mm256_loadu_ps(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
+                            _mm256_load4_f32x2(
+                                m_twiddles.get_unchecked(4 * j + 1..),
+                                m_twiddles.get_unchecked(4 * (j + 1) + 1..),
+                                m_twiddles.get_unchecked(4 * (j + 2) + 1..),
+                                m_twiddles.get_unchecked(4 * (j + 3) + 1..),
+                            ),
+                        );
+                        let u3 = _m256s_mul_complex(
+                            _mm256_loadu_ps(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
+                            _mm256_load4_f32x2(
+                                m_twiddles.get_unchecked(4 * j + 2..),
+                                m_twiddles.get_unchecked(4 * (j + 1) + 2..),
+                                m_twiddles.get_unchecked(4 * (j + 2) + 2..),
+                                m_twiddles.get_unchecked(4 * (j + 3) + 2..),
+                            ),
+                        );
+                        let u4 = _m256s_mul_complex(
+                            _mm256_loadu_ps(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
+                            _mm256_load4_f32x2(
+                                m_twiddles.get_unchecked(4 * j + 3..),
+                                m_twiddles.get_unchecked(4 * (j + 1) + 3..),
+                                m_twiddles.get_unchecked(4 * (j + 2) + 3..),
+                                m_twiddles.get_unchecked(4 * (j + 3) + 3..),
+                            ),
+                        );
+
+                        // Radix-5 butterfly
+
+                        let x14p = _mm256_add_ps(u1, u4);
+                        let x14n = _mm256_sub_ps(u1, u4);
+                        let x23p = _mm256_add_ps(u2, u3);
+                        let x23n = _mm256_sub_ps(u2, u3);
+                        let y0 = _mm256_add_ps(_mm256_add_ps(u0, x14p), x23p);
+
+                        let temp_b1_1 = _mm256_mul_ps(tw1_im, x14n);
+                        let temp_b2_1 = _mm256_mul_ps(tw2_im, x14n);
+
+                        let temp_a1 =
+                            _mm256_fmadd_ps(tw2_re, x23p, _mm256_fmadd_ps(tw1_re, x14p, u0));
+                        let temp_a2 =
+                            _mm256_fmadd_ps(tw1_re, x23p, _mm256_fmadd_ps(tw2_re, x14p, u0));
+
+                        let temp_b1 = _mm256_fmadd_ps(tw2_im, x23n, temp_b1_1);
+                        let temp_b2 = _mm256_fnmadd_ps(tw1_im, x23n, temp_b2_1);
+
+                        const SH: i32 = shuffle(2, 3, 0, 1);
+                        let temp_b1_rot =
+                            _mm256_xor_ps(_mm256_shuffle_ps::<SH>(temp_b1, temp_b1), rot_sign);
+                        let temp_b2_rot =
+                            _mm256_xor_ps(_mm256_shuffle_ps::<SH>(temp_b2, temp_b2), rot_sign);
+
+                        let y1 = _mm256_add_ps(temp_a1, temp_b1_rot);
+                        let y2 = _mm256_add_ps(temp_a2, temp_b2_rot);
+                        let y3 = _mm256_sub_ps(temp_a2, temp_b2_rot);
+                        let y4 = _mm256_sub_ps(temp_a1, temp_b1_rot);
+
+                        _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + fifth..).as_mut_ptr().cast(),
+                            y1,
+                        );
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + 2 * fifth..).as_mut_ptr().cast(),
+                            y2,
+                        );
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + 3 * fifth..).as_mut_ptr().cast(),
+                            y3,
+                        );
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + 4 * fifth..).as_mut_ptr().cast(),
+                            y4,
+                        );
+                        j += 4;
+                    }
 
                     while j + 2 < fifth {
                         let u0 = _mm_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
