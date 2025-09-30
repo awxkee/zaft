@@ -180,21 +180,27 @@ impl AvxFmaRadix6<f64> {
 
                     for j in j..sixth {
                         let u0 = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw0 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(5 * j..).as_ptr().cast());
+                        let tw1 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(5 * j + 2..).as_ptr().cast());
+
                         let u1 = _m128d_fma_mul_complex(
                             _mm_loadu_pd(data.get_unchecked(j + sixth..).as_ptr().cast()),
-                            _mm_loadu_pd(m_twiddles.get_unchecked(5 * j..).as_ptr().cast()),
+                            _mm256_castpd256_pd128(tw0),
                         );
                         let u2 = _m128d_fma_mul_complex(
                             _mm_loadu_pd(data.get_unchecked(j + 2 * sixth..).as_ptr().cast()),
-                            _mm_loadu_pd(m_twiddles.get_unchecked(5 * j + 1..).as_ptr().cast()),
+                            _mm256_extractf128_pd::<1>(tw0),
                         );
                         let u3 = _m128d_fma_mul_complex(
                             _mm_loadu_pd(data.get_unchecked(j + 3 * sixth..).as_ptr().cast()),
-                            _mm_loadu_pd(m_twiddles.get_unchecked(5 * j + 2..).as_ptr().cast()),
+                            _mm256_castpd256_pd128(tw1),
                         );
                         let u4 = _m128d_fma_mul_complex(
                             _mm_loadu_pd(data.get_unchecked(j + 4 * sixth..).as_ptr().cast()),
-                            _mm_loadu_pd(m_twiddles.get_unchecked(5 * j + 3..).as_ptr().cast()),
+                            _mm256_extractf128_pd::<1>(tw1),
                         );
                         let u5 = _m128d_fma_mul_complex(
                             _mm_loadu_pd(data.get_unchecked(j + 5 * sixth..).as_ptr().cast()),
