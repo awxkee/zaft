@@ -28,7 +28,7 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, shuffle,
+    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, shuffle,
 };
 use crate::radix3::Radix3Twiddles;
 use crate::traits::FftTrigonometry;
@@ -108,6 +108,7 @@ impl AvxFmaRadix3<f64> {
 
                     while j + 2 < third {
                         let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+
                         let u1 = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast()),
                             _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
@@ -263,6 +264,10 @@ impl AvxFmaRadix3<f32> {
                             )),
                             _m128s_load_f32x2(data.get_unchecked(j + 2..).as_ptr().cast()),
                         );
+
+                        let twz =
+                            _mm_loadu_ps(m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast());
+
                         let u1 = _m256s_mul_complex(
                             _mm256_insertf128_ps::<1>(
                                 _mm256_castps128_ps256(_mm_loadu_ps(
@@ -276,9 +281,7 @@ impl AvxFmaRadix3<f32> {
                                 _mm256_castps128_ps256(_mm_loadu_ps(
                                     m_twiddles.get_unchecked(2 * j..).as_ptr().cast(),
                                 )),
-                                _m128s_load_f32x2(
-                                    m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast(),
-                                ),
+                                _mm_unpacklo_ps64(twz, twz),
                             ),
                         );
                         let u2 = _m256s_mul_complex(
@@ -294,9 +297,7 @@ impl AvxFmaRadix3<f32> {
                                 _mm256_castps128_ps256(_mm_loadu_ps(
                                     m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast(),
                                 )),
-                                _m128s_load_f32x2(
-                                    m_twiddles.get_unchecked(2 * j + 1 + 2..).as_ptr().cast(),
-                                ),
+                                _mm_unpackhi_ps64(twz, twz),
                             ),
                         );
 
@@ -346,15 +347,16 @@ impl AvxFmaRadix3<f32> {
 
                     for j in j..third {
                         let u0 = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw = _mm_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
+
                         let u1 = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + third..).as_ptr().cast()),
-                            _m128s_load_f32x2(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
+                            _mm_unpacklo_ps64(tw, tw),
                         );
                         let u2 = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
-                            _m128s_load_f32x2(
-                                m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast(),
-                            ),
+                            _mm_unpackhi_ps64(tw, tw),
                         );
 
                         // Radix-3 butterfly

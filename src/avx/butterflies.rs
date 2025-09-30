@@ -26,44 +26,75 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::avx::util::shuffle;
 use std::arch::x86_64::*;
 
 pub(crate) struct AvxButterfly {}
 
 impl AvxButterfly {
-    // #[inline]
-    // pub(crate) fn butterfly3_f32(
-    //     u0: float32x4_t,
-    //     u1: float32x4_t,
-    //     u2: float32x4_t,
-    //     tw_re: float32x4_t,
-    //     tw_w_2: float32x4_t,
-    // ) -> (float32x4_t, float32x4_t, float32x4_t) {
-    //     unsafe {
-    //         let xp = vaddq_f32(u1, u2);
-    //         let xn = vsubq_f32(u1, u2);
-    //         let sum = vaddq_f32(u0, xp);
-    //
-    //         let w_1 = vfmaq_f32(u0, tw_re, xp);
-    //         let vw_2 = vmulq_f32(tw_w_2, vrev64q_f32(xn));
-    //
-    //         let y0 = sum;
-    //         let y1 = vaddq_f32(w_1, vw_2);
-    //         let y2 = vsubq_f32(w_1, vw_2);
-    //         (y0, y1, y2)
-    //     }
-    // }
-    //
-    // #[inline]
-    // pub(crate) fn butterfly2_f32(u0: float32x4_t, u1: float32x4_t) -> (float32x4_t, float32x4_t) {
-    //     unsafe {
-    //         let t = vaddq_f32(u0, u1);
-    //
-    //         let y1 = vsubq_f32(u0, u1);
-    //         let y0 = t;
-    //         (y0, y1)
-    //     }
-    // }
+    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline]
+    pub(crate) unsafe fn butterfly3_f32(
+        u0: __m256,
+        u1: __m256,
+        u2: __m256,
+        tw_re: __m256,
+        tw_w_2: __m256,
+    ) -> (__m256, __m256, __m256) {
+        let xp = _mm256_add_ps(u1, u2);
+        let xn = _mm256_sub_ps(u1, u2);
+        let sum = _mm256_add_ps(u0, xp);
+
+        const SH: i32 = shuffle(2, 3, 0, 1);
+        let w_1 = _mm256_fmadd_ps(tw_re, xp, u0);
+        let vw_2 = _mm256_mul_ps(tw_w_2, _mm256_shuffle_ps::<SH>(xn, xn));
+
+        let y0 = sum;
+        let y1 = _mm256_add_ps(w_1, vw_2);
+        let y2 = _mm256_sub_ps(w_1, vw_2);
+        (y0, y1, y2)
+    }
+
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn butterfly2_f32(u0: __m256, u1: __m256) -> (__m256, __m256) {
+        let t = _mm256_add_ps(u0, u1);
+        let y1 = _mm256_sub_ps(u0, u1);
+        let y0 = t;
+        (y0, y1)
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline]
+    pub(crate) unsafe fn butterfly3_f32_m128(
+        u0: __m128,
+        u1: __m128,
+        u2: __m128,
+        tw_re: __m128,
+        tw_w_2: __m128,
+    ) -> (__m128, __m128, __m128) {
+        let xp = _mm_add_ps(u1, u2);
+        let xn = _mm_sub_ps(u1, u2);
+        let sum = _mm_add_ps(u0, xp);
+
+        const SH: i32 = shuffle(2, 3, 0, 1);
+        let w_1 = _mm_fmadd_ps(tw_re, xp, u0);
+        let vw_2 = _mm_mul_ps(tw_w_2, _mm_shuffle_ps::<SH>(xn, xn));
+
+        let y0 = sum;
+        let y1 = _mm_add_ps(w_1, vw_2);
+        let y2 = _mm_sub_ps(w_1, vw_2);
+        (y0, y1, y2)
+    }
+
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn butterfly2_f32_m128(u0: __m128, u1: __m128) -> (__m128, __m128) {
+        let t = _mm_add_ps(u0, u1);
+        let y1 = _mm_sub_ps(u0, u1);
+        let y0 = t;
+        (y0, y1)
+    }
 
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
