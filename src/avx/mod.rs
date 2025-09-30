@@ -26,13 +26,16 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+mod butterflies;
 mod radix2;
 mod radix3;
 mod radix4;
 mod radix5;
+mod radix6;
 mod util;
 
 pub(crate) use radix2::AvxFmaRadix2;
 pub(crate) use radix3::AvxFmaRadix3;
 pub(crate) use radix4::AvxFmaRadix4;
 pub(crate) use radix5::AvxFmaRadix5;
+pub(crate) use radix6::AvxFmaRadix6;
