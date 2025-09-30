@@ -28,7 +28,8 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, shuffle,
+    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
+    _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, shuffle,
 };
 use crate::radix4::Radix4Twiddles;
 use crate::util::{digit_reverse_indices, permute_inplace};
@@ -90,19 +91,20 @@ impl AvxFmaRadix4<f64> {
                     let mut j = 0usize;
                     while j + 2 < quarter {
                         let a = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw0 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
+                        let tw1 = _mm256_loadu_pd(
+                            m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast(),
+                        );
+
                         let b = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                            _mm256_loadu2_m128d(
-                                m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast(),
-                                m_twiddles.get_unchecked(3 * j..).as_ptr().cast(),
-                            ),
+                            _mm256_unpacklo_pd2(tw0, tw1),
                         );
                         let c = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
-                            _mm256_loadu2_m128d(
-                                m_twiddles.get_unchecked(3 * (j + 1) + 1..).as_ptr().cast(),
-                                m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
-                            ),
+                            _mm256_unpackhi_pd2(tw0, tw1),
                         );
                         let d = _m256d_mul_complex(
                             _mm256_loadu_pd(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
