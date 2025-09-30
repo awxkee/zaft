@@ -275,13 +275,16 @@ impl NeonFcmaRadix4<f32> {
 
                     for j in j..quarter {
                         let a = vld1_f32(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw = vld1q_f32(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
+
                         let b = fcmah_complex_f32(
                             vld1_f32(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                            vld1_f32(m_twiddles.get_unchecked(3 * j..).as_ptr().cast()),
+                            vget_low_f32(tw),
                         );
                         let c = fcmah_complex_f32(
                             vld1_f32(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
-                            vld1_f32(m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast()),
+                            vget_high_f32(tw),
                         );
                         let d = fcmah_complex_f32(
                             vld1_f32(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),

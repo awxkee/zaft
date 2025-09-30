@@ -296,7 +296,7 @@ impl AvxFmaRadix4<f32> {
 
                         let b = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                            _mm_unpacklo_ps64(tw0, tw0),
+                            tw0,
                         );
                         let c = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(

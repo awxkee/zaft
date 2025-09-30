@@ -479,7 +479,7 @@ impl AvxFmaRadix5<f32> {
 
                         let u1 = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + fifth..).as_ptr().cast()),
-                            _mm_unpacklo_ps64(tw0, tw0),
+                            tw0,
                         );
                         let u2 = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
@@ -487,7 +487,7 @@ impl AvxFmaRadix5<f32> {
                         );
                         let u3 = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
-                            _mm_unpacklo_ps64(tw2, tw2),
+                            tw2,
                         );
                         let u4 = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),

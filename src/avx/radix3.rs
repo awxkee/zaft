@@ -352,7 +352,7 @@ impl AvxFmaRadix3<f32> {
 
                         let u1 = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + third..).as_ptr().cast()),
-                            _mm_unpacklo_ps64(tw, tw),
+                            tw,
                         );
                         let u2 = _m128s_fma_mul_complex(
                             _m128s_load_f32x2(data.get_unchecked(j + 2 * third..).as_ptr().cast()),

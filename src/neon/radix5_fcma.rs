@@ -202,39 +202,30 @@ impl NeonFcmaRadix5<f32> {
 
                     while j + 2 < fifth {
                         let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw0 = vld1q_f32(m_twiddles.get_unchecked(4 * j..).as_ptr().cast());
+                        let tw1 =
+                            vld1q_f32(m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast());
+                        let tw2 =
+                            vld1q_f32(m_twiddles.get_unchecked(4 * (j + 2)..).as_ptr().cast());
+                        let tw3 =
+                            vld1q_f32(m_twiddles.get_unchecked(4 * (j + 3)..).as_ptr().cast());
+
                         let u1 = fcma_complex_f32(
                             vld1q_f32(data.get_unchecked(j + fifth..).as_ptr().cast()),
-                            vcombine_f32(
-                                vld1_f32(m_twiddles.get_unchecked(4 * j..).as_ptr().cast()),
-                                vld1_f32(m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast()),
-                            ),
+                            vcombine_f32(vget_low_f32(tw0), vget_low_f32(tw1)),
                         );
                         let u2 = fcma_complex_f32(
                             vld1q_f32(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
-                            vcombine_f32(
-                                vld1_f32(m_twiddles.get_unchecked(4 * j + 1..).as_ptr().cast()),
-                                vld1_f32(
-                                    m_twiddles.get_unchecked(4 * (j + 1) + 1..).as_ptr().cast(),
-                                ),
-                            ),
+                            vcombine_f32(vget_high_f32(tw0), vget_high_f32(tw1)),
                         );
                         let u3 = fcma_complex_f32(
                             vld1q_f32(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
-                            vcombine_f32(
-                                vld1_f32(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast()),
-                                vld1_f32(
-                                    m_twiddles.get_unchecked(4 * (j + 1) + 2..).as_ptr().cast(),
-                                ),
-                            ),
+                            vcombine_f32(vget_low_f32(tw2), vget_low_f32(tw3)),
                         );
                         let u4 = fcma_complex_f32(
                             vld1q_f32(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
-                            vcombine_f32(
-                                vld1_f32(m_twiddles.get_unchecked(4 * j + 3..).as_ptr().cast()),
-                                vld1_f32(
-                                    m_twiddles.get_unchecked(4 * (j + 1) + 3..).as_ptr().cast(),
-                                ),
-                            ),
+                            vcombine_f32(vget_high_f32(tw2), vget_high_f32(tw3)),
                         );
 
                         // Radix-5 butterfly
@@ -282,21 +273,25 @@ impl NeonFcmaRadix5<f32> {
 
                     for j in j..fifth {
                         let u0 = vld1_f32(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw0 = vld1q_f32(m_twiddles.get_unchecked(4 * j..).as_ptr().cast());
+                        let tw1 = vld1q_f32(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast());
+
                         let u1 = fcmah_complex_f32(
                             vld1_f32(data.get_unchecked(j + fifth..).as_ptr().cast()),
-                            vld1_f32(m_twiddles.get_unchecked(4 * j..).as_ptr().cast()),
+                            vget_low_f32(tw0),
                         );
                         let u2 = fcmah_complex_f32(
                             vld1_f32(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
-                            vld1_f32(m_twiddles.get_unchecked(4 * j + 1..).as_ptr().cast()),
+                            vget_high_f32(tw0),
                         );
                         let u3 = fcmah_complex_f32(
                             vld1_f32(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
-                            vld1_f32(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast()),
+                            vget_low_f32(tw1),
                         );
                         let u4 = fcmah_complex_f32(
                             vld1_f32(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
-                            vld1_f32(m_twiddles.get_unchecked(4 * j + 3..).as_ptr().cast()),
+                            vget_high_f32(tw1),
                         );
 
                         // Radix-5 butterfly

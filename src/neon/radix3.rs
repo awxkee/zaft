@@ -222,13 +222,16 @@ impl FftExecutor<f32> for NeonRadix3<f32> {
 
                     for j in j..third {
                         let u0 = vld1_f32(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw = vld1q_f32(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
+
                         let u1 = mulh_complex_f32(
                             vld1_f32(data.get_unchecked(j + third..).as_ptr().cast()),
-                            vld1_f32(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
+                            vget_low_f32(tw),
                         );
                         let u2 = mulh_complex_f32(
                             vld1_f32(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
-                            vld1_f32(m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast()),
+                            vget_high_f32(tw),
                         );
 
                         // Radix-3 butterfly
