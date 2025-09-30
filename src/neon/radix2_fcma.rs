@@ -27,8 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::radix2::Radix2Twiddles;
-use crate::util::permute_inplace;
-use crate::{FftDirection, FftExecutor, ZaftError, bit_reverse_indices};
+use crate::util::{digit_reverse_indices, permute_inplace};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
@@ -36,6 +36,7 @@ pub(crate) struct NeonFcmaRadix2<T> {
     twiddles: Vec<Complex<T>>,
     permutations: Vec<usize>,
     execution_length: usize,
+    direction: FftDirection,
 }
 
 impl<T: Default + Clone + Radix2Twiddles> NeonFcmaRadix2<T> {
@@ -45,12 +46,13 @@ impl<T: Default + Clone + Radix2Twiddles> NeonFcmaRadix2<T> {
         let twiddles = T::make_twiddles(size, fft_direction)?;
 
         // Bit-reversal permutation
-        let rev = bit_reverse_indices(size);
+        let rev = digit_reverse_indices(size, 2)?;
 
         Ok(NeonFcmaRadix2 {
             permutations: rev,
             execution_length: size,
             twiddles,
+            direction: fft_direction,
         })
     }
 }
@@ -122,6 +124,14 @@ impl FftExecutor<f64> for NeonFcmaRadix2<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f64(in_place) }
     }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
 }
 
 impl NeonFcmaRadix2<f32> {
@@ -157,7 +167,7 @@ impl NeonFcmaRadix2<f32> {
                         let tw1 = vld1q_f32(m_twiddles.get_unchecked(j + 2..).as_ptr().cast());
 
                         let t_0 = vcmlaq_rot90_f32(vcmlaq_f32(zero, tw0, u1_0), tw0, u1_0);
-                        let t_1 = vcmlaq_rot90_f32(vcmlaq_f32(zero, tw1, u0_1), tw1, u1_1);
+                        let t_1 = vcmlaq_rot90_f32(vcmlaq_f32(zero, tw1, u1_1), tw1, u1_1);
 
                         let y0 = vaddq_f32(u0_0, t_0);
                         let y1 = vsubq_f32(u0_0, t_0);
@@ -211,5 +221,101 @@ impl NeonFcmaRadix2<f32> {
 impl FftExecutor<f32> for NeonFcmaRadix2<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_neon_fcma_radix2() {
+        for i in 1..14 {
+            let size = 2usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = NeonFcmaRadix2::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = NeonFcmaRadix2::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0 / input.len() as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_neon_radix2_f64() {
+        for i in 1..14 {
+            let size = 2usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = NeonFcmaRadix2::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = NeonFcmaRadix2::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0 / input.len() as f64))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

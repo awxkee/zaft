@@ -28,8 +28,8 @@
  */
 use crate::complex_fma::c_mul_fast;
 use crate::traits::FftTrigonometry;
-use crate::util::permute_inplace;
-use crate::{FftDirection, FftExecutor, ZaftError, bit_reverse_indices};
+use crate::util::{digit_reverse_indices, permute_inplace};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -39,6 +39,7 @@ pub(crate) struct Radix2<T> {
     twiddles: Vec<Complex<T>>,
     permutations: Vec<usize>,
     execution_length: usize,
+    direction: FftDirection,
 }
 
 pub(crate) trait Radix2Twiddles {
@@ -128,12 +129,13 @@ impl<T: Default + Clone + Radix2Twiddles> Radix2<T> {
         let twiddles = T::make_twiddles(size, fft_direction)?;
 
         // Bit-reversal permutation
-        let rev = bit_reverse_indices(size);
+        let rev = digit_reverse_indices(size, 2)?;
 
         Ok(Radix2 {
             permutations: rev,
             execution_length: size,
             twiddles,
+            direction: fft_direction,
         })
     }
 }
@@ -182,5 +184,60 @@ where
             }
         }
         Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_radix2() {
+        for i in 1..14 {
+            let size = 2usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = Radix2::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = Radix2::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0 / input.len() as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

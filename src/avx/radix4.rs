@@ -208,6 +208,13 @@ impl FftExecutor<f64> for AvxFmaRadix4<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f64(in_place) }
     }
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
 }
 
 impl AvxFmaRadix4<f32> {
@@ -362,5 +369,12 @@ impl AvxFmaRadix4<f32> {
 impl FftExecutor<f32> for AvxFmaRadix4<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
+    }
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
     }
 }

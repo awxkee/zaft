@@ -149,6 +149,14 @@ impl FftExecutor<f64> for NeonFcmaRadix4<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f64(in_place) }
     }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
 }
 
 impl NeonFcmaRadix4<f32> {
@@ -180,97 +188,63 @@ impl NeonFcmaRadix4<f32> {
                 for data in in_place.chunks_exact_mut(len) {
                     let mut j = 0usize;
 
-                    while j + 4 < quarter {
-                        let a0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
-                        let a1 = vld1q_f32(data.get_unchecked(j + 2..).as_ptr().cast());
-                        let b0 = fcma_complex_f32(
+                    while j + 2 < quarter {
+                        let a = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw0 = vld1q_f32(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
+                        let tw1 =
+                            vld1q_f32(m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast());
+
+                        let b = fcma_complex_f32(
                             vld1q_f32(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                            vld1q_f32(m_twiddles.get_unchecked(3 * j..).as_ptr().cast()),
+                            vcombine_f32(vget_low_f32(tw0), vget_low_f32(tw1)),
                         );
-                        let b1 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + quarter + 2..).as_ptr().cast()),
-                            vld1q_f32(m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast()),
-                        );
-                        let c0 = fcma_complex_f32(
+                        let c = fcma_complex_f32(
                             vld1q_f32(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
-                            vld1q_f32(m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast()),
+                            vcombine_f32(vget_high_f32(tw0), vget_high_f32(tw1)),
                         );
-                        let c1 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + 2 * quarter + 2..).as_ptr().cast()),
-                            vld1q_f32(m_twiddles.get_unchecked(3 * (j + 1) + 1..).as_ptr().cast()),
-                        );
-                        let d0 = fcma_complex_f32(
+                        let d = fcma_complex_f32(
                             vld1q_f32(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
-                            vld1q_f32(m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast()),
-                        );
-                        let d1 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + 3 * quarter + 2..).as_ptr().cast()),
-                            vld1q_f32(m_twiddles.get_unchecked(3 * (j + 1) + 2..).as_ptr().cast()),
+                            vcombine_f32(
+                                vld1_f32(m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast()),
+                                vld1_f32(
+                                    m_twiddles.get_unchecked(3 * (j + 1) + 2..).as_ptr().cast(),
+                                ),
+                            ),
                         );
 
                         // radix-4 butterfly
-                        let q0t0 = vaddq_f32(a0, c0);
-                        let q0t1 = vsubq_f32(a0, c0);
-                        let q0t2 = vaddq_f32(b0, d0);
-                        let mut q0t3 = vsubq_f32(b0, d0);
-                        q0t3 = vreinterpretq_f32_u32(veorq_u32(
-                            vrev64q_u32(vreinterpretq_u32_f32(q0t3)),
-                            v_i_multiplier,
-                        ));
-
-                        let q1t0 = vaddq_f32(a1, c1);
-                        let q1t1 = vsubq_f32(a1, c1);
-                        let q1t2 = vaddq_f32(b1, d1);
-                        let mut q1t3 = vsubq_f32(b1, d1);
-                        q1t3 = vreinterpretq_f32_u32(veorq_u32(
-                            vrev64q_u32(vreinterpretq_u32_f32(q1t3)),
+                        let t0 = vaddq_f32(a, c);
+                        let t1 = vsubq_f32(a, c);
+                        let t2 = vaddq_f32(b, d);
+                        let mut t3 = vsubq_f32(b, d);
+                        t3 = vreinterpretq_f32_u32(veorq_u32(
+                            vrev64q_u32(vreinterpretq_u32_f32(t3)),
                             v_i_multiplier,
                         ));
 
                         vst1q_f32(
                             data.get_unchecked_mut(j..).as_mut_ptr().cast(),
-                            vaddq_f32(q0t0, q0t2),
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + 2..).as_mut_ptr().cast(),
-                            vaddq_f32(q1t0, q1t2),
+                            vaddq_f32(t0, t2),
                         );
                         vst1q_f32(
                             data.get_unchecked_mut(j + quarter..).as_mut_ptr().cast(),
-                            vaddq_f32(q0t1, q0t3),
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + quarter + 2..)
-                                .as_mut_ptr()
-                                .cast(),
-                            vaddq_f32(q1t1, q1t3),
+                            vaddq_f32(t1, t3),
                         );
                         vst1q_f32(
                             data.get_unchecked_mut(j + 2 * quarter..)
                                 .as_mut_ptr()
                                 .cast(),
-                            vsubq_f32(q0t0, q0t2),
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + 2 * quarter + 2..)
-                                .as_mut_ptr()
-                                .cast(),
-                            vsubq_f32(q1t0, q1t2),
+                            vsubq_f32(t0, t2),
                         );
                         vst1q_f32(
                             data.get_unchecked_mut(j + 3 * quarter..)
                                 .as_mut_ptr()
                                 .cast(),
-                            vsubq_f32(q0t1, q0t3),
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + 3 * quarter + 2..)
-                                .as_mut_ptr()
-                                .cast(),
-                            vsubq_f32(q1t1, q1t3),
+                            vsubq_f32(t1, t3),
                         );
 
-                        j += 4;
+                        j += 2;
                     }
 
                     for j in j..quarter {
@@ -335,5 +309,102 @@ impl NeonFcmaRadix4<f32> {
 impl FftExecutor<f32> for NeonFcmaRadix4<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_neon_fcma_radix4() {
+        for i in 1..7 {
+            let size = 4usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = NeonFcmaRadix4::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = NeonFcmaRadix4::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| Complex::new(x.re as f64, x.im as f64) * (1.0f64 / input.len() as f64))
+                .map(|x| Complex::new(x.re as f32, x.im as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_neon_fcma_radix4_f64() {
+        for i in 1..7 {
+            let size = 4usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = NeonFcmaRadix4::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = NeonFcmaRadix4::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0f64 / input.len() as f64))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

@@ -41,6 +41,7 @@ pub(crate) struct Radix6<T> {
     permutations: Vec<usize>,
     execution_length: usize,
     twiddle: Complex<T>,
+    direction: FftDirection,
 }
 
 pub(crate) trait Radix6Twiddles {
@@ -73,7 +74,7 @@ where
 
         for k in 0..one_fifth {
             for i in 1..6 {
-                let w = compute_twiddle::<T>(k * i, size, fft_direction);
+                let w = compute_twiddle::<T>(k * i, len, fft_direction);
                 twiddles.push(w);
             }
         }
@@ -118,6 +119,7 @@ where
             execution_length: size,
             twiddles,
             twiddle: compute_twiddle(1, 3, fft_direction),
+            direction: fft_direction,
         })
     }
 }
@@ -254,5 +256,60 @@ where
             }
         }
         Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_radix4() {
+        for i in 1..7 {
+            let size = 6usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = Radix6::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = Radix6::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0 / input.len() as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

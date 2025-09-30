@@ -31,8 +31,8 @@ use crate::avx::util::{
     _m256d_mul_complex, _m256s_mul_complex,
 };
 use crate::radix2::Radix2Twiddles;
-use crate::util::permute_inplace;
-use crate::{FftDirection, FftExecutor, ZaftError, bit_reverse_indices};
+use crate::util::{digit_reverse_indices, permute_inplace};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
@@ -40,6 +40,7 @@ pub(crate) struct AvxFmaRadix2<T> {
     twiddles: Vec<Complex<T>>,
     permutations: Vec<usize>,
     execution_length: usize,
+    direction: FftDirection,
 }
 
 impl<T: Default + Clone + Radix2Twiddles> AvxFmaRadix2<T> {
@@ -49,12 +50,13 @@ impl<T: Default + Clone + Radix2Twiddles> AvxFmaRadix2<T> {
         let twiddles = T::make_twiddles(size, fft_direction)?;
 
         // Bit-reversal permutation
-        let rev = bit_reverse_indices(size);
+        let rev = digit_reverse_indices(size, 2)?;
 
         Ok(AvxFmaRadix2 {
             permutations: rev,
             execution_length: size,
             twiddles,
+            direction: fft_direction,
         })
     }
 }
@@ -118,6 +120,14 @@ impl AvxFmaRadix2<f64> {
 impl FftExecutor<f64> for AvxFmaRadix2<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f64(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
     }
 }
 
@@ -201,5 +211,13 @@ impl AvxFmaRadix2<f32> {
 impl FftExecutor<f32> for AvxFmaRadix2<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
     }
 }

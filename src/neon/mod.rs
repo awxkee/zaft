@@ -44,6 +44,7 @@ mod radix6;
 mod radix6_fcma;
 mod util;
 
+pub(crate) use butterflies::{NeonButterfly3, NeonButterfly4};
 pub(crate) use radix2::NeonRadix2;
 #[cfg(feature = "fcma")]
 pub(crate) use radix2_fcma::NeonFcmaRadix2;

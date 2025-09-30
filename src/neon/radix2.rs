@@ -28,8 +28,8 @@
  */
 use crate::neon::util::{mul_complex_f32, mul_complex_f64, mulh_complex_f32};
 use crate::radix2::Radix2Twiddles;
-use crate::util::permute_inplace;
-use crate::{FftDirection, FftExecutor, ZaftError, bit_reverse_indices};
+use crate::util::{digit_reverse_indices, permute_inplace};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
@@ -37,6 +37,7 @@ pub(crate) struct NeonRadix2<T> {
     twiddles: Vec<Complex<T>>,
     permutations: Vec<usize>,
     execution_length: usize,
+    direction: FftDirection,
 }
 
 impl<T: Default + Clone + Radix2Twiddles> NeonRadix2<T> {
@@ -46,12 +47,13 @@ impl<T: Default + Clone + Radix2Twiddles> NeonRadix2<T> {
         let twiddles = T::make_twiddles(size, fft_direction)?;
 
         // Bit-reversal permutation
-        let rev = bit_reverse_indices(size);
+        let rev = digit_reverse_indices(size, 2)?;
 
         Ok(NeonRadix2 {
             permutations: rev,
             execution_length: size,
             twiddles,
+            direction: fft_direction,
         })
     }
 }
@@ -114,6 +116,14 @@ impl FftExecutor<f64> for NeonRadix2<f64> {
             }
         }
         Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
     }
 }
 
@@ -197,5 +207,101 @@ impl FftExecutor<f32> for NeonRadix2<f32> {
             }
         }
         Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_neon_radix2() {
+        for i in 1..14 {
+            let size = 2usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = NeonRadix2::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = NeonRadix2::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0 / input.len() as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_neon_radix2_f64() {
+        for i in 1..14 {
+            let size = 2usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = NeonRadix2::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = NeonRadix2::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0 / input.len() as f64))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

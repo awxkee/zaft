@@ -44,6 +44,7 @@ pub(crate) struct AvxFmaRadix3<T> {
     execution_length: usize,
     twiddle_re: T,
     twiddle_im: [T; 8],
+    direction: FftDirection,
 }
 
 impl<T: Default + Clone + Radix3Twiddles + 'static + Copy + FftTrigonometry + Float> AvxFmaRadix3<T>
@@ -76,6 +77,7 @@ where
                 -twiddle.im,
                 twiddle.im,
             ],
+            direction: fft_direction,
         })
     }
 }
@@ -190,6 +192,14 @@ impl AvxFmaRadix3<f64> {
 impl FftExecutor<f64> for AvxFmaRadix3<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f64(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
     }
 }
 
@@ -399,5 +409,13 @@ impl AvxFmaRadix3<f32> {
 impl FftExecutor<f32> for AvxFmaRadix3<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
     }
 }

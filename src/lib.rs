@@ -33,6 +33,7 @@
 )]
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 mod avx;
+mod butterflies;
 mod complex_fma;
 mod dft;
 mod err;
@@ -49,20 +50,15 @@ mod util;
 
 pub use err::ZaftError;
 
+use crate::butterflies::Butterfly2;
 use crate::dft::Dft;
 use crate::util::{is_power_of_five, is_power_of_six, is_power_of_three};
 use num_complex::Complex;
 
-/// Bit reversal permutation
-fn bit_reverse_indices(n: usize) -> Vec<usize> {
-    let bits = n.trailing_zeros();
-    (0..n)
-        .map(|i| i.reverse_bits() >> (usize::BITS - bits))
-        .collect()
-}
-
 pub trait FftExecutor<T> {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError>;
+    fn direction(&self) -> FftDirection;
+    fn length(&self) -> usize;
 }
 
 pub struct Zaft {}
@@ -72,6 +68,25 @@ impl Zaft {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        if n == 3 {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            if std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
+            {
+                use crate::avx::AvxButterfly3;
+                return Ok(Box::new(AvxButterfly3::new(fft_direction)));
+            }
+            #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+            {
+                use crate::neon::NeonButterfly3;
+                return Ok(Box::new(NeonButterfly3::new(fft_direction)));
+            }
+            #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+            {
+                use crate::butterflies::Butterfly3;
+                return Ok(Box::new(Butterfly3::new(fft_direction)));
+            }
+        }
         // Use Radix-3 if divisible by 3
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
@@ -141,6 +156,25 @@ impl Zaft {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        if n == 4 {
+            #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+            {
+                use crate::neon::NeonButterfly4;
+                return Ok(Box::new(NeonButterfly4::new(fft_direction)));
+            }
+            #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+            {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxButterfly4;
+                    return Ok(Box::new(AvxButterfly4::new(fft_direction)));
+                }
+                use crate::butterflies::Butterfly4;
+                return Ok(Box::new(Butterfly4::new(fft_direction)));
+            }
+        }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -209,6 +243,9 @@ impl Zaft {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        if n == 2 {
+            return Ok(Box::new(Butterfly2::new(fft_direction)));
+        }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -267,6 +304,25 @@ impl Zaft {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        if n == 3 {
+            #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+            {
+                use crate::neon::NeonButterfly3;
+                return Ok(Box::new(NeonButterfly3::new(fft_direction)));
+            }
+            #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+            {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxButterfly3;
+                    return Ok(Box::new(AvxButterfly3::new(fft_direction)));
+                }
+                use crate::butterflies::Butterfly3;
+                return Ok(Box::new(Butterfly3::new(fft_direction)));
+            }
+        }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -335,6 +391,25 @@ impl Zaft {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        if n == 4 {
+            #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+            {
+                use crate::neon::NeonButterfly4;
+                return Ok(Box::new(NeonButterfly4::new(fft_direction)));
+            }
+            #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+            {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxButterfly4;
+                    return Ok(Box::new(AvxButterfly4::new(fft_direction)));
+                }
+                use crate::butterflies::Butterfly4;
+                return Ok(Box::new(Butterfly4::new(fft_direction)));
+            }
+        }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -369,6 +444,9 @@ impl Zaft {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        if n == 2 {
+            return Ok(Box::new(Butterfly2::new(fft_direction)));
+        }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -483,7 +561,7 @@ impl Zaft {
 }
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-pub(crate) enum FftDirection {
+pub enum FftDirection {
     Forward,
     Inverse,
 }

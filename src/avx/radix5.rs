@@ -45,6 +45,7 @@ pub(crate) struct AvxFmaRadix5<T> {
     execution_length: usize,
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
+    direction: FftDirection,
 }
 
 impl<T: Default + Clone + Radix5Twiddles + 'static + Copy + FftTrigonometry + Float> AvxFmaRadix5<T>
@@ -63,6 +64,7 @@ where
             twiddles,
             twiddle1: compute_twiddle(1, 5, fft_direction),
             twiddle2: compute_twiddle(2, 5, fft_direction),
+            direction: fft_direction,
         })
     }
 }
@@ -272,6 +274,14 @@ impl FftExecutor<f64> for AvxFmaRadix5<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f64(in_place) }
     }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
 }
 
 impl AvxFmaRadix5<f32> {
@@ -313,11 +323,10 @@ impl AvxFmaRadix5<f32> {
                         let xw1 = _mm256_loadu_ps(
                             m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast(),
                         );
-                        let xw2 = _mm256_loadu_ps(
-                            m_twiddles.get_unchecked(4 * (j + 2)..).as_ptr().cast(),
-                        );
+                        let xw2 =
+                            _mm256_loadu_ps(m_twiddles.get_unchecked(4 * j + 4..).as_ptr().cast());
                         let xw3 = _mm256_loadu_ps(
-                            m_twiddles.get_unchecked(4 * (j + 3)..).as_ptr().cast(),
+                            m_twiddles.get_unchecked(4 * (j + 1) + 4..).as_ptr().cast(),
                         );
 
                         let (tw0, tw1, tw2, tw3) = _mm256s_interleave_epi64(xw0, xw1, xw2, xw3);
@@ -572,5 +581,13 @@ impl AvxFmaRadix5<f32> {
 impl FftExecutor<f32> for AvxFmaRadix5<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
     }
 }

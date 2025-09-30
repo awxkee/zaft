@@ -44,6 +44,7 @@ pub(crate) struct NeonRadix5<T> {
     execution_length: usize,
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
+    direction: FftDirection,
 }
 
 impl<T: Default + Clone + Radix5Twiddles + 'static + Copy + FftTrigonometry + Float> NeonRadix5<T>
@@ -62,6 +63,7 @@ where
             twiddles,
             twiddle1: compute_twiddle(1, 5, fft_direction),
             twiddle2: compute_twiddle(2, 5, fft_direction),
+            direction: fft_direction,
         })
     }
 }
@@ -160,6 +162,14 @@ impl FftExecutor<f64> for NeonRadix5<f64> {
         }
         Ok(())
     }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
 }
 
 impl FftExecutor<f32> for NeonRadix5<f32> {
@@ -197,10 +207,9 @@ impl FftExecutor<f32> for NeonRadix5<f32> {
                         let tw0 = vld1q_f32(m_twiddles.get_unchecked(4 * j..).as_ptr().cast());
                         let tw1 =
                             vld1q_f32(m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast());
-                        let tw2 =
-                            vld1q_f32(m_twiddles.get_unchecked(4 * (j + 2)..).as_ptr().cast());
+                        let tw2 = vld1q_f32(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast());
                         let tw3 =
-                            vld1q_f32(m_twiddles.get_unchecked(4 * (j + 3)..).as_ptr().cast());
+                            vld1q_f32(m_twiddles.get_unchecked(4 * (j + 1) + 2..).as_ptr().cast());
 
                         let u1 = mul_complex_f32(
                             vld1q_f32(data.get_unchecked(j + fifth..).as_ptr().cast()),
@@ -340,5 +349,102 @@ impl FftExecutor<f32> for NeonRadix5<f32> {
             }
         }
         Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_neon_radix5() {
+        for i in 1..7 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = NeonRadix5::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = NeonRadix5::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| Complex::new(x.re as f64, x.im as f64) * (1.0f64 / input.len() as f64))
+                .map(|x| Complex::new(x.re as f32, x.im as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_neon_radix5_f64() {
+        for i in 1..7 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = NeonRadix5::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = NeonRadix5::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0f64 / input.len() as f64))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

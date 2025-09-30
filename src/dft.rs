@@ -37,6 +37,7 @@ use std::ops::{Add, Mul, Sub};
 pub(crate) struct Dft<T> {
     size: usize,
     twiddles: Vec<Complex<T>>,
+    direction: FftDirection,
 }
 
 impl<T: Copy + Float + FftTrigonometry + 'static + AsPrimitive<f64>> Dft<T>
@@ -47,6 +48,7 @@ where
         Ok(Dft {
             size,
             twiddles: generate_twiddles_dft(size, fft_direction)?,
+            direction: fft_direction,
         })
     }
 }
@@ -60,18 +62,16 @@ where
 {
     let mut twiddles = Vec::new();
     twiddles
-        .try_reserve_exact(size * size)
-        .map_err(|_| ZaftError::OutOfMemory(size * size))?;
-    for k in 0..size {
-        for t in 0..size {
-            let angle = -2.0 * (k * t) as f64 / size as f64;
-            let angle = match fft_direction {
-                FftDirection::Forward => angle,
-                FftDirection::Inverse => -angle,
-            };
-            let (s, c) = angle.as_().sincos_pi();
-            twiddles.push(Complex { re: c, im: s });
-        }
+        .try_reserve_exact(size)
+        .map_err(|_| ZaftError::OutOfMemory(size))?;
+    for t in 0..size {
+        let angle = -2.0 * t as f64 / size as f64;
+        let angle = match fft_direction {
+            FftDirection::Forward => angle,
+            FftDirection::Inverse => -angle,
+        };
+        let (s, c) = angle.as_().sincos_pi();
+        twiddles.push(Complex { re: c, im: s });
     }
     Ok(twiddles)
 }
@@ -102,15 +102,27 @@ where
 
         for (k, dst) in output.iter_mut().enumerate() {
             let mut sum = Complex::<T>::new(0f64.as_(), 0f64.as_());
-            let row_offset = k * n;
-            for t in 0..n {
-                let w = unsafe { *self.twiddles.get_unchecked(row_offset + t) };
-                sum = c_mul_add_fast(unsafe { *in_place.get_unchecked(t) }, w, sum);
+            let mut twiddle_idx = 0usize;
+            for src in in_place.iter() {
+                let w = unsafe { *self.twiddles.get_unchecked(twiddle_idx) };
+                sum = c_mul_add_fast(*src, w, sum);
+                twiddle_idx += k;
+                if twiddle_idx >= self.twiddles.len() {
+                    twiddle_idx -= self.twiddles.len();
+                }
             }
             *dst = sum;
         }
 
         in_place.copy_from_slice(&output);
         Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        self.size
     }
 }

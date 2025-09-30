@@ -34,6 +34,7 @@ mod radix5;
 mod radix6;
 mod util;
 
+pub(crate) use butterflies::{AvxButterfly3, AvxButterfly4};
 pub(crate) use radix2::AvxFmaRadix2;
 pub(crate) use radix3::AvxFmaRadix3;
 pub(crate) use radix4::AvxFmaRadix4;
