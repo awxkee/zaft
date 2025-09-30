@@ -64,7 +64,7 @@ pub(crate) fn digit_reverse_indices(n: usize, radix: usize) -> Result<Vec<usize>
 }
 
 /// Helper function to check if a number is a power of 3.
-pub(crate) fn is_power_of_three(n: usize) -> bool {
+pub(crate) fn is_power_of_three(n: u64) -> bool {
     if n == 0 {
         return false;
     }
@@ -100,7 +100,7 @@ where
     }
 }
 
-pub(crate) fn is_power_of_five(n: usize) -> bool {
+pub(crate) fn is_power_of_five(n: u64) -> bool {
     let mut n = n;
     if n == 0 {
         return false;
@@ -124,7 +124,7 @@ pub(crate) fn permute_inplace<T: Copy + Clone>(table: &mut [T], lut: &[usize]) {
     }
 }
 
-pub(crate) fn is_power_of_six(n: usize) -> bool {
+pub(crate) fn is_power_of_six(n: u64) -> bool {
     let mut n = n;
     if n < 1 {
         return false;

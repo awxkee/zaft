@@ -12,6 +12,15 @@ use zaft::Zaft;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.benchmark_group("Fft");
+
+    let mut input_1296 = vec![Complex::<f32>::default(); 1296];
+    for z in input_1296.iter_mut() {
+        *z = Complex {
+            re: rand::rng().random(),
+            im: rand::rng().random(),
+        };
+    }
+
     let mut input_power4 = vec![Complex::<f64>::default(); 1024];
     for z in input_power4.iter_mut() {
         *z = Complex {
@@ -91,6 +100,22 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             im: rand::rng().random(),
         };
     }
+
+    c.bench_function("rustfft 1296", |b| {
+        let plan = FftPlanner::new().plan_fft_forward(input_1296.len());
+        let mut working = input_1296.to_vec();
+        b.iter(|| {
+            plan.process(&mut working);
+        })
+    });
+
+    c.bench_function("zaft 1296", |b| {
+        let plan = Zaft::make_inverse_fft_f32(input_1296.len()).unwrap();
+        let mut working = input_1296.to_vec();
+        b.iter(|| {
+            plan.execute(&mut working).unwrap();
+        })
+    });
 
     c.bench_function("rustfft power2", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power2.len());

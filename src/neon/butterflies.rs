@@ -168,34 +168,37 @@ where
 
 impl FftExecutor<f64> for NeonButterfly3<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() != 3 {
-            return Err(ZaftError::InvalidInPlaceLength(3, in_place.len()));
+        if in_place.len() % 3 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 3));
         }
 
-        unsafe {
-            let twiddle_re = vdupq_n_f64(self.twiddle.re);
-            let tw1 = vld1q_f64(self.tw1.as_ptr());
-            let tw2 = vld1q_f64(self.tw2.as_ptr());
+        let twiddle_re = unsafe { vdupq_n_f64(self.twiddle.re) };
 
-            let u0 = vld1q_f64(in_place.get_unchecked(0..).as_ptr().cast());
-            let u1 = vld1q_f64(in_place.get_unchecked(1..).as_ptr().cast());
-            let u2 = vld1q_f64(in_place.get_unchecked(2..).as_ptr().cast());
+        for chunk in in_place.chunks_exact_mut(3) {
+            unsafe {
+                let tw1 = vld1q_f64(self.tw1.as_ptr());
+                let tw2 = vld1q_f64(self.tw2.as_ptr());
 
-            let xp = vaddq_f64(u1, u2);
-            let xn = vsubq_f64(u1, u2);
-            let sum = vaddq_f64(u0, xp);
+                let u0 = vld1q_f64(chunk.get_unchecked(0..).as_ptr().cast());
+                let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
+                let u2 = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
 
-            let w_1 = vfmaq_f64(u0, twiddle_re, xp);
+                let xp = vaddq_f64(u1, u2);
+                let xn = vsubq_f64(u1, u2);
+                let sum = vaddq_f64(u0, xp);
 
-            let xn_rot = vextq_f64::<1>(xn, xn);
+                let w_1 = vfmaq_f64(u0, twiddle_re, xp);
 
-            let y0 = sum;
-            let y1 = vfmaq_f64(w_1, tw1, xn_rot);
-            let y2 = vfmaq_f64(w_1, tw2, xn_rot);
+                let xn_rot = vextq_f64::<1>(xn, xn);
 
-            vst1q_f64(in_place.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
-            vst1q_f64(in_place.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
-            vst1q_f64(in_place.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+                let y0 = sum;
+                let y1 = vfmaq_f64(w_1, tw1, xn_rot);
+                let y2 = vfmaq_f64(w_1, tw2, xn_rot);
+
+                vst1q_f64(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
+                vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
+                vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+            }
         }
         Ok(())
     }
@@ -211,38 +214,39 @@ impl FftExecutor<f64> for NeonButterfly3<f64> {
 
 impl FftExecutor<f32> for NeonButterfly3<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() != 3 {
-            return Err(ZaftError::InvalidInPlaceLength(3, in_place.len()));
+        if in_place.len() % 3 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 3));
         }
+        let twiddle_re = unsafe { vdup_n_f32(self.twiddle.re) };
 
-        unsafe {
-            let twiddle_re = vdup_n_f32(self.twiddle.re);
+        for chunk in in_place.chunks_exact_mut(3) {
+            unsafe {
+                let tw1 = vld1_f32(self.tw1.as_ptr());
+                let tw2 = vld1_f32(self.tw2.as_ptr());
+                let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
 
-            let tw1 = vld1_f32(self.tw1.as_ptr());
-            let tw2 = vld1_f32(self.tw2.as_ptr());
-            let uz0 = vld1q_f32(in_place.get_unchecked(0..).as_ptr().cast());
+                let u0 = vget_low_f32(uz0);
+                let u1 = vget_high_f32(uz0);
+                let u2 = vld1_f32(chunk.get_unchecked(2..).as_ptr().cast());
 
-            let u0 = vget_low_f32(uz0);
-            let u1 = vget_high_f32(uz0);
-            let u2 = vld1_f32(in_place.get_unchecked(2..).as_ptr().cast());
+                let xp = vadd_f32(u1, u2);
+                let xn = vsub_f32(u1, u2);
+                let sum = vadd_f32(u0, xp);
 
-            let xp = vadd_f32(u1, u2);
-            let xn = vsub_f32(u1, u2);
-            let sum = vadd_f32(u0, xp);
+                let w_1 = vfma_f32(u0, twiddle_re, xp);
 
-            let w_1 = vfma_f32(u0, twiddle_re, xp);
+                let xn_rot = vext_f32::<1>(xn, xn);
 
-            let xn_rot = vext_f32::<1>(xn, xn);
+                let y0 = sum;
+                let y1 = vfma_f32(w_1, tw1, xn_rot);
+                let y2 = vfma_f32(w_1, tw2, xn_rot);
 
-            let y0 = sum;
-            let y1 = vfma_f32(w_1, tw1, xn_rot);
-            let y2 = vfma_f32(w_1, tw2, xn_rot);
-
-            vst1q_f32(
-                in_place.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                vcombine_f32(y0, y1),
-            );
-            vst1_f32(in_place.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+                vst1q_f32(
+                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
+                    vcombine_f32(y0, y1),
+                );
+                vst1_f32(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+            }
         }
         Ok(())
     }
@@ -281,40 +285,39 @@ where
 
 impl FftExecutor<f32> for NeonButterfly4<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() != 4 {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.length(),
-                in_place.len(),
-            ));
+        if in_place.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 4));
         }
-        unsafe {
-            let v_i_multiplier = vreinterpret_u32_f32(vld1_f32(self.multiplier.as_ptr()));
 
-            let uz0 = vld1q_f32(in_place.get_unchecked(0..).as_ptr().cast());
-            let uz1 = vld1q_f32(in_place.get_unchecked(2..).as_ptr().cast());
+        let v_i_multiplier = unsafe { vreinterpret_u32_f32(vld1_f32(self.multiplier.as_ptr())) };
+        for chunk in in_place.chunks_exact_mut(4) {
+            unsafe {
+                let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
+                let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
 
-            let a = vget_low_f32(uz0);
-            let b = vget_high_f32(uz0);
-            let c = vget_low_f32(uz1);
-            let d = vget_high_f32(uz1);
+                let a = vget_low_f32(uz0);
+                let b = vget_high_f32(uz0);
+                let c = vget_low_f32(uz1);
+                let d = vget_high_f32(uz1);
 
-            let t0 = vadd_f32(a, c);
-            let t1 = vsub_f32(a, c);
-            let t2 = vadd_f32(b, d);
-            let mut t3 = vsub_f32(b, d);
-            t3 = vreinterpret_f32_u32(veor_u32(
-                vreinterpret_u32_f32(vext_f32::<1>(t3, t3)),
-                v_i_multiplier,
-            ));
+                let t0 = vadd_f32(a, c);
+                let t1 = vsub_f32(a, c);
+                let t2 = vadd_f32(b, d);
+                let mut t3 = vsub_f32(b, d);
+                t3 = vreinterpret_f32_u32(veor_u32(
+                    vreinterpret_u32_f32(vext_f32::<1>(t3, t3)),
+                    v_i_multiplier,
+                ));
 
-            vst1q_f32(
-                in_place.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                vcombine_f32(vadd_f32(t0, t2), vadd_f32(t1, t3)),
-            );
-            vst1q_f32(
-                in_place.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                vcombine_f32(vsub_f32(t0, t2), vsub_f32(t1, t3)),
-            );
+                vst1q_f32(
+                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
+                    vcombine_f32(vadd_f32(t0, t2), vadd_f32(t1, t3)),
+                );
+                vst1q_f32(
+                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    vcombine_f32(vsub_f32(t0, t2), vsub_f32(t1, t3)),
+                );
+            }
         }
         Ok(())
     }
@@ -330,45 +333,44 @@ impl FftExecutor<f32> for NeonButterfly4<f32> {
 
 impl FftExecutor<f64> for NeonButterfly4<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() != 4 {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.length(),
-                in_place.len(),
-            ));
+        if in_place.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 4));
         }
-        unsafe {
-            let v_i_multiplier = vreinterpretq_u64_f64(vld1q_f64(self.multiplier.as_ptr()));
+        let v_i_multiplier = unsafe { vreinterpretq_u64_f64(vld1q_f64(self.multiplier.as_ptr())) };
 
-            let a = vld1q_f64(in_place.get_unchecked(0..).as_ptr().cast());
-            let b = vld1q_f64(in_place.get_unchecked(1..).as_ptr().cast());
-            let c = vld1q_f64(in_place.get_unchecked(2..).as_ptr().cast());
-            let d = vld1q_f64(in_place.get_unchecked(3..).as_ptr().cast());
+        for chunk in in_place.chunks_exact_mut(4) {
+            unsafe {
+                let a = vld1q_f64(chunk.get_unchecked(0..).as_ptr().cast());
+                let b = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
+                let c = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
+                let d = vld1q_f64(chunk.get_unchecked(3..).as_ptr().cast());
 
-            let t0 = vaddq_f64(a, c);
-            let t1 = vsubq_f64(a, c);
-            let t2 = vaddq_f64(b, d);
-            let mut t3 = vsubq_f64(b, d);
-            t3 = vreinterpretq_f64_u64(veorq_u64(
-                vreinterpretq_u64_f64(vextq_f64::<1>(t3, t3)),
-                v_i_multiplier,
-            ));
+                let t0 = vaddq_f64(a, c);
+                let t1 = vsubq_f64(a, c);
+                let t2 = vaddq_f64(b, d);
+                let mut t3 = vsubq_f64(b, d);
+                t3 = vreinterpretq_f64_u64(veorq_u64(
+                    vreinterpretq_u64_f64(vextq_f64::<1>(t3, t3)),
+                    v_i_multiplier,
+                ));
 
-            vst1q_f64(
-                in_place.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                vaddq_f64(t0, t2),
-            );
-            vst1q_f64(
-                in_place.get_unchecked_mut(1..).as_mut_ptr().cast(),
-                vaddq_f64(t1, t3),
-            );
-            vst1q_f64(
-                in_place.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                vsubq_f64(t0, t2),
-            );
-            vst1q_f64(
-                in_place.get_unchecked_mut(3..).as_mut_ptr().cast(),
-                vsubq_f64(t1, t3),
-            );
+                vst1q_f64(
+                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
+                    vaddq_f64(t0, t2),
+                );
+                vst1q_f64(
+                    chunk.get_unchecked_mut(1..).as_mut_ptr().cast(),
+                    vaddq_f64(t1, t3),
+                );
+                vst1q_f64(
+                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    vsubq_f64(t0, t2),
+                );
+                vst1q_f64(
+                    chunk.get_unchecked_mut(3..).as_mut_ptr().cast(),
+                    vsubq_f64(t1, t3),
+                );
+            }
         }
         Ok(())
     }

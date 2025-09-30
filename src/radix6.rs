@@ -109,7 +109,10 @@ where
     f64: AsPrimitive<T>,
 {
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<Radix6<T>, ZaftError> {
-        assert!(is_power_of_six(size), "Input length must be a power of 6");
+        assert!(
+            is_power_of_six(size as u64),
+            "Input length must be a power of 6"
+        );
 
         let twiddles = T::make_twiddles(size, fft_direction)?;
         let rev = digit_reverse_indices(size, 6)?;
@@ -193,66 +196,68 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if self.execution_length != in_place.len() {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.execution_length,
+        if in_place.len() % self.execution_length != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
+                self.execution_length,
             ));
         }
 
-        // Digit-reversal permutation
-        permute_inplace(in_place, &self.permutations);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            // Digit-reversal permutation
+            permute_inplace(chunk, &self.permutations);
 
-        let mut len = 6;
+            let mut len = 6;
 
-        unsafe {
-            let mut m_twiddles = self.twiddles.as_slice();
+            unsafe {
+                let mut m_twiddles = self.twiddles.as_slice();
 
-            while len <= self.execution_length {
-                let sixth = len / 6;
+                while len <= self.execution_length {
+                    let sixth = len / 6;
 
-                for data in in_place.chunks_exact_mut(len) {
-                    for j in 0..sixth {
-                        let u0 = *data.get_unchecked(j);
-                        let u1 = c_mul_fast(
-                            *data.get_unchecked(j + sixth),
-                            *m_twiddles.get_unchecked(5 * j),
-                        );
-                        let u2 = c_mul_fast(
-                            *data.get_unchecked(j + 2 * sixth),
-                            *m_twiddles.get_unchecked(5 * j + 1),
-                        );
-                        let u3 = c_mul_fast(
-                            *data.get_unchecked(j + 3 * sixth),
-                            *m_twiddles.get_unchecked(5 * j + 2),
-                        );
-                        let u4 = c_mul_fast(
-                            *data.get_unchecked(j + 4 * sixth),
-                            *m_twiddles.get_unchecked(5 * j + 3),
-                        );
-                        let u5 = c_mul_fast(
-                            *data.get_unchecked(j + 5 * sixth),
-                            *m_twiddles.get_unchecked(5 * j + 4),
-                        );
+                    for data in chunk.chunks_exact_mut(len) {
+                        for j in 0..sixth {
+                            let u0 = *data.get_unchecked(j);
+                            let u1 = c_mul_fast(
+                                *data.get_unchecked(j + sixth),
+                                *m_twiddles.get_unchecked(5 * j),
+                            );
+                            let u2 = c_mul_fast(
+                                *data.get_unchecked(j + 2 * sixth),
+                                *m_twiddles.get_unchecked(5 * j + 1),
+                            );
+                            let u3 = c_mul_fast(
+                                *data.get_unchecked(j + 3 * sixth),
+                                *m_twiddles.get_unchecked(5 * j + 2),
+                            );
+                            let u4 = c_mul_fast(
+                                *data.get_unchecked(j + 4 * sixth),
+                                *m_twiddles.get_unchecked(5 * j + 3),
+                            );
+                            let u5 = c_mul_fast(
+                                *data.get_unchecked(j + 5 * sixth),
+                                *m_twiddles.get_unchecked(5 * j + 4),
+                            );
 
-                        let (t0, t2, t4) = self.butterfly3(u0, u2, u4);
-                        let (t1, t3, t5) = self.butterfly3(u3, u5, u1);
-                        let (y0, y3) = self.butterfly2(t0, t1);
-                        let (y4, y1) = self.butterfly2(t2, t3);
-                        let (y2, y5) = self.butterfly2(t4, t5);
+                            let (t0, t2, t4) = self.butterfly3(u0, u2, u4);
+                            let (t1, t3, t5) = self.butterfly3(u3, u5, u1);
+                            let (y0, y3) = self.butterfly2(t0, t1);
+                            let (y4, y1) = self.butterfly2(t2, t3);
+                            let (y2, y5) = self.butterfly2(t4, t5);
 
-                        // Store results
-                        *data.get_unchecked_mut(j) = y0;
-                        *data.get_unchecked_mut(j + sixth) = y1;
-                        *data.get_unchecked_mut(j + 2 * sixth) = y2;
-                        *data.get_unchecked_mut(j + 3 * sixth) = y3;
-                        *data.get_unchecked_mut(j + 4 * sixth) = y4;
-                        *data.get_unchecked_mut(j + 5 * sixth) = y5;
+                            // Store results
+                            *data.get_unchecked_mut(j) = y0;
+                            *data.get_unchecked_mut(j + sixth) = y1;
+                            *data.get_unchecked_mut(j + 2 * sixth) = y2;
+                            *data.get_unchecked_mut(j + 3 * sixth) = y3;
+                            *data.get_unchecked_mut(j + 4 * sixth) = y4;
+                            *data.get_unchecked_mut(j + 5 * sixth) = y5;
+                        }
                     }
-                }
 
-                m_twiddles = &m_twiddles[sixth * 5..];
-                len *= 6;
+                    m_twiddles = &m_twiddles[sixth * 5..];
+                    len *= 6;
+                }
             }
         }
         Ok(())

@@ -93,28 +93,29 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let n = self.size;
-        if n != in_place.len() {
-            return Err(ZaftError::InvalidInPlaceLength(n, in_place.len()));
+        if in_place.len() % self.size != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), self.size));
         }
 
-        let mut output = try_vec![Complex::<T>::default(); n];
+        let mut output = try_vec![Complex::<T>::default(); self.size];
 
-        for (k, dst) in output.iter_mut().enumerate() {
-            let mut sum = Complex::<T>::new(0f64.as_(), 0f64.as_());
-            let mut twiddle_idx = 0usize;
-            for src in in_place.iter() {
-                let w = unsafe { *self.twiddles.get_unchecked(twiddle_idx) };
-                sum = c_mul_add_fast(*src, w, sum);
-                twiddle_idx += k;
-                if twiddle_idx >= self.twiddles.len() {
-                    twiddle_idx -= self.twiddles.len();
+        for chunk in in_place.chunks_exact_mut(self.size) {
+            for (k, dst) in output.iter_mut().enumerate() {
+                let mut sum = Complex::<T>::new(0f64.as_(), 0f64.as_());
+                let mut twiddle_idx = 0usize;
+                for src in chunk.iter() {
+                    let w = unsafe { *self.twiddles.get_unchecked(twiddle_idx) };
+                    sum = c_mul_add_fast(*src, w, sum);
+                    twiddle_idx += k;
+                    if twiddle_idx >= self.twiddles.len() {
+                        twiddle_idx -= self.twiddles.len();
+                    }
                 }
+                *dst = sum;
             }
-            *dst = sum;
-        }
 
-        in_place.copy_from_slice(&output);
+            chunk.copy_from_slice(&output);
+        }
         Ok(())
     }
 

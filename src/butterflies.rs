@@ -65,22 +65,24 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() != 2 {
-            return Err(ZaftError::InvalidInPlaceLength(2, in_place.len()));
+        if in_place.len() % 2 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 2));
         }
 
-        let u0 = unsafe { *in_place.get_unchecked(0) };
-        let u1 = unsafe { *in_place.get_unchecked(1) };
+        for chunk in in_place.chunks_exact_mut(2) {
+            let u0 = unsafe { *chunk.get_unchecked(0) };
+            let u1 = unsafe { *chunk.get_unchecked(1) };
 
-        let t = u0 + u1;
-        let y1 = u0 - u1;
-        let y0 = t;
+            let t = u0 + u1;
+            let y1 = u0 - u1;
+            let y0 = t;
 
-        unsafe {
-            *in_place.get_unchecked_mut(0) = y0;
-        }
-        unsafe {
-            *in_place.get_unchecked_mut(1) = y1;
+            unsafe {
+                *chunk.get_unchecked_mut(0) = y0;
+            }
+            unsafe {
+                *chunk.get_unchecked_mut(1) = y1;
+            }
         }
         Ok(())
     }
@@ -129,41 +131,43 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() != 3 {
-            return Err(ZaftError::InvalidInPlaceLength(3, in_place.len()));
+        if in_place.len() % 3 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 3));
         }
 
-        let u0 = unsafe { *in_place.get_unchecked(0) };
-        let u1 = unsafe { *in_place.get_unchecked(1) };
-        let u2 = unsafe { *in_place.get_unchecked(2) };
+        for chunk in in_place.chunks_exact_mut(3) {
+            let u0 = unsafe { *chunk.get_unchecked(0) };
+            let u1 = unsafe { *chunk.get_unchecked(1) };
+            let u2 = unsafe { *chunk.get_unchecked(2) };
 
-        let xp = u1 + u2;
-        let xn = u1 - u2;
-        let sum = u0 + xp;
+            let xp = u1 + u2;
+            let xn = u1 - u2;
+            let sum = u0 + xp;
 
-        let w_1 = Complex {
-            re: fmla(self.twiddle.re, xp.re, u0.re),
-            im: fmla(self.twiddle.re, xp.im, u0.im),
-        };
+            let w_1 = Complex {
+                re: fmla(self.twiddle.re, xp.re, u0.re),
+                im: fmla(self.twiddle.re, xp.im, u0.im),
+            };
 
-        let y0 = sum;
-        let y1 = Complex {
-            re: fmla(-self.twiddle.im, xn.im, w_1.re),
-            im: fmla(self.twiddle.im, xn.re, w_1.im),
-        };
-        let y2 = Complex {
-            re: fmla(self.twiddle.im, xn.im, w_1.re),
-            im: fmla(-self.twiddle.im, xn.re, w_1.im),
-        };
+            let y0 = sum;
+            let y1 = Complex {
+                re: fmla(-self.twiddle.im, xn.im, w_1.re),
+                im: fmla(self.twiddle.im, xn.re, w_1.im),
+            };
+            let y2 = Complex {
+                re: fmla(self.twiddle.im, xn.im, w_1.re),
+                im: fmla(-self.twiddle.im, xn.re, w_1.im),
+            };
 
-        unsafe {
-            *in_place.get_unchecked_mut(0) = y0;
-        }
-        unsafe {
-            *in_place.get_unchecked_mut(1) = y1;
-        }
-        unsafe {
-            *in_place.get_unchecked_mut(2) = y2;
+            unsafe {
+                *chunk.get_unchecked_mut(0) = y0;
+            }
+            unsafe {
+                *chunk.get_unchecked_mut(1) = y1;
+            }
+            unsafe {
+                *chunk.get_unchecked_mut(2) = y2;
+            }
         }
         Ok(())
     }
@@ -215,28 +219,27 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() != 4 {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.length(),
-                in_place.len(),
-            ));
+        if in_place.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 4));
         }
 
-        let a = unsafe { *in_place.get_unchecked(0) };
-        let b = unsafe { *in_place.get_unchecked(1) };
-        let c = unsafe { *in_place.get_unchecked(2) };
-        let d = unsafe { *in_place.get_unchecked(3) };
+        for chunk in in_place.chunks_exact_mut(4) {
+            let a = unsafe { *chunk.get_unchecked(0) };
+            let b = unsafe { *chunk.get_unchecked(1) };
+            let c = unsafe { *chunk.get_unchecked(2) };
+            let d = unsafe { *chunk.get_unchecked(3) };
 
-        let t0 = a + c;
-        let t1 = a - c;
-        let t2 = b + d;
-        let t3 = c_mul_fast(b - d, self.twiddle);
+            let t0 = a + c;
+            let t1 = a - c;
+            let t2 = b + d;
+            let t3 = c_mul_fast(b - d, self.twiddle);
 
-        unsafe {
-            *in_place.get_unchecked_mut(0) = t0 + t2;
-            *in_place.get_unchecked_mut(1) = t1 + t3;
-            *in_place.get_unchecked_mut(2) = t0 - t2;
-            *in_place.get_unchecked_mut(3) = t1 - t3;
+            unsafe {
+                *chunk.get_unchecked_mut(0) = t0 + t2;
+                *chunk.get_unchecked_mut(1) = t1 + t3;
+                *chunk.get_unchecked_mut(2) = t0 - t2;
+                *chunk.get_unchecked_mut(3) = t1 - t3;
+            }
         }
         Ok(())
     }

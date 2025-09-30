@@ -64,53 +64,60 @@ impl<T: Default + Clone + Radix2Twiddles> AvxFmaRadix2<T> {
 impl AvxFmaRadix2<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if self.execution_length != in_place.len() {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.execution_length,
+        if in_place.len() % self.execution_length != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
+                self.execution_length,
             ));
         }
 
-        permute_inplace(in_place, &self.permutations);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            permute_inplace(chunk, &self.permutations);
 
-        let mut len = 2;
+            let mut len = 2;
 
-        unsafe {
-            let mut m_twiddles = self.twiddles.as_slice();
-            while len <= self.execution_length {
-                let half = len / 2;
-                for data in in_place.chunks_exact_mut(len) {
-                    let mut j = 0usize;
-                    while j + 2 < half {
-                        let u0_0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
-                        let u1_0 = _mm256_loadu_pd(data.get_unchecked(j + half..).as_ptr().cast());
-                        let tw0 = _mm256_loadu_pd(m_twiddles.get_unchecked(j..).as_ptr().cast());
+            unsafe {
+                let mut m_twiddles = self.twiddles.as_slice();
+                while len <= self.execution_length {
+                    let half = len / 2;
+                    for data in chunk.chunks_exact_mut(len) {
+                        let mut j = 0usize;
+                        while j + 2 < half {
+                            let u0_0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+                            let u1_0 =
+                                _mm256_loadu_pd(data.get_unchecked(j + half..).as_ptr().cast());
+                            let tw0 =
+                                _mm256_loadu_pd(m_twiddles.get_unchecked(j..).as_ptr().cast());
 
-                        let t_0 = _m256d_mul_complex(u1_0, tw0);
-                        let y0 = _mm256_add_pd(u0_0, t_0);
-                        let y1 = _mm256_sub_pd(u0_0, t_0);
+                            let t_0 = _m256d_mul_complex(u1_0, tw0);
+                            let y0 = _mm256_add_pd(u0_0, t_0);
+                            let y1 = _mm256_sub_pd(u0_0, t_0);
 
-                        _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                        _mm256_storeu_pd(
-                            data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
-                            y1,
-                        );
-                        j += 2;
+                            _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
+                                y1,
+                            );
+                            j += 2;
+                        }
+                        for j in j..half {
+                            let u = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+                            let tw = _mm_loadu_pd(m_twiddles.get_unchecked(j..).as_ptr().cast());
+                            let u1 = _mm_loadu_pd(data.get_unchecked(j + half..).as_ptr().cast());
+                            let t = _m128d_fma_mul_complex(u1, tw);
+                            let y0 = _mm_add_pd(u, t);
+                            let y1 = _mm_sub_pd(u, t);
+                            _mm_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                            _mm_storeu_pd(
+                                data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
+                                y1,
+                            );
+                        }
                     }
-                    for j in j..half {
-                        let u = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
-                        let tw = _mm_loadu_pd(m_twiddles.get_unchecked(j..).as_ptr().cast());
-                        let u1 = _mm_loadu_pd(data.get_unchecked(j + half..).as_ptr().cast());
-                        let t = _m128d_fma_mul_complex(u1, tw);
-                        let y0 = _mm_add_pd(u, t);
-                        let y1 = _mm_sub_pd(u, t);
-                        _mm_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                        _mm_storeu_pd(data.get_unchecked_mut(j + half..).as_mut_ptr().cast(), y1);
-                    }
+
+                    len *= 2;
+                    m_twiddles = &m_twiddles[half..];
                 }
-
-                len *= 2;
-                m_twiddles = &m_twiddles[half..];
             }
         }
         Ok(())
@@ -134,74 +141,83 @@ impl FftExecutor<f64> for AvxFmaRadix2<f64> {
 impl AvxFmaRadix2<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if self.execution_length != in_place.len() {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.execution_length,
+        if in_place.len() % self.execution_length != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
+                self.execution_length,
             ));
         }
 
-        permute_inplace(in_place, &self.permutations);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            permute_inplace(chunk, &self.permutations);
 
-        let mut len = 2;
+            let mut len = 2;
 
-        unsafe {
-            let mut m_twiddles = self.twiddles.as_slice();
+            unsafe {
+                let mut m_twiddles = self.twiddles.as_slice();
 
-            while len <= self.execution_length {
-                let half = len / 2;
-                for data in in_place.chunks_exact_mut(len) {
-                    let mut j = 0usize;
+                while len <= self.execution_length {
+                    let half = len / 2;
+                    for data in chunk.chunks_exact_mut(len) {
+                        let mut j = 0usize;
 
-                    while j + 4 < half {
-                        let u0_0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
-                        let u1_0 = _mm256_loadu_ps(data.get_unchecked(j + half..).as_ptr().cast());
-                        let tw0 = _mm256_loadu_ps(m_twiddles.get_unchecked(j..).as_ptr().cast());
+                        while j + 4 < half {
+                            let u0_0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
+                            let u1_0 =
+                                _mm256_loadu_ps(data.get_unchecked(j + half..).as_ptr().cast());
+                            let tw0 =
+                                _mm256_loadu_ps(m_twiddles.get_unchecked(j..).as_ptr().cast());
 
-                        let t_0 = _m256s_mul_complex(tw0, u1_0);
+                            let t_0 = _m256s_mul_complex(tw0, u1_0);
 
-                        let y0 = _mm256_add_ps(u0_0, t_0);
-                        let y1 = _mm256_sub_ps(u0_0, t_0);
+                            let y0 = _mm256_add_ps(u0_0, t_0);
+                            let y1 = _mm256_sub_ps(u0_0, t_0);
 
-                        _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                        _mm256_storeu_ps(
-                            data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
-                            y1,
-                        );
+                            _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
+                                y1,
+                            );
 
-                        j += 4;
+                            j += 4;
+                        }
+
+                        while j + 2 < half {
+                            let u = _mm_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
+                            let tw = _mm_loadu_ps(m_twiddles.get_unchecked(j..).as_ptr().cast());
+                            let u1 = _mm_loadu_ps(data.get_unchecked(j + half..).as_ptr().cast());
+                            let t = _m128s_fma_mul_complex(tw, u1);
+                            let y0 = _mm_add_ps(u, t);
+                            let y1 = _mm_sub_ps(u, t);
+                            _mm_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                            _mm_storeu_ps(
+                                data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
+                                y1,
+                            );
+
+                            j += 2;
+                        }
+
+                        for j in j..half {
+                            let u = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
+                            let tw =
+                                _m128s_load_f32x2(m_twiddles.get_unchecked(j..).as_ptr().cast());
+                            let u1 =
+                                _m128s_load_f32x2(data.get_unchecked(j + half..).as_ptr().cast());
+                            let t = _m128s_fma_mul_complex(tw, u1);
+                            let y0 = _mm_add_ps(u, t);
+                            let y1 = _mm_sub_ps(u, t);
+                            _m128s_store_f32x2(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                            _m128s_store_f32x2(
+                                data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
+                                y1,
+                            );
+                        }
                     }
 
-                    while j + 2 < half {
-                        let u = _mm_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
-                        let tw = _mm_loadu_ps(m_twiddles.get_unchecked(j..).as_ptr().cast());
-                        let u1 = _mm_loadu_ps(data.get_unchecked(j + half..).as_ptr().cast());
-                        let t = _m128s_fma_mul_complex(tw, u1);
-                        let y0 = _mm_add_ps(u, t);
-                        let y1 = _mm_sub_ps(u, t);
-                        _mm_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                        _mm_storeu_ps(data.get_unchecked_mut(j + half..).as_mut_ptr().cast(), y1);
-
-                        j += 2;
-                    }
-
-                    for j in j..half {
-                        let u = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
-                        let tw = _m128s_load_f32x2(m_twiddles.get_unchecked(j..).as_ptr().cast());
-                        let u1 = _m128s_load_f32x2(data.get_unchecked(j + half..).as_ptr().cast());
-                        let t = _m128s_fma_mul_complex(tw, u1);
-                        let y0 = _mm_add_ps(u, t);
-                        let y1 = _mm_sub_ps(u, t);
-                        _m128s_store_f32x2(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                        _m128s_store_f32x2(
-                            data.get_unchecked_mut(j + half..).as_mut_ptr().cast(),
-                            y1,
-                        );
-                    }
+                    len *= 2;
+                    m_twiddles = &m_twiddles[half..];
                 }
-
-                len *= 2;
-                m_twiddles = &m_twiddles[half..];
             }
         }
         Ok(())

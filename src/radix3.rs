@@ -145,68 +145,70 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if self.execution_length != in_place.len() {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.execution_length,
+        if in_place.len() % self.execution_length != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
+                self.execution_length,
             ));
         }
 
-        // Trit-reversal permutation
-        permute_inplace(in_place, &self.permutations);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            // Trit-reversal permutation
+            permute_inplace(chunk, &self.permutations);
 
-        let mut len = 3;
+            let mut len = 3;
 
-        unsafe {
-            let mut m_twiddles = self.twiddles.as_slice();
+            unsafe {
+                let mut m_twiddles = self.twiddles.as_slice();
 
-            while len <= self.execution_length {
-                let third = len / 3;
-                for data in in_place.chunks_exact_mut(len) {
-                    for j in 0..third {
-                        let u0 = *data.get_unchecked(j);
-                        let u1 = c_mul_fast(
-                            *data.get_unchecked(j + third),
-                            *m_twiddles.get_unchecked(2 * j),
-                        );
-                        let u2 = c_mul_fast(
-                            *data.get_unchecked(j + 2 * third),
-                            *m_twiddles.get_unchecked(2 * j + 1),
-                        );
+                while len <= self.execution_length {
+                    let third = len / 3;
+                    for data in chunk.chunks_exact_mut(len) {
+                        for j in 0..third {
+                            let u0 = *data.get_unchecked(j);
+                            let u1 = c_mul_fast(
+                                *data.get_unchecked(j + third),
+                                *m_twiddles.get_unchecked(2 * j),
+                            );
+                            let u2 = c_mul_fast(
+                                *data.get_unchecked(j + 2 * third),
+                                *m_twiddles.get_unchecked(2 * j + 1),
+                            );
 
-                        // Radix-3 butterfly
-                        let xp = u1 + u2;
-                        let xn = u1 - u2;
-                        let sum = u0 + xp;
+                            // Radix-3 butterfly
+                            let xp = u1 + u2;
+                            let xn = u1 - u2;
+                            let sum = u0 + xp;
 
-                        let w_1 = Complex {
-                            re: fmla(self.twiddle.re, xp.re, u0.re),
-                            im: fmla(self.twiddle.re, xp.im, u0.im),
-                        };
-                        // let w_2 = ZComplex {
-                        //     re: -self.twiddle.im * xn.im,
-                        //     im: self.twiddle.im * xn.re,
-                        // };
+                            let w_1 = Complex {
+                                re: fmla(self.twiddle.re, xp.re, u0.re),
+                                im: fmla(self.twiddle.re, xp.im, u0.im),
+                            };
+                            // let w_2 = ZComplex {
+                            //     re: -self.twiddle.im * xn.im,
+                            //     im: self.twiddle.im * xn.re,
+                            // };
 
-                        let y0 = sum;
-                        let y1 = Complex {
-                            re: fmla(-self.twiddle.im, xn.im, w_1.re),
-                            im: fmla(self.twiddle.im, xn.re, w_1.im),
-                        }; //w_1 + w_2;
-                        let y2 = Complex {
-                            re: fmla(self.twiddle.im, xn.im, w_1.re),
-                            im: fmla(-self.twiddle.im, xn.re, w_1.im),
-                        }; //w_1 - w_2;
-                        // let y2 = w_1 - w_2;
+                            let y0 = sum;
+                            let y1 = Complex {
+                                re: fmla(-self.twiddle.im, xn.im, w_1.re),
+                                im: fmla(self.twiddle.im, xn.re, w_1.im),
+                            }; //w_1 + w_2;
+                            let y2 = Complex {
+                                re: fmla(self.twiddle.im, xn.im, w_1.re),
+                                im: fmla(-self.twiddle.im, xn.re, w_1.im),
+                            }; //w_1 - w_2;
+                            // let y2 = w_1 - w_2;
 
-                        *data.get_unchecked_mut(j) = y0;
-                        *data.get_unchecked_mut(j + third) = y1;
-                        *data.get_unchecked_mut(j + 2 * third) = y2;
+                            *data.get_unchecked_mut(j) = y0;
+                            *data.get_unchecked_mut(j + third) = y1;
+                            *data.get_unchecked_mut(j + 2 * third) = y2;
+                        }
                     }
-                }
 
-                m_twiddles = &m_twiddles[third * 2..];
-                len *= 3;
+                    m_twiddles = &m_twiddles[third * 2..];
+                    len *= 3;
+                }
             }
         }
         Ok(())

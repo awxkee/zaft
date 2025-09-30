@@ -154,33 +154,35 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if self.execution_length != in_place.len() {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.execution_length,
+        if in_place.len() % self.execution_length != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
+                self.execution_length,
             ));
         }
 
-        permute_inplace(in_place, &self.permutations);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            permute_inplace(chunk, &self.permutations);
 
-        let mut len = 2;
+            let mut len = 2;
 
-        unsafe {
-            let mut m_twiddles = self.twiddles.as_slice();
-            while len <= self.execution_length {
-                let half = len / 2;
-                for data in in_place.chunks_exact_mut(len) {
-                    for j in 0..half {
-                        let u = *data.get_unchecked(j);
-                        let tw = *m_twiddles.get_unchecked(j);
-                        let t = c_mul_fast(tw, *data.get_unchecked(j + half));
-                        *data.get_unchecked_mut(j) = u + t;
-                        *data.get_unchecked_mut(j + half) = u - t;
+            unsafe {
+                let mut m_twiddles = self.twiddles.as_slice();
+                while len <= self.execution_length {
+                    let half = len / 2;
+                    for data in chunk.chunks_exact_mut(len) {
+                        for j in 0..half {
+                            let u = *data.get_unchecked(j);
+                            let tw = *m_twiddles.get_unchecked(j);
+                            let t = c_mul_fast(tw, *data.get_unchecked(j + half));
+                            *data.get_unchecked_mut(j) = u + t;
+                            *data.get_unchecked_mut(j + half) = u - t;
+                        }
                     }
-                }
 
-                len *= 2;
-                m_twiddles = &m_twiddles[half..];
+                    len *= 2;
+                    m_twiddles = &m_twiddles[half..];
+                }
             }
         }
         Ok(())

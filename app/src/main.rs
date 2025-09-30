@@ -29,17 +29,23 @@
 
 extern crate core;
 
+use rand::Rng;
 use rustfft::FftPlanner;
 use rustfft::num_complex::Complex;
 use zaft::Zaft;
 
 fn main() {
-    let mut data = vec![
+    let mut data0 = vec![
         Complex::new(1.0, 4.0),
         Complex::new(5.0, -1.0),
         Complex::new(9.6, -2.0),
         Complex::new(12.6, -3.0),
+        Complex::new(14.6, -6.0),
     ];
+    let mut data = vec![Complex::<f32>::default(); 360];
+    for (k, z) in data.iter_mut().enumerate() {
+        *z = data0[k % data0.len()];
+    }
 
     let o_data = data.clone();
 

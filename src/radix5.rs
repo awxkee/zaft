@@ -110,7 +110,10 @@ where
     f64: AsPrimitive<T>,
 {
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<Radix5<T>, ZaftError> {
-        assert!(is_power_of_five(size), "Input length must be a power of 5");
+        assert!(
+            is_power_of_five(size as u64),
+            "Input length must be a power of 5"
+        );
 
         let twiddles = T::make_twiddles(size, fft_direction)?;
         let rev = digit_reverse_indices(size, 5)?;
@@ -142,117 +145,111 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if self.execution_length != in_place.len() {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.execution_length,
+        if in_place.len() % self.execution_length != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
+                self.execution_length,
             ));
         }
 
-        // Digit-reversal permutation
-        permute_inplace(in_place, &self.permutations);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            // Digit-reversal permutation
+            permute_inplace(chunk, &self.permutations);
 
-        let mut len = 5;
+            let mut len = 5;
 
-        unsafe {
-            let mut m_twiddles = self.twiddles.as_slice();
+            unsafe {
+                let mut m_twiddles = self.twiddles.as_slice();
 
-            while len <= self.execution_length {
-                let fifth = len / 5;
+                while len <= self.execution_length {
+                    let fifth = len / 5;
 
-                for data in in_place.chunks_exact_mut(len) {
-                    for j in 0..fifth {
-                        let u0 = *data.get_unchecked(j);
-                        let u1 = c_mul_fast(
-                            *data.get_unchecked(j + fifth),
-                            *m_twiddles.get_unchecked(4 * j),
-                        );
-                        let u2 = c_mul_fast(
-                            *data.get_unchecked(j + 2 * fifth),
-                            *m_twiddles.get_unchecked(4 * j + 1),
-                        );
-                        let u3 = c_mul_fast(
-                            *data.get_unchecked(j + 3 * fifth),
-                            *m_twiddles.get_unchecked(4 * j + 2),
-                        );
-                        let u4 = c_mul_fast(
-                            *data.get_unchecked(j + 4 * fifth),
-                            *m_twiddles.get_unchecked(4 * j + 3),
-                        );
+                    for data in chunk.chunks_exact_mut(len) {
+                        for j in 0..fifth {
+                            let u0 = *data.get_unchecked(j);
+                            let u1 = c_mul_fast(
+                                *data.get_unchecked(j + fifth),
+                                *m_twiddles.get_unchecked(4 * j),
+                            );
+                            let u2 = c_mul_fast(
+                                *data.get_unchecked(j + 2 * fifth),
+                                *m_twiddles.get_unchecked(4 * j + 1),
+                            );
+                            let u3 = c_mul_fast(
+                                *data.get_unchecked(j + 3 * fifth),
+                                *m_twiddles.get_unchecked(4 * j + 2),
+                            );
+                            let u4 = c_mul_fast(
+                                *data.get_unchecked(j + 4 * fifth),
+                                *m_twiddles.get_unchecked(4 * j + 3),
+                            );
 
-                        // Radix-5 butterfly
+                            // Radix-5 butterfly
 
-                        let x14p = u1 + u4;
-                        let x14n = u1 - u4;
-                        let x23p = u2 + u3;
-                        let x23n = u2 - u3;
-                        let y0 = u0 + x14p + x23p;
-                        // let b14re_a =
-                        //     u0.re + self.twiddle1.re * x14p.re + self.twiddle2.re * x23p.re;
-                        // let b14re_b = self.twiddle1.im * x14n.im + self.twiddle2.im * x23n.im;
-                        // let b23re_a =
-                        //     u0.re + self.twiddle2.re * x14p.re + self.twiddle1.re * x23p.re;
-                        // let b23re_b = self.twiddle2.im * x14n.im + -self.twiddle1.im * x23n.im;
-                        //
-                        // let b14im_a =
-                        //     u0.im + self.twiddle1.re * x14p.im + self.twiddle2.re * x23p.im;
-                        // let b14im_b = self.twiddle1.im * x14n.re + self.twiddle2.im * x23n.re;
-                        // let b23im_a =
-                        //     u0.im + self.twiddle2.re * x14p.im + self.twiddle1.re * x23p.im;
-                        // let b23im_b = self.twiddle2.im * x14n.re + -self.twiddle1.im * x23n.re;
-                        let b14re_a = fmla(
-                            self.twiddle2.re,
-                            x23p.re,
-                            fmla(self.twiddle1.re, x14p.re, u0.re),
-                        );
-                        let b14re_b = fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
-                        let b23re_a = fmla(
-                            self.twiddle1.re,
-                            x23p.re,
-                            fmla(self.twiddle2.re, x14p.re, u0.re),
-                        );
-                        let b23re_b = fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
+                            let x14p = u1 + u4;
+                            let x14n = u1 - u4;
+                            let x23p = u2 + u3;
+                            let x23n = u2 - u3;
+                            let y0 = u0 + x14p + x23p;
 
-                        let b14im_a = fmla(
-                            self.twiddle2.re,
-                            x23p.im,
-                            fmla(self.twiddle1.re, x14p.im, u0.im),
-                        );
-                        let b14im_b = fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
-                        let b23im_a = fmla(
-                            self.twiddle1.re,
-                            x23p.im,
-                            fmla(self.twiddle2.re, x14p.im, u0.im),
-                        );
-                        let b23im_b = fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
+                            let b14re_a = fmla(
+                                self.twiddle2.re,
+                                x23p.re,
+                                fmla(self.twiddle1.re, x14p.re, u0.re),
+                            );
+                            let b14re_b =
+                                fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
+                            let b23re_a = fmla(
+                                self.twiddle1.re,
+                                x23p.re,
+                                fmla(self.twiddle2.re, x14p.re, u0.re),
+                            );
+                            let b23re_b =
+                                fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
 
-                        let y1 = Complex {
-                            re: b14re_a - b14re_b,
-                            im: b14im_a + b14im_b,
-                        };
-                        let y2 = Complex {
-                            re: b23re_a - b23re_b,
-                            im: b23im_a + b23im_b,
-                        };
-                        let y3 = Complex {
-                            re: b23re_a + b23re_b,
-                            im: b23im_a - b23im_b,
-                        };
-                        let y4 = Complex {
-                            re: b14re_a + b14re_b,
-                            im: b14im_a - b14im_b,
-                        };
+                            let b14im_a = fmla(
+                                self.twiddle2.re,
+                                x23p.im,
+                                fmla(self.twiddle1.re, x14p.im, u0.im),
+                            );
+                            let b14im_b =
+                                fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
+                            let b23im_a = fmla(
+                                self.twiddle1.re,
+                                x23p.im,
+                                fmla(self.twiddle2.re, x14p.im, u0.im),
+                            );
+                            let b23im_b =
+                                fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
 
-                        *data.get_unchecked_mut(j) = y0;
-                        *data.get_unchecked_mut(j + fifth) = y1;
-                        *data.get_unchecked_mut(j + 2 * fifth) = y2;
-                        *data.get_unchecked_mut(j + 3 * fifth) = y3;
-                        *data.get_unchecked_mut(j + 4 * fifth) = y4;
+                            let y1 = Complex {
+                                re: b14re_a - b14re_b,
+                                im: b14im_a + b14im_b,
+                            };
+                            let y2 = Complex {
+                                re: b23re_a - b23re_b,
+                                im: b23im_a + b23im_b,
+                            };
+                            let y3 = Complex {
+                                re: b23re_a + b23re_b,
+                                im: b23im_a - b23im_b,
+                            };
+                            let y4 = Complex {
+                                re: b14re_a + b14re_b,
+                                im: b14im_a - b14im_b,
+                            };
+
+                            *data.get_unchecked_mut(j) = y0;
+                            *data.get_unchecked_mut(j + fifth) = y1;
+                            *data.get_unchecked_mut(j + 2 * fifth) = y2;
+                            *data.get_unchecked_mut(j + 3 * fifth) = y3;
+                            *data.get_unchecked_mut(j + 4 * fifth) = y4;
+                        }
                     }
-                }
 
-                m_twiddles = &m_twiddles[fifth * 4..];
-                len *= 5;
+                    m_twiddles = &m_twiddles[fifth * 4..];
+                    len *= 5;
+                }
             }
         }
         Ok(())

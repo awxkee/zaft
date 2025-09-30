@@ -194,42 +194,45 @@ where
 impl AvxButterfly3<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() != 3 {
-            return Err(ZaftError::InvalidInPlaceLength(3, in_place.len()));
+        if in_place.len() % 3 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 3));
         }
 
-        unsafe {
-            let twiddle_re = _mm_set1_ps(self.twiddle.re);
-            let tw1 = _mm_loadu_ps(self.tw1.as_ptr());
-            let tw2 = _mm_loadu_ps(self.tw2.as_ptr());
+        let twiddle_re = _mm_set1_ps(self.twiddle.re);
+        let tw1 = unsafe { _mm_loadu_ps(self.tw1.as_ptr()) };
+        let tw2 = unsafe { _mm_loadu_ps(self.tw2.as_ptr()) };
 
-            let uz = _mm_loadu_ps(in_place.get_unchecked(0..).as_ptr().cast());
+        for chunk in in_place.chunks_exact_mut(3) {
+            unsafe {
+                let uz = _mm_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
 
-            let u0 = uz;
-            let u1 = _mm_unpackhi_ps64(uz, uz);
-            let u2 = _mm_castsi128_ps(_mm_loadu_epi64(in_place.get_unchecked(2..).as_ptr().cast()));
+                let u0 = uz;
+                let u1 = _mm_unpackhi_ps64(uz, uz);
+                let u2 =
+                    _mm_castsi128_ps(_mm_loadu_epi64(chunk.get_unchecked(2..).as_ptr().cast()));
 
-            let xp = _mm_add_ps(u1, u2);
-            let xn = _mm_sub_ps(u1, u2);
-            let sum = _mm_add_ps(u0, xp);
+                let xp = _mm_add_ps(u1, u2);
+                let xn = _mm_sub_ps(u1, u2);
+                let sum = _mm_add_ps(u0, xp);
 
-            let w_1 = _mm_fmadd_ps(twiddle_re, xp, u0);
+                let w_1 = _mm_fmadd_ps(twiddle_re, xp, u0);
 
-            const SH: i32 = shuffle(2, 3, 0, 1);
-            let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
+                const SH: i32 = shuffle(2, 3, 0, 1);
+                let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
 
-            let y0 = sum;
-            let y1 = _mm_fmadd_ps(tw1, xn_rot, w_1);
-            let y2 = _mm_fmadd_ps(tw2, xn_rot, w_1);
+                let y0 = sum;
+                let y1 = _mm_fmadd_ps(tw1, xn_rot, w_1);
+                let y2 = _mm_fmadd_ps(tw2, xn_rot, w_1);
 
-            _mm_storeu_pd(
-                in_place.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                _mm_unpacklo_pd(_mm_castps_pd(y0), _mm_castps_pd(y1)),
-            );
-            _mm_storeu_si64(
-                in_place.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                _mm_castps_si128(y2),
-            );
+                _mm_storeu_pd(
+                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
+                    _mm_unpacklo_pd(_mm_castps_pd(y0), _mm_castps_pd(y1)),
+                );
+                _mm_storeu_si64(
+                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    _mm_castps_si128(y2),
+                );
+            }
         }
         Ok(())
     }
@@ -238,37 +241,39 @@ impl AvxButterfly3<f32> {
 impl AvxButterfly3<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() != 3 {
-            return Err(ZaftError::InvalidInPlaceLength(3, in_place.len()));
+        if in_place.len() % 3 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 3));
         }
 
-        unsafe {
-            let twiddle_re = _mm_set1_pd(self.twiddle.re);
-            let tw1 = _mm_loadu_pd(self.tw1.as_ptr());
-            let tw2 = _mm_loadu_pd(self.tw2.as_ptr());
+        let twiddle_re = _mm_set1_pd(self.twiddle.re);
+        let tw1 = unsafe { _mm_loadu_pd(self.tw1.as_ptr()) };
+        let tw2 = unsafe { _mm_loadu_pd(self.tw2.as_ptr()) };
 
-            let uz0 = _mm256_loadu_pd(in_place.get_unchecked(0..).as_ptr().cast());
+        for chunk in in_place.chunks_exact_mut(3) {
+            unsafe {
+                let uz0 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
 
-            let u0 = _mm256_castpd256_pd128(uz0);
-            let u1 = _mm256_extractf128_pd::<1>(uz0);
-            let u2 = _mm_loadu_pd(in_place.get_unchecked(2..).as_ptr().cast());
+                let u0 = _mm256_castpd256_pd128(uz0);
+                let u1 = _mm256_extractf128_pd::<1>(uz0);
+                let u2 = _mm_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
 
-            let xp = _mm_add_pd(u1, u2);
-            let xn = _mm_sub_pd(u1, u2);
-            let sum = _mm_add_pd(u0, xp);
+                let xp = _mm_add_pd(u1, u2);
+                let xn = _mm_sub_pd(u1, u2);
+                let sum = _mm_add_pd(u0, xp);
 
-            let w_1 = _mm_fmadd_pd(twiddle_re, xp, u0);
+                let w_1 = _mm_fmadd_pd(twiddle_re, xp, u0);
 
-            let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
+                let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
 
-            let y0 = sum;
-            let y1 = _mm_fmadd_pd(tw1, xn_rot, w_1);
-            let y2 = _mm_fmadd_pd(tw2, xn_rot, w_1);
+                let y0 = sum;
+                let y1 = _mm_fmadd_pd(tw1, xn_rot, w_1);
+                let y2 = _mm_fmadd_pd(tw2, xn_rot, w_1);
 
-            let y01 = _mm256_insertf128_pd::<1>(_mm256_castpd128_pd256(y0), y1);
+                let y01 = _mm256_insertf128_pd::<1>(_mm256_castpd128_pd256(y0), y1);
 
-            _mm256_storeu_pd(in_place.get_unchecked_mut(0..).as_mut_ptr().cast(), y01);
-            _mm_storeu_pd(in_place.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+                _mm256_storeu_pd(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y01);
+                _mm_storeu_pd(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+            }
         }
         Ok(())
     }
@@ -328,35 +333,38 @@ where
 impl AvxButterfly4<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() != 4 {
-            return Err(ZaftError::InvalidInPlaceLength(4, in_place.len()));
+        if in_place.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 4));
         }
 
-        unsafe {
-            let v_i_multiplier = _mm_loadu_ps(self.multiplier.as_ptr());
+        let v_i_multiplier = unsafe { _mm_loadu_ps(self.multiplier.as_ptr()) };
 
-            let aaaa0 = _mm256_loadu_ps(in_place.get_unchecked(0..).as_ptr().cast());
+        for chunk in in_place.chunks_exact_mut(4) {
+            unsafe {
+                let aaaa0 = _mm256_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
 
-            let a = _mm256_castps256_ps128(aaaa0);
-            let b = _mm_unpackhi_ps64(_mm256_castps256_ps128(aaaa0), _mm256_castps256_ps128(aaaa0));
+                let a = _mm256_castps256_ps128(aaaa0);
+                let b =
+                    _mm_unpackhi_ps64(_mm256_castps256_ps128(aaaa0), _mm256_castps256_ps128(aaaa0));
 
-            let aa0 = _mm256_extractf128_ps::<1>(aaaa0);
+                let aa0 = _mm256_extractf128_ps::<1>(aaaa0);
 
-            let c = aa0;
-            let d = _mm_unpackhi_ps64(aa0, aa0);
+                let c = aa0;
+                let d = _mm_unpackhi_ps64(aa0, aa0);
 
-            let t0 = _mm_add_ps(a, c);
-            let t1 = _mm_sub_ps(a, c);
-            let t2 = _mm_add_ps(b, d);
-            let mut t3 = _mm_sub_ps(b, d);
-            const SH: i32 = shuffle(2, 3, 0, 1);
-            t3 = _mm_xor_ps(_mm_shuffle_ps::<SH>(t3, t3), v_i_multiplier);
+                let t0 = _mm_add_ps(a, c);
+                let t1 = _mm_sub_ps(a, c);
+                let t2 = _mm_add_ps(b, d);
+                let mut t3 = _mm_sub_ps(b, d);
+                const SH: i32 = shuffle(2, 3, 0, 1);
+                t3 = _mm_xor_ps(_mm_shuffle_ps::<SH>(t3, t3), v_i_multiplier);
 
-            let yy0 = _mm_unpacklo_ps64(_mm_add_ps(t0, t2), _mm_add_ps(t1, t3));
-            let yy1 = _mm_unpacklo_ps64(_mm_sub_ps(t0, t2), _mm_sub_ps(t1, t3));
-            let yyyy = _mm256_insertf128_ps::<1>(_mm256_castps128_ps256(yy0), yy1);
+                let yy0 = _mm_unpacklo_ps64(_mm_add_ps(t0, t2), _mm_add_ps(t1, t3));
+                let yy1 = _mm_unpacklo_ps64(_mm_sub_ps(t0, t2), _mm_sub_ps(t1, t3));
+                let yyyy = _mm256_insertf128_ps::<1>(_mm256_castps128_ps256(yy0), yy1);
 
-            _mm256_storeu_ps(in_place.get_unchecked_mut(0..).as_mut_ptr().cast(), yyyy);
+                _mm256_storeu_ps(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), yyyy);
+            }
         }
         Ok(())
     }
@@ -365,38 +373,40 @@ impl AvxButterfly4<f32> {
 impl AvxButterfly4<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() != 4 {
-            return Err(ZaftError::InvalidInPlaceLength(4, in_place.len()));
+        if in_place.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 4));
         }
 
-        unsafe {
-            let v_i_multiplier = _mm_loadu_pd(self.multiplier.as_ptr());
+        let v_i_multiplier = unsafe { _mm_loadu_pd(self.multiplier.as_ptr()) };
 
-            let aa0 = _mm256_loadu_pd(in_place.get_unchecked(0..).as_ptr().cast());
-            let bb0 = _mm256_loadu_pd(in_place.get_unchecked(2..).as_ptr().cast());
+        for chunk in in_place.chunks_exact_mut(4) {
+            unsafe {
+                let aa0 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
+                let bb0 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
 
-            let a = _mm256_castpd256_pd128(aa0);
-            let b = _mm256_extractf128_pd::<1>(aa0);
-            let c = _mm256_castpd256_pd128(bb0);
-            let d = _mm256_extractf128_pd::<1>(bb0);
+                let a = _mm256_castpd256_pd128(aa0);
+                let b = _mm256_extractf128_pd::<1>(aa0);
+                let c = _mm256_castpd256_pd128(bb0);
+                let d = _mm256_extractf128_pd::<1>(bb0);
 
-            let t0 = _mm_add_pd(a, c);
-            let t1 = _mm_sub_pd(a, c);
-            let t2 = _mm_add_pd(b, d);
-            let mut t3 = _mm_sub_pd(b, d);
-            t3 = _mm_xor_pd(_mm_shuffle_pd::<0b01>(t3, t3), v_i_multiplier);
+                let t0 = _mm_add_pd(a, c);
+                let t1 = _mm_sub_pd(a, c);
+                let t2 = _mm_add_pd(b, d);
+                let mut t3 = _mm_sub_pd(b, d);
+                t3 = _mm_xor_pd(_mm_shuffle_pd::<0b01>(t3, t3), v_i_multiplier);
 
-            let yy0 = _mm256_insertf128_pd::<1>(
-                _mm256_castpd128_pd256(_mm_add_pd(t0, t2)),
-                _mm_add_pd(t1, t3),
-            );
-            let yy1 = _mm256_insertf128_pd::<1>(
-                _mm256_castpd128_pd256(_mm_sub_pd(t0, t2)),
-                _mm_sub_pd(t1, t3),
-            );
+                let yy0 = _mm256_insertf128_pd::<1>(
+                    _mm256_castpd128_pd256(_mm_add_pd(t0, t2)),
+                    _mm_add_pd(t1, t3),
+                );
+                let yy1 = _mm256_insertf128_pd::<1>(
+                    _mm256_castpd128_pd256(_mm_sub_pd(t0, t2)),
+                    _mm_sub_pd(t1, t3),
+                );
 
-            _mm256_storeu_pd(in_place.get_unchecked_mut(0..).as_mut_ptr().cast(), yy0);
-            _mm256_storeu_pd(in_place.get_unchecked_mut(2..).as_mut_ptr().cast(), yy1);
+                _mm256_storeu_pd(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), yy0);
+                _mm256_storeu_pd(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), yy1);
+            }
         }
         Ok(())
     }

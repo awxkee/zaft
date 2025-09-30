@@ -134,60 +134,62 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if self.execution_length != in_place.len() {
-            return Err(ZaftError::InvalidInPlaceLength(
-                self.execution_length,
+        if in_place.len() % self.execution_length != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
+                self.execution_length,
             ));
         }
 
-        // bit reversal first
-        permute_inplace(in_place, &self.permutations);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            // bit reversal first
+            permute_inplace(chunk, &self.permutations);
 
-        let mut len = 4;
+            let mut len = 4;
 
-        unsafe {
-            let mut m_twiddles = self.twiddles.as_slice();
+            unsafe {
+                let mut m_twiddles = self.twiddles.as_slice();
 
-            let t3_twiddle = match self.direction {
-                FftDirection::Forward => Complex::new(T::zero(), -T::one()),
-                FftDirection::Inverse => Complex::new(T::zero(), T::one()),
-            };
+                let t3_twiddle = match self.direction {
+                    FftDirection::Forward => Complex::new(T::zero(), -T::one()),
+                    FftDirection::Inverse => Complex::new(T::zero(), T::one()),
+                };
 
-            while len <= self.execution_length {
-                let quarter = len / 4;
+                while len <= self.execution_length {
+                    let quarter = len / 4;
 
-                for data in in_place.chunks_exact_mut(len) {
-                    for j in 0..quarter {
-                        let a = *data.get_unchecked(j);
-                        let b = c_mul_fast(
-                            *data.get_unchecked(j + quarter),
-                            *m_twiddles.get_unchecked(3 * j),
-                        );
-                        let c = c_mul_fast(
-                            *data.get_unchecked(j + 2 * quarter),
-                            *m_twiddles.get_unchecked(3 * j + 1),
-                        );
-                        let d = c_mul_fast(
-                            *data.get_unchecked(j + 3 * quarter),
-                            *m_twiddles.get_unchecked(3 * j + 2),
-                        );
+                    for data in chunk.chunks_exact_mut(len) {
+                        for j in 0..quarter {
+                            let a = *data.get_unchecked(j);
+                            let b = c_mul_fast(
+                                *data.get_unchecked(j + quarter),
+                                *m_twiddles.get_unchecked(3 * j),
+                            );
+                            let c = c_mul_fast(
+                                *data.get_unchecked(j + 2 * quarter),
+                                *m_twiddles.get_unchecked(3 * j + 1),
+                            );
+                            let d = c_mul_fast(
+                                *data.get_unchecked(j + 3 * quarter),
+                                *m_twiddles.get_unchecked(3 * j + 2),
+                            );
 
-                        // radix-4 butterfly
-                        let t0 = a + c;
-                        let t1 = a - c;
-                        let t2 = b + d;
-                        let t3 = c_mul_fast(b - d, t3_twiddle);
+                            // radix-4 butterfly
+                            let t0 = a + c;
+                            let t1 = a - c;
+                            let t2 = b + d;
+                            let t3 = c_mul_fast(b - d, t3_twiddle);
 
-                        *data.get_unchecked_mut(j) = t0 + t2;
-                        *data.get_unchecked_mut(j + quarter) = t1 + t3;
-                        *data.get_unchecked_mut(j + 2 * quarter) = t0 - t2;
-                        *data.get_unchecked_mut(j + 3 * quarter) = t1 - t3;
+                            *data.get_unchecked_mut(j) = t0 + t2;
+                            *data.get_unchecked_mut(j + quarter) = t1 + t3;
+                            *data.get_unchecked_mut(j + 2 * quarter) = t0 - t2;
+                            *data.get_unchecked_mut(j + 3 * quarter) = t1 - t3;
+                        }
                     }
-                }
 
-                m_twiddles = &m_twiddles[quarter * 3..];
-                len *= 4;
+                    m_twiddles = &m_twiddles[quarter * 3..];
+                    len *= 4;
+                }
             }
         }
         Ok(())

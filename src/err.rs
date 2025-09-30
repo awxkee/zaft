@@ -33,6 +33,8 @@ use std::fmt::Formatter;
 pub enum ZaftError {
     OutOfMemory(usize),
     InvalidInPlaceLength(usize, usize),
+    InvalidPointerSize(u128),
+    InvalidSizeMultiplier(usize, usize),
 }
 
 impl Error for ZaftError {}
@@ -45,6 +47,12 @@ impl std::fmt::Display for ZaftError {
             }
             ZaftError::InvalidInPlaceLength(s0, s1) => f.write_fmt(format_args!(
                 "In-place length expected to be {s0}, but it was {s1}"
+            )),
+            ZaftError::InvalidPointerSize(s0) => {
+                f.write_fmt(format_args!("Pointer size invalid, it's too big {s0}"))
+            }
+            ZaftError::InvalidSizeMultiplier(s0, s1) => f.write_fmt(format_args!(
+                "Size {s0} is assumed to be multiplier of {s1} to execute many DFT, but it wasn't"
             )),
         }
     }
