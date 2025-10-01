@@ -42,9 +42,12 @@ mod radix5_fcma;
 mod radix6;
 #[cfg(feature = "fcma")]
 mod radix6_fcma;
+mod spectrum_arithmetic;
+#[cfg(feature = "fcma")]
+mod spectrum_arithmetic_fcma;
 mod util;
 
-pub(crate) use butterflies::{NeonButterfly3, NeonButterfly4};
+pub(crate) use butterflies::{NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5};
 pub(crate) use radix2::NeonRadix2;
 #[cfg(feature = "fcma")]
 pub(crate) use radix2_fcma::NeonFcmaRadix2;
@@ -60,3 +63,6 @@ pub(crate) use radix5_fcma::NeonFcmaRadix5;
 pub(crate) use radix6::NeonRadix6;
 #[cfg(feature = "fcma")]
 pub(crate) use radix6_fcma::NeonFcmaRadix6;
+pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
+#[cfg(feature = "fcma")]
+pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;

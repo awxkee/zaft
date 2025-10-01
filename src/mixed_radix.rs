@@ -27,11 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
+use crate::spectrum_arithmetic::{SpectrumArithmetic, SpectrumArithmeticFactory};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
+use std::fmt::Display;
 use std::ops::{Add, Mul, Neg, Sub};
 
 pub(crate) struct MixedRadix<T> {
@@ -42,9 +44,10 @@ pub(crate) struct MixedRadix<T> {
     width: usize,
     height_executor: Box<dyn FftExecutor<T> + Send + Sync>,
     height: usize,
+    arithmetic_executor: Box<dyn SpectrumArithmetic<T> + Send + Sync>,
 }
 
-impl<T: Copy + 'static + FftTrigonometry + Float> MixedRadix<T>
+impl<T: Copy + 'static + FftTrigonometry + Float + SpectrumArithmeticFactory<T>> MixedRadix<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -73,6 +76,7 @@ where
                 *dst = compute_twiddle(x * y, len, direction);
             }
         }
+
         Ok(MixedRadix {
             execution_length: width * height,
             width_executor,
@@ -81,6 +85,7 @@ where
             height,
             direction,
             twiddles,
+            arithmetic_executor: T::make_spectrum_arithmetic(),
         })
     }
 }
@@ -93,7 +98,8 @@ impl<
         + Num
         + 'static
         + Neg<Output = T>
-        + MulAdd<T, Output = T>,
+        + MulAdd<T, Output = T>
+        + Display,
 > FftExecutor<T> for MixedRadix<T>
 where
     f64: AsPrimitive<T>,
@@ -106,7 +112,8 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.width * self.height];
+        let mut scratch = try_vec![Complex::zero(); self.execution_length];
+
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // SIX STEP FFT:
             // STEP 1: transpose
@@ -116,13 +123,8 @@ where
             self.height_executor.execute(&mut scratch)?;
 
             // STEP 3: Apply twiddle factors
-            for ((src, dst), twiddle) in scratch
-                .iter()
-                .zip(chunk.iter_mut())
-                .zip(self.twiddles.iter())
-            {
-                *dst = *src * twiddle;
-            }
+            self.arithmetic_executor
+                .mul(&scratch, &self.twiddles, chunk);
 
             // STEP 4: transpose again
             transpose_small(self.height, self.width, chunk, &mut scratch);

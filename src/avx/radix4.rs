@@ -73,8 +73,8 @@ impl AvxFmaRadix4<f64> {
 
         let v_i_multiplier = unsafe {
             match self.direction {
-                FftDirection::Forward => _mm256_loadu_pd([-0.0f64, 0.0, -0.0f64, 0.0].as_ptr()),
-                FftDirection::Inverse => _mm256_loadu_pd([0.0f64, -0.0, 0.0f64, -0.0].as_ptr()),
+                FftDirection::Inverse => _mm256_loadu_pd([-0.0f64, 0.0, -0.0f64, 0.0].as_ptr()),
+                FftDirection::Forward => _mm256_loadu_pd([0.0f64, -0.0, 0.0f64, -0.0].as_ptr()),
             }
         };
 
@@ -238,10 +238,10 @@ impl AvxFmaRadix4<f32> {
 
         let v_i_multiplier = unsafe {
             match self.direction {
-                FftDirection::Forward => {
+                FftDirection::Inverse => {
                     _mm256_loadu_ps([-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0].as_ptr())
                 }
-                FftDirection::Inverse => {
+                FftDirection::Forward => {
                     _mm256_loadu_ps([0.0f32, -0.0, 0.0, -0.0, 0.0f32, -0.0, 0.0, -0.0].as_ptr())
                 }
             }

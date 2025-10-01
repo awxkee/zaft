@@ -112,3 +112,21 @@ pub(crate) unsafe fn v_rotate90_f32(values: float32x4_t, sign: float32x4_t) -> f
         ))
     }
 }
+
+#[inline(always)]
+pub(crate) unsafe fn v_transpose_complex_f32(
+    a: float32x4_t,
+    b: float32x4_t,
+) -> (float32x4_t, float32x4_t) {
+    unsafe {
+        let u0_0 = vreinterpretq_f32_f64(vtrn1q_f64(
+            vreinterpretq_f64_f32(a),
+            vreinterpretq_f64_f32(b),
+        ));
+        let u1_0 = vreinterpretq_f32_f64(vtrn2q_f64(
+            vreinterpretq_f64_f32(a),
+            vreinterpretq_f64_f32(b),
+        ));
+        (u0_0, u1_0)
+    }
+}

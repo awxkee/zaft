@@ -26,7 +26,6 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::butterflies::Butterfly2;
 use crate::dft::Dft;
 use crate::factory::AlgorithmFactory;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -35,7 +34,21 @@ impl AlgorithmFactory<f64> for f64 {
     fn butterfly2(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        Ok(Box::new(Butterfly2::new(fft_direction)))
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly2;
+            return Ok(Box::new(NeonButterfly2::new(fft_direction)));
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if std::arch::is_x86_feature_detected!("avx2") {
+            use crate::avx::AvxButterfly2;
+            return Ok(Box::new(AvxButterfly2::new(fft_direction)));
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly2;
+            Ok(Box::new(Butterfly2::new(fft_direction)))
+        }
     }
 
     fn butterfly3(
@@ -77,7 +90,22 @@ impl AlgorithmFactory<f64> for f64 {
                 return Ok(Box::new(AvxButterfly4::new(fft_direction)));
             }
             use crate::butterflies::Butterfly4;
-            return Ok(Box::new(Butterfly4::new(fft_direction)));
+            Ok(Box::new(Butterfly4::new(fft_direction)))
+        }
+    }
+
+    fn butterfly5(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly5;
+            Ok(Box::new(NeonButterfly5::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly5;
+            Ok(Box::new(Butterfly5::new(fft_direction)))
         }
     }
 
@@ -197,6 +225,9 @@ impl AlgorithmFactory<f64> for f64 {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        if n == 5 {
+            return Self::butterfly5(fft_direction);
+        }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]

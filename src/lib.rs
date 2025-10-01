@@ -49,6 +49,7 @@ mod radix3;
 mod radix4;
 mod radix5;
 mod radix6;
+mod spectrum_arithmetic;
 mod traits;
 mod util;
 
@@ -58,6 +59,7 @@ use std::fmt::{Display, Formatter};
 use crate::factory::AlgorithmFactory;
 use crate::mixed_radix::MixedRadix;
 use crate::prime_factors::PrimeFactors;
+use crate::spectrum_arithmetic::SpectrumArithmeticFactory;
 use crate::traits::FftTrigonometry;
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -79,7 +81,9 @@ impl Zaft {
             + Send
             + Sync
             + MulAdd<T, Output = T>
-            + Copy,
+            + SpectrumArithmeticFactory<T>
+            + Copy
+            + Display,
     >(
         direction: FftDirection,
         prime_factors: PrimeFactors,
@@ -128,7 +132,9 @@ impl Zaft {
             + Send
             + Sync
             + MulAdd<T, Output = T>
-            + Copy,
+            + SpectrumArithmeticFactory<T>
+            + Copy
+            + Display,
     >(
         n: usize,
         fft_direction: FftDirection,
@@ -144,6 +150,8 @@ impl Zaft {
             return T::butterfly3(fft_direction);
         } else if n == 4 {
             return T::butterfly4(fft_direction);
+        } else if n == 5 {
+            return T::butterfly5(fft_direction);
         }
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {

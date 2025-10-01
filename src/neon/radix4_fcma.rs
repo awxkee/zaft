@@ -71,8 +71,8 @@ impl NeonFcmaRadix4<f64> {
 
         let v_i_multiplier = unsafe {
             vreinterpretq_u64_f64(match self.direction {
-                FftDirection::Forward => vld1q_f64([-0.0, 0.0].as_ptr()),
-                FftDirection::Inverse => vld1q_f64([0.0, -0.0].as_ptr()),
+                FftDirection::Inverse => vld1q_f64([-0.0, 0.0].as_ptr()),
+                FftDirection::Forward => vld1q_f64([0.0, -0.0].as_ptr()),
             })
         };
 
@@ -175,8 +175,8 @@ impl NeonFcmaRadix4<f32> {
 
         let v_i_multiplier = unsafe {
             vreinterpretq_u32_f32(match self.direction {
-                FftDirection::Forward => vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()),
-                FftDirection::Inverse => vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()),
+                FftDirection::Inverse => vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()),
+                FftDirection::Forward => vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr()),
             })
         };
 

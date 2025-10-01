@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rustfft = { version = "6.4", default-features = false, features = ["neon", "avx"] }
-zaft = {path = "../", features = ["fcma", "avx"]}
+rustfft = { version = "6.4", default-features = false, features = [] }
+zaft = {path = "../", features = ["fcma"], default-features = false}
 num-complex = "0.4.6"
 rand = "0.9"
 

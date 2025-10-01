@@ -26,7 +26,6 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::complex_fma::c_mul_fast;
 use crate::mla::fmla;
 use crate::radix6::Radix6Twiddles;
 use crate::traits::FftTrigonometry;
@@ -37,11 +36,13 @@ use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg, Sub};
 
+#[allow(unused)]
 pub(crate) struct Butterfly2<T> {
     pub(crate) phantom_data: PhantomData<T>,
     pub(crate) direction: FftDirection,
 }
 
+#[allow(unused)]
 impl<T> Butterfly2<T> {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
@@ -70,19 +71,14 @@ where
         }
 
         for chunk in in_place.chunks_exact_mut(2) {
-            let u0 = unsafe { *chunk.get_unchecked(0) };
-            let u1 = unsafe { *chunk.get_unchecked(1) };
+            let u0 = chunk[0];
+            let u1 = chunk[1];
 
-            let t = u0 + u1;
+            let y0 = u0 + u1;
             let y1 = u0 - u1;
-            let y0 = t;
 
-            unsafe {
-                *chunk.get_unchecked_mut(0) = y0;
-            }
-            unsafe {
-                *chunk.get_unchecked_mut(1) = y1;
-            }
+            chunk[0] = y0;
+            chunk[1] = y1;
         }
         Ok(())
     }
@@ -136,9 +132,9 @@ where
         }
 
         for chunk in in_place.chunks_exact_mut(3) {
-            let u0 = unsafe { *chunk.get_unchecked(0) };
-            let u1 = unsafe { *chunk.get_unchecked(1) };
-            let u2 = unsafe { *chunk.get_unchecked(2) };
+            let u0 = chunk[0];
+            let u1 = chunk[1];
+            let u2 = chunk[2];
 
             let xp = u1 + u2;
             let xn = u1 - u2;
@@ -159,15 +155,9 @@ where
                 im: fmla(-self.twiddle.im, xn.re, w_1.im),
             };
 
-            unsafe {
-                *chunk.get_unchecked_mut(0) = y0;
-            }
-            unsafe {
-                *chunk.get_unchecked_mut(1) = y1;
-            }
-            unsafe {
-                *chunk.get_unchecked_mut(2) = y2;
-            }
+            chunk[0] = y0;
+            chunk[1] = y1;
+            chunk[2] = y2;
         }
         Ok(())
     }
@@ -183,9 +173,24 @@ where
 
 #[allow(unused)]
 pub(crate) struct Butterfly4<T> {
-    phantom_data: PhantomData<T>,
     direction: FftDirection,
     twiddle: Complex<T>,
+}
+
+pub(crate) fn rotate_90<T: Copy + Neg<Output = T>>(
+    value: Complex<T>,
+    direction: FftDirection,
+) -> Complex<T> {
+    match direction {
+        FftDirection::Forward => Complex {
+            re: value.im,
+            im: -value.re,
+        },
+        FftDirection::Inverse => Complex {
+            re: -value.im,
+            im: value.re,
+        },
+    }
 }
 
 #[allow(unused)]
@@ -196,10 +201,9 @@ where
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            phantom_data: PhantomData,
             twiddle: match fft_direction {
-                FftDirection::Forward => Complex::new(T::zero(), -T::one()),
-                FftDirection::Inverse => Complex::new(T::zero(), T::one()),
+                FftDirection::Inverse => Complex::new(T::zero(), -T::one()),
+                FftDirection::Forward => Complex::new(T::zero(), T::one()),
             },
         }
     }
@@ -224,22 +228,21 @@ where
         }
 
         for chunk in in_place.chunks_exact_mut(4) {
-            let a = unsafe { *chunk.get_unchecked(0) };
-            let b = unsafe { *chunk.get_unchecked(1) };
-            let c = unsafe { *chunk.get_unchecked(2) };
-            let d = unsafe { *chunk.get_unchecked(3) };
+            let a = chunk[0];
+            let b = chunk[1];
+            let c = chunk[2];
+            let d = chunk[3];
 
             let t0 = a + c;
             let t1 = a - c;
             let t2 = b + d;
-            let t3 = c_mul_fast(b - d, self.twiddle);
+            let z3 = b - d;
+            let t3 = rotate_90(z3, self.direction);
 
-            unsafe {
-                *chunk.get_unchecked_mut(0) = t0 + t2;
-                *chunk.get_unchecked_mut(1) = t1 + t3;
-                *chunk.get_unchecked_mut(2) = t0 - t2;
-                *chunk.get_unchecked_mut(3) = t1 - t3;
-            }
+            chunk[0] = t0 + t2;
+            chunk[1] = t1 + t3;
+            chunk[2] = t0 - t2;
+            chunk[3] = t1 - t3;
         }
         Ok(())
     }
@@ -253,6 +256,125 @@ where
     }
 }
 
+#[allow(unused)]
+pub(crate) struct Butterfly5<T> {
+    direction: FftDirection,
+    twiddle1: Complex<T>,
+    twiddle2: Complex<T>,
+}
+
+#[allow(unused)]
+impl<T: FftTrigonometry + Float + 'static> Butterfly5<T>
+where
+    f64: AsPrimitive<T>,
+{
+    pub fn new(fft_direction: FftDirection) -> Self {
+        Butterfly5 {
+            direction: fft_direction,
+            twiddle1: compute_twiddle(1, 5, fft_direction),
+            twiddle2: compute_twiddle(2, 5, fft_direction),
+        }
+    }
+}
+
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>,
+> FftExecutor<T> for Butterfly5<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if in_place.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                in_place.len(),
+                self.length(),
+            ));
+        }
+
+        for chunk in in_place.chunks_exact_mut(5) {
+            let u0 = chunk[0];
+            let u1 = chunk[1];
+            let u2 = chunk[2];
+            let u3 = chunk[3];
+            let u4 = chunk[4];
+
+            // Radix-5 butterfly
+
+            let x14p = u1 + u4;
+            let x14n = u1 - u4;
+            let x23p = u2 + u3;
+            let x23n = u2 - u3;
+            let y0 = u0 + x14p + x23p;
+
+            let b14re_a = fmla(
+                self.twiddle2.re,
+                x23p.re,
+                fmla(self.twiddle1.re, x14p.re, u0.re),
+            );
+            let b14re_b = fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
+            let b23re_a = fmla(
+                self.twiddle1.re,
+                x23p.re,
+                fmla(self.twiddle2.re, x14p.re, u0.re),
+            );
+            let b23re_b = fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
+
+            let b14im_a = fmla(
+                self.twiddle2.re,
+                x23p.im,
+                fmla(self.twiddle1.re, x14p.im, u0.im),
+            );
+            let b14im_b = fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
+            let b23im_a = fmla(
+                self.twiddle1.re,
+                x23p.im,
+                fmla(self.twiddle2.re, x14p.im, u0.im),
+            );
+            let b23im_b = fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
+
+            let y1 = Complex {
+                re: b14re_a - b14re_b,
+                im: b14im_a + b14im_b,
+            };
+            let y2 = Complex {
+                re: b23re_a - b23re_b,
+                im: b23im_a + b23im_b,
+            };
+            let y3 = Complex {
+                re: b23re_a + b23re_b,
+                im: b23im_a - b23im_b,
+            };
+            let y4 = Complex {
+                re: b14re_a + b14re_b,
+                im: b14im_a - b14im_b,
+            };
+
+            chunk[0] = y0;
+            chunk[1] = y1;
+            chunk[2] = y2;
+            chunk[3] = y3;
+            chunk[4] = y4;
+        }
+        Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    #[inline]
+    fn length(&self) -> usize {
+        5
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,118 +382,154 @@ mod tests {
 
     #[test]
     fn test_butterfly2() {
-        let size = 2usize;
-        let mut input = vec![Complex::<f32>::default(); size];
-        for z in input.iter_mut() {
-            *z = Complex {
-                re: rand::rng().random(),
-                im: rand::rng().random(),
-            };
+        for i in 1..6 {
+            let size = 2usize.pow(i);
+
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = Butterfly2::new(FftDirection::Forward);
+            let radix_inverse = Butterfly2::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 2f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
         }
-        let src = input.to_vec();
-        let radix_forward = Butterfly2::new(FftDirection::Forward);
-        let radix_inverse = Butterfly2::new(FftDirection::Inverse);
-        radix_forward.execute(&mut input).unwrap();
-        radix_inverse.execute(&mut input).unwrap();
-
-        input = input
-            .iter()
-            .map(|&x| x * (1.0 / input.len() as f32))
-            .collect();
-
-        input.iter().zip(src.iter()).for_each(|(a, b)| {
-            assert!(
-                (a.re - b.re).abs() < 1e-5,
-                "a_re {} != b_re {} for size {}",
-                a.re,
-                b.re,
-                size
-            );
-            assert!(
-                (a.im - b.im).abs() < 1e-5,
-                "a_im {} != b_im {} for size {}",
-                a.im,
-                b.im,
-                size
-            );
-        });
     }
 
     #[test]
     fn test_butterfly3() {
-        let size = 3usize;
-        let mut input = vec![Complex::<f32>::default(); size];
-        for z in input.iter_mut() {
-            *z = Complex {
-                re: rand::rng().random(),
-                im: rand::rng().random(),
-            };
+        for i in 1..6 {
+            let size = 3usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = Butterfly3::new(FftDirection::Forward);
+            let radix_inverse = Butterfly3::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 3f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
         }
-        let src = input.to_vec();
-        let radix_forward = Butterfly3::new(FftDirection::Forward);
-        let radix_inverse = Butterfly3::new(FftDirection::Inverse);
-        radix_forward.execute(&mut input).unwrap();
-        radix_inverse.execute(&mut input).unwrap();
-
-        input = input
-            .iter()
-            .map(|&x| x * (1.0 / input.len() as f32))
-            .collect();
-
-        input.iter().zip(src.iter()).for_each(|(a, b)| {
-            assert!(
-                (a.re - b.re).abs() < 1e-5,
-                "a_re {} != b_re {} for size {}",
-                a.re,
-                b.re,
-                size
-            );
-            assert!(
-                (a.im - b.im).abs() < 1e-5,
-                "a_im {} != b_im {} for size {}",
-                a.im,
-                b.im,
-                size
-            );
-        });
     }
 
     #[test]
     fn test_butterfly4() {
-        let size = 4usize;
-        let mut input = vec![Complex::<f32>::default(); size];
-        for z in input.iter_mut() {
-            *z = Complex {
-                re: rand::rng().random(),
-                im: rand::rng().random(),
-            };
+        for i in 1..6 {
+            let size = 4usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = Butterfly4::new(FftDirection::Forward);
+            let radix_inverse = Butterfly4::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 4f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
         }
-        let src = input.to_vec();
-        let radix_forward = Butterfly4::new(FftDirection::Forward);
-        let radix_inverse = Butterfly4::new(FftDirection::Inverse);
-        radix_forward.execute(&mut input).unwrap();
-        radix_inverse.execute(&mut input).unwrap();
+    }
 
-        input = input
-            .iter()
-            .map(|&x| x * (1.0 / input.len() as f32))
-            .collect();
+    #[test]
+    fn test_butterfly5() {
+        for i in 1..6 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = Butterfly5::new(FftDirection::Forward);
+            let radix_inverse = Butterfly5::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
 
-        input.iter().zip(src.iter()).for_each(|(a, b)| {
-            assert!(
-                (a.re - b.re).abs() < 1e-5,
-                "a_re {} != b_re {} for size {}",
-                a.re,
-                b.re,
-                size
-            );
-            assert!(
-                (a.im - b.im).abs() < 1e-5,
-                "a_im {} != b_im {} for size {}",
-                a.im,
-                b.im,
-                size
-            );
-        });
+            input = input.iter().map(|&x| x * (1.0 / 5f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

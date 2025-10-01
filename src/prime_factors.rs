@@ -125,10 +125,6 @@ impl PrimeFactors {
 
     pub(crate) fn may_be_represented_in_mixed_radix(&self) -> bool {
         self.factorization.len() > 1
-            && self
-                .factorization
-                .iter()
-                .all(|x| x.0 == 2 || x.0 == 3 || x.0 == 5)
     }
 }
 
@@ -149,6 +145,7 @@ mod tests {
         assert_eq!(prime_factorization(97), vec![(97, 1)]);
         assert_eq!(prime_factorization(36), vec![(2, 2), (3, 2)]);
         assert_eq!(prime_factorization(36 * 6), vec![(2, 3), (3, 3)]);
+        assert_eq!(prime_factorization(900), vec![(2, 2), (3, 2), (5, 2)]);
     }
 
     #[test]
