@@ -29,7 +29,7 @@
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
     _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
-    _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_interleave_epi64, shuffle,
+    _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64, shuffle,
 };
 use crate::radix5::Radix5Twiddles;
 use crate::traits::FftTrigonometry;
@@ -340,16 +340,17 @@ impl AvxFmaRadix5<f32> {
                             let xw0 =
                                 _mm256_loadu_ps(m_twiddles.get_unchecked(4 * j..).as_ptr().cast());
                             let xw1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast(),
-                            );
-                            let xw2 = _mm256_loadu_ps(
                                 m_twiddles.get_unchecked(4 * j + 4..).as_ptr().cast(),
                             );
+                            let xw2 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(4 * j + 8..).as_ptr().cast(),
+                            );
                             let xw3 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(4 * (j + 1) + 4..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(4 * j + 12..).as_ptr().cast(),
                             );
 
-                            let (tw0, tw1, tw2, tw3) = _mm256s_interleave_epi64(xw0, xw1, xw2, xw3);
+                            let (tw0, tw1, tw2, tw3) =
+                                _mm256s_deinterleave4_epi64(xw0, xw1, xw2, xw3);
 
                             let u1 = _m256s_mul_complex(
                                 _mm256_loadu_ps(data.get_unchecked(j + fifth..).as_ptr().cast()),
@@ -631,5 +632,94 @@ impl FftExecutor<f32> for AvxFmaRadix5<f32> {
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_neon_radix5() {
+        for i in 1..7 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxFmaRadix5::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = AvxFmaRadix5::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| Complex::new(x.re as f64, x.im as f64) * (1.0f64 / input.len() as f64))
+                .map(|x| Complex::new(x.re as f32, x.im as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_neon_radix5_f64() {
+        for i in 1..7 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxFmaRadix5::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = AvxFmaRadix5::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0f64 / input.len() as f64))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

@@ -30,7 +30,7 @@ use crate::avx::butterflies::AvxButterfly;
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
     _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
-    _mm256_load4_f32x2, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_interleave_epi64,
+    _mm256_load4_f32x2, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64,
 };
 use crate::radix6::Radix6Twiddles;
 use crate::traits::FftTrigonometry;
@@ -324,39 +324,34 @@ impl AvxFmaRadix6<f32> {
                             let xw0 =
                                 _mm256_loadu_ps(m_twiddles.get_unchecked(5 * j..).as_ptr().cast());
                             let xw1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(5 * (j + 1)..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(5 * j + 5..).as_ptr().cast(),
                             );
                             let xw2 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(5 * j + 2..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(5 * j + 10..).as_ptr().cast(),
                             );
                             let xw3 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(5 * (j + 1) + 2..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(5 * j + 15..).as_ptr().cast(),
                             );
 
-                            let (tw0, tw1, tw2, tw3) = _mm256s_interleave_epi64(xw0, xw1, xw2, xw3);
+                            let rk1 =
+                                _mm256_loadu_ps(data.get_unchecked(j + sixth..).as_ptr().cast());
+                            let rk2 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 2 * sixth..).as_ptr().cast(),
+                            );
+                            let rk3 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 3 * sixth..).as_ptr().cast(),
+                            );
+                            let rk4 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 4 * sixth..).as_ptr().cast(),
+                            );
 
-                            let u1 = _m256s_mul_complex(
-                                _mm256_loadu_ps(data.get_unchecked(j + sixth..).as_ptr().cast()),
-                                tw0,
-                            );
-                            let u2 = _m256s_mul_complex(
-                                _mm256_loadu_ps(
-                                    data.get_unchecked(j + 2 * sixth..).as_ptr().cast(),
-                                ),
-                                tw1,
-                            );
-                            let u3 = _m256s_mul_complex(
-                                _mm256_loadu_ps(
-                                    data.get_unchecked(j + 3 * sixth..).as_ptr().cast(),
-                                ),
-                                tw2,
-                            );
-                            let u4 = _m256s_mul_complex(
-                                _mm256_loadu_ps(
-                                    data.get_unchecked(j + 4 * sixth..).as_ptr().cast(),
-                                ),
-                                tw3,
-                            );
+                            let (tw0, tw1, tw2, tw3) =
+                                _mm256s_deinterleave4_epi64(xw0, xw1, xw2, xw3);
+
+                            let u1 = _m256s_mul_complex(rk1, tw0);
+                            let u2 = _m256s_mul_complex(rk2, tw1);
+                            let u3 = _m256s_mul_complex(rk3, tw2);
+                            let u4 = _m256s_mul_complex(rk4, tw3);
                             let u5 = _m256s_mul_complex(
                                 _mm256_loadu_ps(
                                     data.get_unchecked(j + 5 * sixth..).as_ptr().cast(),
@@ -591,5 +586,94 @@ impl FftExecutor<f32> for AvxFmaRadix6<f32> {
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_neon_radix6() {
+        for i in 1..7 {
+            let size = 6usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxFmaRadix6::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = AvxFmaRadix6::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| Complex::new(x.re as f64, x.im as f64) * (1.0f64 / input.len() as f64))
+                .map(|x| Complex::new(x.re as f32, x.im as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_neon_radix6_f64() {
+        for i in 1..7 {
+            let size = 6usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxFmaRadix6::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = AvxFmaRadix6::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0f64 / input.len() as f64))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

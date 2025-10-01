@@ -28,7 +28,8 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, shuffle,
+    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm256_unpackhi_pd2,
+    _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, shuffle,
 };
 use crate::radix3::Radix3Twiddles;
 use crate::traits::FftTrigonometry;
@@ -112,18 +113,20 @@ impl AvxFmaRadix3<f64> {
                         while j + 2 < third {
                             let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
 
-                            let u1 = _m256d_mul_complex(
-                                _mm256_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast()),
-                                _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
+                            let tw0 =
+                                _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
+                            let tw1 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast(),
                             );
-                            let u2 = _m256d_mul_complex(
-                                _mm256_loadu_pd(
-                                    data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                                ),
-                                _mm256_loadu_pd(
-                                    m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast(),
-                                ),
+
+                            let rk1 =
+                                _mm256_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast());
+                            let rk2 = _mm256_loadu_pd(
+                                data.get_unchecked(j + 2 * third..).as_ptr().cast(),
                             );
+
+                            let u1 = _m256d_mul_complex(rk1, _mm256_unpacklo_pd2(tw0, tw1));
+                            let u2 = _m256d_mul_complex(rk2, _mm256_unpackhi_pd2(tw0, tw1));
 
                             // Radix-3 butterfly
                             let xp = _mm256_add_pd(u1, u2);
@@ -242,18 +245,23 @@ impl AvxFmaRadix3<f32> {
 
                         while j + 4 < third {
                             let u0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
-                            let u1 = _m256s_mul_complex(
-                                _mm256_loadu_ps(data.get_unchecked(j + third..).as_ptr().cast()),
-                                _mm256_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
+
+                            let tw0 =
+                                _mm256_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
+                            let tw1 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(2 * (j + 2)..).as_ptr().cast(),
                             );
-                            let u2 = _m256s_mul_complex(
-                                _mm256_loadu_ps(
-                                    data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                                ),
-                                _mm256_loadu_ps(
-                                    m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast(),
-                                ),
+
+                            let rk1 =
+                                _mm256_loadu_ps(data.get_unchecked(j + third..).as_ptr().cast());
+                            let rk2 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 2 * third..).as_ptr().cast(),
                             );
+
+                            let (xw0, xw1) = _mm256s_deinterleave2_epi64(tw0, tw1);
+
+                            let u1 = _m256s_mul_complex(rk1, xw0);
+                            let u2 = _m256s_mul_complex(rk2, xw1);
 
                             // Radix-3 butterfly
                             let xp_0 = _mm256_add_ps(u1, u2);
@@ -282,110 +290,20 @@ impl AvxFmaRadix3<f32> {
                             j += 4;
                         }
 
-                        while j + 3 < third {
-                            let u0 = _mm256_insertf128_ps::<1>(
-                                _mm256_castps128_ps256(_mm_loadu_ps(
-                                    data.get_unchecked(j..).as_ptr().cast(),
-                                )),
-                                _m128s_load_f32x2(data.get_unchecked(j + 2..).as_ptr().cast()),
-                            );
-
-                            let twz =
-                                _mm_loadu_ps(m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast());
-
-                            let u1 = _m256s_mul_complex(
-                                _mm256_insertf128_ps::<1>(
-                                    _mm256_castps128_ps256(_mm_loadu_ps(
-                                        data.get_unchecked(j + third..).as_ptr().cast(),
-                                    )),
-                                    _m128s_load_f32x2(
-                                        data.get_unchecked(j + third + 2..).as_ptr().cast(),
-                                    ),
-                                ),
-                                _mm256_insertf128_ps::<1>(
-                                    _mm256_castps128_ps256(_mm_loadu_ps(
-                                        m_twiddles.get_unchecked(2 * j..).as_ptr().cast(),
-                                    )),
-                                    _mm_unpacklo_ps64(twz, twz),
-                                ),
-                            );
-                            let u2 = _m256s_mul_complex(
-                                _mm256_insertf128_ps::<1>(
-                                    _mm256_castps128_ps256(_mm_loadu_ps(
-                                        data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                                    )),
-                                    _m128s_load_f32x2(
-                                        data.get_unchecked(j + 2 * third + 2..).as_ptr().cast(),
-                                    ),
-                                ),
-                                _mm256_insertf128_ps::<1>(
-                                    _mm256_castps128_ps256(_mm_loadu_ps(
-                                        m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast(),
-                                    )),
-                                    _mm_unpackhi_ps64(twz, twz),
-                                ),
-                            );
-
-                            // Radix-3 butterfly
-                            let xp_0 = _mm256_add_ps(u1, u2);
-                            let xn_0 = _mm256_sub_ps(u1, u2);
-                            let sum_0 = _mm256_add_ps(u0, xp_0);
-
-                            const SH: i32 = shuffle(2, 3, 0, 1);
-
-                            let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
-                            let vw_2_1 = _mm256_mul_ps(twiddle_w_2, _mm256_permute_ps::<SH>(xn_0));
-
-                            let vy0 = sum_0;
-                            let vy1 = _mm256_add_ps(vw_1_1, vw_2_1);
-                            let vy2 = _mm256_sub_ps(vw_1_1, vw_2_1);
-
-                            _mm_storeu_ps(
-                                data.get_unchecked_mut(j..).as_mut_ptr().cast(),
-                                _mm256_castps256_ps128(vy0),
-                            );
-                            _m128s_store_f32x2(
-                                data.get_unchecked_mut(j + 2..).as_mut_ptr().cast(),
-                                _mm256_extractf128_ps::<1>(vy0),
-                            );
-                            _mm_storeu_ps(
-                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
-                                _mm256_castps256_ps128(vy1),
-                            );
-                            _m128s_store_f32x2(
-                                data.get_unchecked_mut(j + third + 2..).as_mut_ptr().cast(),
-                                _mm256_extractf128_ps::<1>(vy1),
-                            );
-                            _mm_storeu_ps(
-                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
-                                _mm256_castps256_ps128(vy2),
-                            );
-                            _m128s_store_f32x2(
-                                data.get_unchecked_mut(j + 2 * third + 2..)
-                                    .as_mut_ptr()
-                                    .cast(),
-                                _mm256_extractf128_ps::<1>(vy2),
-                            );
-
-                            j += 3;
-                        }
-
                         for j in j..third {
                             let u0 = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
 
                             let tw =
                                 _mm_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
 
-                            let u1 = _m128s_fma_mul_complex(
-                                _m128s_load_f32x2(data.get_unchecked(j + third..).as_ptr().cast()),
-                                tw,
+                            let rk1 =
+                                _m128s_load_f32x2(data.get_unchecked(j + third..).as_ptr().cast());
+                            let rk2 = _m128s_load_f32x2(
+                                data.get_unchecked(j + 2 * third..).as_ptr().cast(),
                             );
-                            let u2 = _m128s_fma_mul_complex(
-                                _m128s_load_f32x2(
-                                    data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                                ),
-                                _mm_unpackhi_ps64(tw, tw),
-                            );
+
+                            let u1 = _m128s_fma_mul_complex(rk1, tw);
+                            let u2 = _m128s_fma_mul_complex(rk2, _mm_unpackhi_ps64(tw, tw));
 
                             // Radix-3 butterfly
                             let xp = _mm_add_ps(u1, u2);
@@ -439,5 +357,94 @@ impl FftExecutor<f32> for AvxFmaRadix3<f32> {
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::Rng;
+
+    #[test]
+    fn test_avx_radix3() {
+        for i in 1..9 {
+            let size = 3usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxFmaRadix3::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = AvxFmaRadix3::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| Complex::new(x.re as f64, x.im as f64) * (1.0f64 / input.len() as f64))
+                .map(|x| Complex::new(x.re as f32, x.im as f32))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_avx_radix3_f64() {
+        for i in 1..9 {
+            let size = 3usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxFmaRadix3::new(size, FftDirection::Forward).unwrap();
+            let radix_inverse = AvxFmaRadix3::new(size, FftDirection::Inverse).unwrap();
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input
+                .iter()
+                .map(|&x| x * (1.0f64 / input.len() as f64))
+                .collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 }

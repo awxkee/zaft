@@ -36,7 +36,7 @@ pub(crate) unsafe fn _m128d_fma_mul_complex(a: __m128d, b: __m128d) -> __m128d {
     let mut temp2 = _mm_unpackhi_pd(b, b);
     temp1 = _mm_mul_pd(temp1, a);
     temp2 = _mm_mul_pd(temp2, a);
-    temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
+    temp2 = _mm_shuffle_pd::<0x01>(temp2, temp2);
     _mm_addsub_pd(temp1, temp2)
 }
 
@@ -123,7 +123,7 @@ pub(crate) unsafe fn _mm256_unpackhi_pd2(a: __m256d, b: __m256d) -> __m256d {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn _mm256s_interleave_epi64(
+pub(crate) unsafe fn _mm256s_interleave4_epi64(
     a: __m256,
     b: __m256,
     c: __m256,
@@ -144,6 +144,88 @@ pub(crate) unsafe fn _mm256s_interleave_epi64(
         _mm256_castsi256_ps(xy2),
         _mm256_castsi256_ps(xy3),
     )
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn _mm256s_deinterleave4_epi64(
+    a: __m256,
+    b: __m256,
+    c: __m256,
+    d: __m256,
+) -> (__m256, __m256, __m256, __m256) {
+    let l02 = _mm256_permute2x128_si256::<32>(_mm256_castps_si256(a), _mm256_castps_si256(c));
+    let h02 = _mm256_permute2x128_si256::<49>(_mm256_castps_si256(a), _mm256_castps_si256(c));
+    let l13 = _mm256_permute2x128_si256::<32>(_mm256_castps_si256(b), _mm256_castps_si256(d));
+    let h13 = _mm256_permute2x128_si256::<49>(_mm256_castps_si256(b), _mm256_castps_si256(d));
+
+    let xy0 = _mm256_unpacklo_epi64(l02, l13);
+    let xy1 = _mm256_unpackhi_epi64(l02, l13);
+    let xy2 = _mm256_unpacklo_epi64(h02, h13);
+    let xy3 = _mm256_unpackhi_epi64(h02, h13);
+    (
+        _mm256_castsi256_ps(xy0),
+        _mm256_castsi256_ps(xy1),
+        _mm256_castsi256_ps(xy2),
+        _mm256_castsi256_ps(xy3),
+    )
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn _mm256s_deinterleave3_epi64(
+    a: __m256,
+    b: __m256,
+    c: __m256,
+) -> (__m256, __m256, __m256) {
+    let s01 = _mm256_blend_epi32::<0xf0>(_mm256_castps_si256(a), _mm256_castps_si256(b));
+    let s12 = _mm256_blend_epi32::<0xf0>(_mm256_castps_si256(b), _mm256_castps_si256(c));
+    let s20r = _mm256_permute4x64_epi64::<0x1b>(_mm256_blend_epi32::<0xf0>(
+        _mm256_castps_si256(c),
+        _mm256_castps_si256(a),
+    ));
+    let xy0 = _mm256_unpacklo_epi64(s01, s20r);
+    let xy1 = _mm256_alignr_epi8::<8>(s12, s01);
+    let xy2 = _mm256_unpackhi_epi64(s20r, s12);
+
+    (
+        _mm256_castsi256_ps(xy0),
+        _mm256_castsi256_ps(xy1),
+        _mm256_castsi256_ps(xy2),
+    )
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn _mm128s_deinterleave3_epi64(
+    a: __m128,
+    b: __m128,
+    c: __m128,
+) -> (__m128, __m128, __m128) {
+    let t1 = _mm_shuffle_epi32::<0x4e>(_mm_castps_si128(b)); // a1, c0
+
+    let xy0 = _mm_unpacklo_epi64(_mm_castps_si128(a), t1);
+    let xy1 = _mm_unpacklo_epi64(
+        _mm_unpackhi_epi64(_mm_castps_si128(a), _mm_castps_si128(a)),
+        _mm_castps_si128(c),
+    );
+    let xy2 = _mm_unpackhi_epi64(t1, _mm_castps_si128(c));
+
+    (
+        _mm_castsi128_ps(xy0),
+        _mm_castsi128_ps(xy1),
+        _mm_castsi128_ps(xy2),
+    )
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn _mm256s_deinterleave2_epi64(a: __m256, b: __m256) -> (__m256, __m256) {
+    let pl = _mm256_permute2x128_si256::<32>(_mm256_castps_si256(a), _mm256_castps_si256(b));
+    let ph = _mm256_permute2x128_si256::<49>(_mm256_castps_si256(a), _mm256_castps_si256(b));
+    let a0 = _mm256_unpacklo_epi64(pl, ph);
+    let b0 = _mm256_unpackhi_epi64(pl, ph);
+    (_mm256_castsi256_ps(a0), _mm256_castsi256_ps(b0))
 }
 
 #[inline]

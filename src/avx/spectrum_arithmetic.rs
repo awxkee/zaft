@@ -30,7 +30,6 @@ use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
     _m256d_mul_complex, _m256s_mul_complex,
 };
-use crate::complex_fma::c_mul_fast;
 use crate::spectrum_arithmetic::SpectrumArithmetic;
 use num_complex::Complex;
 use std::arch::x86_64::*;

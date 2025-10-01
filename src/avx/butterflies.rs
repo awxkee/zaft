@@ -197,7 +197,7 @@ impl AvxButterfly2<f64> {
 
         for chunk in in_place.chunks_exact_mut(4) {
             unsafe {
-                let a = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
+                let a = _mm256_loadu_pd(chunk.as_ptr().cast());
                 let b = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
 
                 let u0 = _mm256_permute2f128_pd::<0x20>(a, b);
@@ -206,16 +206,19 @@ impl AvxButterfly2<f64> {
                 let y0 = _mm256_add_pd(u0, u1);
                 let y1 = _mm256_sub_pd(u0, u1);
 
-                _mm256_storeu_pd(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y1);
+                let zy0 = _mm256_permute2f128_pd::<0x20>(y0, y1);
+                let zy1 = _mm256_permute2f128_pd::<0x31>(y0, y1);
+
+                _mm256_storeu_pd(chunk.as_mut_ptr().cast(), zy0);
+                _mm256_storeu_pd(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), zy1);
             }
         }
 
         let rem = in_place.chunks_exact_mut(4).into_remainder();
 
-        for chunk in rem.iter_mut() {
+        for chunk in rem.chunks_exact_mut(2) {
             unsafe {
-                let uz0 = _mm256_loadu_pd(chunk as *const Complex<f64> as *const f64);
+                let uz0 = _mm256_loadu_pd(chunk.as_ptr().cast());
 
                 let u0 = _mm256_castpd256_pd128(uz0);
                 let u1 = _mm256_extractf128_pd::<1>(uz0);
@@ -225,7 +228,7 @@ impl AvxButterfly2<f64> {
 
                 let y0y1 = _mm256_insertf128_pd::<1>(_mm256_castpd128_pd256(y0), y1);
 
-                _mm256_storeu_pd(chunk as *mut Complex<f64> as *mut f64, y0y1);
+                _mm256_storeu_pd(chunk.as_mut_ptr().cast(), y0y1);
             }
         }
         Ok(())
@@ -242,9 +245,9 @@ impl AvxButterfly2<f32> {
             ));
         }
 
-        for chunk in in_place.chunks_exact_mut(2) {
+        for chunk in in_place.chunks_exact_mut(4) {
             unsafe {
-                let a = _mm256_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
+                let a = _mm256_loadu_ps(chunk.as_ptr().cast());
 
                 const SH: i32 = shuffle(3, 1, 2, 0);
                 let ab =
@@ -257,15 +260,18 @@ impl AvxButterfly2<f32> {
 
                 let y0y1 = _mm256_insertf128_ps::<1>(_mm256_castps128_ps256(y0), y1);
 
-                _mm256_storeu_ps(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0y1);
+                let vy0y1 =
+                    _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(_mm256_castps_si256(y0y1)));
+
+                _mm256_storeu_ps(chunk.as_mut_ptr().cast(), vy0y1);
             }
         }
 
         let rem = in_place.chunks_exact_mut(4).into_remainder();
 
-        for chunk in rem.iter_mut() {
+        for chunk in rem.chunks_exact_mut(2) {
             unsafe {
-                let uz0 = _mm_loadu_ps(chunk as *const Complex<f32> as *const f32);
+                let uz0 = _mm_loadu_ps(chunk.as_ptr().cast());
 
                 let u0 = _mm_unpacklo_ps64(uz0, uz0);
                 let u1 = _mm_unpackhi_ps64(uz0, uz0);
@@ -275,7 +281,7 @@ impl AvxButterfly2<f32> {
 
                 let y0y1 = _mm_unpacklo_ps64(y0, y1);
 
-                _mm_storeu_ps(chunk as *mut Complex<f32> as *mut f32, y0y1);
+                _mm_storeu_ps(chunk.as_mut_ptr().cast(), y0y1);
             }
         }
 
@@ -766,158 +772,230 @@ mod test {
     use rand::Rng;
 
     #[test]
-    fn test_butterfly3_f32() {
-        let size = 3usize;
-        let mut input = vec![Complex::<f32>::default(); size];
-        for z in input.iter_mut() {
-            *z = Complex {
-                re: rand::rng().random(),
-                im: rand::rng().random(),
-            };
+    fn test_butterfly2_f32() {
+        for i in 1..6 {
+            let size = 2usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxButterfly2::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly2::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 2f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
         }
-        let src = input.to_vec();
-        let radix_forward = AvxButterfly3::new(FftDirection::Forward);
-        let radix_inverse = AvxButterfly3::new(FftDirection::Inverse);
-        radix_forward.execute(&mut input).unwrap();
-        radix_inverse.execute(&mut input).unwrap();
+    }
 
-        input = input
-            .iter()
-            .map(|&x| x * (1.0 / input.len() as f32))
-            .collect();
+    #[test]
+    fn test_butterfly2_f64() {
+        for i in 1..7 {
+            let size = 2usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxButterfly2::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly2::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
 
-        input.iter().zip(src.iter()).for_each(|(a, b)| {
-            assert!(
-                (a.re - b.re).abs() < 1e-5,
-                "a_re {} != b_re {} for size {}",
-                a.re,
-                b.re,
-                size
-            );
-            assert!(
-                (a.im - b.im).abs() < 1e-5,
-                "a_im {} != b_im {} for size {}",
-                a.im,
-                b.im,
-                size
-            );
-        });
+            input = input.iter().map(|&x| x * (1.0 / 2f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly3_f32() {
+        for i in 1..6 {
+            let size = 3usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxButterfly3::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly3::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 3f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
     }
 
     #[test]
     fn test_butterfly3_f64() {
-        let size = 3usize;
-        let mut input = vec![Complex::<f64>::default(); size];
-        for z in input.iter_mut() {
-            *z = Complex {
-                re: rand::rng().random(),
-                im: rand::rng().random(),
-            };
+        for i in 1..6 {
+            let size = 3usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxButterfly3::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly3::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 3f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
         }
-        let src = input.to_vec();
-        let radix_forward = AvxButterfly3::new(FftDirection::Forward);
-        let radix_inverse = AvxButterfly3::new(FftDirection::Inverse);
-        radix_forward.execute(&mut input).unwrap();
-        radix_inverse.execute(&mut input).unwrap();
-
-        input = input
-            .iter()
-            .map(|&x| x * (1.0 / input.len() as f64))
-            .collect();
-
-        input.iter().zip(src.iter()).for_each(|(a, b)| {
-            assert!(
-                (a.re - b.re).abs() < 1e-9,
-                "a_re {} != b_re {} for size {}",
-                a.re,
-                b.re,
-                size
-            );
-            assert!(
-                (a.im - b.im).abs() < 1e-9,
-                "a_im {} != b_im {} for size {}",
-                a.im,
-                b.im,
-                size
-            );
-        });
     }
 
     #[test]
     fn test_butterfly4_f32() {
-        let size = 4usize;
-        let mut input = vec![Complex::<f32>::default(); size];
-        for z in input.iter_mut() {
-            *z = Complex {
-                re: rand::rng().random(),
-                im: rand::rng().random(),
-            };
+        for i in 1..6 {
+            let size = 4usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxButterfly4::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly4::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 4f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
         }
-        let src = input.to_vec();
-        let radix_forward = AvxButterfly4::new(FftDirection::Forward);
-        let radix_inverse = AvxButterfly4::new(FftDirection::Inverse);
-        radix_forward.execute(&mut input).unwrap();
-        radix_inverse.execute(&mut input).unwrap();
-
-        input = input
-            .iter()
-            .map(|&x| x * (1.0 / input.len() as f32))
-            .collect();
-
-        input.iter().zip(src.iter()).for_each(|(a, b)| {
-            assert!(
-                (a.re - b.re).abs() < 1e-5,
-                "a_re {} != b_re {} for size {}",
-                a.re,
-                b.re,
-                size
-            );
-            assert!(
-                (a.im - b.im).abs() < 1e-5,
-                "a_im {} != b_im {} for size {}",
-                a.im,
-                b.im,
-                size
-            );
-        });
     }
 
     #[test]
     fn test_butterfly4_f64() {
-        let size = 4usize;
-        let mut input = vec![Complex::<f64>::default(); size];
-        for z in input.iter_mut() {
-            *z = Complex {
-                re: rand::rng().random(),
-                im: rand::rng().random(),
-            };
+        for i in 1..6 {
+            let size = 4usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let radix_forward = AvxButterfly4::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly4::new(FftDirection::Inverse);
+            radix_forward.execute(&mut input).unwrap();
+            radix_inverse.execute(&mut input).unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 4f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
         }
-        let src = input.to_vec();
-        let radix_forward = AvxButterfly4::new(FftDirection::Forward);
-        let radix_inverse = AvxButterfly4::new(FftDirection::Inverse);
-        radix_forward.execute(&mut input).unwrap();
-        radix_inverse.execute(&mut input).unwrap();
-
-        input = input
-            .iter()
-            .map(|&x| x * (1.0 / input.len() as f64))
-            .collect();
-
-        input.iter().zip(src.iter()).for_each(|(a, b)| {
-            assert!(
-                (a.re - b.re).abs() < 1e-9,
-                "a_re {} != b_re {} for size {}",
-                a.re,
-                b.re,
-                size
-            );
-            assert!(
-                (a.im - b.im).abs() < 1e-9,
-                "a_im {} != b_im {} for size {}",
-                a.im,
-                b.im,
-                size
-            );
-        });
     }
 }
