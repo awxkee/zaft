@@ -28,7 +28,7 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
+    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_ps,
     _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64, shuffle,
 };
 use crate::radix5::Radix5Twiddles;
@@ -439,22 +439,40 @@ impl AvxFmaRadix5<f32> {
                                 m_twiddles.get_unchecked(4 * (j + 1) + 2..).as_ptr().cast(),
                             );
 
-                            let u1 = _m128s_fma_mul_complex(
-                                _mm_loadu_ps(data.get_unchecked(j + fifth..).as_ptr().cast()),
-                                _mm_unpacklo_ps64(tw0, tw1),
+                            const SH: i32 = shuffle(3, 1, 2, 0);
+
+                            let tw01 = _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(
+                                _mm256_castps_si256(_mm256_create_ps(tw0, tw1)),
+                            ));
+                            let tw23 = _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(
+                                _mm256_castps_si256(_mm256_create_ps(tw2, tw3)),
+                            ));
+
+                            let u1u2 = _m256s_mul_complex(
+                                _mm256_create_ps(
+                                    _mm_loadu_ps(data.get_unchecked(j + fifth..).as_ptr().cast()),
+                                    _mm_loadu_ps(
+                                        data.get_unchecked(j + 2 * fifth..).as_ptr().cast(),
+                                    ),
+                                ),
+                                tw01,
                             );
-                            let u2 = _m128s_fma_mul_complex(
-                                _mm_loadu_ps(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
-                                _mm_unpackhi_ps64(tw0, tw1),
+                            let u3u4 = _m256s_mul_complex(
+                                _mm256_create_ps(
+                                    _mm_loadu_ps(
+                                        data.get_unchecked(j + 3 * fifth..).as_ptr().cast(),
+                                    ),
+                                    _mm_loadu_ps(
+                                        data.get_unchecked(j + 4 * fifth..).as_ptr().cast(),
+                                    ),
+                                ),
+                                tw23,
                             );
-                            let u3 = _m128s_fma_mul_complex(
-                                _mm_loadu_ps(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
-                                _mm_unpacklo_ps64(tw2, tw3),
-                            );
-                            let u4 = _m128s_fma_mul_complex(
-                                _mm_loadu_ps(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
-                                _mm_unpackhi_ps64(tw2, tw3),
-                            );
+
+                            let u1 = _mm256_castps256_ps128(u1u2);
+                            let u2 = _mm256_extractf128_ps::<1>(u1u2);
+                            let u3 = _mm256_castps256_ps128(u3u4);
+                            let u4 = _mm256_extractf128_ps::<1>(u3u4);
 
                             // Radix-5 butterfly
 
@@ -483,7 +501,6 @@ impl AvxFmaRadix5<f32> {
                             let temp_b2 =
                                 _mm_fnmadd_ps(_mm256_castps256_ps128(tw1_im), x23n, temp_b2_1);
 
-                            const SH: i32 = shuffle(2, 3, 0, 1);
                             let temp_b1_rot = _mm_xor_ps(
                                 _mm_shuffle_ps::<SH>(temp_b1, temp_b1),
                                 _mm256_castps256_ps128(rot_sign),
@@ -526,28 +543,33 @@ impl AvxFmaRadix5<f32> {
                             let tw2 =
                                 _mm_loadu_ps(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast());
 
-                            let u1 = _m128s_fma_mul_complex(
-                                _m128s_load_f32x2(data.get_unchecked(j + fifth..).as_ptr().cast()),
+                            let u1u2 = _m128s_fma_mul_complex(
+                                _mm_unpacklo_ps64(
+                                    _m128s_load_f32x2(
+                                        data.get_unchecked(j + fifth..).as_ptr().cast(),
+                                    ),
+                                    _m128s_load_f32x2(
+                                        data.get_unchecked(j + 2 * fifth..).as_ptr().cast(),
+                                    ),
+                                ),
                                 tw0,
                             );
-                            let u2 = _m128s_fma_mul_complex(
-                                _m128s_load_f32x2(
-                                    data.get_unchecked(j + 2 * fifth..).as_ptr().cast(),
-                                ),
-                                _mm_unpackhi_ps64(tw0, tw0),
-                            );
-                            let u3 = _m128s_fma_mul_complex(
-                                _m128s_load_f32x2(
-                                    data.get_unchecked(j + 3 * fifth..).as_ptr().cast(),
+                            let u3u4 = _m128s_fma_mul_complex(
+                                _mm_unpacklo_ps64(
+                                    _m128s_load_f32x2(
+                                        data.get_unchecked(j + 3 * fifth..).as_ptr().cast(),
+                                    ),
+                                    _m128s_load_f32x2(
+                                        data.get_unchecked(j + 4 * fifth..).as_ptr().cast(),
+                                    ),
                                 ),
                                 tw2,
                             );
-                            let u4 = _m128s_fma_mul_complex(
-                                _m128s_load_f32x2(
-                                    data.get_unchecked(j + 4 * fifth..).as_ptr().cast(),
-                                ),
-                                _mm_unpackhi_ps64(tw2, tw2),
-                            );
+
+                            let u1 = u1u2;
+                            let u2 = _mm_unpackhi_ps64(u1u2, u1u2);
+                            let u3 = u3u4;
+                            let u4 = _mm_unpackhi_ps64(u3u4, u3u4);
 
                             // Radix-5 butterfly
 

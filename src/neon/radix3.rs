@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::util::{mul_complex_f32, mul_complex_f64, mulh_complex_f32};
+use crate::neon::util::{mul_complex_f32, mul_complex_f64};
 use crate::radix3::Radix3Twiddles;
 use crate::traits::FftTrigonometry;
 use crate::util::{compute_twiddle, digit_reverse_indices, permute_inplace};
@@ -358,14 +358,16 @@ impl FftExecutor<f32> for NeonRadix3<f32> {
 
                             let tw = vld1q_f32(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
 
-                            let u1 = mulh_complex_f32(
-                                vld1_f32(data.get_unchecked(j + third..).as_ptr().cast()),
-                                vget_low_f32(tw),
+                            let u1u2 = mul_complex_f32(
+                                vcombine_f32(
+                                    vld1_f32(data.get_unchecked(j + third..).as_ptr().cast()),
+                                    vld1_f32(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
+                                ),
+                                tw,
                             );
-                            let u2 = mulh_complex_f32(
-                                vld1_f32(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
-                                vget_high_f32(tw),
-                            );
+
+                            let u1 = vget_low_f32(u1u2);
+                            let u2 = vget_high_f32(u1u2);
 
                             // Radix-3 butterfly
                             let xp = vadd_f32(u1, u2);

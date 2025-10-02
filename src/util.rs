@@ -29,7 +29,7 @@
 use crate::traits::FftTrigonometry;
 use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, MulAdd};
 
 /// Digit-reversal permutation in base `radix` (radix = 3 for Radix-3)
 pub(crate) fn digit_reverse_indices(n: usize, radix: usize) -> Result<Vec<usize>, ZaftError> {
@@ -133,4 +133,70 @@ pub(crate) fn is_power_of_six(n: u64) -> bool {
         n /= 6;
     }
     n == 1
+}
+
+pub(crate) fn is_power_of_seven(n: u64) -> bool {
+    let mut n = n;
+    if n == 0 {
+        return false;
+    }
+    while n % 7 == 0 {
+        n /= 7;
+    }
+    n == 1
+}
+
+pub(crate) fn is_power_of_eleven(n: u64) -> bool {
+    let mut n = n;
+    if n == 0 {
+        return false;
+    }
+    while n % 11 == 0 {
+        n /= 11;
+    }
+    n == 1
+}
+
+pub(crate) fn is_power_of_thirteen(n: u64) -> bool {
+    let mut n = n;
+    if n == 0 {
+        return false;
+    }
+    while n % 13 == 0 {
+        n /= 13;
+    }
+    n == 1
+}
+
+pub(crate) fn radixn_floating_twiddles<
+    T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,
+    const N: usize,
+>(
+    size: usize,
+    fft_direction: FftDirection,
+) -> Result<Vec<Complex<T>>, ZaftError>
+where
+    usize: AsPrimitive<T>,
+    f64: AsPrimitive<T>,
+{
+    let mut len = N;
+    let mut twiddles = Vec::new(); // total twiddles = N-1 for radix-7
+    twiddles
+        .try_reserve_exact(size - 1)
+        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+    while len <= size {
+        let one_fifth = len / N;
+
+        for k in 0..one_fifth {
+            for i in 1..N {
+                let w = compute_twiddle::<T>(k * i, len, fft_direction);
+                twiddles.push(w);
+            }
+        }
+
+        len *= N;
+    }
+
+    Ok(twiddles)
 }

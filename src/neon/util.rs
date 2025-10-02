@@ -130,3 +130,28 @@ pub(crate) unsafe fn v_transpose_complex_f32(
         (u0_0, u1_0)
     }
 }
+
+#[inline]
+pub(crate) fn conjq_f32(v: float32x4_t, a: float32x4_t) -> float32x4_t {
+    unsafe {
+        vreinterpretq_f32_u32(veorq_u32(
+            vreinterpretq_u32_f32(v),
+            vreinterpretq_u32_f32(a),
+        ))
+    }
+}
+
+#[inline]
+pub(crate) fn conj_f64(v: float64x2_t, a: float64x2_t) -> float64x2_t {
+    unsafe {
+        vreinterpretq_f64_u64(veorq_u64(
+            vreinterpretq_u64_f64(v),
+            vreinterpretq_u64_f64(a),
+        ))
+    }
+}
+
+#[inline]
+pub(crate) fn conj_f32(v: float32x2_t, a: float32x2_t) -> float32x2_t {
+    unsafe { vreinterpret_f32_u32(veor_u32(vreinterpret_u32_f32(v), vreinterpret_u32_f32(a))) }
+}

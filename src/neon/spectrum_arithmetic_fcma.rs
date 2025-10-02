@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::neon::util::{conj_f32, conj_f64, conjq_f32};
 use crate::spectrum_arithmetic::SpectrumArithmetic;
 use num_complex::Complex;
 use std::arch::aarch64::*;
@@ -47,13 +48,13 @@ impl NeonFcmaSpectrumArithmetic<f32> {
             {
                 let s0 = vld1q_f32(src.as_ptr().cast());
                 let s1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
-                let s2 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
-                let s3 = vld1q_f32(src.get_unchecked(8..).as_ptr().cast());
+                let s2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let s3 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
 
                 let q0 = vld1q_f32(twiddle.as_ptr().cast());
                 let q1 = vld1q_f32(twiddle.get_unchecked(2..).as_ptr().cast());
-                let q2 = vld1q_f32(twiddle.get_unchecked(6..).as_ptr().cast());
-                let q3 = vld1q_f32(twiddle.get_unchecked(8..).as_ptr().cast());
+                let q2 = vld1q_f32(twiddle.get_unchecked(4..).as_ptr().cast());
+                let q3 = vld1q_f32(twiddle.get_unchecked(6..).as_ptr().cast());
 
                 let p0 = vcmlaq_rot90_f32(vcmlaq_f32(zero, s0, q0), s0, q0);
                 let p1 = vcmlaq_rot90_f32(vcmlaq_f32(zero, s1, q1), s1, q1);
@@ -97,11 +98,81 @@ impl NeonFcmaSpectrumArithmetic<f32> {
             }
         }
     }
+
+    #[target_feature(enable = "fcma")]
+    fn mul_conjugate_in_place_f32(&self, dst: &mut [Complex<f32>], b: &[Complex<f32>]) {
+        unsafe {
+            let conjugate_factors = vld1q_f32([0.0f32, -0.0f32, 0.0f32, -0.0f32].as_ptr());
+            let zero = vdupq_n_f32(0.);
+            for (dst, twiddle) in dst.chunks_exact_mut(8).zip(b.chunks_exact(8)) {
+                let s0 = vld1q_f32(dst.as_ptr().cast());
+                let s1 = vld1q_f32(dst.get_unchecked(2..).as_ptr().cast());
+                let s2 = vld1q_f32(dst.get_unchecked(4..).as_ptr().cast());
+                let s3 = vld1q_f32(dst.get_unchecked(6..).as_ptr().cast());
+
+                let q0 = vld1q_f32(twiddle.as_ptr().cast());
+                let q1 = vld1q_f32(twiddle.get_unchecked(2..).as_ptr().cast());
+                let q2 = vld1q_f32(twiddle.get_unchecked(4..).as_ptr().cast());
+                let q3 = vld1q_f32(twiddle.get_unchecked(6..).as_ptr().cast());
+
+                let mut p0 = vcmlaq_rot90_f32(vcmlaq_f32(zero, s0, q0), s0, q0);
+                let mut p1 = vcmlaq_rot90_f32(vcmlaq_f32(zero, s1, q1), s1, q1);
+                let mut p2 = vcmlaq_rot90_f32(vcmlaq_f32(zero, s2, q2), s2, q2);
+                let mut p3 = vcmlaq_rot90_f32(vcmlaq_f32(zero, s3, q3), s3, q3);
+
+                p0 = conjq_f32(p0, conjugate_factors);
+                p1 = conjq_f32(p1, conjugate_factors);
+                p2 = conjq_f32(p2, conjugate_factors);
+                p3 = conjq_f32(p3, conjugate_factors);
+
+                vst1q_f32(dst.as_mut_ptr().cast(), p0);
+                vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), p1);
+                vst1q_f32(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), p2);
+                vst1q_f32(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), p3);
+            }
+
+            let dst = dst.chunks_exact_mut(8).into_remainder();
+            let b = b.chunks_exact(8).remainder();
+
+            for (dst, twiddle) in dst.chunks_exact_mut(2).zip(b.chunks_exact(2)) {
+                let s0 = vld1q_f32(dst.as_ptr().cast());
+                let q0 = vld1q_f32(twiddle.as_ptr().cast());
+
+                let p0 = conjq_f32(
+                    vcmlaq_rot90_f32(vcmlaq_f32(zero, s0, q0), s0, q0),
+                    conjugate_factors,
+                );
+
+                vst1q_f32(dst.as_mut_ptr().cast(), p0);
+            }
+
+            let dst = dst.chunks_exact_mut(2).into_remainder();
+            let b = b.chunks_exact(2).remainder();
+
+            for (dst, twiddle) in dst.iter_mut().zip(b.iter()) {
+                let s0 = vld1_f32(dst as *const Complex<f32> as *const f32);
+                let q0 = vld1_f32(twiddle as *const Complex<f32> as *const f32);
+
+                let p0 = conj_f32(
+                    vcmla_rot90_f32(vcmla_f32(vget_low_f32(zero), s0, q0), s0, q0),
+                    vget_low_f32(conjugate_factors),
+                );
+
+                vst1_f32(dst as *mut Complex<f32> as *mut f32, p0);
+            }
+        }
+    }
 }
 
 impl SpectrumArithmetic<f32> for NeonFcmaSpectrumArithmetic<f32> {
     fn mul(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [Complex<f32>]) {
         unsafe { self.mul_f32(a, b, dst) }
+    }
+
+    fn mul_conjugate_in_place(&self, dst: &mut [Complex<f32>], b: &[Complex<f32>]) {
+        unsafe {
+            self.mul_conjugate_in_place_f32(dst, b);
+        }
     }
 }
 
@@ -150,10 +221,65 @@ impl NeonFcmaSpectrumArithmetic<f64> {
             }
         }
     }
+
+    #[target_feature(enable = "fcma")]
+    unsafe fn mul_conjugate_in_place_f64(&self, dst: &mut [Complex<f64>], b: &[Complex<f64>]) {
+        unsafe {
+            let conjugate_factors = vld1q_f64([0.0f64, -0.0f64].as_ptr());
+            let zero = vdupq_n_f64(0.);
+            for (dst, twiddle) in dst.chunks_exact_mut(4).zip(b.chunks_exact(4)) {
+                let s0 = vld1q_f64(dst.as_ptr().cast());
+                let s1 = vld1q_f64(dst.get_unchecked(1..).as_ptr().cast());
+                let s2 = vld1q_f64(dst.get_unchecked(2..).as_ptr().cast());
+                let s3 = vld1q_f64(dst.get_unchecked(3..).as_ptr().cast());
+
+                let q0 = vld1q_f64(twiddle.as_ptr().cast());
+                let q1 = vld1q_f64(twiddle.get_unchecked(1..).as_ptr().cast());
+                let q2 = vld1q_f64(twiddle.get_unchecked(2..).as_ptr().cast());
+                let q3 = vld1q_f64(twiddle.get_unchecked(3..).as_ptr().cast());
+
+                let mut p0 = vcmlaq_rot90_f64(vcmlaq_f64(zero, s0, q0), s0, q0);
+                let mut p1 = vcmlaq_rot90_f64(vcmlaq_f64(zero, s1, q1), s1, q1);
+                let mut p2 = vcmlaq_rot90_f64(vcmlaq_f64(zero, s2, q2), s2, q2);
+                let mut p3 = vcmlaq_rot90_f64(vcmlaq_f64(zero, s3, q3), s3, q3);
+
+                p0 = conj_f64(p0, conjugate_factors);
+                p1 = conj_f64(p1, conjugate_factors);
+                p2 = conj_f64(p2, conjugate_factors);
+                p3 = conj_f64(p3, conjugate_factors);
+
+                vst1q_f64(dst.as_mut_ptr().cast(), p0);
+                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), p1);
+                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), p2);
+                vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), p3);
+            }
+
+            let dst = dst.chunks_exact_mut(4).into_remainder();
+            let b = b.chunks_exact(4).remainder();
+
+            for (dst, twiddle) in dst.iter_mut().zip(b.iter()) {
+                let s0 = vld1q_f64(dst as *const Complex<f64> as *const f64);
+                let q0 = vld1q_f64(twiddle as *const Complex<f64> as *const f64);
+
+                let p0 = conj_f64(
+                    vcmlaq_rot90_f64(vcmlaq_f64(zero, s0, q0), s0, q0),
+                    conjugate_factors,
+                );
+
+                vst1q_f64(dst as *mut Complex<f64> as *mut f64, p0);
+            }
+        }
+    }
 }
 
 impl SpectrumArithmetic<f64> for NeonFcmaSpectrumArithmetic<f64> {
     fn mul(&self, a: &[Complex<f64>], b: &[Complex<f64>], dst: &mut [Complex<f64>]) {
         unsafe { self.mul_f64(a, b, dst) }
+    }
+
+    fn mul_conjugate_in_place(&self, dst: &mut [Complex<f64>], b: &[Complex<f64>]) {
+        unsafe {
+            self.mul_conjugate_in_place_f64(dst, b);
+        }
     }
 }

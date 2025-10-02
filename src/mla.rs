@@ -29,6 +29,29 @@
 use num_traits::MulAdd;
 use std::ops::{Add, Mul};
 
+#[cfg(any(
+    all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        target_feature = "fma"
+    ),
+    target_arch = "aarch64"
+))]
+#[inline(always)]
+pub(crate) fn fmla<T: Copy + Mul<T, Output = T> + Add<T, Output = T> + MulAdd<T, Output = T>>(
+    a: T,
+    b: T,
+    c: T,
+) -> T {
+    MulAdd::mul_add(a, b, c)
+}
+
+#[cfg(not(any(
+    all(
+        any(target_arch = "x86", target_arch = "x86_64"),
+        target_feature = "fma"
+    ),
+    target_arch = "aarch64"
+)))]
 #[inline(always)]
 pub(crate) fn fmla<T: Copy + Mul<T, Output = T> + Add<T, Output = T> + MulAdd<T, Output = T>>(
     a: T,

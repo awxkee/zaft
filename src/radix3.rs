@@ -29,7 +29,9 @@
 use crate::complex_fma::c_mul_fast;
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, permute_inplace};
+use crate::util::{
+    compute_twiddle, digit_reverse_indices, permute_inplace, radixn_floating_twiddles,
+};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
@@ -53,45 +55,12 @@ pub(crate) trait Radix3Twiddles {
         Self: Sized;
 }
 
-fn radix3_floating_twiddles<
-    T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,
->(
-    size: usize,
-    fft_direction: FftDirection,
-) -> Result<Vec<Complex<T>>, ZaftError>
-where
-    usize: AsPrimitive<T>,
-    f64: AsPrimitive<T>,
-{
-    let mut len = 3;
-
-    let mut twiddles = Vec::new();
-    twiddles
-        .try_reserve_exact(size - 1)
-        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
-
-    while len <= size {
-        let one_third = len / 3;
-        for k in 0..one_third {
-            // In Radix-3, we need twiddle factors W_N^k and W_N^{2k}
-            for i in 1..3 {
-                let w1 = compute_twiddle::<T>(k * i, len, fft_direction);
-                twiddles.push(w1); // W_N^k
-            }
-        }
-
-        len *= 3;
-    }
-
-    Ok(twiddles)
-}
-
 impl Radix3Twiddles for f64 {
     fn make_twiddles(
         size: usize,
         fft_direction: FftDirection,
     ) -> Result<Vec<Complex<f64>>, ZaftError> {
-        radix3_floating_twiddles(size, fft_direction)
+        radixn_floating_twiddles::<f64, 3>(size, fft_direction)
     }
 }
 
@@ -100,7 +69,7 @@ impl Radix3Twiddles for f32 {
         size: usize,
         fft_direction: FftDirection,
     ) -> Result<Vec<Complex<f32>>, ZaftError> {
-        radix3_floating_twiddles(size, fft_direction)
+        radixn_floating_twiddles::<f32, 3>(size, fft_direction)
     }
 }
 

@@ -29,7 +29,10 @@
 use crate::complex_fma::c_mul_fast;
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_five, permute_inplace};
+use crate::util::{
+    compute_twiddle, digit_reverse_indices, is_power_of_five, permute_inplace,
+    radixn_floating_twiddles,
+};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
@@ -54,44 +57,12 @@ pub(crate) trait Radix5Twiddles {
         Self: Sized;
 }
 
-fn radix5_floating_twiddles<
-    T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,
->(
-    size: usize,
-    fft_direction: FftDirection,
-) -> Result<Vec<Complex<T>>, ZaftError>
-where
-    usize: AsPrimitive<T>,
-    f64: AsPrimitive<T>,
-{
-    let mut len = 5;
-    let mut twiddles = Vec::new(); // total twiddles = N-1 for radix-5
-    twiddles
-        .try_reserve_exact(size - 1)
-        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
-
-    while len <= size {
-        let one_fifth = len / 5;
-
-        for k in 0..one_fifth {
-            for i in 1..5 {
-                let w = compute_twiddle::<T>(k * i, len, fft_direction);
-                twiddles.push(w);
-            }
-        }
-
-        len *= 5;
-    }
-
-    Ok(twiddles)
-}
-
 impl Radix5Twiddles for f64 {
     fn make_twiddles(
         size: usize,
         fft_direction: FftDirection,
     ) -> Result<Vec<Complex<f64>>, ZaftError> {
-        radix5_floating_twiddles(size, fft_direction)
+        radixn_floating_twiddles::<f64, 5>(size, fft_direction)
     }
 }
 
@@ -100,7 +71,7 @@ impl Radix5Twiddles for f32 {
         size: usize,
         fft_direction: FftDirection,
     ) -> Result<Vec<Complex<f32>>, ZaftError> {
-        radix5_floating_twiddles(size, fft_direction)
+        radixn_floating_twiddles::<f32, 5>(size, fft_direction)
     }
 }
 

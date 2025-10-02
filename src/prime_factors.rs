@@ -26,7 +26,11 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::util::{is_power_of_five, is_power_of_six, is_power_of_three};
+use crate::util::{
+    is_power_of_eleven, is_power_of_five, is_power_of_seven, is_power_of_six, is_power_of_thirteen,
+    is_power_of_three,
+};
+use num_traits::{One, PrimInt, Zero};
 
 /// Return the prime factors of `n` as a Vec with multiplicity.
 /// For example: `prime_factors(360) -> [2,2,2,3,3,5]`.
@@ -73,6 +77,42 @@ pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
     res
 }
 
+pub(crate) fn primitive_root(prime: u64) -> Option<u64> {
+    let test_exponents: Vec<u64> = prime_factors(prime - 1)
+        .iter()
+        .map(|factor| (prime - 1) / factor)
+        .collect();
+    'next: for potential_root in 2..prime {
+        // for each distinct factor, if potential_root^(p-1)/factor mod p is 1, reject it
+        for exp in &test_exponents {
+            if modular_exponent(potential_root, *exp, prime) == 1 {
+                continue 'next;
+            }
+        }
+
+        // if we reach this point, it means this root was not rejected, so return it
+        return Some(potential_root);
+    }
+    None
+}
+
+/// computes base^exponent % modulo using the standard exponentiation by squaring algorithm
+pub(crate) fn modular_exponent<T: PrimInt>(mut base: T, mut exponent: T, modulo: T) -> T {
+    let one = T::one();
+
+    let mut result = one;
+
+    while exponent > Zero::zero() {
+        if exponent & one == one {
+            result = result * base % modulo;
+        }
+        exponent = exponent >> One::one();
+        base = (base * base) % modulo;
+    }
+
+    result
+}
+
 /// Return the prime factorization as (prime, exponent) pairs.
 /// Example: `prime_factorization(360) -> [(2,3), (3,2), (5,1)]`.
 pub(crate) fn prime_factorization(n: u64) -> Vec<(u64, u32)> {
@@ -97,11 +137,15 @@ pub(crate) fn prime_factorization(n: u64) -> Vec<(u64, u32)> {
 
 #[derive(Clone, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub(crate) struct PrimeFactors {
+    pub(crate) n: u64,
     pub(crate) is_power_of_two: bool,
     pub(crate) is_power_of_three: bool,
     pub(crate) is_power_of_four: bool,
     pub(crate) is_power_of_five: bool,
     pub(crate) is_power_of_six: bool,
+    pub(crate) is_power_of_seven: bool,
+    pub(crate) is_power_of_eleven: bool,
+    pub(crate) is_power_of_thirteen: bool,
     pub(crate) factorization: Vec<(u64, u32)>,
 }
 
@@ -112,19 +156,31 @@ impl PrimeFactors {
         let is_power_of_four = n.is_power_of_two() && n.trailing_zeros() % 2 == 0;
         let is_power_of_six = is_power_of_six(n);
         let is_power_of_five = is_power_of_five(n);
+        let is_power_of_seven = is_power_of_seven(n);
+        let is_power_of_eleven = is_power_of_eleven(n);
         let factorization = prime_factorization(n);
         PrimeFactors {
+            n,
             is_power_of_two,
             is_power_of_five,
             is_power_of_six,
             is_power_of_three,
             is_power_of_four,
+            is_power_of_seven,
+            is_power_of_eleven,
+            is_power_of_thirteen: is_power_of_thirteen(n),
             factorization,
         }
     }
 
     pub(crate) fn may_be_represented_in_mixed_radix(&self) -> bool {
         self.factorization.len() > 1
+    }
+
+    pub(crate) fn is_prime(&self) -> bool {
+        self.factorization.len() == 1
+            && self.factorization[0].0 == self.n
+            && self.factorization[0].1 == 1
     }
 }
 
@@ -145,16 +201,18 @@ mod tests {
         assert_eq!(prime_factorization(97), vec![(97, 1)]);
         assert_eq!(prime_factorization(36), vec![(2, 2), (3, 2)]);
         assert_eq!(prime_factorization(36 * 6), vec![(2, 3), (3, 3)]);
-        assert_eq!(prime_factorization(900), vec![(2, 2), (3, 2), (5, 2)]);
     }
 
     #[test]
     fn test_large_prime() {
-        // a large prime near u32^2 (just an example)
         let p = 4_294_967_291u64; // this is prime
         assert_eq!(prime_factors(p), vec![p]);
         assert_eq!(prime_factorization(p), vec![(p, 1)]);
         assert_eq!(prime_factorization(2028), vec![(2, 2), (3, 1), (13, 2)]);
+        assert_eq!(prime_factorization(900), vec![(2, 2), (3, 2), (5, 2)]);
+        assert_eq!(prime_factorization(121), vec![(11, 2)]);
+        assert_eq!(prime_factorization(1312), vec![(2, 5), (41, 1)]);
+        assert_eq!(prime_factorization(1201), vec![(1201, 1)]);
     }
 
     #[test]

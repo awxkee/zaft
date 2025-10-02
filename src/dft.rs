@@ -29,6 +29,7 @@
 use crate::complex_fma::c_mul_add_fast;
 use crate::err::try_vec;
 use crate::traits::FftTrigonometry;
+use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
@@ -40,7 +41,7 @@ pub(crate) struct Dft<T> {
     direction: FftDirection,
 }
 
-impl<T: Copy + Float + FftTrigonometry + 'static + AsPrimitive<f64>> Dft<T>
+impl<T: Copy + Float + FftTrigonometry + 'static + AsPrimitive<f64> + Default> Dft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -53,25 +54,16 @@ where
     }
 }
 
-pub(crate) fn generate_twiddles_dft<T: Copy + FftTrigonometry + 'static>(
+pub(crate) fn generate_twiddles_dft<T: Copy + FftTrigonometry + 'static + Float + Default>(
     size: usize,
     fft_direction: FftDirection,
 ) -> Result<Vec<Complex<T>>, ZaftError>
 where
     f64: AsPrimitive<T>,
 {
-    let mut twiddles = Vec::new();
-    twiddles
-        .try_reserve_exact(size)
-        .map_err(|_| ZaftError::OutOfMemory(size))?;
-    for t in 0..size {
-        let angle = -2.0 * t as f64 / size as f64;
-        let angle = match fft_direction {
-            FftDirection::Forward => angle,
-            FftDirection::Inverse => -angle,
-        };
-        let (s, c) = angle.as_().sincos_pi();
-        twiddles.push(Complex { re: c, im: s });
+    let mut twiddles = try_vec![Complex::<T>::default(); size];
+    for (k, dst) in twiddles.iter_mut().enumerate() {
+        *dst = compute_twiddle(k, size, fft_direction);
     }
     Ok(twiddles)
 }

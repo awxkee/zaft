@@ -35,6 +35,7 @@ use std::ops::{Add, Mul, Neg, Sub};
 
 pub(crate) trait SpectrumArithmetic<T> {
     fn mul(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
+    fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
 }
 
 pub(crate) trait SpectrumArithmeticFactory<T> {
@@ -136,6 +137,12 @@ where
     fn mul(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]) {
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
             *dst = c_mul_fast(*src, *twiddle);
+        }
+    }
+
+    fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]) {
+        for (scratch_cell, &twiddle) in dst.iter_mut().zip(b.iter()) {
+            *scratch_cell = c_mul_fast(*scratch_cell, twiddle).conj();
         }
     }
 }

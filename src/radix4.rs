@@ -26,12 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::butterflies::rotate_90;
 use crate::complex_fma::c_mul_fast;
-use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, permute_inplace};
+use crate::util::{digit_reverse_indices, permute_inplace, radixn_floating_twiddles};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
+use num_traits::{AsPrimitive, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
 
 #[allow(unused)]
@@ -51,45 +51,12 @@ pub(crate) trait Radix4Twiddles {
         Self: Sized;
 }
 
-fn radix4_floating_twiddles<
-    T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,
->(
-    size: usize,
-    fft_direction: FftDirection,
-) -> Result<Vec<Complex<T>>, ZaftError>
-where
-    usize: AsPrimitive<T>,
-    f64: AsPrimitive<T>,
-{
-    // radix-4 needs fewer stages: log4(size) instead of log2(size)
-    let mut len = 4;
-
-    let mut twiddles = Vec::new();
-    twiddles
-        .try_reserve_exact(size - 1)
-        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
-
-    while len <= size {
-        let quarter = len / 4;
-        for k in 0..quarter {
-            for i in 1..4 {
-                let w1 = compute_twiddle::<T>(k * i, len, fft_direction);
-                twiddles.push(w1); // W_N^k
-            }
-        }
-
-        len *= 4;
-    }
-
-    Ok(twiddles)
-}
-
 impl Radix4Twiddles for f64 {
     fn make_twiddles(
         size: usize,
         fft_direction: FftDirection,
     ) -> Result<Vec<Complex<f64>>, ZaftError> {
-        radix4_floating_twiddles(size, fft_direction)
+        radixn_floating_twiddles::<f64, 4>(size, fft_direction)
     }
 }
 
@@ -98,7 +65,7 @@ impl Radix4Twiddles for f32 {
         size: usize,
         fft_direction: FftDirection,
     ) -> Result<Vec<Complex<f32>>, ZaftError> {
-        radix4_floating_twiddles(size, fft_direction)
+        radixn_floating_twiddles::<f32, 4>(size, fft_direction)
     }
 }
 
@@ -150,11 +117,6 @@ where
             unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                let t3_twiddle = match self.direction {
-                    FftDirection::Forward => Complex::new(T::zero(), -T::one()),
-                    FftDirection::Inverse => Complex::new(T::zero(), T::one()),
-                };
-
                 while len <= self.execution_length {
                     let quarter = len / 4;
 
@@ -178,7 +140,7 @@ where
                             let t0 = a + c;
                             let t1 = a - c;
                             let t2 = b + d;
-                            let t3 = c_mul_fast(b - d, t3_twiddle);
+                            let t3 = rotate_90(b - d, self.direction);
 
                             *data.get_unchecked_mut(j) = t0 + t2;
                             *data.get_unchecked_mut(j + quarter) = t1 + t3;

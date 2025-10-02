@@ -28,8 +28,9 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm128s_deinterleave3_epi64,
-    _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave3_epi64, shuffle,
+    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
+    _mm128s_deinterleave3_epi64, _mm256_create_ps, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
+    _mm256s_deinterleave3_epi64, shuffle,
 };
 use crate::radix4::Radix4Twiddles;
 use crate::util::{digit_reverse_indices, permute_inplace};
@@ -343,9 +344,13 @@ impl AvxFmaRadix4<f32> {
 
                             let (xw0, xw1, xw2) = _mm128s_deinterleave3_epi64(tw0, tw1, tw2);
 
-                            let b0 = _m128s_fma_mul_complex(rk1, xw0);
-                            let c0 = _m128s_fma_mul_complex(rk2, xw1);
+                            let b0c0 = _m256s_mul_complex(
+                                _mm256_create_ps(rk1, rk2),
+                                _mm256_create_ps(xw0, xw1),
+                            );
                             let d0 = _m128s_fma_mul_complex(rk3, xw2);
+                            let b0 = _mm256_castps256_ps128(b0c0);
+                            let c0 = _mm256_extractf128_ps::<1>(b0c0);
 
                             // radix-4 butterfly
                             let q0t0 = _mm_add_ps(a0, c0);
@@ -390,17 +395,16 @@ impl AvxFmaRadix4<f32> {
                             let tw0 =
                                 _mm_loadu_ps(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
 
-                            let b = _m128s_fma_mul_complex(
-                                _m128s_load_f32x2(
-                                    data.get_unchecked(j + quarter..).as_ptr().cast(),
+                            let bc = _m128s_fma_mul_complex(
+                                _mm_unpacklo_ps64(
+                                    _m128s_load_f32x2(
+                                        data.get_unchecked(j + quarter..).as_ptr().cast(),
+                                    ),
+                                    _m128s_load_f32x2(
+                                        data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
+                                    ),
                                 ),
                                 tw0,
-                            );
-                            let c = _m128s_fma_mul_complex(
-                                _m128s_load_f32x2(
-                                    data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
-                                ),
-                                _mm_unpackhi_ps64(tw0, tw0),
                             );
                             let d = _m128s_fma_mul_complex(
                                 _m128s_load_f32x2(
@@ -410,6 +414,9 @@ impl AvxFmaRadix4<f32> {
                                     m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
                                 ),
                             );
+
+                            let b = bc;
+                            let c = _mm_unpackhi_ps64(bc, bc);
 
                             // radix-4 butterfly
                             let t0 = _mm_add_ps(a, c);

@@ -41,7 +41,7 @@ fn main() {
         Complex::new(12.6, -3.0),
         Complex::new(14.6, -6.0),
     ];
-    let mut data = vec![Complex::<f64>::default(); 1296];
+    let mut data = vec![Complex::<f32>::default(); 1201];
     for (k, z) in data.iter_mut().enumerate() {
         *z = data0[k % data0.len()];
     }
@@ -50,8 +50,8 @@ fn main() {
 
     let mut cvt = data.clone();
 
-    let forward = Zaft::make_forward_fft_f64(cvt.len()).unwrap();
-    let inverse = Zaft::make_inverse_fft_f64(cvt.len()).unwrap();
+    let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
+    let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
 
     forward.execute(&mut data).unwrap();
 
@@ -59,7 +59,7 @@ fn main() {
         println!("X[{}] = {}", i, val);
     }
 
-    let mut planner = FftPlanner::<f64>::new();
+    let mut planner = FftPlanner::<f32>::new();
 
     let planned_fft = planner.plan_fft_forward(data.len());
     let planned_fft_inv = planner.plan_fft_inverse(data.len());
@@ -74,11 +74,11 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
     println!("Mine inverse -----");
@@ -89,7 +89,7 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
 
     for (i, val) in data.iter().enumerate() {
@@ -101,15 +101,28 @@ fn main() {
     planned_fft_inv.process(&mut cvt);
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
     for (i, val) in cvt.iter().enumerate() {
         println!("X[{}] = {}", i, val);
     }
 
-    data.iter().zip(o_data).for_each(|(a, b)| {
-        assert!((a.re - b.re).abs() < 1e-5, "a_re {}, b_re {}", a.re, b.re);
-        assert!((a.im - b.im).abs() < 1e-5, "a_im {}, b_im {}", a.im, b.im);
-    });
+    data.iter()
+        .zip(o_data)
+        .enumerate()
+        .for_each(|(idx, (a, b))| {
+            assert!(
+                (a.re - b.re).abs() < 1e-4,
+                "a_re {}, b_re {} at {idx}",
+                a.re,
+                b.re
+            );
+            assert!(
+                (a.im - b.im).abs() < 1e-4,
+                "a_im {}, b_im {} at {idx}",
+                a.im,
+                b.im
+            );
+        });
 }

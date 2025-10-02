@@ -44,13 +44,20 @@ mod mla;
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
 mod neon;
 mod prime_factors;
+mod raders;
+mod radix11;
+mod radix13;
 mod radix2;
 mod radix3;
 mod radix4;
 mod radix5;
 mod radix6;
+mod radix7;
+mod short_butterflies;
 mod spectrum_arithmetic;
 mod traits;
+mod transpose;
+mod transpose_arbitrary;
 mod util;
 
 pub use err::ZaftError;
@@ -61,6 +68,7 @@ use crate::mixed_radix::MixedRadix;
 use crate::prime_factors::PrimeFactors;
 use crate::spectrum_arithmetic::SpectrumArithmeticFactory;
 use crate::traits::FftTrigonometry;
+use crate::transpose::TransposeFactory;
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 
@@ -82,6 +90,7 @@ impl Zaft {
             + Sync
             + MulAdd<T, Output = T>
             + SpectrumArithmeticFactory<T>
+            + TransposeFactory<T>
             + Copy
             + Display,
     >(
@@ -124,7 +133,7 @@ impl Zaft {
         Ok(main_radix)
     }
 
-    fn strategy<
+    pub(crate) fn strategy<
         T: AlgorithmFactory<T>
             + FftTrigonometry
             + Float
@@ -133,6 +142,7 @@ impl Zaft {
             + Sync
             + MulAdd<T, Output = T>
             + SpectrumArithmeticFactory<T>
+            + TransposeFactory<T>
             + Copy
             + Display,
     >(
@@ -143,7 +153,7 @@ impl Zaft {
         f64: AsPrimitive<T>,
     {
         if n == 1 {
-            return T::dft(n, fft_direction);
+            return T::butterfly1(fft_direction);
         } else if n == 2 {
             return T::butterfly2(fft_direction);
         } else if n == 3 {
@@ -152,6 +162,20 @@ impl Zaft {
             return T::butterfly4(fft_direction);
         } else if n == 5 {
             return T::butterfly5(fft_direction);
+        } else if n == 6 {
+            return T::butterfly6(fft_direction);
+        } else if n == 7 {
+            return T::butterfly7(fft_direction);
+        } else if n == 8 {
+            return T::butterfly8(fft_direction);
+        } else if n == 9 {
+            return T::butterfly9(fft_direction);
+        } else if n == 11 {
+            return T::butterfly11(fft_direction);
+        } else if n == 12 {
+            return T::butterfly12(fft_direction);
+        } else if n == 13 {
+            return T::butterfly13(fft_direction);
         }
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {
@@ -168,8 +192,17 @@ impl Zaft {
             T::radix2(n, fft_direction)
         } else if prime_factors.is_power_of_six {
             T::radix6(n, fft_direction)
+        } else if prime_factors.is_power_of_seven {
+            T::radix7(n, fft_direction)
+        } else if prime_factors.is_power_of_eleven {
+            T::radix11(n, fft_direction)
+        } else if prime_factors.is_power_of_thirteen {
+            T::radix13(n, fft_direction)
         } else if prime_factors.may_be_represented_in_mixed_radix() {
             Zaft::make_mixed_radix(fft_direction, prime_factors)
+        } else if prime_factors.is_prime() {
+            let convolve_fft = Zaft::strategy(n - 1, fft_direction);
+            T::raders(convolve_fft?, n, fft_direction)
         } else {
             T::dft(n, fft_direction)
         }

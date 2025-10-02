@@ -250,6 +250,12 @@ pub(crate) unsafe fn _mm256_load4_f32x2(
     }
 }
 
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm256_create_ps(a: __m128, b: __m128) -> __m256 {
+    _mm256_insertf128_ps::<1>(_mm256_castps128_ps256(a), b)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

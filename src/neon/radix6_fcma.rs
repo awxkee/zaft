@@ -278,26 +278,29 @@ impl NeonFcmaRadix6<f32> {
                             let tw1 =
                                 vld1q_f32(m_twiddles.get_unchecked(5 * j + 2..).as_ptr().cast());
 
-                            let u1 = fcmah_complex_f32(
-                                vld1_f32(data.get_unchecked(j + sixth..).as_ptr().cast()),
-                                vget_low_f32(tw0),
+                            let u1u2 = fcma_complex_f32(
+                                vcombine_f32(
+                                    vld1_f32(data.get_unchecked(j + sixth..).as_ptr().cast()),
+                                    vld1_f32(data.get_unchecked(j + 2 * sixth..).as_ptr().cast()),
+                                ),
+                                tw0,
                             );
-                            let u2 = fcmah_complex_f32(
-                                vld1_f32(data.get_unchecked(j + 2 * sixth..).as_ptr().cast()),
-                                vget_high_f32(tw0),
-                            );
-                            let u3 = fcmah_complex_f32(
-                                vld1_f32(data.get_unchecked(j + 3 * sixth..).as_ptr().cast()),
-                                vget_low_f32(tw1),
-                            );
-                            let u4 = fcmah_complex_f32(
-                                vld1_f32(data.get_unchecked(j + 4 * sixth..).as_ptr().cast()),
-                                vget_high_f32(tw1),
+                            let u3u4 = fcma_complex_f32(
+                                vcombine_f32(
+                                    vld1_f32(data.get_unchecked(j + 3 * sixth..).as_ptr().cast()),
+                                    vld1_f32(data.get_unchecked(j + 4 * sixth..).as_ptr().cast()),
+                                ),
+                                tw1,
                             );
                             let u5 = fcmah_complex_f32(
                                 vld1_f32(data.get_unchecked(j + 5 * sixth..).as_ptr().cast()),
                                 vld1_f32(m_twiddles.get_unchecked(5 * j + 4..).as_ptr().cast()),
                             );
+
+                            let u1 = vget_low_f32(u1u2);
+                            let u2 = vget_high_f32(u1u2);
+                            let u3 = vget_low_f32(u3u4);
+                            let u4 = vget_high_f32(u3u4);
 
                             let (t0, t2, t4) = NeonButterfly::butterfly3h_f32(
                                 u0,

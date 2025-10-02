@@ -26,10 +26,15 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::butterflies::Butterfly1;
 use crate::dft::Dft;
+use crate::raders::RadersFft;
 use crate::{FftDirection, FftExecutor, ZaftError};
 
 pub(crate) trait AlgorithmFactory<T> {
+    fn butterfly1(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly2(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
@@ -40,6 +45,27 @@ pub(crate) trait AlgorithmFactory<T> {
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly5(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly6(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly7(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly8(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly9(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly11(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly12(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly13(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix2(
@@ -62,13 +88,40 @@ pub(crate) trait AlgorithmFactory<T> {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn radix7(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn radix11(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn radix13(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn dft(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+
+    fn raders(
+        convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
 }
 
 impl AlgorithmFactory<f32> for f32 {
+    fn butterfly1(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        Ok(Box::new(Butterfly1 {
+            phantom_data: Default::default(),
+            direction: fft_direction,
+        }))
+    }
+
     fn butterfly2(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
@@ -151,6 +204,55 @@ impl AlgorithmFactory<f32> for f32 {
             use crate::butterflies::Butterfly5;
             Ok(Box::new(Butterfly5::new(fft_direction)))
         }
+    }
+
+    fn butterfly6(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly6;
+        Ok(Box::new(Butterfly6::new(fft_direction)))
+    }
+
+    fn butterfly7(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly7;
+        Ok(Box::new(Butterfly7::new(fft_direction)))
+    }
+
+    fn butterfly8(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly8;
+        Ok(Box::new(Butterfly8::new(fft_direction)))
+    }
+
+    fn butterfly9(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly9;
+        Ok(Box::new(Butterfly9::new(fft_direction)))
+    }
+
+    fn butterfly11(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly11;
+        Ok(Box::new(Butterfly11::new(fft_direction)))
+    }
+
+    fn butterfly12(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly12;
+        Ok(Box::new(Butterfly12::new(fft_direction)))
+    }
+
+    fn butterfly13(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly13;
+        Ok(Box::new(Butterfly13::new(fft_direction)))
     }
 
     fn radix2(
@@ -336,10 +438,46 @@ impl AlgorithmFactory<f32> for f32 {
         }
     }
 
+    fn radix7(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::radix7::Radix7;
+        Radix7::new(n, fft_direction)
+            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+    }
+
+    fn radix11(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::radix11::Radix11;
+        Radix11::new(n, fft_direction)
+            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+    }
+
+    fn radix13(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::radix13::Radix13;
+        Radix13::new(n, fft_direction)
+            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+    }
+
     fn dft(
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         Dft::new(n, fft_direction).map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+    }
+
+    fn raders(
+        convolve_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        RadersFft::new(n, convolve_fft, fft_direction)
+            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
     }
 }

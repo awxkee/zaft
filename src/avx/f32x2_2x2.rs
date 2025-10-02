@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 9/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -26,47 +26,37 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-mod butterflies;
-mod f32x2_2x2;
-mod f32x2_4x4;
-mod radix2;
-#[cfg(feature = "fcma")]
-mod radix2_fcma;
-mod radix3;
-#[cfg(feature = "fcma")]
-mod radix3_fcma;
-mod radix4;
-#[cfg(feature = "fcma")]
-mod radix4_fcma;
-mod radix5;
-#[cfg(feature = "fcma")]
-mod radix5_fcma;
-mod radix6;
-#[cfg(feature = "fcma")]
-mod radix6_fcma;
-mod spectrum_arithmetic;
-#[cfg(feature = "fcma")]
-mod spectrum_arithmetic_fcma;
-mod util;
 
-pub(crate) use butterflies::{NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5};
-pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
-pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
-pub(crate) use radix2::NeonRadix2;
-#[cfg(feature = "fcma")]
-pub(crate) use radix2_fcma::NeonFcmaRadix2;
-pub(crate) use radix3::NeonRadix3;
-#[cfg(feature = "fcma")]
-pub(crate) use radix3_fcma::NeonFcmaRadix3;
-pub(crate) use radix4::NeonRadix4;
-#[cfg(feature = "fcma")]
-pub(crate) use radix4_fcma::NeonFcmaRadix4;
-pub(crate) use radix5::NeonRadix5;
-#[cfg(feature = "fcma")]
-pub(crate) use radix5_fcma::NeonFcmaRadix5;
-pub(crate) use radix6::NeonRadix6;
-#[cfg(feature = "fcma")]
-pub(crate) use radix6_fcma::NeonFcmaRadix6;
-pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
-#[cfg(feature = "fcma")]
-pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
+use num_complex::Complex;
+use std::arch::x86_64::*;
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn transpose_u64_2x2_impl(v0: (__m128i, __m128i)) -> (__m128i, __m128i) {
+    let l = _mm_unpacklo_epi64(v0.0, v0.1);
+    let h = _mm_unpackhi_epi64(v0.0, v0.1);
+
+    (l, h)
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn avx_transpose_f32x2_2x2(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let row0 = _mm_loadu_si128(src.as_ptr().cast());
+        let row1 = _mm_loadu_si128(src.get_unchecked(src_stride..).as_ptr().cast());
+
+        let v0 = transpose_u64_2x2_impl((row0, row1));
+
+        _mm_storeu_si128(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), v0.0);
+        _mm_storeu_si128(
+            dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
+            v0.1,
+        );
+    }
+}

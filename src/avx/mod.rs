@@ -27,6 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod butterflies;
+mod f32x2_2x2;
+mod f32x2_4x4;
 mod radix2;
 mod radix3;
 mod radix4;
@@ -36,6 +38,8 @@ mod spectrum_arithmetic;
 mod util;
 
 pub(crate) use butterflies::{AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5};
+pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
+pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
 pub(crate) use radix2::AvxFmaRadix2;
 pub(crate) use radix3::AvxFmaRadix3;
 pub(crate) use radix4::AvxFmaRadix4;

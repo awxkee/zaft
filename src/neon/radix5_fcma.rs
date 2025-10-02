@@ -27,8 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::neon::util::{
-    fcma_complex_f32, fcma_complex_f64, fcmah_complex_f32, v_rotate90_f32, v_rotate90_f64,
-    vh_rotate90_f32,
+    fcma_complex_f32, fcma_complex_f64, v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32,
 };
 use crate::radix5::Radix5Twiddles;
 use crate::traits::FftTrigonometry;
@@ -296,24 +295,27 @@ impl NeonFcmaRadix5<f32> {
                             let tw1 =
                                 vld1q_f32(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast());
 
-                            let u1 = fcmah_complex_f32(
-                                vld1_f32(data.get_unchecked(j + fifth..).as_ptr().cast()),
-                                vget_low_f32(tw0),
+                            let u1u2 = fcma_complex_f32(
+                                vcombine_f32(
+                                    vld1_f32(data.get_unchecked(j + fifth..).as_ptr().cast()),
+                                    vld1_f32(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
+                                ),
+                                tw0,
                             );
-                            let u2 = fcmah_complex_f32(
-                                vld1_f32(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
-                                vget_high_f32(tw0),
-                            );
-                            let u3 = fcmah_complex_f32(
-                                vld1_f32(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
-                                vget_low_f32(tw1),
-                            );
-                            let u4 = fcmah_complex_f32(
-                                vld1_f32(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
-                                vget_high_f32(tw1),
+                            let u3u4 = fcma_complex_f32(
+                                vcombine_f32(
+                                    vld1_f32(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
+                                    vld1_f32(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
+                                ),
+                                tw1,
                             );
 
                             // Radix-5 butterfly
+
+                            let u1 = vget_low_f32(u1u2);
+                            let u2 = vget_high_f32(u1u2);
+                            let u3 = vget_low_f32(u3u4);
+                            let u4 = vget_high_f32(u3u4);
 
                             let x14p = vadd_f32(u1, u4);
                             let x14n = vsub_f32(u1, u4);

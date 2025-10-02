@@ -29,6 +29,7 @@
 use crate::err::try_vec;
 use crate::spectrum_arithmetic::{SpectrumArithmetic, SpectrumArithmeticFactory};
 use crate::traits::FftTrigonometry;
+use crate::transpose::{TransposeExecutor, TransposeFactory};
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -45,9 +46,12 @@ pub(crate) struct MixedRadix<T> {
     height_executor: Box<dyn FftExecutor<T> + Send + Sync>,
     height: usize,
     arithmetic_executor: Box<dyn SpectrumArithmetic<T> + Send + Sync>,
+    transpose_executor: Box<dyn TransposeExecutor<T> + Send + Sync>,
 }
 
-impl<T: Copy + 'static + FftTrigonometry + Float + SpectrumArithmeticFactory<T>> MixedRadix<T>
+impl<
+    T: Copy + 'static + FftTrigonometry + Float + SpectrumArithmeticFactory<T> + TransposeFactory<T>,
+> MixedRadix<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -86,6 +90,7 @@ where
             direction,
             twiddles,
             arithmetic_executor: T::make_spectrum_arithmetic(),
+            transpose_executor: T::transpose_strategy(width, height),
         })
     }
 }
@@ -115,9 +120,9 @@ where
         let mut scratch = try_vec![Complex::zero(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // SIX STEP FFT:
             // STEP 1: transpose
-            transpose_small(self.width, self.height, chunk, &mut scratch);
+            self.transpose_executor
+                .transpose(chunk, &mut scratch, self.width, self.height);
 
             // STEP 2: perform FFTs of size `height`
             self.height_executor.execute(&mut scratch)?;
@@ -127,13 +132,15 @@ where
                 .mul(&scratch, &self.twiddles, chunk);
 
             // STEP 4: transpose again
-            transpose_small(self.height, self.width, chunk, &mut scratch);
+            self.transpose_executor
+                .transpose(chunk, &mut scratch, self.height, self.width);
 
             // STEP 5: perform FFTs of size `width`
             self.width_executor.execute(&mut scratch)?;
 
             // STEP 6: transpose again
-            transpose_small(self.width, self.height, &scratch, chunk);
+            self.transpose_executor
+                .transpose(&scratch, chunk, self.width, self.height);
         }
         Ok(())
     }
@@ -144,18 +151,5 @@ where
 
     fn length(&self) -> usize {
         self.execution_length
-    }
-}
-
-pub(crate) fn transpose_small<T: Copy>(width: usize, height: usize, input: &[T], output: &mut [T]) {
-    for x in 0..width {
-        for y in 0..height {
-            let input_index = x + y * width;
-            let output_index = y + x * height;
-
-            unsafe {
-                *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
-            }
-        }
     }
 }
