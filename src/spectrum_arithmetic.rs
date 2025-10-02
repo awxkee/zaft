@@ -33,17 +33,18 @@ use std::fmt::Display;
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg, Sub};
 
-pub(crate) trait SpectrumArithmetic<T> {
+pub(crate) trait SpectrumOps<T> {
     fn mul(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
+    fn conjugate_mul_by_b(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
 }
 
-pub(crate) trait SpectrumArithmeticFactory<T> {
-    fn make_spectrum_arithmetic() -> Box<dyn SpectrumArithmetic<T> + Send + Sync>;
+pub(crate) trait SpectrumOpsFactory<T> {
+    fn make_spectrum_arithmetic() -> Box<dyn SpectrumOps<T> + Send + Sync>;
 }
 
-impl SpectrumArithmeticFactory<f32> for f32 {
-    fn make_spectrum_arithmetic() -> Box<dyn SpectrumArithmetic<f32> + Send + Sync> {
+impl SpectrumOpsFactory<f32> for f32 {
+    fn make_spectrum_arithmetic() -> Box<dyn SpectrumOps<f32> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -78,8 +79,8 @@ impl SpectrumArithmeticFactory<f32> for f32 {
     }
 }
 
-impl SpectrumArithmeticFactory<f64> for f64 {
-    fn make_spectrum_arithmetic() -> Box<dyn SpectrumArithmetic<f64> + Send + Sync> {
+impl SpectrumOpsFactory<f64> for f64 {
+    fn make_spectrum_arithmetic() -> Box<dyn SpectrumOps<f64> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -130,7 +131,7 @@ impl<
         + Neg<Output = T>
         + MulAdd<T, Output = T>
         + Display,
-> SpectrumArithmetic<T> for ScalarSpectrumArithmetic<T>
+> SpectrumOps<T> for ScalarSpectrumArithmetic<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -143,6 +144,12 @@ where
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]) {
         for (scratch_cell, &twiddle) in dst.iter_mut().zip(b.iter()) {
             *scratch_cell = c_mul_fast(*scratch_cell, twiddle).conj();
+        }
+    }
+
+    fn conjugate_mul_by_b(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]) {
+        for ((buffer_entry, inner_entry), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
+            *buffer_entry = c_mul_fast(inner_entry.conj(), *twiddle);
         }
     }
 }

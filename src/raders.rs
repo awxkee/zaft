@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::prime_factors::{PrimeFactors, primitive_root};
 use crate::radix2::Radix2Twiddles;
-use crate::spectrum_arithmetic::{SpectrumArithmetic, SpectrumArithmeticFactory};
+use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -47,7 +47,7 @@ pub(crate) struct RadersFft<T> {
     primitive_root_inverse: u64,
     len: StrengthReducedU64,
     direction: FftDirection,
-    spectrum_arithmetic: Box<dyn SpectrumArithmetic<T> + Send + Sync>,
+    spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
 }
 
 impl<
@@ -59,7 +59,7 @@ impl<
         + Radix2Twiddles
         + Zero
         + Default
-        + SpectrumArithmeticFactory<T>
+        + SpectrumOpsFactory<T>
         + 'static,
 > RadersFft<T>
 where
@@ -115,7 +115,7 @@ where
             len: reduced_len,
             convolve_fft_twiddles: inner_fft_input,
             direction: fft_direction,
-            spectrum_arithmetic: T::make_spectrum_arithmetic(),
+            spectrum_ops: T::make_spectrum_arithmetic(),
         })
     }
 }
@@ -169,7 +169,7 @@ where
             // multiply the inner result with our cached setup data
             // also conjugate every entry. this sets us up to do an inverse FFT
             // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
-            self.spectrum_arithmetic
+            self.spectrum_ops
                 .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
 
             // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.

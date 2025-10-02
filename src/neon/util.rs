@@ -151,7 +151,28 @@ pub(crate) fn conj_f64(v: float64x2_t, a: float64x2_t) -> float64x2_t {
     }
 }
 
+#[cfg(feature = "fcma")]
 #[inline]
 pub(crate) fn conj_f32(v: float32x2_t, a: float32x2_t) -> float32x2_t {
     unsafe { vreinterpret_f32_u32(veor_u32(vreinterpret_u32_f32(v), vreinterpret_u32_f32(a))) }
+}
+
+#[inline(always)]
+pub(crate) unsafe fn pack_complex_lo(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+    unsafe {
+        vreinterpretq_f32_f64(vtrn1q_f64(
+            vreinterpretq_f64_f32(lhs),
+            vreinterpretq_f64_f32(rhs),
+        ))
+    }
+}
+
+#[inline(always)]
+pub(crate) unsafe fn pack_complex_hi(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+    unsafe {
+        vreinterpretq_f32_f64(vtrn2q_f64(
+            vreinterpretq_f64_f32(lhs),
+            vreinterpretq_f64_f32(rhs),
+        ))
+    }
 }

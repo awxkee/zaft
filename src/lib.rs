@@ -33,12 +33,14 @@
 )]
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 mod avx;
+mod bluestein;
 mod butterflies;
 mod complex_fma;
 mod dft;
 mod err;
 mod factory;
 mod factory64;
+mod good_thomas;
 mod mixed_radix;
 mod mla;
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -64,9 +66,8 @@ pub use err::ZaftError;
 use std::fmt::{Display, Formatter};
 
 use crate::factory::AlgorithmFactory;
-use crate::mixed_radix::MixedRadix;
-use crate::prime_factors::PrimeFactors;
-use crate::spectrum_arithmetic::SpectrumArithmeticFactory;
+use crate::prime_factors::{PrimeFactors, split_factors_closest};
+use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
 use num_complex::Complex;
@@ -89,7 +90,7 @@ impl Zaft {
             + Send
             + Sync
             + MulAdd<T, Output = T>
-            + SpectrumArithmeticFactory<T>
+            + SpectrumOpsFactory<T>
             + TransposeFactory<T>
             + Copy
             + Display,
@@ -102,35 +103,58 @@ impl Zaft {
     {
         let factorization = prime_factors.factorization;
 
-        let mut stages: Vec<Box<dyn FftExecutor<T> + Send + Sync>> = Vec::new();
+        let (n_length, q_length) = split_factors_closest(&factorization);
 
-        for (prime, exp) in factorization {
-            let len = (prime as usize)
-                .checked_pow(exp)
-                .ok_or(ZaftError::InvalidPointerSize(
-                    (prime as u128).saturating_pow(exp),
-                ))?;
-            let stage = Zaft::strategy(len, direction)?;
-            stages.push(stage);
+        let p_fft = Zaft::strategy(n_length as usize, direction)?;
+        let q_fft = Zaft::strategy(q_length as usize, direction)?;
+        if num_integer::gcd(q_length, n_length) == 1 {
+            T::good_thomas(p_fft, q_fft)
+        } else {
+            T::mixed_radix(p_fft, q_fft)
         }
+    }
 
-        if stages.len() < 2 {
-            unreachable!("This is an internal error, this should never happen");
+    fn make_prime<
+        T: AlgorithmFactory<T>
+            + FftTrigonometry
+            + Float
+            + 'static
+            + Send
+            + Sync
+            + MulAdd<T, Output = T>
+            + SpectrumOpsFactory<T>
+            + TransposeFactory<T>
+            + Copy
+            + Display,
+    >(
+        n: usize,
+        direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>
+    where
+        f64: AsPrimitive<T>,
+    {
+        let convolve_prime = PrimeFactors::from_number(n as u64 - 1);
+        let big_factor = convolve_prime.factorization.iter().any(|x| x.0 > 25);
+        if !big_factor {
+            let convolve_fft = Zaft::strategy(n - 1, direction);
+            T::raders(convolve_fft?, n, direction)
+        } else {
+            // we want to use bluestein's algorithm. we have a free choice of which inner FFT length to use
+            // the only restriction is that it has to be (2 * len - 1) or larger. So we want the fastest FFT we can compute at or above that size.
+
+            // the most obvious choice is the next-highest power of two, but there's one trick we can pull to get a smaller fft that we can be 100% certain will be faster
+            let min_inner_len = 2 * n - 1;
+            let inner_len_pow2 = min_inner_len.checked_next_power_of_two().unwrap();
+            let inner_len_factor3 = inner_len_pow2 / 4 * 3;
+
+            let inner_len = if inner_len_factor3 >= min_inner_len {
+                inner_len_factor3
+            } else {
+                inner_len_pow2
+            };
+            let convolve_fft = Zaft::strategy(inner_len, direction)?;
+            T::bluestein(convolve_fft, n, direction)
         }
-
-        // Take ownership via into_iter()
-        let mut iter = stages.into_iter();
-        let first = iter.next().unwrap();
-        let second = iter.next().unwrap();
-        let mut main_radix =
-            Box::new(MixedRadix::new(first, second)?) as Box<dyn FftExecutor<T> + Send + Sync>;
-
-        // Chain the rest
-        for stage in iter {
-            main_radix = Box::new(MixedRadix::new(main_radix, stage)?);
-        }
-
-        Ok(main_radix)
     }
 
     pub(crate) fn strategy<
@@ -141,7 +165,7 @@ impl Zaft {
             + Send
             + Sync
             + MulAdd<T, Output = T>
-            + SpectrumArithmeticFactory<T>
+            + SpectrumOpsFactory<T>
             + TransposeFactory<T>
             + Copy
             + Display,
@@ -201,8 +225,7 @@ impl Zaft {
         } else if prime_factors.may_be_represented_in_mixed_radix() {
             Zaft::make_mixed_radix(fft_direction, prime_factors)
         } else if prime_factors.is_prime() {
-            let convolve_fft = Zaft::strategy(n - 1, fft_direction);
-            T::raders(convolve_fft?, n, fft_direction)
+            Zaft::make_prime(n, fft_direction)
         } else {
             T::dft(n, fft_direction)
         }
@@ -237,6 +260,15 @@ impl Zaft {
 pub enum FftDirection {
     Forward,
     Inverse,
+}
+
+impl FftDirection {
+    pub fn inverse(self) -> FftDirection {
+        match self {
+            FftDirection::Forward => FftDirection::Inverse,
+            FftDirection::Inverse => FftDirection::Forward,
+        }
+    }
 }
 
 impl Display for FftDirection {

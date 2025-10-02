@@ -184,6 +184,63 @@ impl PrimeFactors {
     }
 }
 
+pub(crate) fn split_factors_closest(factors: &[(u64, u32)]) -> (u64, u64) {
+    // Step 1: expand the factors into a flat list of primes
+    let mut primes = Vec::new();
+    for &(p, exp) in factors {
+        for _ in 0..exp {
+            primes.push(p);
+        }
+    }
+
+    let total: u64 = primes.iter().product();
+
+    // Step 2: recursive helper to try all subset products
+    fn dfs(
+        primes: &[u64],
+        index: usize,
+        prod: u64,
+        total: u64,
+        best: &mut u64,
+        best_prod: &mut u64,
+    ) {
+        if index == primes.len() {
+            let other = total / prod;
+            let diff = if prod > other {
+                prod - other
+            } else {
+                other - prod
+            };
+            if diff < *best {
+                *best = diff;
+                *best_prod = prod;
+            }
+            return;
+        }
+
+        // include current prime in prod
+        dfs(
+            primes,
+            index + 1,
+            prod * primes[index],
+            total,
+            best,
+            best_prod,
+        );
+        // exclude current prime from prod
+        dfs(primes, index + 1, prod, total, best, best_prod);
+    }
+
+    let mut best_diff = u64::MAX;
+    let mut best_prod = 1;
+
+    dfs(&primes, 0, 1, total, &mut best_diff, &mut best_prod);
+
+    let n1 = best_prod;
+    let n2 = total / best_prod;
+    (n1, n2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,6 +270,19 @@ mod tests {
         assert_eq!(prime_factorization(121), vec![(11, 2)]);
         assert_eq!(prime_factorization(1312), vec![(2, 5), (41, 1)]);
         assert_eq!(prime_factorization(1201), vec![(1201, 1)]);
+        assert_eq!(prime_factorization(1200), vec![(2, 4), (3, 1), (5, 2)]);
+    }
+
+    #[test]
+    fn test_factors_splitting() {
+        assert_eq!(
+            split_factors_closest(&vec![(2, 4), (3, 1), (5, 2)]),
+            (40, 30)
+        );
+        assert_eq!(
+            split_factors_closest(&vec![(2, 2), (3, 1), (13, 2)]),
+            (52, 39)
+        );
     }
 
     #[test]

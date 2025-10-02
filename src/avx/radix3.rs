@@ -28,8 +28,8 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm256_unpackhi_pd2,
-    _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, _mm_unpacklo_ps64, shuffle,
+    _m256d_mul_complex, _m256s_mul_complex, _mm_unpacklo_ps64, _mm256_unpackhi_pd2,
+    _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, shuffle,
 };
 use crate::radix3::Radix3Twiddles;
 use crate::traits::FftTrigonometry;

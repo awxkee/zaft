@@ -49,7 +49,9 @@ mod spectrum_arithmetic;
 mod spectrum_arithmetic_fcma;
 mod util;
 
-pub(crate) use butterflies::{NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5};
+pub(crate) use butterflies::{
+    NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5, NeonButterfly6,
+};
 pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
 pub(crate) use radix2::NeonRadix2;

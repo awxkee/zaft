@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::spectrum_arithmetic::{SpectrumArithmetic, SpectrumArithmeticFactory};
+use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
 use crate::traits::FftTrigonometry;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
 use crate::util::compute_twiddle;
@@ -45,13 +45,12 @@ pub(crate) struct MixedRadix<T> {
     width: usize,
     height_executor: Box<dyn FftExecutor<T> + Send + Sync>,
     height: usize,
-    arithmetic_executor: Box<dyn SpectrumArithmetic<T> + Send + Sync>,
+    spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
     transpose_executor: Box<dyn TransposeExecutor<T> + Send + Sync>,
 }
 
-impl<
-    T: Copy + 'static + FftTrigonometry + Float + SpectrumArithmeticFactory<T> + TransposeFactory<T>,
-> MixedRadix<T>
+impl<T: Copy + 'static + FftTrigonometry + Float + SpectrumOpsFactory<T> + TransposeFactory<T>>
+    MixedRadix<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -89,7 +88,7 @@ where
             height,
             direction,
             twiddles,
-            arithmetic_executor: T::make_spectrum_arithmetic(),
+            spectrum_ops: T::make_spectrum_arithmetic(),
             transpose_executor: T::transpose_strategy(width, height),
         })
     }
@@ -128,8 +127,7 @@ where
             self.height_executor.execute(&mut scratch)?;
 
             // STEP 3: Apply twiddle factors
-            self.arithmetic_executor
-                .mul(&scratch, &self.twiddles, chunk);
+            self.spectrum_ops.mul(&scratch, &self.twiddles, chunk);
 
             // STEP 4: transpose again
             self.transpose_executor

@@ -26,8 +26,11 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::bluestein::BluesteinFft;
 use crate::butterflies::Butterfly1;
 use crate::dft::Dft;
+use crate::good_thomas::GoodThomasFft;
+use crate::mixed_radix::MixedRadix;
 use crate::raders::RadersFft;
 use crate::{FftDirection, FftExecutor, ZaftError};
 
@@ -109,6 +112,22 @@ pub(crate) trait AlgorithmFactory<T> {
         convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
         n: usize,
         fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+
+    fn bluestein(
+        convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+
+    fn mixed_radix(
+        left_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+
+    fn good_thomas(
+        left_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
 }
 
@@ -209,8 +228,16 @@ impl AlgorithmFactory<f32> for f32 {
     fn butterfly6(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
-        use crate::butterflies::Butterfly6;
-        Ok(Box::new(Butterfly6::new(fft_direction)))
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly6;
+            Ok(Box::new(NeonButterfly6::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly6;
+            Ok(Box::new(Butterfly6::new(fft_direction)))
+        }
     }
 
     fn butterfly7(
@@ -478,6 +505,31 @@ impl AlgorithmFactory<f32> for f32 {
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         RadersFft::new(n, convolve_fft, fft_direction)
+            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+    }
+
+    fn bluestein(
+        convolve_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        BluesteinFft::new(n, convolve_fft, fft_direction)
+            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+    }
+
+    fn mixed_radix(
+        left_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        MixedRadix::new(left_fft, right_fft)
+            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+    }
+
+    fn good_thomas(
+        left_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        GoodThomasFft::new(left_fft, right_fft)
             .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
     }
 }
