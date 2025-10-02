@@ -617,8 +617,8 @@ where
 impl AvxButterfly5<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 4 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 4));
+        if in_place.len() % 5 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 5));
         }
 
         let tw1_re = _mm256_set1_ps(self.twiddle1.re);
