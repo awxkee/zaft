@@ -53,7 +53,7 @@ impl TransposeFactory<f32> for f32 {
     ) -> Box<dyn TransposeExecutor<f32> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
-            if _width > 31 && _height > 31 {
+            if _width > 15 && _height > 15 {
                 return Box::new(NeonDefaultExecutorSingle {});
             }
             Box::new(TransposeTiny {
@@ -64,8 +64,10 @@ impl TransposeFactory<f32> for f32 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2") {
-                    return Box::new(AvxDefaultExecutorSingle {});
+                if _width > 15 && _height > 15 {
+                    if std::arch::is_x86_feature_detected!("avx2") {
+                        return Box::new(AvxDefaultExecutorSingle {});
+                    }
                 }
             }
             if _width > 31 && _height > 31 {

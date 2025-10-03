@@ -235,6 +235,13 @@ impl AlgorithmFactory<f32> for f32 {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            if std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
+            {
+                use crate::avx::AvxButterfly6;
+                return Ok(Box::new(AvxButterfly6::new(fft_direction)));
+            }
             use crate::butterflies::Butterfly6;
             Ok(Box::new(Butterfly6::new(fft_direction)))
         }

@@ -331,12 +331,11 @@ impl FftExecutor<f64> for NeonButterfly3<f64> {
         }
 
         let twiddle_re = unsafe { vdupq_n_f64(self.twiddle.re) };
+        let tw1 = unsafe { vld1q_f64(self.tw1.as_ptr()) };
+        let tw2 = unsafe { vld1q_f64(self.tw2.as_ptr()) };
 
         for chunk in in_place.chunks_exact_mut(3) {
             unsafe {
-                let tw1 = vld1q_f64(self.tw1.as_ptr());
-                let tw2 = vld1q_f64(self.tw2.as_ptr());
-
                 let u0 = vld1q_f64(chunk.get_unchecked(0..).as_ptr().cast());
                 let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
                 let u2 = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
@@ -373,14 +372,106 @@ impl FftExecutor<f64> for NeonButterfly3<f64> {
 impl FftExecutor<f32> for NeonButterfly3<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % 3 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 3));
+            return Err(ZaftError::InvalidSizeMultiplier(
+                in_place.len(),
+                self.length(),
+            ));
         }
-        let twiddle_re = unsafe { vdup_n_f32(self.twiddle.re) };
+        let twiddle_re = unsafe { vdupq_n_f32(self.twiddle.re) };
 
-        for chunk in in_place.chunks_exact_mut(3) {
+        let tw1 = unsafe { vld1q_f32(self.tw1.as_ptr()) };
+        let tw2 = unsafe { vld1q_f32(self.tw2.as_ptr()) };
+
+        for chunk in in_place.chunks_exact_mut(12) {
             unsafe {
-                let tw1 = vld1_f32(self.tw1.as_ptr());
-                let tw2 = vld1_f32(self.tw2.as_ptr());
+                let uz0 = vld3q_f64(chunk.as_ptr().cast());
+                let uz1 = vld3q_f64(chunk.get_unchecked(6..).as_ptr().cast());
+
+                let u0 = vreinterpretq_f32_f64(uz0.0);
+                let u1 = vreinterpretq_f32_f64(uz0.1);
+                let u2 = vreinterpretq_f32_f64(uz0.2);
+
+                let u3 = vreinterpretq_f32_f64(uz1.0);
+                let u4 = vreinterpretq_f32_f64(uz1.1);
+                let u5 = vreinterpretq_f32_f64(uz1.2);
+
+                let xp0 = vaddq_f32(u1, u2);
+                let xn0 = vsubq_f32(u1, u2);
+                let sum0 = vaddq_f32(u0, xp0);
+
+                let xp1 = vaddq_f32(u4, u5);
+                let xn1 = vsubq_f32(u4, u5);
+                let sum1 = vaddq_f32(u3, xp1);
+
+                let w_1 = vfmaq_f32(u0, twiddle_re, xp0);
+                let w_2 = vfmaq_f32(u3, twiddle_re, xp1);
+
+                let xn_rot0 = vrev64q_f32(xn0);
+                let xn_rot1 = vrev64q_f32(xn1);
+
+                let y0 = sum0;
+                let y1 = vfmaq_f32(w_1, tw1, xn_rot0);
+                let y2 = vfmaq_f32(w_1, tw2, xn_rot0);
+
+                let y3 = sum1;
+                let y4 = vfmaq_f32(w_2, tw1, xn_rot1);
+                let y5 = vfmaq_f32(w_2, tw2, xn_rot1);
+
+                vst3q_f64(
+                    chunk.as_mut_ptr().cast(),
+                    float64x2x3_t(
+                        vreinterpretq_f64_f32(y0),
+                        vreinterpretq_f64_f32(y1),
+                        vreinterpretq_f64_f32(y2),
+                    ),
+                );
+                vst3q_f64(
+                    chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    float64x2x3_t(
+                        vreinterpretq_f64_f32(y3),
+                        vreinterpretq_f64_f32(y4),
+                        vreinterpretq_f64_f32(y5),
+                    ),
+                );
+            }
+        }
+
+        let rem = in_place.chunks_exact_mut(12).into_remainder();
+
+        for chunk in rem.chunks_exact_mut(6) {
+            unsafe {
+                let uz = vld3q_f64(chunk.as_ptr().cast());
+                let u0 = vreinterpretq_f32_f64(uz.0);
+                let u1 = vreinterpretq_f32_f64(uz.1);
+                let u2 = vreinterpretq_f32_f64(uz.2);
+
+                let xp = vaddq_f32(u1, u2);
+                let xn = vsubq_f32(u1, u2);
+                let sum = vaddq_f32(u0, xp);
+
+                let w_1 = vfmaq_f32(u0, twiddle_re, xp);
+
+                let xn_rot = vrev64q_f32(xn);
+
+                let y0 = sum;
+                let y1 = vfmaq_f32(w_1, tw1, xn_rot);
+                let y2 = vfmaq_f32(w_1, tw2, xn_rot);
+
+                vst3q_f64(
+                    chunk.as_mut_ptr().cast(),
+                    float64x2x3_t(
+                        vreinterpretq_f64_f32(y0),
+                        vreinterpretq_f64_f32(y1),
+                        vreinterpretq_f64_f32(y2),
+                    ),
+                );
+            }
+        }
+
+        let rem = rem.chunks_exact_mut(6).into_remainder();
+
+        for chunk in rem.chunks_exact_mut(3) {
+            unsafe {
                 let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
 
                 let u0 = vget_low_f32(uz0);
@@ -391,13 +482,13 @@ impl FftExecutor<f32> for NeonButterfly3<f32> {
                 let xn = vsub_f32(u1, u2);
                 let sum = vadd_f32(u0, xp);
 
-                let w_1 = vfma_f32(u0, twiddle_re, xp);
+                let w_1 = vfma_f32(u0, vget_low_f32(twiddle_re), xp);
 
                 let xn_rot = vext_f32::<1>(xn, xn);
 
                 let y0 = sum;
-                let y1 = vfma_f32(w_1, tw1, xn_rot);
-                let y2 = vfma_f32(w_1, tw2, xn_rot);
+                let y1 = vfma_f32(w_1, vget_low_f32(tw1), xn_rot);
+                let y2 = vfma_f32(w_1, vget_low_f32(tw2), xn_rot);
 
                 vst1q_f32(
                     chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
@@ -450,9 +541,93 @@ impl FftExecutor<f32> for NeonButterfly4<f32> {
             ));
         }
 
-        let z_mul = unsafe { vld1_f32(self.multiplier.as_ptr()) };
-        let v_i_multiplier = unsafe { vreinterpret_u32_f32(z_mul) };
-        for chunk in in_place.chunks_exact_mut(4) {
+        let z_mul = unsafe { vld1q_f32(self.multiplier.as_ptr()) };
+        let v_i_multiplier = unsafe { vreinterpretq_u32_f32(z_mul) };
+
+        for chunk in in_place.chunks_exact_mut(16) {
+            unsafe {
+                let uzp0 = vld4q_f64(chunk.as_ptr().cast());
+                let uzp1 = vld4q_f64(chunk.get_unchecked(8..).as_ptr().cast());
+
+                let u0 = vreinterpretq_f32_f64(uzp0.0);
+                let u1 = vreinterpretq_f32_f64(uzp0.1);
+                let u2 = vreinterpretq_f32_f64(uzp0.2);
+                let u3 = vreinterpretq_f32_f64(uzp0.3);
+
+                let u4 = vreinterpretq_f32_f64(uzp1.0);
+                let u5 = vreinterpretq_f32_f64(uzp1.1);
+                let u6 = vreinterpretq_f32_f64(uzp1.2);
+                let u7 = vreinterpretq_f32_f64(uzp1.3);
+
+                let t0 = vaddq_f32(u0, u2);
+                let t4 = vaddq_f32(u4, u6);
+                let t1 = vsubq_f32(u0, u2);
+                let t5 = vsubq_f32(u4, u6);
+                let t2 = vaddq_f32(u1, u3);
+                let t6 = vaddq_f32(u5, u7);
+                let mut t3 = vsubq_f32(u1, u3);
+                let mut t7 = vsubq_f32(u5, u7);
+                t3 = vreinterpretq_f32_u32(veorq_u32(
+                    vreinterpretq_u32_f32(vrev64q_f32(t3)),
+                    v_i_multiplier,
+                ));
+                t7 = vreinterpretq_f32_u32(veorq_u32(
+                    vreinterpretq_u32_f32(vrev64q_f32(t7)),
+                    v_i_multiplier,
+                ));
+
+                let rw0 = float64x2x4_t(
+                    vreinterpretq_f64_f32(vaddq_f32(t0, t2)),
+                    vreinterpretq_f64_f32(vaddq_f32(t1, t3)),
+                    vreinterpretq_f64_f32(vsubq_f32(t0, t2)),
+                    vreinterpretq_f64_f32(vsubq_f32(t1, t3)),
+                );
+                let rw1 = float64x2x4_t(
+                    vreinterpretq_f64_f32(vaddq_f32(t4, t6)),
+                    vreinterpretq_f64_f32(vaddq_f32(t5, t7)),
+                    vreinterpretq_f64_f32(vsubq_f32(t4, t6)),
+                    vreinterpretq_f64_f32(vsubq_f32(t5, t7)),
+                );
+
+                vst4q_f64(chunk.as_mut_ptr().cast(), rw0);
+                vst4q_f64(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), rw1);
+            }
+        }
+
+        let rem = in_place.chunks_exact_mut(16).into_remainder();
+
+        for chunk in rem.chunks_exact_mut(8) {
+            unsafe {
+                let uzp = vld4q_f64(chunk.as_ptr().cast());
+
+                let a = vreinterpretq_f32_f64(uzp.0);
+                let b = vreinterpretq_f32_f64(uzp.1);
+                let c = vreinterpretq_f32_f64(uzp.2);
+                let d = vreinterpretq_f32_f64(uzp.3);
+
+                let t0 = vaddq_f32(a, c);
+                let t1 = vsubq_f32(a, c);
+                let t2 = vaddq_f32(b, d);
+                let mut t3 = vsubq_f32(b, d);
+                t3 = vreinterpretq_f32_u32(veorq_u32(
+                    vreinterpretq_u32_f32(vrev64q_f32(t3)),
+                    v_i_multiplier,
+                ));
+
+                let rw0 = float64x2x4_t(
+                    vreinterpretq_f64_f32(vaddq_f32(t0, t2)),
+                    vreinterpretq_f64_f32(vaddq_f32(t1, t3)),
+                    vreinterpretq_f64_f32(vsubq_f32(t0, t2)),
+                    vreinterpretq_f64_f32(vsubq_f32(t1, t3)),
+                );
+
+                vst4q_f64(chunk.as_mut_ptr().cast(), rw0);
+            }
+        }
+
+        let rem = rem.chunks_exact_mut(8).into_remainder();
+
+        for chunk in rem.chunks_exact_mut(4) {
             unsafe {
                 let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
@@ -468,7 +643,7 @@ impl FftExecutor<f32> for NeonButterfly4<f32> {
                 let mut t3 = vsub_f32(b, d);
                 t3 = vreinterpret_f32_u32(veor_u32(
                     vreinterpret_u32_f32(vext_f32::<1>(t3, t3)),
-                    v_i_multiplier,
+                    vget_low_u32(v_i_multiplier),
                 ));
 
                 vst1q_f32(
