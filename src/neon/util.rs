@@ -176,3 +176,19 @@ pub(crate) unsafe fn pack_complex_hi(lhs: float32x4_t, rhs: float32x4_t) -> floa
         ))
     }
 }
+
+#[inline(always)]
+pub(crate) fn vqtrnq_f32(a: float32x4_t, b: float32x4_t) -> (float32x4_t, float32x4_t) {
+    unsafe {
+        (
+            vreinterpretq_f32_f64(vtrn1q_f64(
+                vreinterpretq_f64_f32(a),
+                vreinterpretq_f64_f32(b),
+            )),
+            vreinterpretq_f32_f64(vtrn2q_f64(
+                vreinterpretq_f64_f32(a),
+                vreinterpretq_f64_f32(b),
+            )),
+        )
+    }
+}

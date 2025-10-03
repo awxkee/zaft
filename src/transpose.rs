@@ -420,27 +420,31 @@ impl TransposeExecutor<f32> for NeonDefaultExecutorSingle {
         let input_stride = width;
         let output_stride = height;
 
-        y = transpose_executor::<f32, 4>(
-            input,
-            input_stride,
-            output,
-            output_stride,
-            width,
-            height,
-            y,
-            TransposeBlockNeon4x4F32x2 {},
-        );
+        unsafe {
+            y = transpose_executor::<f32, 4>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockNeon4x4F32x2 {},
+            );
+        }
 
-        y = transpose_executor::<f32, 2>(
-            input,
-            input_stride,
-            output,
-            output_stride,
-            width,
-            height,
-            y,
-            TransposeBlockNeon2x2F32x2 {},
-        );
+        unsafe {
+            y = transpose_executor::<f32, 2>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockNeon2x2F32x2 {},
+            );
+        }
 
         transpose_section::<Complex<f32>>(
             input,
