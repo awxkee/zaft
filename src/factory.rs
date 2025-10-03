@@ -511,6 +511,18 @@ impl AlgorithmFactory<f32> for f32 {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
+            {
+                use crate::avx::AvxRadersFft;
+                unsafe {
+                    return AvxRadersFft::new(n, convolve_fft, fft_direction)
+                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                }
+            }
+        }
         RadersFft::new(n, convolve_fft, fft_direction)
             .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
     }

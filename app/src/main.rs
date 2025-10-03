@@ -41,7 +41,7 @@ fn main() {
         Complex::new(12.6, -3.0),
         Complex::new(14.6, -6.0),
     ];
-    let mut data = vec![Complex::<f32>::default(); 900];
+    let mut data = vec![Complex::<f32>::default(); 1200];
     for (k, z) in data.iter_mut().enumerate() {
         *z = data0[k % data0.len()];
     }
@@ -55,9 +55,9 @@ fn main() {
 
     forward.execute(&mut data).unwrap();
 
-    for (i, val) in data.iter().enumerate() {
-        println!("X[{}] = {}", i, val);
-    }
+    // for (i, val) in data.iter().enumerate() {
+    //     println!("X[{}] = {}", i, val);
+    // }
 
     let mut planner = FftPlanner::<f32>::new();
 
@@ -68,9 +68,9 @@ fn main() {
 
     println!("Rust fft forward -----");
 
-    for (i, val) in cvt.iter().enumerate() {
-        println!("X[{}] = {}", i, val);
-    }
+    // for (i, val) in cvt.iter().enumerate() {
+    //     println!("X[{}] = {}", i, val);
+    // }
 
     data = data
         .iter()
@@ -92,9 +92,9 @@ fn main() {
         .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
 
-    for (i, val) in data.iter().enumerate() {
-        println!("X[{}] = {}", i, val);
-    }
+    // for (i, val) in data.iter().enumerate() {
+    //     println!("X[{}] = {}", i, val);
+    // }
 
     println!("Rust fft inv -----");
 
@@ -104,9 +104,9 @@ fn main() {
         .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
-    for (i, val) in cvt.iter().enumerate() {
-        println!("X[{}] = {}", i, val);
-    }
+    // for (i, val) in cvt.iter().enumerate() {
+    //     println!("X[{}] = {}", i, val);
+    // }
 
     data.iter()
         .zip(o_data)

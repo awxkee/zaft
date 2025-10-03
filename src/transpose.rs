@@ -137,8 +137,92 @@ pub(crate) trait TransposeBlock<V> {
 }
 
 #[allow(dead_code)]
-#[inline(always)]
-pub(crate) fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
+#[target_feature(enable = "avx2")]
+pub(crate) unsafe fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
+    input: &[Complex<V>],
+    input_stride: usize,
+    output: &mut [Complex<V>],
+    output_stride: usize,
+    width: usize,
+    height: usize,
+    start_y: usize,
+    exec: impl TransposeBlock<V>,
+) -> usize {
+    let mut y = start_y;
+
+    let mut src_buffer = vec![Complex::<V>::default(); BLOCK_SIZE * BLOCK_SIZE];
+    let mut dst_buffer = vec![Complex::<V>::default(); BLOCK_SIZE * BLOCK_SIZE];
+
+    unsafe {
+        while y + BLOCK_SIZE < height {
+            let input_y = y;
+
+            let src = input.get_unchecked(input_stride * input_y..);
+
+            let mut x = 0usize;
+
+            while x + BLOCK_SIZE < width {
+                let output_x = x;
+
+                let src = src.get_unchecked(x..);
+                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                exec.transpose_block(src, input_stride, dst, output_stride);
+
+                x += BLOCK_SIZE;
+            }
+
+            if x < width {
+                let rem_x = width - x;
+                assert!(
+                    rem_x <= BLOCK_SIZE,
+                    "Remainder is expected to be less than {BLOCK_SIZE}, but got {rem_x}"
+                );
+
+                let output_x = x;
+                let src = src.get_unchecked(x..);
+
+                for j in 0..BLOCK_SIZE {
+                    std::ptr::copy_nonoverlapping(
+                        src.get_unchecked(j * input_stride..).as_ptr(),
+                        src_buffer
+                            .get_unchecked_mut(j * (BLOCK_SIZE)..)
+                            .as_mut_ptr(),
+                        rem_x,
+                    );
+                }
+
+                exec.transpose_block(
+                    src_buffer.as_slice(),
+                    BLOCK_SIZE,
+                    dst_buffer.as_mut_slice(),
+                    BLOCK_SIZE,
+                );
+
+                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                for j in 0..rem_x {
+                    std::ptr::copy_nonoverlapping(
+                        dst_buffer
+                            .get_unchecked_mut(j * (BLOCK_SIZE)..)
+                            .as_mut_ptr(),
+                        dst.get_unchecked_mut(j * output_stride..).as_mut_ptr(),
+                        BLOCK_SIZE,
+                    );
+                }
+            }
+
+            y += BLOCK_SIZE;
+        }
+    }
+
+    y
+}
+
+#[allow(dead_code)]
+#[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
+pub(crate) unsafe fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
     input: &[Complex<V>],
     input_stride: usize,
     output: &mut [Complex<V>],
@@ -387,27 +471,31 @@ impl TransposeExecutor<f32> for AvxDefaultExecutorSingle {
         let input_stride = width;
         let output_stride = height;
 
-        y = transpose_executor::<f32, 4>(
-            input,
-            input_stride,
-            output,
-            output_stride,
-            width,
-            height,
-            y,
-            TransposeBlockAvx4x4F32x4 {},
-        );
+        unsafe {
+            y = transpose_executor::<f32, 4>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockAvx4x4F32x4 {},
+            );
+        }
 
-        y = transpose_executor::<f32, 2>(
-            input,
-            input_stride,
-            output,
-            output_stride,
-            width,
-            height,
-            y,
-            TransposeBlockAvx2x2F32x2 {},
-        );
+        unsafe {
+            y = transpose_executor::<f32, 2>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockAvx2x2F32x2 {},
+            );
+        }
 
         transpose_section::<Complex<f32>>(
             input,
