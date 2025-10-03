@@ -48,6 +48,7 @@ mod spectrum_arithmetic;
 #[cfg(feature = "fcma")]
 mod spectrum_arithmetic_fcma;
 mod util;
+mod raders;
 
 pub(crate) use butterflies::{
     NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5, NeonButterfly6, NeonButterfly8,
@@ -72,3 +73,4 @@ pub(crate) use radix6_fcma::NeonFcmaRadix6;
 pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
 #[cfg(feature = "fcma")]
 pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
+pub(crate) use raders::NeonRadersFft;

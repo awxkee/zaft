@@ -39,17 +39,19 @@ use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
 use strength_reduce::StrengthReducedU64;
 
+#[allow(unused)]
 pub(crate) struct RadersFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: Vec<Complex<T>>,
     execution_length: usize,
-    primitive_root: u64,
-    primitive_root_inverse: u64,
     len: StrengthReducedU64,
     direction: FftDirection,
+    input_indices: Vec<usize>,
+    output_indices: Vec<usize>,
     spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
 }
 
+#[allow(unused)]
 impl<
     T: Copy
         + Default
@@ -65,7 +67,7 @@ impl<
 where
     f64: AsPrimitive<T>,
 {
-    pub fn new(
+    pub(crate) fn new(
         size: usize,
         convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
         fft_direction: FftDirection,
@@ -107,14 +109,29 @@ where
 
         convolve_fft.execute(&mut inner_fft_input)?;
 
+        let mut input_index = 1;
+        let mut input_indices = try_vec![0usize; size - 1];
+        for indexer in input_indices.iter_mut() {
+            input_index = ((input_index as u64 * primitive_root) % reduced_len) as usize;
+
+            *indexer = input_index - 1;
+        }
+
+        let mut output_index = 1;
+        let mut output_indices = try_vec![0usize; size - 1];
+        for indexer in output_indices.iter_mut() {
+            output_index = ((output_index as u64 * primitive_root_inverse) % reduced_len) as usize;
+            *indexer = output_index - 1;
+        }
+
         Ok(RadersFft {
             execution_length: size,
             convolve_fft,
-            primitive_root,
-            primitive_root_inverse,
             len: reduced_len,
             convolve_fft_twiddles: inner_fft_input,
             direction: fft_direction,
+            input_indices,
+            output_indices,
             spectrum_ops: T::make_spectrum_arithmetic(),
         })
     }
@@ -151,12 +168,9 @@ where
             let (scratch, _) = scratch.split_at_mut(self.length() - 1);
 
             // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
-            let mut input_index = 1;
-            for scratch_element in scratch.iter_mut() {
-                input_index = ((input_index as u64 * self.primitive_root) % self.len) as usize;
-
-                let buffer_element = unsafe { *buffer.get_unchecked(input_index - 1) };
-                *scratch_element = buffer_element;
+            for (scratch_element, &buffer_idx) in scratch.iter_mut().zip(self.input_indices.iter())
+            {
+                *scratch_element = unsafe { *buffer.get_unchecked(buffer_idx) };
             }
 
             // perform the first of two inner FFTs
@@ -180,12 +194,9 @@ where
             self.convolve_fft.execute(scratch)?;
 
             // copy the final values into the output, reordering as we go
-            let mut output_index = 1;
-            for scratch_element in scratch {
-                output_index =
-                    ((output_index as u64 * self.primitive_root_inverse) % self.len) as usize;
+            for (scratch_element, &buffer_idx) in scratch.iter().zip(self.output_indices.iter()) {
                 unsafe {
-                    *buffer.get_unchecked_mut(output_index - 1) = scratch_element.conj();
+                    *buffer.get_unchecked_mut(buffer_idx) = scratch_element.conj();
                 }
             }
         }

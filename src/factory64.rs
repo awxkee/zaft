@@ -436,8 +436,18 @@ impl AlgorithmFactory<f64> for f64 {
                 }
             }
         }
-        RadersFft::new(n, convolve_fft, fft_direction)
-            .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonRadersFft;
+            NeonRadersFft::new(n, convolve_fft, fft_direction)
+                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::raders::RadersFft;
+            RadersFft::new(n, convolve_fft, fft_direction)
+                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
+        }
     }
 
     fn bluestein(
