@@ -638,7 +638,6 @@ impl AvxButterfly5<f32> {
                 let lo = _mm256_castps256_ps128(u0u1u2u3); // (u0,u1)
                 let hi = _mm256_extractf128_ps::<1>(u0u1u2u3); // (u2, u3)
 
-                // u8..u11
                 let hi2 = _mm256_castps256_ps128(u4u5u6u7); // (u4,u5)
                 let hi3 = _mm256_extractf128_ps::<1>(u4u5u6u7); // (u6, u7)
 
@@ -699,7 +698,7 @@ impl AvxButterfly5<f32> {
 
                 _mm256_storeu_ps(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), zu0u1);
                 _mm256_storeu_ps(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), zu2u3);
-                _mm_storeu_ps(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), zu4);
+                _mm_storeu_ps(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), zu4);
             }
         }
 
@@ -796,7 +795,67 @@ impl AvxButterfly5<f64> {
         let tw2_im = _mm256_set1_pd(self.twiddle2.im);
         let rot_sign = unsafe { _mm256_loadu_pd([-0.0f64, 0.0, -0.0, 0.0].as_ptr()) };
 
-        for chunk in in_place.chunks_exact_mut(5) {
+        for chunk in in_place.chunks_exact_mut(10) {
+            unsafe {
+                let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
+                let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = _mm256_loadu_pd(chunk.get_unchecked(6..).as_ptr().cast());
+                let u8u10 = _mm256_loadu_pd(chunk.get_unchecked(8..).as_ptr().cast());
+
+                const LO_HI: i32 = 0b0011_0000;
+                const HI_LO: i32 = 0b0010_0001;
+                const HI_HI: i32 = 0b0011_0001;
+                const LO_LO: i32 = 0b0010_0000;
+
+                let u0 = _mm256_permute2f128_pd::<LO_HI>(u0u1, u4u5);
+                let u1 = _mm256_permute2f128_pd::<HI_LO>(u0u1, u6u7);
+                let u2 = _mm256_permute2f128_pd::<LO_HI>(u2u3, u6u7);
+                let u3 = _mm256_permute2f128_pd::<HI_LO>(u2u3, u8u10);
+                let u4 = _mm256_permute2f128_pd::<LO_HI>(u4u5, u8u10);
+
+                // Radix-5 butterfly
+
+                let x14p = _mm256_add_pd(u1, u4);
+                let x14n = _mm256_sub_pd(u1, u4);
+                let x23p = _mm256_add_pd(u2, u3);
+                let x23n = _mm256_sub_pd(u2, u3);
+                let y0 = _mm256_add_pd(_mm256_add_pd(u0, x14p), x23p);
+
+                let temp_b1_1 = _mm256_mul_pd(tw1_im, x14n);
+                let temp_b2_1 = _mm256_mul_pd(tw2_im, x14n);
+
+                let temp_a1 = _mm256_fmadd_pd(tw2_re, x23p, _mm256_fmadd_pd(tw1_re, x14p, u0));
+                let temp_a2 = _mm256_fmadd_pd(tw1_re, x23p, _mm256_fmadd_pd(tw2_re, x14p, u0));
+
+                let temp_b1 = _mm256_fmadd_pd(tw2_im, x23n, temp_b1_1);
+                let temp_b2 = _mm256_fnmadd_pd(tw1_im, x23n, temp_b2_1);
+
+                let temp_b1_rot = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b1), rot_sign);
+                let temp_b2_rot = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b2), rot_sign);
+
+                let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
+                let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);
+                let y3 = _mm256_sub_pd(temp_a2, temp_b2_rot);
+                let y4 = _mm256_sub_pd(temp_a1, temp_b1_rot);
+
+                let u0u1 = _mm256_permute2f128_pd::<LO_LO>(y0, y1);
+                let u2u3 = _mm256_permute2f128_pd::<LO_LO>(y2, y3);
+                let u4u5 = _mm256_permute2f128_pd::<LO_HI>(y4, y0);
+                let u6u7 = _mm256_permute2f128_pd::<HI_HI>(y1, y2);
+                let u8u9 = _mm256_permute2f128_pd::<HI_HI>(y3, y4);
+
+                _mm256_storeu_pd(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), u0u1);
+                _mm256_storeu_pd(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), u2u3);
+                _mm256_storeu_pd(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), u4u5);
+                _mm256_storeu_pd(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), u6u7);
+                _mm256_storeu_pd(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), u8u9);
+            }
+        }
+
+        let rem = in_place.chunks_exact_mut(10).into_remainder();
+
+        for chunk in rem.chunks_exact_mut(5) {
             unsafe {
                 let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());

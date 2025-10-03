@@ -53,7 +53,7 @@ impl TransposeFactory<f32> for f32 {
     ) -> Box<dyn TransposeExecutor<f32> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
-            if _width > 15 && _height > 15 {
+            if _width > 31 && _height > 31 {
                 return Box::new(NeonDefaultExecutorSingle {});
             }
             Box::new(TransposeTiny {
@@ -68,7 +68,7 @@ impl TransposeFactory<f32> for f32 {
                     return Box::new(AvxDefaultExecutorSingle {});
                 }
             }
-            if _width > 15 && _height > 15 {
+            if _width > 31 && _height > 31 {
                 use crate::transpose_arbitrary::TransposeArbitrary;
                 return Box::new(TransposeArbitrary {
                     phantom_data: Default::default(),
@@ -86,7 +86,7 @@ impl TransposeFactory<f64> for f64 {
         width: usize,
         height: usize,
     ) -> Box<dyn TransposeExecutor<f64> + Send + Sync> {
-        if width > 15 && height > 15 {
+        if width > 31 && height > 31 {
             use crate::transpose_arbitrary::TransposeArbitrary;
             return Box::new(TransposeArbitrary {
                 phantom_data: Default::default(),
