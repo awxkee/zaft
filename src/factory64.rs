@@ -31,6 +31,7 @@ use crate::butterflies::Butterfly1;
 use crate::dft::Dft;
 use crate::factory::AlgorithmFactory;
 use crate::good_thomas::GoodThomasFft;
+use crate::good_thomas_small::GoodThomasSmallFft;
 use crate::mixed_radix::MixedRadix;
 use crate::raders::RadersFft;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -438,16 +439,15 @@ impl AlgorithmFactory<f64> for f64 {
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
-            use crate::neon::NeonRadersFft;
-            NeonRadersFft::new(n, convolve_fft, fft_direction)
-                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
+            if n < (u32::MAX - 100_000u32) as usize {
+                use crate::neon::NeonRadersFft;
+                return NeonRadersFft::new(n, convolve_fft, fft_direction)
+                    .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
+            }
         }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            use crate::raders::RadersFft;
-            RadersFft::new(n, convolve_fft, fft_direction)
-                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
-        }
+        use crate::raders::RadersFft;
+        RadersFft::new(n, convolve_fft, fft_direction)
+            .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
     }
 
     fn bluestein(
@@ -471,6 +471,11 @@ impl AlgorithmFactory<f64> for f64 {
         left_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        let length = left_fft.length() * right_fft.length();
+        if length < (u16::MAX - 100) as usize {
+            return GoodThomasSmallFft::new(left_fft, right_fft)
+                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
+        }
         GoodThomasFft::new(left_fft, right_fft)
             .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
     }

@@ -33,18 +33,18 @@ use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
-use strength_reduce::StrengthReducedUsize;
+use strength_reduce::StrengthReducedU16;
 
-pub(crate) struct GoodThomasFft<T> {
+pub(crate) struct GoodThomasSmallFft<T> {
     width: usize,
     width_size_fft: Box<dyn FftExecutor<T> + Send + Sync>,
 
     height: usize,
     height_size_fft: Box<dyn FftExecutor<T> + Send + Sync>,
 
-    reduced_width: StrengthReducedUsize,
-    reduced_width_plus_one: StrengthReducedUsize,
-    execution_length: usize,
+    reduced_width: StrengthReducedU16,
+    reduced_width_plus_one: StrengthReducedU16,
+    execution_length: u16,
     direction: FftDirection,
     transpose_ops: Box<dyn TransposeExecutor<T> + Send + Sync>,
 }
@@ -59,14 +59,14 @@ impl<
         + Default
         + TransposeFactory<T>
         + 'static,
-> GoodThomasFft<T>
+> GoodThomasSmallFft<T>
 where
     f64: AsPrimitive<T>,
 {
     pub fn new(
         mut width_fft: Box<dyn FftExecutor<T> + Send + Sync>,
         mut height_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<GoodThomasFft<T>, ZaftError> {
+    ) -> Result<GoodThomasSmallFft<T>, ZaftError> {
         assert_eq!(
             width_fft.direction(),
             height_fft.direction(),
@@ -101,17 +101,17 @@ where
             height,
             height_size_fft: height_fft,
 
-            reduced_width: StrengthReducedUsize::new(width),
-            reduced_width_plus_one: StrengthReducedUsize::new(width + 1),
+            reduced_width: StrengthReducedU16::new(width as u16),
+            reduced_width_plus_one: StrengthReducedU16::new(width as u16 + 1),
 
-            execution_length: len,
+            execution_length: len as u16,
             direction,
             transpose_ops: T::transpose_strategy(width, height),
         })
     }
 }
 
-impl<T: Copy> GoodThomasFft<T> {
+impl<T: Copy> GoodThomasSmallFft<T> {
     fn reindex_input(&self, source: &[Complex<T>], destination: &mut [Complex<T>]) {
         // A critical part of the good-thomas algorithm is re-indexing the inputs and outputs.
         // To remap the inputs, we will use the CRT mapping, paired with the normal transpose we'd do for mixed radix.
@@ -127,10 +127,11 @@ impl<T: Copy> GoodThomasFft<T> {
         // 5: The first index of each row will be the final index of the previous row plus one, but because of our incrementing (width+1) inside the loop, we overshot, so at the end of the row, subtract width from output_index
         //
         // This ends up producing the same result as computing the multiplicative inverse of width mod height and etc by the CRT mapping, but with only one integer division per row, instead of one per element.
-        let mut destination_index = 0;
+        let mut destination_index = 0u16;
         for mut source_row in source.chunks_exact(self.width) {
-            let increments_until_cycle =
-                1 + (self.execution_length - destination_index) / self.reduced_width_plus_one;
+            let increments_until_cycle = (1
+                + (self.execution_length - destination_index) / self.reduced_width_plus_one)
+                as usize;
 
             // If we have to rollover output_index on this row, do it in a separate loop
             if increments_until_cycle < self.width {
@@ -138,7 +139,7 @@ impl<T: Copy> GoodThomasFft<T> {
 
                 for input_element in pre_cycle_row {
                     unsafe {
-                        *destination.get_unchecked_mut(destination_index) = *input_element;
+                        *destination.get_unchecked_mut(destination_index as usize) = *input_element;
                     }
                     destination_index += self.reduced_width_plus_one.get();
                 }
@@ -151,14 +152,14 @@ impl<T: Copy> GoodThomasFft<T> {
             // Loop over the entire row (if we did not roll over) or what's left of the row (if we did) and keep incrementing output_row
             for input_element in source_row {
                 unsafe {
-                    *destination.get_unchecked_mut(destination_index) = *input_element;
+                    *destination.get_unchecked_mut(destination_index as usize) = *input_element;
                 }
                 destination_index += self.reduced_width_plus_one.get();
             }
 
             // The first index of the next will be the final index this row, plus one.
             // But because of our incrementing (width+1) inside the loop above, we overshot, so subtract width, and we'll get (width + 1) - width = 1
-            destination_index -= self.width;
+            destination_index -= self.width as u16;
         }
     }
 
@@ -176,11 +177,11 @@ impl<T: Copy> GoodThomasFft<T> {
         // This achieves the same result as the modular arithmetic ofthe ruritanian mapping, but with only one integer divison per row, instead of one per element
         for (y, source_chunk) in source.chunks_exact(self.height).enumerate() {
             let (quotient, remainder) =
-                StrengthReducedUsize::div_rem(y * self.height, self.reduced_width);
+                StrengthReducedU16::div_rem(y as u16 * self.height as u16, self.reduced_width);
 
             // Compute our base index and starting point in the row
-            let mut destination_index = remainder;
-            let start_x = self.height - quotient;
+            let mut destination_index = remainder as usize;
+            let start_x = self.height - quotient as usize;
 
             // Process the first part of the row
             for x in start_x..self.height {
@@ -212,21 +213,19 @@ impl<
         + 'static
         + Neg<Output = T>
         + MulAdd<T, Output = T>,
-> FftExecutor<T> for GoodThomasFft<T>
+> FftExecutor<T> for GoodThomasSmallFft<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.execution_length,
-            ));
+        let length = self.execution_length as usize;
+        if in_place.len() % length != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), length));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.execution_length];
+        let mut scratch = try_vec![Complex::zero(); length];
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+        for chunk in in_place.chunks_exact_mut(length) {
             // Re-index the input, copying from the buffer to the scratch in the process
             self.reindex_input(chunk, &mut scratch);
 
@@ -250,7 +249,8 @@ where
         self.direction
     }
 
+    #[inline]
     fn length(&self) -> usize {
-        self.execution_length
+        self.execution_length as usize
     }
 }

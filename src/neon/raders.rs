@@ -46,36 +46,36 @@ pub(crate) struct NeonRadersFft<T> {
     convolve_fft_twiddles: Vec<Complex<T>>,
     execution_length: usize,
     direction: FftDirection,
-    input_indices: Vec<usize>,
-    output_indices: Vec<usize>,
+    input_indices: Vec<u32>,
+    output_indices: Vec<u32>,
     spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
 }
 
 pub(crate) trait RadersIndicer<T> {
-    fn index_inputs(buffer: &[Complex<T>], output: &mut [Complex<T>], indices: &[usize]);
-    fn output_indices(buffer: &mut [Complex<T>], scratch: &[Complex<T>], indices: &[usize]);
+    fn index_inputs(buffer: &[Complex<T>], output: &mut [Complex<T>], indices: &[u32]);
+    fn output_indices(buffer: &mut [Complex<T>], scratch: &[Complex<T>], indices: &[u32]);
 }
 
 impl RadersIndicer<f32> for f32 {
-    fn index_inputs(buffer: &[Complex<f32>], output: &mut [Complex<f32>], indices: &[usize]) {
+    fn index_inputs(buffer: &[Complex<f32>], output: &mut [Complex<f32>], indices: &[u32]) {
         unsafe {
             for (scratch_element, buffer_idx) in
                 output.chunks_exact_mut(6).zip(indices.chunks_exact(6))
             {
-                let idx0 = buffer_idx[0];
-                let idx1 = buffer_idx[1];
+                let idx0 = buffer_idx[0] as usize;
+                let idx1 = buffer_idx[1] as usize;
 
                 let v0 = vld1_f32(buffer.get_unchecked(idx0..).as_ptr().cast());
                 let v1 = vld1_f32(buffer.get_unchecked(idx1..).as_ptr().cast());
 
-                let idx2 = buffer_idx[2];
-                let idx3 = buffer_idx[3];
+                let idx2 = buffer_idx[2] as usize;
+                let idx3 = buffer_idx[3] as usize;
 
                 let v2 = vld1_f32(buffer.get_unchecked(idx2..).as_ptr().cast());
                 let v3 = vld1_f32(buffer.get_unchecked(idx3..).as_ptr().cast());
 
-                let idx4 = buffer_idx[4];
-                let idx5 = buffer_idx[5];
+                let idx4 = buffer_idx[4] as usize;
+                let idx5 = buffer_idx[5] as usize;
 
                 let v4 = vld1_f32(buffer.get_unchecked(idx4..).as_ptr().cast());
                 let v5 = vld1_f32(buffer.get_unchecked(idx5..).as_ptr().cast());
@@ -107,31 +107,32 @@ impl RadersIndicer<f32> for f32 {
             let rem_indices = indices.chunks_exact(6).remainder();
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
-                let v0 = vld1_f32(buffer.get_unchecked(buffer_idx..).as_ptr().cast());
+                let v0 = vld1_f32(buffer.get_unchecked(buffer_idx as usize..).as_ptr().cast());
                 vst1_f32(scratch_element as *mut Complex<f32> as *mut f32, v0);
             }
         }
     }
 
-    fn output_indices(buffer: &mut [Complex<f32>], scratch: &[Complex<f32>], indices: &[usize]) {
+    fn output_indices(buffer: &mut [Complex<f32>], scratch: &[Complex<f32>], indices: &[u32]) {
         unsafe {
-            let conj = vld1q_f32([0.0, -0.0, 0.0, -0.0].as_ptr());
+            static CONJ: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
+            let conj = vld1q_f32(CONJ.as_ptr());
             for (src, buffer_idx) in scratch.chunks_exact(6).zip(indices.chunks_exact(6)) {
                 let mut v0 = vld1q_f32(src.as_ptr().cast());
                 let mut v1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
                 let mut v2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
 
-                let idx0 = buffer_idx[0];
-                let idx1 = buffer_idx[1];
-                let idx2 = buffer_idx[2];
+                let idx0 = buffer_idx[0] as usize;
+                let idx1 = buffer_idx[1] as usize;
+                let idx2 = buffer_idx[2] as usize;
 
                 v0 = conjq_f32(v0, conj);
                 v1 = conjq_f32(v1, conj);
                 v2 = conjq_f32(v2, conj);
 
-                let idx3 = buffer_idx[3];
-                let idx4 = buffer_idx[4];
-                let idx5 = buffer_idx[5];
+                let idx3 = buffer_idx[3] as usize;
+                let idx4 = buffer_idx[4] as usize;
+                let idx5 = buffer_idx[5] as usize;
 
                 vst1_f32(
                     buffer.get_unchecked_mut(idx0..).as_mut_ptr().cast(),
@@ -163,34 +164,32 @@ impl RadersIndicer<f32> for f32 {
             let rem_indices = indices.chunks_exact(6).remainder();
 
             for (scratch_element, &buffer_idx) in rem_scratch.iter().zip(rem_indices.iter()) {
-                unsafe {
-                    *buffer.get_unchecked_mut(buffer_idx) = scratch_element.conj();
-                }
+                *buffer.get_unchecked_mut(buffer_idx as usize) = scratch_element.conj();
             }
         }
     }
 }
 
 impl RadersIndicer<f64> for f64 {
-    fn index_inputs(buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[usize]) {
+    fn index_inputs(buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[u32]) {
         unsafe {
             for (scratch_element, buffer_idx) in
                 output.chunks_exact_mut(6).zip(indices.chunks_exact(6))
             {
-                let idx0 = buffer_idx[0];
-                let idx1 = buffer_idx[1];
+                let idx0 = buffer_idx[0] as usize;
+                let idx1 = buffer_idx[1] as usize;
 
                 let v0 = vld1q_f64(buffer.get_unchecked(idx0..).as_ptr().cast());
                 let v1 = vld1q_f64(buffer.get_unchecked(idx1..).as_ptr().cast());
 
-                let idx2 = buffer_idx[2];
-                let idx3 = buffer_idx[3];
+                let idx2 = buffer_idx[2] as usize;
+                let idx3 = buffer_idx[3] as usize;
 
                 let v2 = vld1q_f64(buffer.get_unchecked(idx2..).as_ptr().cast());
                 let v3 = vld1q_f64(buffer.get_unchecked(idx3..).as_ptr().cast());
 
-                let idx4 = buffer_idx[4];
-                let idx5 = buffer_idx[5];
+                let idx4 = buffer_idx[4] as usize;
+                let idx5 = buffer_idx[5] as usize;
 
                 let v4 = vld1q_f64(buffer.get_unchecked(idx4..).as_ptr().cast());
                 let v5 = vld1q_f64(buffer.get_unchecked(idx5..).as_ptr().cast());
@@ -222,15 +221,16 @@ impl RadersIndicer<f64> for f64 {
             let rem_indices = indices.chunks_exact(6).remainder();
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
-                let v0 = vld1q_f64(buffer.get_unchecked(buffer_idx..).as_ptr().cast());
+                let v0 = vld1q_f64(buffer.get_unchecked(buffer_idx as usize..).as_ptr().cast());
                 vst1q_f64(scratch_element as *mut Complex<f64> as *mut f64, v0);
             }
         }
     }
 
-    fn output_indices(buffer: &mut [Complex<f64>], scratch: &[Complex<f64>], indices: &[usize]) {
+    fn output_indices(buffer: &mut [Complex<f64>], scratch: &[Complex<f64>], indices: &[u32]) {
         unsafe {
-            let conj = vld1q_f64([0.0, -0.0].as_ptr());
+            static CONJ: [f64; 2] = [0.0, -0.0];
+            let conj = vld1q_f64(CONJ.as_ptr());
             for (src, buffer_idx) in scratch.chunks_exact(6).zip(indices.chunks_exact(6)) {
                 let mut v0 = vld1q_f64(src.as_ptr().cast());
                 let mut v1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
@@ -259,21 +259,55 @@ impl RadersIndicer<f64> for f64 {
                 let idx4 = buffer_idx[4];
                 let idx5 = buffer_idx[5];
 
-                vst1q_f64(buffer.get_unchecked_mut(idx0..).as_mut_ptr().cast(), v0);
-                vst1q_f64(buffer.get_unchecked_mut(idx1..).as_mut_ptr().cast(), v1);
-                vst1q_f64(buffer.get_unchecked_mut(idx2..).as_mut_ptr().cast(), v2);
-                vst1q_f64(buffer.get_unchecked_mut(idx3..).as_mut_ptr().cast(), v3);
-                vst1q_f64(buffer.get_unchecked_mut(idx4..).as_mut_ptr().cast(), v4);
-                vst1q_f64(buffer.get_unchecked_mut(idx5..).as_mut_ptr().cast(), v5);
+                vst1q_f64(
+                    buffer
+                        .get_unchecked_mut(idx0 as usize..)
+                        .as_mut_ptr()
+                        .cast(),
+                    v0,
+                );
+                vst1q_f64(
+                    buffer
+                        .get_unchecked_mut(idx1 as usize..)
+                        .as_mut_ptr()
+                        .cast(),
+                    v1,
+                );
+                vst1q_f64(
+                    buffer
+                        .get_unchecked_mut(idx2 as usize..)
+                        .as_mut_ptr()
+                        .cast(),
+                    v2,
+                );
+                vst1q_f64(
+                    buffer
+                        .get_unchecked_mut(idx3 as usize..)
+                        .as_mut_ptr()
+                        .cast(),
+                    v3,
+                );
+                vst1q_f64(
+                    buffer
+                        .get_unchecked_mut(idx4 as usize..)
+                        .as_mut_ptr()
+                        .cast(),
+                    v4,
+                );
+                vst1q_f64(
+                    buffer
+                        .get_unchecked_mut(idx5 as usize..)
+                        .as_mut_ptr()
+                        .cast(),
+                    v5,
+                );
             }
 
             let rem_scratch = scratch.chunks_exact(6).remainder();
             let rem_indices = indices.chunks_exact(6).remainder();
 
             for (scratch_element, &buffer_idx) in rem_scratch.iter().zip(rem_indices.iter()) {
-                unsafe {
-                    *buffer.get_unchecked_mut(buffer_idx) = scratch_element.conj();
-                }
+                *buffer.get_unchecked_mut(buffer_idx as usize) = scratch_element.conj();
             }
         }
     }
@@ -337,17 +371,17 @@ where
         convolve_fft.execute(&mut inner_fft_input)?;
 
         let mut input_index = 1;
-        let mut input_indices = try_vec![0usize; size - 1];
+        let mut input_indices = try_vec![0u32; size - 1];
         for indexer in input_indices.iter_mut() {
-            input_index = ((input_index as u64 * primitive_root) % reduced_len) as usize;
+            input_index = ((input_index as u64 * primitive_root) % reduced_len) as u32;
 
             *indexer = input_index - 1;
         }
 
         let mut output_index = 1;
-        let mut output_indices = try_vec![0usize; size - 1];
+        let mut output_indices = try_vec![0u32; size - 1];
         for indexer in output_indices.iter_mut() {
-            output_index = ((output_index as u64 * primitive_root_inverse) % reduced_len) as usize;
+            output_index = ((output_index as u64 * primitive_root_inverse) % reduced_len) as u32;
             *indexer = output_index - 1;
         }
 

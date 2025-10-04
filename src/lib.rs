@@ -61,6 +61,7 @@ mod traits;
 mod transpose;
 mod transpose_arbitrary;
 mod util;
+mod good_thomas_small;
 
 pub use err::ZaftError;
 use std::fmt::{Display, Formatter};

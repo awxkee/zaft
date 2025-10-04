@@ -39,7 +39,6 @@ use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
 use strength_reduce::StrengthReducedU64;
 
-#[allow(unused)]
 pub(crate) struct RadersFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: Vec<Complex<T>>,
@@ -51,7 +50,6 @@ pub(crate) struct RadersFft<T> {
     spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
 }
 
-#[allow(unused)]
 impl<
     T: Copy
         + Default
