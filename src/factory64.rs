@@ -155,8 +155,16 @@ impl AlgorithmFactory<f64> for f64 {
     fn butterfly7(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        use crate::butterflies::Butterfly7;
-        Ok(Box::new(Butterfly7::new(fft_direction)))
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly7;
+            Ok(Box::new(NeonButterfly7::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly7;
+            Ok(Box::new(Butterfly7::new(fft_direction)))
+        }
     }
 
     fn butterfly8(
@@ -396,9 +404,24 @@ impl AlgorithmFactory<f64> for f64 {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        use crate::radix7::Radix7;
-        Radix7::new(n, fft_direction)
-            .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaRadix7;
+                return NeonFcmaRadix7::new(n, fft_direction)
+                    .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
+            }
+            use crate::neon::NeonRadix7;
+            NeonRadix7::new(n, fft_direction)
+                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::radix7::Radix7;
+            Radix7::new(n, fft_direction)
+                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
+        }
     }
 
     fn radix11(

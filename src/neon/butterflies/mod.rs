@@ -31,6 +31,7 @@ mod bf3;
 mod bf4;
 mod bf5;
 mod bf6;
+mod bf7;
 mod bf8;
 mod shared;
 
@@ -39,5 +40,6 @@ pub(crate) use bf3::NeonButterfly3;
 pub(crate) use bf4::NeonButterfly4;
 pub(crate) use bf5::NeonButterfly5;
 pub(crate) use bf6::NeonButterfly6;
+pub(crate) use bf7::NeonButterfly7;
 pub(crate) use bf8::NeonButterfly8;
 pub(crate) use shared::NeonButterfly;
