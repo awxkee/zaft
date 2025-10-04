@@ -35,6 +35,7 @@
 mod avx;
 mod bluestein;
 mod butterflies;
+mod c2r;
 mod complex_fma;
 mod dft;
 mod err;
@@ -47,6 +48,7 @@ mod mla;
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
 mod neon;
 mod prime_factors;
+mod r2c;
 mod raders;
 mod radix11;
 mod radix13;
@@ -66,13 +68,17 @@ mod util;
 pub use err::ZaftError;
 use std::fmt::{Display, Formatter};
 
+use crate::c2r::{C2RFftEvenInterceptor, C2RFftOddInterceptor};
 use crate::factory::AlgorithmFactory;
 use crate::prime_factors::{PrimeFactors, split_factors_closest};
+use crate::r2c::{R2CFftEvenInterceptor, R2CFftOddInterceptor};
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
+pub use c2r::C2RFftExecutor;
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
+pub use r2c::R2CFftExecutor;
 
 pub trait FftExecutor<T> {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError>;
@@ -232,6 +238,30 @@ impl Zaft {
         }
     }
 
+    pub fn make_r2c_fft_f32(
+        n: usize,
+    ) -> Result<Box<dyn R2CFftExecutor<f32> + Send + Sync>, ZaftError> {
+        if n.is_multiple_of(2) {
+            R2CFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Forward)?)
+                .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f32> + Send + Sync>)
+        } else {
+            R2CFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Forward)?)
+                .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f32> + Send + Sync>)
+        }
+    }
+
+    pub fn make_c2r_fft_f32(
+        n: usize,
+    ) -> Result<Box<dyn C2RFftExecutor<f32> + Send + Sync>, ZaftError> {
+        if n.is_multiple_of(2) {
+            C2RFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Inverse)?)
+                .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f32> + Send + Sync>)
+        } else {
+            C2RFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Inverse)?)
+                .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f32> + Send + Sync>)
+        }
+    }
+
     pub fn make_forward_fft_f32(
         n: usize,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
@@ -242,6 +272,30 @@ impl Zaft {
         n: usize,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Forward)
+    }
+
+    pub fn make_c2r_fft_f64(
+        n: usize,
+    ) -> Result<Box<dyn C2RFftExecutor<f64> + Send + Sync>, ZaftError> {
+        if n.is_multiple_of(2) {
+            C2RFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Inverse)?)
+                .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f64> + Send + Sync>)
+        } else {
+            C2RFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Inverse)?)
+                .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f64> + Send + Sync>)
+        }
+    }
+
+    pub fn make_r2c_fft_f64(
+        n: usize,
+    ) -> Result<Box<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
+        if n.is_multiple_of(2) {
+            R2CFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Forward)?)
+                .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f64> + Send + Sync>)
+        } else {
+            R2CFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Forward)?)
+                .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f64> + Send + Sync>)
+        }
     }
 
     pub fn make_inverse_fft_f32(

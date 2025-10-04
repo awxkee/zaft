@@ -234,8 +234,8 @@ pub(crate) unsafe fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usi
 ) -> usize {
     let mut y = start_y;
 
-    let mut src_buffer = vec![Complex::<V>::default(); BLOCK_SIZE * BLOCK_SIZE];
-    let mut dst_buffer = vec![Complex::<V>::default(); BLOCK_SIZE * BLOCK_SIZE];
+    let mut src_buffer = [Complex::<V>::default(); 16];
+    let mut dst_buffer = [Complex::<V>::default(); 16];
 
     unsafe {
         while y + BLOCK_SIZE < height {
