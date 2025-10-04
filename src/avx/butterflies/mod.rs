@@ -26,51 +26,18 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-mod butterflies;
-mod f32x2_2x2;
-mod f32x2_4x4;
-mod raders;
-mod radix2;
-#[cfg(feature = "fcma")]
-mod radix2_fcma;
-mod radix3;
-#[cfg(feature = "fcma")]
-mod radix3_fcma;
-mod radix4;
-#[cfg(feature = "fcma")]
-mod radix4_fcma;
-mod radix5;
-#[cfg(feature = "fcma")]
-mod radix5_fcma;
-mod radix6;
-#[cfg(feature = "fcma")]
-mod radix6_fcma;
-mod spectrum_arithmetic;
-#[cfg(feature = "fcma")]
-mod spectrum_arithmetic_fcma;
-mod util;
+mod bf2;
+mod bf3;
+mod bf4;
+mod bf5;
+mod bf6;
+mod bf8;
+mod shared;
 
-pub(crate) use butterflies::{
-    NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5, NeonButterfly6, NeonButterfly8,
-};
-pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
-pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
-pub(crate) use raders::NeonRadersFft;
-pub(crate) use radix2::NeonRadix2;
-#[cfg(feature = "fcma")]
-pub(crate) use radix2_fcma::NeonFcmaRadix2;
-pub(crate) use radix3::NeonRadix3;
-#[cfg(feature = "fcma")]
-pub(crate) use radix3_fcma::NeonFcmaRadix3;
-pub(crate) use radix4::NeonRadix4;
-#[cfg(feature = "fcma")]
-pub(crate) use radix4_fcma::NeonFcmaRadix4;
-pub(crate) use radix5::NeonRadix5;
-#[cfg(feature = "fcma")]
-pub(crate) use radix5_fcma::NeonFcmaRadix5;
-pub(crate) use radix6::NeonRadix6;
-#[cfg(feature = "fcma")]
-pub(crate) use radix6_fcma::NeonFcmaRadix6;
-pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
-#[cfg(feature = "fcma")]
-pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
+pub(crate) use bf2::AvxButterfly2;
+pub(crate) use bf3::AvxButterfly3;
+pub(crate) use bf4::AvxButterfly4;
+pub(crate) use bf5::AvxButterfly5;
+pub(crate) use bf6::AvxButterfly6;
+pub(crate) use bf8::AvxButterfly8;
+pub(crate) use shared::AvxButterfly;

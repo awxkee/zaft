@@ -32,7 +32,6 @@ use crate::dft::Dft;
 use crate::good_thomas::GoodThomasFft;
 use crate::good_thomas_small::GoodThomasSmallFft;
 use crate::mixed_radix::MixedRadix;
-use crate::raders::RadersFft;
 use crate::{FftDirection, FftExecutor, ZaftError};
 
 pub(crate) trait AlgorithmFactory<T> {
@@ -265,6 +264,13 @@ impl AlgorithmFactory<f32> for f32 {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            if std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
+            {
+                use crate::avx::AvxButterfly8;
+                return Ok(Box::new(AvxButterfly8::new(fft_direction)));
+            }
             use crate::butterflies::Butterfly8;
             Ok(Box::new(Butterfly8::new(fft_direction)))
         }
@@ -525,10 +531,12 @@ impl AlgorithmFactory<f32> for f32 {
             if std::arch::is_x86_feature_detected!("avx2")
                 && std::arch::is_x86_feature_detected!("fma")
             {
-                use crate::avx::AvxRadersFft;
-                unsafe {
-                    return AvxRadersFft::new(n, convolve_fft, fft_direction)
-                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                if n < (u32::MAX - 100_000u32) as usize {
+                    use crate::avx::AvxRadersFft;
+                    unsafe {
+                        return AvxRadersFft::new(n, convolve_fft, fft_direction)
+                            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                    }
                 }
             }
         }

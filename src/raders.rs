@@ -43,7 +43,6 @@ pub(crate) struct RadersFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: Vec<Complex<T>>,
     execution_length: usize,
-    len: StrengthReducedU64,
     direction: FftDirection,
     input_indices: Vec<usize>,
     output_indices: Vec<usize>,
@@ -125,7 +124,6 @@ where
         Ok(RadersFft {
             execution_length: size,
             convolve_fft,
-            len: reduced_len,
             convolve_fft_twiddles: inner_fft_input,
             direction: fft_direction,
             input_indices,

@@ -203,6 +203,17 @@ pub(crate) unsafe fn _mm256s_deinterleave3_epi64(
 
 #[inline]
 #[target_feature(enable = "avx2")]
+pub(crate) unsafe fn _mm256s_interleave2_epi64(a: __m256, b: __m256) -> (__m256, __m256) {
+    let xy_l = _mm256_unpacklo_pd(_mm256_castps_pd(a), _mm256_castps_pd(b));
+    let xy_h = _mm256_unpackhi_pd(_mm256_castps_pd(a), _mm256_castps_pd(b));
+
+    let xy0 = _mm256_permute2f128_pd::<32>(xy_l, xy_h);
+    let xy1 = _mm256_permute2f128_pd::<49>(xy_l, xy_h);
+    (_mm256_castpd_ps(xy0), _mm256_castpd_ps(xy1))
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
 pub(crate) unsafe fn _mm256s_interleave3_epi64(
     a: __m256,
     b: __m256,
@@ -251,11 +262,11 @@ pub(crate) unsafe fn _mm128s_deinterleave3_epi64(
 #[inline]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn _mm256s_deinterleave2_epi64(a: __m256, b: __m256) -> (__m256, __m256) {
-    let pl = _mm256_permute2x128_si256::<32>(_mm256_castps_si256(a), _mm256_castps_si256(b));
-    let ph = _mm256_permute2x128_si256::<49>(_mm256_castps_si256(a), _mm256_castps_si256(b));
-    let a0 = _mm256_unpacklo_epi64(pl, ph);
-    let b0 = _mm256_unpackhi_epi64(pl, ph);
-    (_mm256_castsi256_ps(a0), _mm256_castsi256_ps(b0))
+    let pl = _mm256_permute2f128_pd::<32>(_mm256_castps_pd(a), _mm256_castps_pd(b));
+    let ph = _mm256_permute2f128_pd::<49>(_mm256_castps_pd(a), _mm256_castps_pd(b));
+    let a0 = _mm256_unpacklo_pd(pl, ph);
+    let b0 = _mm256_unpackhi_pd(pl, ph);
+    (_mm256_castpd_ps(a0), _mm256_castpd_ps(b0))
 }
 
 #[inline]

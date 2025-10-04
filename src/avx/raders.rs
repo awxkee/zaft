@@ -36,6 +36,7 @@ use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_integer::Integer;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
+use std::arch::x86_64::*;
 use std::ops::{Add, Mul, Neg, Sub};
 use strength_reduce::StrengthReducedU64;
 
@@ -43,11 +44,183 @@ pub(crate) struct AvxRadersFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: Vec<Complex<T>>,
     execution_length: usize,
-    primitive_root: u64,
-    primitive_root_inverse: u64,
-    len: StrengthReducedU64,
     direction: FftDirection,
+    input_indices: Vec<u32>,
+    output_indices: Vec<u32>,
     spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
+}
+
+pub(crate) trait RadersIndicer<T> {
+    unsafe fn index_inputs(buffer: &[Complex<T>], output: &mut [Complex<T>], indices: &[u32]);
+    unsafe fn output_indices(buffer: &mut [Complex<T>], scratch: &[Complex<T>], indices: &[u32]);
+}
+
+impl RadersIndicer<f32> for f32 {
+    #[target_feature(enable = "avx2")]
+    unsafe fn index_inputs(buffer: &[Complex<f32>], output: &mut [Complex<f32>], indices: &[u32]) {
+        unsafe {
+            let one = _mm_set1_epi32(1); // [1, 1, 1, 1]
+
+            for (scratch_element, buffer_idx) in
+                output.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            {
+                let idx = _mm_slli_epi32::<1>(_mm_loadu_si128(buffer_idx.as_ptr().cast()));
+
+                let idx_plus_one = _mm_add_epi32(idx, one); // [idx0+1, idx1+1, idx2+1, idx3+1]
+
+                // Interleave: [idx0, idx0+1, idx1, idx1+1]
+                let idx0 = _mm_unpacklo_epi32(idx, idx_plus_one); // low 2 elements
+
+                // Interleave: [idx2, idx2+1, idx3, idx3+1]
+                let idx1 = _mm_unpackhi_epi32(idx, idx_plus_one); // high 2 elements
+
+                let v0 = _mm256_i32gather_ps::<4>(
+                    buffer.as_ptr().cast(),
+                    _mm256_inserti128_si256::<1>(_mm256_castsi128_si256(idx0), idx1),
+                );
+
+                _mm256_storeu_ps(scratch_element.as_mut_ptr().cast(), v0);
+            }
+
+            let rem = output.chunks_exact_mut(4).into_remainder();
+            let rem_indices = indices.chunks_exact(4).remainder();
+
+            for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
+                *scratch_element = *buffer.get_unchecked(buffer_idx as usize);
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx2")]
+    unsafe fn output_indices(
+        buffer: &mut [Complex<f32>],
+        scratch: &[Complex<f32>],
+        indices: &[u32],
+    ) {
+        unsafe {
+            let one = _mm_set1_epi32(1); // [1, 1, 1, 1]
+            let conj_factors =
+                _mm256_loadu_ps([0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0].as_ptr());
+
+            for (scratch_element, buffer_idx) in
+                buffer.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            {
+                let idx = _mm_slli_epi32::<1>(_mm_loadu_si128(buffer_idx.as_ptr().cast()));
+
+                let idx_plus_one = _mm_add_epi32(idx, one); // [idx0+1, idx1+1, idx2+1, idx3+1]
+
+                // Interleave: [idx0, idx0+1, idx1, idx1+1]
+                let idx0 = _mm_unpacklo_epi32(idx, idx_plus_one); // low 2 elements
+
+                // Interleave: [idx2, idx2+1, idx3, idx3+1]
+                let idx1 = _mm_unpackhi_epi32(idx, idx_plus_one); // high 2 elements
+
+                let v0 = _mm256_xor_ps(
+                    _mm256_i32gather_ps::<4>(
+                        scratch.as_ptr().cast(),
+                        _mm256_inserti128_si256::<1>(_mm256_castsi128_si256(idx0), idx1),
+                    ),
+                    conj_factors,
+                );
+
+                _mm256_storeu_ps(scratch_element.as_mut_ptr().cast(), v0);
+            }
+
+            let rem = buffer.chunks_exact_mut(4).into_remainder();
+            let rem_indices = indices.chunks_exact(4).remainder();
+
+            for (dst, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
+                *dst = scratch.get_unchecked(buffer_idx as usize).conj();
+            }
+        }
+    }
+}
+
+impl RadersIndicer<f64> for f64 {
+    #[target_feature(enable = "avx2")]
+    unsafe fn index_inputs(buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[u32]) {
+        unsafe {
+            let one = _mm_set1_epi32(1); // [1, 1, 1, 1]
+
+            for (scratch_element, buffer_idx) in
+                output.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            {
+                let idx = _mm_slli_epi32::<1>(_mm_loadu_si128(buffer_idx.as_ptr().cast()));
+
+                let idx_plus_one = _mm_add_epi32(idx, one); // [idx0+1, idx1+1, idx2+1, idx3+1]
+
+                // Interleave: [idx0, idx0+1, idx1, idx1+1]
+                let idx0 = _mm_unpacklo_epi32(idx, idx_plus_one); // low 2 elements
+
+                // Interleave: [idx2, idx2+1, idx3, idx3+1]
+                let idx1 = _mm_unpackhi_epi32(idx, idx_plus_one); // high 2 elements
+
+                let v0 = _mm256_i32gather_pd::<8>(buffer.as_ptr().cast(), idx0);
+                let v1 = _mm256_i32gather_pd::<8>(buffer.as_ptr().cast(), idx1);
+
+                _mm256_storeu_pd(scratch_element.as_mut_ptr().cast(), v0);
+                _mm256_storeu_pd(
+                    scratch_element.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    v1,
+                );
+            }
+
+            let rem = output.chunks_exact_mut(4).into_remainder();
+            let rem_indices = indices.chunks_exact(4).remainder();
+
+            for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
+                *scratch_element = *buffer.get_unchecked(buffer_idx as usize);
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx2")]
+    unsafe fn output_indices(
+        buffer: &mut [Complex<f64>],
+        scratch: &[Complex<f64>],
+        indices: &[u32],
+    ) {
+        unsafe {
+            let one = _mm_set1_epi32(1); // [1, 1, 1, 1]
+            let conj_factors = _mm256_loadu_pd([0.0, -0.0, 0.0, -0.0].as_ptr());
+
+            for (scratch_element, buffer_idx) in
+                buffer.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            {
+                let idx = _mm_slli_epi32::<1>(_mm_loadu_si128(buffer_idx.as_ptr().cast()));
+
+                let idx_plus_one = _mm_add_epi32(idx, one); // [idx0+1, idx1+1, idx2+1, idx3+1]
+
+                // Interleave: [idx0, idx0+1, idx1, idx1+1]
+                let idx0 = _mm_unpacklo_epi32(idx, idx_plus_one); // low 2 elements
+
+                // Interleave: [idx2, idx2+1, idx3, idx3+1]
+                let idx1 = _mm_unpackhi_epi32(idx, idx_plus_one); // high 2 elements
+
+                let v0 = _mm256_xor_pd(
+                    _mm256_i32gather_pd::<8>(scratch.as_ptr().cast(), idx0),
+                    conj_factors,
+                );
+                let v1 = _mm256_xor_pd(
+                    _mm256_i32gather_pd::<8>(scratch.as_ptr().cast(), idx1),
+                    conj_factors,
+                );
+
+                _mm256_storeu_pd(scratch_element.as_mut_ptr().cast(), v0);
+                _mm256_storeu_pd(
+                    scratch_element.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    v1,
+                );
+            }
+
+            let rem = buffer.chunks_exact_mut(4).into_remainder();
+            let rem_indices = indices.chunks_exact(4).remainder();
+
+            for (dst, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
+                *dst = scratch.get_unchecked(buffer_idx as usize).conj();
+            }
+        }
+    }
 }
 
 impl<
@@ -108,12 +281,30 @@ where
 
         convolve_fft.execute(&mut inner_fft_input)?;
 
+        let mut input_index = 1;
+        let mut input_indices = try_vec![0u32; size - 1];
+        for indexer in input_indices.iter_mut() {
+            input_index = ((input_index as u64 * primitive_root) % reduced_len) as u32;
+
+            *indexer = input_index - 1;
+        }
+
+        let mut output_index = 1;
+        let mut output_indices = try_vec![0u32; size - 1];
+        for indexer in output_indices.iter_mut() {
+            output_index = ((output_index as u64 * primitive_root_inverse) % reduced_len) as u32;
+            *indexer = output_index - 1;
+        }
+        let mut z_output = try_vec![0u32; size - 1];
+        for (input_idx, &output_idx) in output_indices.iter().enumerate() {
+            z_output[output_idx as usize] = input_idx as u32;
+        }
+
         Ok(AvxRadersFft {
             execution_length: size,
             convolve_fft,
-            primitive_root,
-            primitive_root_inverse,
-            len: reduced_len,
+            input_indices,
+            output_indices: z_output,
             convolve_fft_twiddles: inner_fft_input,
             direction: fft_direction,
             spectrum_ops: T::make_spectrum_arithmetic(),
@@ -129,7 +320,8 @@ impl<
         + Num
         + 'static
         + Neg<Output = T>
-        + MulAdd<T, Output = T>,
+        + MulAdd<T, Output = T>
+        + RadersIndicer<T>,
 > AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,
@@ -153,12 +345,8 @@ where
             let (scratch, _) = scratch.split_at_mut(self.length() - 1);
 
             // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
-            let mut input_index = 1;
-            for scratch_element in scratch.iter_mut() {
-                input_index = ((input_index as u64 * self.primitive_root) % self.len) as usize;
-
-                let buffer_element = unsafe { *buffer.get_unchecked(input_index - 1) };
-                *scratch_element = buffer_element;
+            unsafe {
+                T::index_inputs(buffer, scratch, &self.input_indices);
             }
 
             // perform the first of two inner FFTs
@@ -182,13 +370,8 @@ where
             self.convolve_fft.execute(scratch)?;
 
             // copy the final values into the output, reordering as we go
-            let mut output_index = 1;
-            for scratch_element in scratch {
-                output_index =
-                    ((output_index as u64 * self.primitive_root_inverse) % self.len) as usize;
-                unsafe {
-                    *buffer.get_unchecked_mut(output_index - 1) = scratch_element.conj();
-                }
+            unsafe {
+                T::output_indices(buffer, scratch, &self.output_indices);
             }
         }
         Ok(())
@@ -203,7 +386,8 @@ impl<
         + Num
         + 'static
         + Neg<Output = T>
-        + MulAdd<T, Output = T>,
+        + MulAdd<T, Output = T>
+        + RadersIndicer<T>,
 > FftExecutor<T> for AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,

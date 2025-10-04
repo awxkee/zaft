@@ -41,6 +41,7 @@ mod err;
 mod factory;
 mod factory64;
 mod good_thomas;
+mod good_thomas_small;
 mod mixed_radix;
 mod mla;
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -61,7 +62,6 @@ mod traits;
 mod transpose;
 mod transpose_arbitrary;
 mod util;
-mod good_thomas_small;
 
 pub use err::ZaftError;
 use std::fmt::{Display, Formatter};
