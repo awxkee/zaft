@@ -270,8 +270,8 @@ impl FftExecutor<f64> for NeonButterfly5<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::Butterfly5;
     use rand::Rng;
+    use crate::butterflies::Butterfly5;
 
     #[test]
     fn test_butterfly5_f32() {

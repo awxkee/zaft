@@ -324,8 +324,8 @@ impl NeonFcmaButterfly9<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::Butterfly9;
     use rand::Rng;
+    use crate::butterflies::Butterfly9;
 
     #[test]
     fn test_fcma_butterfly9_f32() {

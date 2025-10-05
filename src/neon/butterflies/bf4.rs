@@ -249,8 +249,8 @@ impl FftExecutor<f64> for NeonButterfly4<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::Butterfly4;
     use rand::Rng;
+    use crate::butterflies::Butterfly4;
 
     #[test]
     fn test_butterfly4_f32() {

@@ -58,7 +58,6 @@ mod radix4;
 mod radix5;
 mod radix6;
 mod radix7;
-mod short_butterflies;
 mod spectrum_arithmetic;
 mod traits;
 mod transpose;
