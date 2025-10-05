@@ -463,8 +463,8 @@ impl FftExecutor<f32> for NeonButterfly11<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
     use crate::butterflies::Butterfly11;
+    use rand::Rng;
 
     #[test]
     fn test_butterfly11_f32() {

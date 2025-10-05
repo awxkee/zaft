@@ -209,6 +209,13 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    fn butterfly10(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly10;
+        Ok(Box::new(Butterfly10::new(fft_direction)))
+    }
+
     fn butterfly11(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {

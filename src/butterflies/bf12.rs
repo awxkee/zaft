@@ -135,7 +135,7 @@ where
 mod tests {
     use super::*;
     use rand::Rng;
-    
+
     #[test]
     fn test_butterfly12() {
         for i in 1..4 {

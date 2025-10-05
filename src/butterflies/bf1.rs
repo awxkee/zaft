@@ -26,11 +26,11 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, MulAdd, Num};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use std::marker::PhantomData;
+use std::ops::{Add, Mul, Neg, Sub};
 
 pub(crate) struct Butterfly1<T> {
     pub(crate) phantom_data: PhantomData<T>,
@@ -39,13 +39,13 @@ pub(crate) struct Butterfly1<T> {
 
 impl<
     T: Copy
-    + Mul<T, Output = T>
-    + Add<T, Output = T>
-    + Sub<T, Output = T>
-    + Num
-    + 'static
-    + Neg<Output = T>
-    + MulAdd<T, Output = T>,
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>,
 > FftExecutor<T> for Butterfly1<T>
 where
     f64: AsPrimitive<T>,

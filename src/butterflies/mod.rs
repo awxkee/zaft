@@ -31,6 +31,7 @@ use num_complex::Complex;
 use std::ops::Neg;
 
 mod bf1;
+mod bf10;
 mod bf11;
 mod bf12;
 mod bf13;
@@ -61,6 +62,8 @@ pub(crate) use bf7::Butterfly7;
 pub(crate) use bf8::Butterfly8;
 #[allow(unused)]
 pub(crate) use bf9::Butterfly9;
+#[allow(unused)]
+pub(crate) use bf10::Butterfly10;
 #[allow(unused)]
 pub(crate) use bf11::Butterfly11;
 #[allow(unused)]

@@ -26,13 +26,13 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use std::ops::{Add, Mul, Neg, Sub};
-use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use crate::{FftDirection, FftExecutor, ZaftError};
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
+use crate::{FftDirection, FftExecutor, ZaftError};
+use num_complex::Complex;
+use num_traits::{AsPrimitive, Float, MulAdd, Num};
+use std::ops::{Add, Mul, Neg, Sub};
 
 #[allow(unused)]
 pub(crate) struct Butterfly5<T> {
@@ -57,13 +57,13 @@ where
 
 impl<
     T: Copy
-    + Mul<T, Output = T>
-    + Add<T, Output = T>
-    + Sub<T, Output = T>
-    + Num
-    + 'static
-    + Neg<Output = T>
-    + MulAdd<T, Output = T>,
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>,
 > FftExecutor<T> for Butterfly5<T>
 where
     f64: AsPrimitive<T>,
@@ -155,8 +155,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::Rng;
     use super::*;
+    use rand::Rng;
 
     #[test]
     fn test_butterfly5() {
@@ -195,5 +195,4 @@ mod tests {
             });
         }
     }
-
 }
