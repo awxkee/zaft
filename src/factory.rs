@@ -290,8 +290,16 @@ impl AlgorithmFactory<f32> for f32 {
     fn butterfly10(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
-        use crate::butterflies::Butterfly10;
-        Ok(Box::new(Butterfly10::new(fft_direction)))
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly10;
+            Ok(Box::new(NeonButterfly10::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly10;
+            Ok(Box::new(Butterfly10::new(fft_direction)))
+        }
     }
 
     fn butterfly9(

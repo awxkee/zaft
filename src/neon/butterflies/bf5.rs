@@ -208,6 +208,7 @@ impl FftExecutor<f64> for NeonButterfly5<f64> {
                 self.length(),
             ));
         }
+
         let tw1_re = unsafe { vdupq_n_f64(self.twiddle1.re) };
         let tw1_im = unsafe { vdupq_n_f64(self.twiddle1.im) };
         let tw2_re = unsafe { vdupq_n_f64(self.twiddle2.re) };

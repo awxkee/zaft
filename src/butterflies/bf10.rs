@@ -103,12 +103,15 @@ where
             chunk[0] = y0;
             chunk[1] = y3;
             chunk[2] = y4;
+
             chunk[3] = y7;
             chunk[4] = y8;
             chunk[5] = y1;
+
             chunk[6] = y2;
             chunk[7] = y5;
             chunk[8] = y6;
+
             chunk[9] = y9;
         }
         Ok(())
