@@ -26,6 +26,8 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+mod bf11;
+mod bf13;
 mod bf2;
 mod bf3;
 mod bf4;
@@ -33,6 +35,9 @@ mod bf5;
 mod bf6;
 mod bf7;
 mod bf8;
+mod bf9;
+#[cfg(feature = "fcma")]
+mod bf9_fcma;
 mod shared;
 
 pub(crate) use bf2::NeonButterfly2;
@@ -42,4 +47,9 @@ pub(crate) use bf5::NeonButterfly5;
 pub(crate) use bf6::NeonButterfly6;
 pub(crate) use bf7::NeonButterfly7;
 pub(crate) use bf8::NeonButterfly8;
+pub(crate) use bf9::NeonButterfly9;
+#[cfg(feature = "fcma")]
+pub(crate) use bf9_fcma::NeonFcmaButterfly9;
+pub(crate) use bf11::NeonButterfly11;
+pub(crate) use bf13::NeonButterfly13;
 pub(crate) use shared::NeonButterfly;

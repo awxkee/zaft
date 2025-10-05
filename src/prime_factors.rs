@@ -272,6 +272,7 @@ mod tests {
         assert_eq!(prime_factorization(1201), vec![(1201, 1)]);
         assert_eq!(prime_factorization(1200), vec![(2, 4), (3, 1), (5, 2)]);
         assert_eq!(prime_factorization(1295), vec![(5, 1), (7, 1), (37, 1)]);
+        assert_eq!(prime_factorization(1859), vec![(11, 1), (13, 2)]);
     }
 
     #[test]

@@ -56,7 +56,7 @@ where
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<NeonFcmaRadix7<T>, ZaftError> {
         assert!(
             is_power_of_seven(size as u64),
-            "Input length must be a power of 6"
+            "Input length must be a power of 7"
         );
 
         let twiddles = T::make_twiddles(size, fft_direction)?;
