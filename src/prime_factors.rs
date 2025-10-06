@@ -140,7 +140,6 @@ pub(crate) struct PrimeFactors {
     pub(crate) n: u64,
     pub(crate) is_power_of_two: bool,
     pub(crate) is_power_of_three: bool,
-    pub(crate) is_power_of_four: bool,
     pub(crate) is_power_of_five: bool,
     pub(crate) is_power_of_six: bool,
     pub(crate) is_power_of_seven: bool,
@@ -153,7 +152,6 @@ impl PrimeFactors {
     pub(crate) fn from_number(n: u64) -> PrimeFactors {
         let is_power_of_three = is_power_of_three(n);
         let is_power_of_two = n.is_power_of_two();
-        let is_power_of_four = n.is_power_of_two() && n.trailing_zeros() % 2 == 0;
         let is_power_of_six = is_power_of_six(n);
         let is_power_of_five = is_power_of_five(n);
         let is_power_of_seven = is_power_of_seven(n);
@@ -165,7 +163,6 @@ impl PrimeFactors {
             is_power_of_five,
             is_power_of_six,
             is_power_of_three,
-            is_power_of_four,
             is_power_of_seven,
             is_power_of_eleven,
             is_power_of_thirteen: is_power_of_thirteen(n),

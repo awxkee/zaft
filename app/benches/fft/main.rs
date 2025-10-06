@@ -64,8 +64,8 @@ pub fn bench_power7s_zaft_average(c: &mut Criterion) {
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.benchmark_group("Fft");
-    bench_power7s_average(c);
-    bench_power7s_zaft_average(c);
+    // bench_power7s_average(c);
+    // bench_power7s_zaft_average(c);
 
     let mut input_power7 = vec![Complex::<f64>::default(); 7 * 7 * 7];
     for z in input_power7.iter_mut() {
@@ -195,37 +195,25 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    c.bench_function("rustfft power 13", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power13.len());
-        let mut working = input_power13.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
+    let mut input_power64 = vec![Complex::<f64>::default(); 64];
+    for z in input_power64.iter_mut() {
+        *z = Complex {
+            re: rand::rng().random(),
+            im: rand::rng().random(),
+        };
+    }
 
-    c.bench_function("zaft power 13", |b| {
-        let plan = Zaft::make_inverse_fft_f64(input_power13.len()).unwrap();
-        let mut working = input_power13.to_vec();
+    c.bench_function("zaft 64", |b| {
+        let plan = Zaft::make_forward_fft_f64(input_power64.len()).unwrap();
+        let mut working = input_power64.to_vec();
         b.iter(|| {
             plan.execute(&mut working).unwrap();
         })
     });
 
-    c.bench_function("rustfft power 13s", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power13.len());
-        let s = input_power13
-            .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
-            .collect::<Vec<_>>();
-        let mut working = s.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power 13s", |b| {
-        let plan = Zaft::make_inverse_fft_f32(input_power13.len()).unwrap();
-        let s = input_power13
+    c.bench_function("zaft 64s", |b| {
+        let plan = Zaft::make_forward_fft_f32(input_power64.len()).unwrap();
+        let s = input_power64
             .iter()
             .map(|&x| Complex::new(x.re as f32, x.im as f32))
             .collect::<Vec<_>>();
@@ -235,21 +223,61 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("rustfft prime 1201", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_1201.len());
-        let mut working = input_1201.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft prime 1201", |b| {
-        let plan = Zaft::make_inverse_fft_f64(input_1201.len()).unwrap();
-        let mut working = input_1201.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
+    // c.bench_function("rustfft power 13", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_power13.len());
+    //     let mut working = input_power13.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    //
+    // c.bench_function("zaft power 13", |b| {
+    //     let plan = Zaft::make_inverse_fft_f64(input_power13.len()).unwrap();
+    //     let mut working = input_power13.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    //
+    // c.bench_function("rustfft power 13s", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_power13.len());
+    //     let s = input_power13
+    //         .iter()
+    //         .map(|&x| Complex::new(x.re as f32, x.im as f32))
+    //         .collect::<Vec<_>>();
+    //     let mut working = s.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    //
+    // c.bench_function("zaft power 13s", |b| {
+    //     let plan = Zaft::make_inverse_fft_f32(input_power13.len()).unwrap();
+    //     let s = input_power13
+    //         .iter()
+    //         .map(|&x| Complex::new(x.re as f32, x.im as f32))
+    //         .collect::<Vec<_>>();
+    //     let mut working = s.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    //
+    // c.bench_function("rustfft prime 1201", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_1201.len());
+    //     let mut working = input_1201.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    //
+    // c.bench_function("zaft prime 1201", |b| {
+    //     let plan = Zaft::make_inverse_fft_f64(input_1201.len()).unwrap();
+    //     let mut working = input_1201.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
 
     //
     // c.bench_function("rustfft prime f32 1201", |b| {
@@ -276,101 +304,101 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     //     })
     // });
     //
-    c.bench_function("rustfft power7", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power7.len());
-        let mut working = input_power7.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power7", |b| {
-        let plan = Zaft::make_inverse_fft_f64(input_power7.len()).unwrap();
-        let mut working = input_power7.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft power7s", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power7.len());
-        let s = input_power7
-            .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
-            .collect::<Vec<_>>();
-        let mut working = s.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power7s", |b| {
-        let plan = Zaft::make_inverse_fft_f32(input_power7.len()).unwrap();
-        let s = input_power7
-            .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
-            .collect::<Vec<_>>();
-        let mut working = s.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft 900", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_900.len());
-        let mut working = input_900.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft 900", |b| {
-        let plan = Zaft::make_inverse_fft_f64(input_900.len()).unwrap();
-        let mut working = input_900.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft 900s", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_900.len());
-        let s = input_900
-            .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
-            .collect::<Vec<_>>();
-        let mut working = s.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft 900s", |b| {
-        let plan = Zaft::make_inverse_fft_f32(input_900.len()).unwrap();
-        let s = input_900
-            .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
-            .collect::<Vec<_>>();
-        let mut working = s.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft 1296", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_1296.len());
-        let mut working = input_1296.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft 1296", |b| {
-        let plan = Zaft::make_inverse_fft_f32(input_1296.len()).unwrap();
-        let mut working = input_1296.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
+    // c.bench_function("rustfft power7", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_power7.len());
+    //     let mut working = input_power7.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    //
+    // c.bench_function("zaft power7", |b| {
+    //     let plan = Zaft::make_inverse_fft_f64(input_power7.len()).unwrap();
+    //     let mut working = input_power7.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    //
+    // c.bench_function("rustfft power7s", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_power7.len());
+    //     let s = input_power7
+    //         .iter()
+    //         .map(|&x| Complex::new(x.re as f32, x.im as f32))
+    //         .collect::<Vec<_>>();
+    //     let mut working = s.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    //
+    // c.bench_function("zaft power7s", |b| {
+    //     let plan = Zaft::make_inverse_fft_f32(input_power7.len()).unwrap();
+    //     let s = input_power7
+    //         .iter()
+    //         .map(|&x| Complex::new(x.re as f32, x.im as f32))
+    //         .collect::<Vec<_>>();
+    //     let mut working = s.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    //
+    // c.bench_function("rustfft 900", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_900.len());
+    //     let mut working = input_900.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    //
+    // c.bench_function("zaft 900", |b| {
+    //     let plan = Zaft::make_inverse_fft_f64(input_900.len()).unwrap();
+    //     let mut working = input_900.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    //
+    // c.bench_function("rustfft 900s", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_900.len());
+    //     let s = input_900
+    //         .iter()
+    //         .map(|&x| Complex::new(x.re as f32, x.im as f32))
+    //         .collect::<Vec<_>>();
+    //     let mut working = s.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    //
+    // c.bench_function("zaft 900s", |b| {
+    //     let plan = Zaft::make_inverse_fft_f32(input_900.len()).unwrap();
+    //     let s = input_900
+    //         .iter()
+    //         .map(|&x| Complex::new(x.re as f32, x.im as f32))
+    //         .collect::<Vec<_>>();
+    //     let mut working = s.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    //
+    // c.bench_function("rustfft 1296", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_1296.len());
+    //     let mut working = input_1296.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    //
+    // c.bench_function("zaft 1296", |b| {
+    //     let plan = Zaft::make_inverse_fft_f32(input_1296.len()).unwrap();
+    //     let mut working = input_1296.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
 
     c.bench_function("rustfft power2", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power2.len());

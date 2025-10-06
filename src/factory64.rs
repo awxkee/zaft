@@ -298,43 +298,6 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
-    fn radix2(
-        n: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        if n == 2 {
-            return Self::butterfly2(fft_direction);
-        }
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaRadix2;
-                return NeonFcmaRadix2::new(n, fft_direction)
-                    .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
-            }
-            use crate::neon::NeonRadix2;
-            NeonRadix2::new(n, fft_direction)
-                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
-                    use crate::avx::AvxFmaRadix2;
-                    return AvxFmaRadix2::new(n, fft_direction)
-                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
-                }
-            }
-            use crate::radix2::Radix2;
-            Radix2::new(n, fft_direction)
-                .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
-        }
-    }
-
     fn radix3(
         n: usize,
         fft_direction: FftDirection,

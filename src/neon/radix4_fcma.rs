@@ -26,35 +26,52 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::factory::AlgorithmFactory;
 use crate::neon::util::fcma_complex_f32;
 use crate::neon::util::fcma_complex_f64;
 use crate::neon::util::fcmah_complex_f32;
 use crate::radix4::Radix4Twiddles;
-use crate::util::{digit_reverse_indices, permute_inplace};
+use crate::util::bitreversed_transpose;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
 pub(crate) struct NeonFcmaRadix4<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     direction: FftDirection,
+    base_len: usize,
+    base_fft: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix4Twiddles> NeonFcmaRadix4<T> {
+impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> NeonFcmaRadix4<T> {
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<NeonFcmaRadix4<T>, ZaftError> {
         assert!(size.is_power_of_two(), "Input length must be a power of 2");
-        assert_eq!(size.trailing_zeros() % 2, 0, "Radix-4 requires power of 4");
+        // assert_eq!(size.trailing_zeros() % 2, 0, "Radix-4 requires power of 4");
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 4)?;
+        let exponent = size.trailing_zeros();
+        let (_, base_fft) = match exponent {
+            0 => (0, T::butterfly1(fft_direction)?),
+            1 => (1, T::butterfly2(fft_direction)?),
+            2 => (2, T::butterfly4(fft_direction)?),
+            3 => (3, T::butterfly8(fft_direction)?),
+            _ => {
+                if exponent % 2 == 1 {
+                    (3, T::butterfly8(fft_direction)?)
+                } else {
+                    (4, T::butterfly16(fft_direction)?)
+                }
+            }
+        };
+
+        let twiddles = T::make_twiddles(base_fft.length(), size, fft_direction)?;
 
         Ok(NeonFcmaRadix4 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             direction: fft_direction,
+            base_len: base_fft.length(),
+            base_fft,
         })
     }
 }
@@ -76,16 +93,23 @@ impl NeonFcmaRadix4<f64> {
             })
         };
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // bit reversal first
-            permute_inplace(chunk, &self.permutations);
+        let mut scratch = vec![Complex::default(); self.execution_length];
 
-            let mut len = 4;
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            scratch.copy_from_slice(chunk);
+            // bit reversal first
+            bitreversed_transpose::<Complex<f64>, 4>(self.base_len, &scratch, chunk);
+
+            self.base_fft.execute(chunk)?;
+
+            let mut len = self.base_len;
 
             unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 4;
                     let quarter = len / 4;
 
                     for data in chunk.chunks_exact_mut(len) {
@@ -140,8 +164,7 @@ impl NeonFcmaRadix4<f64> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[quarter * 3..];
-                    len *= 4;
+                    m_twiddles = &m_twiddles[columns * 3..];
                 }
             }
         }
@@ -180,16 +203,23 @@ impl NeonFcmaRadix4<f32> {
             })
         };
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // bit reversal first
-            permute_inplace(chunk, &self.permutations);
+        let mut scratch = vec![Complex::default(); self.execution_length];
 
-            let mut len = 4;
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            scratch.copy_from_slice(chunk);
+            // bit reversal first
+            bitreversed_transpose::<Complex<f32>, 4>(self.base_len, &scratch, chunk);
+
+            self.base_fft.execute(chunk)?;
+
+            let mut len = self.base_len;
 
             unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 4;
                     let quarter = len / 4;
 
                     for data in chunk.chunks_exact_mut(len) {
@@ -307,8 +337,7 @@ impl NeonFcmaRadix4<f32> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[quarter * 3..];
-                    len *= 4;
+                    m_twiddles = &m_twiddles[columns * 3..];
                 }
             }
         }

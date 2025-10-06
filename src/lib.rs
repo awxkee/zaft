@@ -52,7 +52,6 @@ mod r2c;
 mod raders;
 mod radix11;
 mod radix13;
-mod radix2;
 mod radix3;
 mod radix4;
 mod radix5;
@@ -222,12 +221,9 @@ impl Zaft {
         } else if prime_factors.is_power_of_five {
             // Use Radix-5 if power of 5
             T::radix5(n, fft_direction)
-        } else if prime_factors.is_power_of_four {
-            // Use Radix-4 if a power of 4
-            T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_two {
-            // Otherwise, fallback to Radix-2
-            T::radix2(n, fft_direction)
+            // Use Radix-4 if a power of 2
+            T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_six {
             T::radix6(n, fft_direction)
         } else if prime_factors.is_power_of_seven {

@@ -31,7 +31,7 @@ use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 
-/// Digit-reversal permutation in base `radix` (radix = 3 for Radix-3)
+/// Digit-reversal permutation in base `radix`
 pub(crate) fn digit_reverse_indices(n: usize, radix: usize) -> Result<Vec<usize>, ZaftError> {
     assert!(radix >= 2, "radix must be at least 2");
 
@@ -186,9 +186,9 @@ where
         .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
 
     while len <= size {
-        let one_fifth = len / N;
+        let columns = len / N;
 
-        for k in 0..one_fifth {
+        for k in 0..columns {
             for i in 1..N {
                 let w = compute_twiddle::<T>(k * i, len, fft_direction);
                 twiddles.push(w);
@@ -199,4 +199,125 @@ where
     }
 
     Ok(twiddles)
+}
+
+pub(crate) fn radixn_floating_twiddles_from_base<
+    T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,
+    const N: usize,
+>(
+    base_len: usize,
+    size: usize,
+    fft_direction: FftDirection,
+) -> Result<Vec<Complex<T>>, ZaftError>
+where
+    usize: AsPrimitive<T>,
+    f64: AsPrimitive<T>,
+{
+    let mut twiddles = Vec::new(); // total twiddles = N-1 for radix-7
+    twiddles
+        .try_reserve_exact(size - 1)
+        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+    let mut cross_fft_len = base_len;
+    while cross_fft_len < size {
+        let num_columns = cross_fft_len;
+        cross_fft_len *= N;
+
+        for i in 0..num_columns {
+            for k in 1..N {
+                let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                twiddles.push(twiddle);
+            }
+        }
+    }
+
+    Ok(twiddles)
+}
+
+pub fn bitreversed_transpose<T: Copy, const D: usize>(
+    height: usize,
+    input: &[T],
+    output: &mut [T],
+) {
+    let width = input.len() / height;
+
+    // Let's make sure the arguments are ok
+    assert!(D > 1 && input.len() % height == 0 && input.len() == output.len());
+
+    let strided_width = width / D;
+    let rev_digits = if D.is_power_of_two() {
+        let width_bits = width.trailing_zeros();
+        let d_bits = D.trailing_zeros();
+
+        // verify that width is a power of d
+        assert!(width_bits % d_bits == 0);
+        width_bits / d_bits
+    } else {
+        compute_logarithm::<D>(width).unwrap()
+    };
+
+    for x in 0..strided_width {
+        let mut i = 0;
+        let x_fwd = [(); D].map(|_| {
+            let value = D * x + i;
+            i += 1;
+            value
+        }); // If we had access to rustc 1.63, we could use std::array::from_fn instead
+        let x_rev = x_fwd.map(|x| reverse_bits::<D>(x, rev_digits));
+
+        // Assert that the the bit reversed indices will not exceed the length of the output.
+        // The highest index the loop reaches is: (x_rev[n] + 1)*height - 1
+        // The last element of the data is at index: width*height - 1
+        // Thus it is sufficient to assert that x_rev[n]<width.
+        for r in x_rev {
+            assert!(r < width);
+        }
+        for y in 0..height {
+            for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
+                let input_index = *fwd + y * width;
+                let output_index = y + *rev * height;
+
+                unsafe {
+                    let temp = *input.get_unchecked(input_index);
+                    *output.get_unchecked_mut(output_index) = temp;
+                }
+            }
+        }
+    }
+}
+
+// Repeatedly divide `value` by divisor `D`, `iters` times, and apply the remainders to a new value
+// When D is a power of 2, this is exactly equal (implementation and assembly)-wise to a bit reversal
+// When D is not a power of 2, think of this function as a logical equivalent to a bit reversal
+fn reverse_bits<const D: usize>(value: usize, rev_digits: u32) -> usize {
+    assert!(D > 1);
+
+    let mut result: usize = 0;
+    let mut value = value;
+    for _ in 0..rev_digits {
+        result = (result * D) + (value % D);
+        value = value / D;
+    }
+    result
+}
+
+// computes `n` such that `D ^ n == value`. Returns `None` if `value` is not a perfect power of `D`, otherwise returns `Some(n)`
+fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
+    if value == 0 || D < 2 {
+        return None;
+    }
+
+    let mut current_exponent = 0;
+    let mut current_value = value;
+
+    while current_value % D == 0 {
+        current_exponent += 1;
+        current_value /= D;
+    }
+
+    if current_value == 1 {
+        Some(current_exponent)
+    } else {
+        None
+    }
 }
