@@ -30,7 +30,6 @@ mod butterflies;
 mod f32x2_2x2;
 mod f32x2_4x4;
 mod raders;
-mod radix2;
 mod radix3;
 mod radix4;
 mod radix5;
@@ -44,7 +43,6 @@ pub(crate) use butterflies::{
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
 pub(crate) use raders::AvxRadersFft;
-pub(crate) use radix2::AvxFmaRadix2;
 pub(crate) use radix3::AvxFmaRadix3;
 pub(crate) use radix4::AvxFmaRadix4;
 pub(crate) use radix5::AvxFmaRadix5;

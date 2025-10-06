@@ -195,34 +195,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    let mut input_power64 = vec![Complex::<f64>::default(); 64];
-    for z in input_power64.iter_mut() {
-        *z = Complex {
-            re: rand::rng().random(),
-            im: rand::rng().random(),
-        };
-    }
-
-    c.bench_function("zaft 64", |b| {
-        let plan = Zaft::make_forward_fft_f64(input_power64.len()).unwrap();
-        let mut working = input_power64.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("zaft 64s", |b| {
-        let plan = Zaft::make_forward_fft_f32(input_power64.len()).unwrap();
-        let s = input_power64
-            .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
-            .collect::<Vec<_>>();
-        let mut working = s.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
     // c.bench_function("rustfft power 13", |b| {
     //     let plan = FftPlanner::new().plan_fft_forward(input_power13.len());
     //     let mut working = input_power13.to_vec();

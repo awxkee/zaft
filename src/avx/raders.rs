@@ -28,7 +28,6 @@
  */
 use crate::err::try_vec;
 use crate::prime_factors::{PrimeFactors, primitive_root};
-use crate::radix2::Radix2Twiddles;
 use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
@@ -229,7 +228,6 @@ impl<
         + Clone
         + FftTrigonometry
         + Float
-        + Radix2Twiddles
         + Zero
         + Default
         + SpectrumOpsFactory<T>

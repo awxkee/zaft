@@ -28,8 +28,8 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm_unpacklo_ps64, _mm256_unpackhi_pd2,
-    _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, shuffle,
+    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
+    _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, shuffle,
 };
 use crate::radix3::Radix3Twiddles;
 use crate::traits::FftTrigonometry;
@@ -305,7 +305,7 @@ impl AvxFmaRadix3<f32> {
                             let u1u2 = _m128s_fma_mul_complex(_mm_unpacklo_ps64(rk1, rk2), tw);
 
                             let u1 = u1u2;
-                            let u2 = _mm_mul_ps(u1u2, u1u2);
+                            let u2 = _mm_unpackhi_ps64(u1u2, u1u2);
 
                             // Radix-3 butterfly
                             let xp = _mm_add_ps(u1, u2);
@@ -392,14 +392,14 @@ mod tests {
 
             input.iter().zip(src.iter()).for_each(|(a, b)| {
                 assert!(
-                    (a.re - b.re).abs() < 1e-4,
+                    (a.re - b.re).abs() < 1e-5,
                     "a_re {} != b_re {} for size {}",
                     a.re,
                     b.re,
                     size
                 );
                 assert!(
-                    (a.im - b.im).abs() < 1e-4,
+                    (a.im - b.im).abs() < 1e-5,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

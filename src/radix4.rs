@@ -80,16 +80,16 @@ impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> Radix4<T> {
         assert!(size.is_power_of_two(), "Input length must be a power of 2");
 
         let exponent = size.trailing_zeros();
-        let (base_exponent, base_fft) = match exponent {
-            0 => (0, T::butterfly1(fft_direction)?),
-            1 => (1, T::butterfly2(fft_direction)?),
-            2 => (2, T::butterfly4(fft_direction)?),
-            3 => (3, T::butterfly8(fft_direction)?),
+        let base_fft = match exponent {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly2(fft_direction)?,
+            2 => T::butterfly4(fft_direction)?,
+            3 => T::butterfly8(fft_direction)?,
             _ => {
                 if exponent % 2 == 1 {
-                    (3, T::butterfly8(fft_direction)?)
+                    (T::butterfly8(fft_direction)?)
                 } else {
-                    (4, T::butterfly16(fft_direction)?)
+                    (T::butterfly16(fft_direction)?)
                 }
             }
         };
