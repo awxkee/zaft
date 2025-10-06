@@ -64,6 +64,8 @@ pub fn bench_power7s_zaft_average(c: &mut Criterion) {
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.benchmark_group("Fft");
+    bench_power7s_average(c);
+    bench_power7s_zaft_average(c);
 
     let mut input_power7 = vec![Complex::<f64>::default(); 7 * 7 * 7];
     for z in input_power7.iter_mut() {

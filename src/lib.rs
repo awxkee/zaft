@@ -208,6 +208,12 @@ impl Zaft {
             return T::butterfly12(fft_direction);
         } else if n == 13 {
             return T::butterfly13(fft_direction);
+        } else if n == 15 {
+            return T::butterfly15(fft_direction);
+        } else if n == 16 {
+            return T::butterfly16(fft_direction);
+        } else if n == 17 {
+            return T::butterfly17(fft_direction);
         }
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {

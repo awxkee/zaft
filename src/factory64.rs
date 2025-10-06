@@ -261,6 +261,43 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    fn butterfly15(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly15;
+            Ok(Box::new(NeonButterfly15::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly15;
+            Ok(Box::new(Butterfly15::new(fft_direction)))
+        }
+    }
+
+    fn butterfly16(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly16;
+        Ok(Box::new(Butterfly16::new(fft_direction)))
+    }
+
+    fn butterfly17(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly17;
+            Ok(Box::new(NeonButterfly17::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly17;
+            Ok(Box::new(Butterfly17::new(fft_direction)))
+        }
+    }
+
     fn radix2(
         n: usize,
         fft_direction: FftDirection,

@@ -43,6 +43,32 @@ pub(crate) fn c_mul_fast<
     Complex::new(re, im)
 }
 
+// Multiplies a.conj() by b
+#[inline(always)]
+pub(crate) fn c_conj_mul_fast<
+    T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,
+>(
+    a: Complex<T>,
+    b: Complex<T>,
+) -> Complex<T> {
+    let re = fmla(a.re, b.re, a.im * b.im);
+    let im = fmla(a.re, b.im, -a.im * b.re);
+    Complex::new(re, im)
+}
+
+// Multiplies a by b.conj()
+#[inline(always)]
+pub(crate) fn c_mul_fast_conj<
+    T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,
+>(
+    a: Complex<T>,
+    b: Complex<T>,
+) -> Complex<T> {
+    let re = fmla(a.re, b.re, a.im * b.im);
+    let im = fmla(a.re, -b.im, a.im * b.re);
+    Complex::new(re, im)
+}
+
 #[inline(always)]
 pub(crate) fn c_mul_add_fast<
     T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,

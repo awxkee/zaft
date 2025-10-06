@@ -26,8 +26,8 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::butterflies::rotate_90;
-use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly4};
+
+use crate::butterflies::short_butterflies::{FastButterfly3, FastButterfly5};
 use crate::traits::FftTrigonometry;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -35,22 +35,22 @@ use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
 
 #[allow(unused)]
-pub(crate) struct Butterfly8<T> {
+pub(crate) struct Butterfly15<T> {
     direction: FftDirection,
-    root2: T,
-    bf4: FastButterfly4<T>,
+    bf5: FastButterfly5<T>,
+    bf3: FastButterfly3<T>,
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static + Default> Butterfly8<T>
+impl<T: FftTrigonometry + Float + 'static + Default> Butterfly15<T>
 where
     f64: AsPrimitive<T>,
 {
     pub fn new(fft_direction: FftDirection) -> Self {
-        Butterfly8 {
+        Butterfly15 {
             direction: fft_direction,
-            root2: (0.5f64.sqrt()).as_(),
-            bf4: FastButterfly4::new(fft_direction),
+            bf5: FastButterfly5::new(fft_direction),
+            bf3: FastButterfly3::new(fft_direction),
         }
     }
 }
@@ -65,8 +65,9 @@ impl<
         + Neg<Output = T>
         + MulAdd<T, Output = T>
         + Float
-        + Default,
-> FftExecutor<T> for Butterfly8<T>
+        + Default
+        + FftTrigonometry,
+> FftExecutor<T> for Butterfly15<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -78,39 +79,62 @@ where
             ));
         }
 
-        let bf2 = FastButterfly2::new(self.direction);
-
-        for chunk in in_place.chunks_exact_mut(8) {
+        for chunk in in_place.chunks_exact_mut(15) {
             let u0 = chunk[0];
             let u1 = chunk[1];
             let u2 = chunk[2];
             let u3 = chunk[3];
+
             let u4 = chunk[4];
             let u5 = chunk[5];
             let u6 = chunk[6];
             let u7 = chunk[7];
 
-            // Radix-8 butterfly
-            let (u0, u2, u4, u6) = self.bf4.butterfly4(u0, u2, u4, u6);
-            let (u1, mut u3, mut u5, mut u7) = self.bf4.butterfly4(u1, u3, u5, u7);
+            let u8 = chunk[8];
+            let u9 = chunk[9];
+            let u10 = chunk[10];
+            let u11 = chunk[11];
+            let u12 = chunk[12];
 
-            u3 = (rotate_90(u3, self.direction) + u3) * self.root2;
-            u5 = rotate_90(u5, self.direction);
-            u7 = (rotate_90(u7, self.direction) - u7) * self.root2;
+            let u13 = chunk[13];
+            let u14 = chunk[14];
 
-            let (u0, u1) = bf2.butterfly2(u0, u1);
-            let (u2, u3) = bf2.butterfly2(u2, u3);
-            let (u4, u5) = bf2.butterfly2(u4, u5);
-            let (u6, u7) = bf2.butterfly2(u6, u7);
+            // Size-5 FFTs down the columns of our reordered array
+            let mid0 = self.bf5.bf5(u0, u3, u6, u9, u12);
+            let mid1 = self.bf5.bf5(u5, u8, u11, u14, u2);
+            let mid2 = self.bf5.bf5(u10, u13, u1, u4, u7);
 
-            chunk[0] = u0;
-            chunk[1] = u2;
-            chunk[2] = u4;
-            chunk[3] = u6;
-            chunk[4] = u1;
-            chunk[5] = u3;
-            chunk[6] = u5;
-            chunk[7] = u7;
+            // Since this is good-thomas algorithm, we don't need twiddle factors
+
+            // Transpose the data and do size-3 FFTs down the columns
+            let (y0, y1, y2) = self.bf3.butterfly3(mid0.0, mid1.0, mid2.0);
+            let (y3, y4, y5) = self.bf3.butterfly3(mid0.1, mid1.1, mid2.1);
+            let (y6, y7, y8) = self.bf3.butterfly3(mid0.2, mid1.2, mid2.2);
+            let (y9, y10, y11) = self.bf3.butterfly3(mid0.3, mid1.3, mid2.3);
+            let (y12, y13, y14) = self.bf3.butterfly3(mid0.4, mid1.4, mid2.4);
+
+            chunk[0] = y0;
+            chunk[1] = y4;
+
+            chunk[2] = y8;
+            chunk[3] = y9;
+
+            chunk[4] = y13;
+            chunk[5] = y2;
+
+            chunk[6] = y3;
+            chunk[7] = y7;
+
+            chunk[8] = y11;
+            chunk[9] = y12;
+
+            chunk[10] = y1;
+            chunk[11] = y5;
+
+            chunk[12] = y6;
+            chunk[13] = y10;
+
+            chunk[14] = y14;
         }
         Ok(())
     }
@@ -121,7 +145,7 @@ where
 
     #[inline]
     fn length(&self) -> usize {
-        8
+        15
     }
 }
 
@@ -129,10 +153,11 @@ where
 mod tests {
     use super::*;
     use rand::Rng;
+
     #[test]
-    fn test_butterfly8() {
-        for i in 1..5 {
-            let size = 8usize.pow(i);
+    fn test_butterfly15() {
+        for i in 1..4 {
+            let size = 15usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
                 *z = Complex {
@@ -141,12 +166,12 @@ mod tests {
                 };
             }
             let src = input.to_vec();
-            let radix_forward = Butterfly8::new(FftDirection::Forward);
-            let radix_inverse = Butterfly8::new(FftDirection::Inverse);
+            let radix_forward = Butterfly15::new(FftDirection::Forward);
+            let radix_inverse = Butterfly15::new(FftDirection::Inverse);
             radix_forward.execute(&mut input).unwrap();
             radix_inverse.execute(&mut input).unwrap();
 
-            input = input.iter().map(|&x| x * (1.0 / 8f32)).collect();
+            input = input.iter().map(|&x| x * (1.0 / 15f32)).collect();
 
             input.iter().zip(src.iter()).for_each(|(a, b)| {
                 assert!(

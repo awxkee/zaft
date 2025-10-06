@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+#![feature(stdarch_neon_fcma)]
 extern crate core;
 
 use rustfft::FftPlanner;
@@ -41,7 +41,7 @@ fn main() {
         Complex::new(12.6, -3.0),
         Complex::new(14.6, -6.0),
     ];
-    let mut data = vec![Complex::<f32>::default(); 10];
+    let mut data = vec![Complex::<f32>::default(); 1201];
     for (k, z) in data.iter_mut().enumerate() {
         *z = data0[k % data0.len()];
     }

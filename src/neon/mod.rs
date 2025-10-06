@@ -64,6 +64,7 @@ pub(crate) use butterflies::NeonFcmaButterfly9;
 pub(crate) use butterflies::{
     NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5, NeonButterfly6, NeonButterfly7,
     NeonButterfly8, NeonButterfly9, NeonButterfly10, NeonButterfly11, NeonButterfly13,
+    NeonButterfly15, NeonButterfly17,
 };
 pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;

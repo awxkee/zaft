@@ -26,31 +26,40 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::butterflies::fast_bf8::FastButterfly8;
 use crate::butterflies::rotate_90;
 use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly4};
+use crate::complex_fma::{c_mul_fast, c_mul_fast_conj};
 use crate::traits::FftTrigonometry;
+use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
 
 #[allow(unused)]
-pub(crate) struct Butterfly8<T> {
+pub(crate) struct Butterfly16<T> {
     direction: FftDirection,
-    root2: T,
+    twiddle1: Complex<T>,
+    twiddle2: Complex<T>,
+    twiddle3: Complex<T>,
+    bf8: FastButterfly8<T>,
     bf4: FastButterfly4<T>,
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static + Default> Butterfly8<T>
+impl<T: FftTrigonometry + Float + 'static + Default> Butterfly16<T>
 where
     f64: AsPrimitive<T>,
 {
     pub fn new(fft_direction: FftDirection) -> Self {
-        Butterfly8 {
+        Butterfly16 {
             direction: fft_direction,
-            root2: (0.5f64.sqrt()).as_(),
+            bf8: FastButterfly8::new(fft_direction),
             bf4: FastButterfly4::new(fft_direction),
+            twiddle1: compute_twiddle(1, 16, fft_direction),
+            twiddle2: compute_twiddle(2, 16, fft_direction),
+            twiddle3: compute_twiddle(3, 16, fft_direction),
         }
     }
 }
@@ -65,8 +74,9 @@ impl<
         + Neg<Output = T>
         + MulAdd<T, Output = T>
         + Float
-        + Default,
-> FftExecutor<T> for Butterfly8<T>
+        + Default
+        + FftTrigonometry,
+> FftExecutor<T> for Butterfly16<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -80,37 +90,78 @@ where
 
         let bf2 = FastButterfly2::new(self.direction);
 
-        for chunk in in_place.chunks_exact_mut(8) {
+        for chunk in in_place.chunks_exact_mut(16) {
             let u0 = chunk[0];
             let u1 = chunk[1];
             let u2 = chunk[2];
             let u3 = chunk[3];
+
             let u4 = chunk[4];
             let u5 = chunk[5];
             let u6 = chunk[6];
             let u7 = chunk[7];
 
-            // Radix-8 butterfly
-            let (u0, u2, u4, u6) = self.bf4.butterfly4(u0, u2, u4, u6);
-            let (u1, mut u3, mut u5, mut u7) = self.bf4.butterfly4(u1, u3, u5, u7);
+            let u8 = chunk[8];
+            let u9 = chunk[9];
+            let u10 = chunk[10];
+            let u11 = chunk[11];
+            let u12 = chunk[12];
 
-            u3 = (rotate_90(u3, self.direction) + u3) * self.root2;
-            u5 = rotate_90(u5, self.direction);
-            u7 = (rotate_90(u7, self.direction) - u7) * self.root2;
+            let u13 = chunk[13];
+            let u14 = chunk[14];
+            let u15 = chunk[15];
 
-            let (u0, u1) = bf2.butterfly2(u0, u1);
-            let (u2, u3) = bf2.butterfly2(u2, u3);
-            let (u4, u5) = bf2.butterfly2(u4, u5);
-            let (u6, u7) = bf2.butterfly2(u6, u7);
+            let evens = self.bf8.exec(u0, u2, u4, u6, u8, u10, u12, u14);
 
-            chunk[0] = u0;
-            chunk[1] = u2;
-            chunk[2] = u4;
-            chunk[3] = u6;
-            chunk[4] = u1;
-            chunk[5] = u3;
-            chunk[6] = u5;
-            chunk[7] = u7;
+            let mut odds_1 = self.bf4.butterfly4(u1, u5, u9, u13);
+            let mut odds_2 = self.bf4.butterfly4(u15, u3, u7, u11);
+
+            odds_1.1 = c_mul_fast(odds_1.1, self.twiddle1);
+            odds_2.1 = c_mul_fast_conj(odds_2.1, self.twiddle1);
+
+            odds_1.2 = c_mul_fast(odds_1.2, self.twiddle2);
+            odds_2.2 = c_mul_fast_conj(odds_2.2, self.twiddle2);
+
+            odds_1.3 = c_mul_fast(odds_1.3, self.twiddle3);
+            odds_2.3 = c_mul_fast_conj(odds_2.3, self.twiddle3);
+
+            // step 4: cross FFTs
+            let (o01, o02) = bf2.butterfly2(odds_1.0, odds_2.0);
+            odds_1.0 = o01;
+            odds_2.0 = o02;
+
+            let (o03, o04) = bf2.butterfly2(odds_1.1, odds_2.1);
+            odds_1.1 = o03;
+            odds_2.1 = o04;
+            let (o05, o06) = bf2.butterfly2(odds_1.2, odds_2.2);
+            odds_1.2 = o05;
+            odds_2.2 = o06;
+            let (o07, o08) = bf2.butterfly2(odds_1.3, odds_2.3);
+            odds_1.3 = o07;
+            odds_2.3 = o08;
+
+            // apply the butterfly 4 twiddle factor, which is just a rotation
+            odds_2.0 = rotate_90(odds_2.0, self.direction);
+            odds_2.1 = rotate_90(odds_2.1, self.direction);
+            odds_2.2 = rotate_90(odds_2.2, self.direction);
+            odds_2.3 = rotate_90(odds_2.3, self.direction);
+
+            chunk[0] = evens.0 + odds_1.0;
+            chunk[1] = evens.1 + odds_1.1;
+            chunk[2] = evens.2 + odds_1.2;
+            chunk[3] = evens.3 + odds_1.3;
+            chunk[4] = evens.4 + odds_2.0;
+            chunk[5] = evens.5 + odds_2.1;
+            chunk[6] = evens.6 + odds_2.2;
+            chunk[7] = evens.7 + odds_2.3;
+            chunk[8] = evens.0 - odds_1.0;
+            chunk[9] = evens.1 - odds_1.1;
+            chunk[10] = evens.2 - odds_1.2;
+            chunk[11] = evens.3 - odds_1.3;
+            chunk[12] = evens.4 - odds_2.0;
+            chunk[13] = evens.5 - odds_2.1;
+            chunk[14] = evens.6 - odds_2.2;
+            chunk[15] = evens.7 - odds_2.3;
         }
         Ok(())
     }
@@ -121,7 +172,7 @@ where
 
     #[inline]
     fn length(&self) -> usize {
-        8
+        16
     }
 }
 
@@ -129,10 +180,11 @@ where
 mod tests {
     use super::*;
     use rand::Rng;
+
     #[test]
-    fn test_butterfly8() {
+    fn test_butterfly16() {
         for i in 1..5 {
-            let size = 8usize.pow(i);
+            let size = 16usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
                 *z = Complex {
@@ -141,12 +193,12 @@ mod tests {
                 };
             }
             let src = input.to_vec();
-            let radix_forward = Butterfly8::new(FftDirection::Forward);
-            let radix_inverse = Butterfly8::new(FftDirection::Inverse);
+            let radix_forward = Butterfly16::new(FftDirection::Forward);
+            let radix_inverse = Butterfly16::new(FftDirection::Inverse);
             radix_forward.execute(&mut input).unwrap();
             radix_inverse.execute(&mut input).unwrap();
 
-            input = input.iter().map(|&x| x * (1.0 / 8f32)).collect();
+            input = input.iter().map(|&x| x * (1.0 / 16f32)).collect();
 
             input.iter().zip(src.iter()).for_each(|(a, b)| {
                 assert!(

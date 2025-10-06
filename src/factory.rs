@@ -74,6 +74,15 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly13(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly15(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly16(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly17(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix2(
         n: usize,
         fft_direction: FftDirection,
@@ -356,6 +365,43 @@ impl AlgorithmFactory<f32> for f32 {
         {
             use crate::butterflies::Butterfly13;
             Ok(Box::new(Butterfly13::new(fft_direction)))
+        }
+    }
+
+    fn butterfly15(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly15;
+            Ok(Box::new(NeonButterfly15::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly15;
+            Ok(Box::new(Butterfly15::new(fft_direction)))
+        }
+    }
+
+    fn butterfly16(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly16;
+        Ok(Box::new(Butterfly16::new(fft_direction)))
+    }
+
+    fn butterfly17(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly17;
+            Ok(Box::new(NeonButterfly17::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly17;
+            Ok(Box::new(Butterfly17::new(fft_direction)))
         }
     }
 

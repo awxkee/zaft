@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::complex_fma::c_mul_fast;
+use crate::complex_fma::{c_conj_mul_fast, c_mul_fast};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, MulAdd, Num};
 use std::fmt::Display;
@@ -149,7 +149,7 @@ where
 
     fn conjugate_mul_by_b(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]) {
         for ((buffer_entry, inner_entry), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-            *buffer_entry = c_mul_fast(inner_entry.conj(), *twiddle);
+            *buffer_entry = c_conj_mul_fast(*inner_entry, *twiddle);
         }
     }
 }

@@ -29,6 +29,8 @@
 mod bf10;
 mod bf11;
 mod bf13;
+mod bf15;
+mod bf17;
 mod bf2;
 mod bf3;
 mod bf4;
@@ -55,4 +57,6 @@ pub(crate) use bf9_fcma::NeonFcmaButterfly9;
 pub(crate) use bf10::NeonButterfly10;
 pub(crate) use bf11::NeonButterfly11;
 pub(crate) use bf13::NeonButterfly13;
+pub(crate) use bf15::NeonButterfly15;
+pub(crate) use bf17::NeonButterfly17;
 pub(crate) use shared::NeonButterfly;
