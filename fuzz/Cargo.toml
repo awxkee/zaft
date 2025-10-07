@@ -1,0 +1,30 @@
+[package]
+name = "app-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = {version = "1.4", features = ["derive"]}
+num-complex = "0.4"
+
+[dependencies.zaft]
+path = ".."
+
+[[bin]]
+name = "single_precision"
+path = "single_precision/single_precision.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "double_precision"
+path = "double_precision/double_precision.rs"
+test = false
+doc = false
+bench = false

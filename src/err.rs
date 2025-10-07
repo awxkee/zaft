@@ -35,6 +35,7 @@ pub enum ZaftError {
     InvalidInPlaceLength(usize, usize),
     InvalidPointerSize(u128),
     InvalidSizeMultiplier(usize, usize),
+    ZeroSizedFft,
 }
 
 impl Error for ZaftError {}
@@ -54,6 +55,7 @@ impl std::fmt::Display for ZaftError {
             ZaftError::InvalidSizeMultiplier(s0, s1) => f.write_fmt(format_args!(
                 "Size {s0} is assumed to be multiplier of {s1} to execute many DFT, but it wasn't"
             )),
+            ZaftError::ZeroSizedFft => f.write_str("Cannot execute FFT on zero-sized buffers"),
         }
     }
 }

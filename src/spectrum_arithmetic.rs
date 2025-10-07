@@ -34,8 +34,11 @@ use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg, Sub};
 
 pub(crate) trait SpectrumOps<T> {
+    // a * b
     fn mul(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
+    // (a*b).conj()
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
+    // a.conj() * b
     fn conjugate_mul_by_b(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
 }
 

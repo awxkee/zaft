@@ -181,6 +181,9 @@ impl Zaft {
     where
         f64: AsPrimitive<T>,
     {
+        if n == 0 {
+            return Err(ZaftError::ZeroSizedFft);
+        }
         if n == 1 {
             return T::butterfly1(fft_direction);
         } else if n == 2 {
