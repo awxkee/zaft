@@ -115,7 +115,7 @@ impl Zaft {
 
         let p_fft = Zaft::strategy(n_length as usize, direction)?;
         let q_fft = Zaft::strategy(q_length as usize, direction)?;
-        if num_integer::gcd(q_length, n_length) == 1 {
+        if num_integer::gcd(q_length, n_length) == 1 && q_length < 33 && n_length <= 33 {
             T::good_thomas(p_fft, q_fft)
         } else {
             T::mixed_radix(p_fft, q_fft)
@@ -221,6 +221,8 @@ impl Zaft {
             return T::butterfly17(fft_direction);
         } else if n == 19 {
             return T::butterfly19(fft_direction);
+        } else if n == 23 {
+            return T::butterfly23(fft_direction);
         }
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {

@@ -86,6 +86,9 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly19(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly23(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix3(
         n: usize,
         fft_direction: FftDirection,
@@ -429,6 +432,21 @@ impl AlgorithmFactory<f32> for f32 {
         {
             use crate::butterflies::Butterfly19;
             Ok(Box::new(Butterfly19::new(fft_direction)))
+        }
+    }
+
+    fn butterfly23(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly23;
+            Ok(Box::new(NeonButterfly23::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly23;
+            Ok(Box::new(Butterfly23::new(fft_direction)))
         }
     }
 

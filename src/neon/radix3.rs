@@ -129,18 +129,18 @@ impl FftExecutor<f64> for NeonRadix3<f64> {
                             let sum1 = vaddq_f64(u3, xp1);
 
                             let w_01 = vfmaq_f64(u0, twiddle_re, xp0);
-                            let vw_02 = vmulq_f64(twiddle_w_2, vextq_f64::<1>(xn0, xn0));
-
                             let w_02 = vfmaq_f64(u3, twiddle_re, xp1);
-                            let vw_03 = vmulq_f64(twiddle_w_2, vextq_f64::<1>(xn1, xn1));
+
+                            let xn0_rot = vextq_f64::<1>(xn0, xn0);
+                            let xn1_rot = vextq_f64::<1>(xn1, xn1);
 
                             let vy0 = sum0;
-                            let vy1 = vaddq_f64(w_01, vw_02);
-                            let vy2 = vsubq_f64(w_01, vw_02);
+                            let vy1 = vfmaq_f64(w_01, twiddle_w_2, xn0_rot);
+                            let vy2 = vfmsq_f64(w_01, twiddle_w_2, xn0_rot);
 
                             let vy3 = sum1;
-                            let vy4 = vaddq_f64(w_02, vw_03);
-                            let vy5 = vsubq_f64(w_02, vw_03);
+                            let vy4 = vfmaq_f64(w_02, twiddle_w_2, xn1_rot);
+                            let vy5 = vfmsq_f64(w_02, twiddle_w_2, xn1_rot);
 
                             vst1q_f64(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1q_f64(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
@@ -179,11 +179,12 @@ impl FftExecutor<f64> for NeonRadix3<f64> {
                             let sum = vaddq_f64(u0, xp);
 
                             let w_1 = vfmaq_f64(u0, twiddle_re, xp);
-                            let vw_2 = vmulq_f64(twiddle_w_2, vextq_f64::<1>(xn, xn));
+
+                            let xn_rot = vextq_f64::<1>(xn, xn);
 
                             let vy0 = sum;
-                            let vy1 = vaddq_f64(w_1, vw_2);
-                            let vy2 = vsubq_f64(w_1, vw_2);
+                            let vy1 = vfmaq_f64(w_1, twiddle_w_2, xn_rot);
+                            let vy2 = vfmsq_f64(w_1, twiddle_w_2, xn_rot);
 
                             vst1q_f64(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1q_f64(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
@@ -279,19 +280,19 @@ impl FftExecutor<f32> for NeonRadix3<f32> {
                             let xn1 = vsubq_f32(u4, u5);
                             let sum1 = vaddq_f32(u3, xp1);
 
-                            let w_01 = vfmaq_f32(u0, twiddle_re, xp0);
-                            let vw_02 = vmulq_f32(twiddle_w_2, vrev64q_f32(xn0));
+                            let xn0_rot = vrev64q_f32(xn0);
+                            let xn1_rot = vrev64q_f32(xn1);
 
+                            let w_01 = vfmaq_f32(u0, twiddle_re, xp0);
                             let w_02 = vfmaq_f32(u3, twiddle_re, xp1);
-                            let vw_03 = vmulq_f32(twiddle_w_2, vrev64q_f32(xn1));
 
                             let vy0 = sum0;
-                            let vy1 = vaddq_f32(w_01, vw_02);
-                            let vy2 = vsubq_f32(w_01, vw_02);
+                            let vy1 = vfmaq_f32(w_01, twiddle_w_2, xn0_rot);
+                            let vy2 = vfmsq_f32(w_01, twiddle_w_2, xn0_rot);
 
                             let vy3 = sum1;
-                            let vy4 = vaddq_f32(w_02, vw_03);
-                            let vy5 = vsubq_f32(w_02, vw_03);
+                            let vy4 = vfmaq_f32(w_02, twiddle_w_2, xn1_rot);
+                            let vy5 = vfmsq_f32(w_02, twiddle_w_2, xn1_rot);
 
                             vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1q_f32(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
@@ -337,11 +338,11 @@ impl FftExecutor<f32> for NeonRadix3<f32> {
                             let sum = vaddq_f32(u0, xp);
 
                             let w_1 = vfmaq_f32(u0, twiddle_re, xp);
-                            let vw_2 = vmulq_f32(twiddle_w_2, vrev64q_f32(xn));
+                            let xn_rot = vrev64q_f32(xn);
 
                             let vy0 = sum;
-                            let vy1 = vaddq_f32(w_1, vw_2);
-                            let vy2 = vsubq_f32(w_1, vw_2);
+                            let vy1 = vfmaq_f32(w_1, twiddle_w_2, xn_rot);
+                            let vy2 = vfmsq_f32(w_1, twiddle_w_2, xn_rot);
 
                             vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1q_f32(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
@@ -375,11 +376,12 @@ impl FftExecutor<f32> for NeonRadix3<f32> {
                             let sum = vadd_f32(u0, xp);
 
                             let w_1 = vfma_f32(u0, vget_low_f32(twiddle_re), xp);
-                            let vw_2 = vmul_f32(vget_low_f32(twiddle_w_2), vext_f32::<1>(xn, xn));
+
+                            let xn_rot = vext_f32::<1>(xn, xn);
 
                             let vy0 = sum;
-                            let vy1 = vadd_f32(w_1, vw_2);
-                            let vy2 = vsub_f32(w_1, vw_2);
+                            let vy1 = vfma_f32(w_1, vget_low_f32(twiddle_w_2), xn_rot);
+                            let vy2 = vfms_f32(w_1, vget_low_f32(twiddle_w_2), xn_rot);
 
                             vst1_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1_f32(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);

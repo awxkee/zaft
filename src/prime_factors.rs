@@ -171,7 +171,7 @@ impl PrimeFactors {
     }
 
     pub(crate) fn may_be_represented_in_mixed_radix(&self) -> bool {
-        self.factorization.len() > 1
+        self.factorization.len() > 1 || self.factorization[0].1 != 1
     }
 
     pub(crate) fn is_prime(&self) -> bool {

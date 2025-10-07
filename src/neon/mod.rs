@@ -59,7 +59,7 @@ mod util;
 pub(crate) use butterflies::{
     NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5, NeonButterfly6, NeonButterfly7,
     NeonButterfly8, NeonButterfly9, NeonButterfly10, NeonButterfly11, NeonButterfly13,
-    NeonButterfly15, NeonButterfly16, NeonButterfly17, NeonButterfly19,
+    NeonButterfly15, NeonButterfly16, NeonButterfly17, NeonButterfly19, NeonButterfly23,
 };
 #[cfg(feature = "fcma")]
 pub(crate) use butterflies::{NeonFcmaButterfly9, NeonFcmaButterfly16};

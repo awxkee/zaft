@@ -8,14 +8,14 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
 use rand::Rng;
 use rustfft::FftPlanner;
-use zaft::Zaft;
+use zaft::{Zaft, ZaftError};
 
-pub fn bench_power7s_average(c: &mut Criterion) {
+pub fn bench_rustfft_averages(c: &mut Criterion) {
     c.bench_function("rustfft avg1", |b| {
         b.iter_batched(
             || {
                 // Prepare all inputs and FFT plans
-                (1..=500)
+                (500..=1500)
                     .map(|n| {
                         let input: Vec<Complex<f32>> =
                             (0..n).map(|i| Complex::new(i as f32, 0.0)).collect();
@@ -36,12 +36,12 @@ pub fn bench_power7s_average(c: &mut Criterion) {
     });
 }
 
-pub fn bench_power7s_zaft_average(c: &mut Criterion) {
+pub fn bench_zaft_averages(c: &mut Criterion) {
     c.bench_function("zaft avg1", |b| {
         b.iter_batched(
             || {
                 // Prepare all inputs and FFT plans
-                (1..=500)
+                (500..=1500)
                     .map(|n| {
                         let input: Vec<Complex<f32>> =
                             (0..n).map(|i| Complex::new(i as f32, 0.0)).collect();
@@ -62,10 +62,65 @@ pub fn bench_power7s_zaft_average(c: &mut Criterion) {
     });
 }
 
+pub fn bench_rustfft_average(c: &mut Criterion) {
+    c.bench_function("rustfft avg", |b| {
+        b.iter_batched(
+            || {
+                // Prepare all inputs and FFT plans
+                (1..=500)
+                    .map(|n| {
+                        let input: Vec<Complex<f64>> =
+                            (0..n).map(|i| Complex::new(i as f64, 0.0)).collect();
+                        let fft = FftPlanner::<f64>::new().plan_fft_forward(n);
+                        (input, fft)
+                    })
+                    .collect::<Vec<_>>()
+            },
+            |mut plans_and_inputs| {
+                // Execute FFTs for all sizes
+                for (input, fft) in plans_and_inputs.iter() {
+                    let mut c = input.to_vec();
+                    fft.process(&mut c);
+                }
+            },
+            BatchSize::LargeInput,
+        );
+    });
+}
+
+pub fn bench_zaft_average(c: &mut Criterion) {
+    c.bench_function("zaft avg", |b| {
+        b.iter_batched(
+            || {
+                // Prepare all inputs and FFT plans
+                (1..=500)
+                    .map(|n| {
+                        let input: Vec<Complex<f64>> =
+                            (0..n).map(|i| Complex::new(i as f64, 0.0)).collect();
+                        let fft = Zaft::make_forward_fft_f64(n).unwrap();
+                        (input, fft)
+                    })
+                    .collect::<Vec<_>>()
+            },
+            |mut plans_and_inputs| {
+                // Execute FFTs for all sizes
+                for (i, (input, fft)) in plans_and_inputs.iter().enumerate() {
+                    let mut c = input.to_vec();
+                    match fft.execute(&mut c) {
+                        Ok(_) => {}
+                        Err(err) => panic!("err: {err} on {i}"),
+                    };
+                }
+            },
+            BatchSize::LargeInput,
+        );
+    });
+}
+
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.benchmark_group("Fft");
-    // bench_power7s_average(c);
-    // bench_power7s_zaft_average(c);
+    bench_rustfft_averages(c);
+    bench_zaft_averages(c);
 
     let mut input_power7 = vec![Complex::<f64>::default(); 7 * 7 * 7];
     for z in input_power7.iter_mut() {

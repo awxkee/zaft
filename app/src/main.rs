@@ -1,3 +1,4 @@
+#![feature(duration_millis_float)]
 /*
  * // Copyright (c) Radzivon Bartoshyk 6/2025. All rights reserved.
  * //
@@ -30,6 +31,7 @@ extern crate core;
 
 use rustfft::FftPlanner;
 use rustfft::num_complex::Complex;
+use std::time::Instant;
 use zaft::Zaft;
 
 fn main() {
@@ -40,7 +42,7 @@ fn main() {
         Complex::new(12.6, -3.0),
         Complex::new(14.6, -6.0),
     ];
-    let mut data = vec![Complex::<f32>::default(); 19];
+    let mut data = vec![Complex::<f64>::default(); 327];
     for (k, z) in data.iter_mut().enumerate() {
         *z = data0[k % data0.len()];
     }
@@ -49,10 +51,32 @@ fn main() {
 
     let mut cvt = data.clone();
 
-    let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
-    let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
+    let mut planner = FftPlanner::<f64>::new();
 
-    let mut planner = FftPlanner::<f32>::new();
+    // for i in 1..1500 {
+    //     let mut data = vec![Complex::<f64>::default(); i];
+    //     for (k, z) in data.iter_mut().enumerate() {
+    //         *z = data0[k % data0.len()];
+    //     }
+    //     let forward = Zaft::make_forward_fft_f64(data.len()).unwrap();
+    //     let new_plan = planner.plan_fft_forward(data.len());
+    //     let s0 = Instant::now();
+    //     forward.execute(&mut data).unwrap();
+    //     let elapsed1 = s0.elapsed();
+    //
+    //     let s1 = Instant::now();
+    //     new_plan.process(&mut data);
+    //     let elapsed2 = s1.elapsed();
+    //     let diff = elapsed1.as_millis_f64() / elapsed2.as_millis_f64();
+    //     if diff > 1.6 {
+    //         println!("Timescale was {diff} on {i}");
+    //     }
+    // }
+
+    let forward = Zaft::make_forward_fft_f64(cvt.len()).unwrap();
+    let inverse = Zaft::make_inverse_fft_f64(cvt.len()).unwrap();
+
+    let mut planner = FftPlanner::<f64>::new();
 
     let planned_fft = planner.plan_fft_forward(data.len());
     let planned_fft_inv = planner.plan_fft_inverse(data.len());
@@ -68,11 +92,11 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
         .collect();
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
         .collect();
 
     println!("Mine inverse -----");
@@ -83,7 +107,7 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
         .collect();
 
     // for (i, val) in data.iter().enumerate() {
@@ -95,7 +119,7 @@ fn main() {
     planned_fft_inv.process(&mut cvt);
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
         .collect();
 
     // for (i, val) in cvt.iter().enumerate() {
