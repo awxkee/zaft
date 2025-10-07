@@ -48,16 +48,16 @@ impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> NeonRadix4<T> {
         // assert_eq!(size.trailing_zeros() % 2, 0, "Radix-4 requires power of 4");
 
         let exponent = size.trailing_zeros();
-        let (_, base_fft) = match exponent {
-            0 => (0, T::butterfly1(fft_direction)?),
-            1 => (1, T::butterfly2(fft_direction)?),
-            2 => (2, T::butterfly4(fft_direction)?),
-            3 => (3, T::butterfly8(fft_direction)?),
+        let base_fft = match exponent {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly2(fft_direction)?,
+            2 => T::butterfly4(fft_direction)?,
+            3 => T::butterfly8(fft_direction)?,
             _ => {
                 if exponent % 2 == 1 {
-                    (3, T::butterfly8(fft_direction)?)
+                    T::butterfly8(fft_direction)?
                 } else {
-                    (4, T::butterfly16(fft_direction)?)
+                    T::butterfly16(fft_direction)?
                 }
             }
         };
@@ -196,7 +196,6 @@ impl FftExecutor<f32> for NeonRadix4<f32> {
         let mut scratch = vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // bit reversal first
             scratch.copy_from_slice(chunk);
             // bit reversal first
             bitreversed_transpose::<Complex<f32>, 4>(self.base_len, &scratch, chunk);

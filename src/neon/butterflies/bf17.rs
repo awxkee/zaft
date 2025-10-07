@@ -159,10 +159,10 @@ impl FftExecutor<f64> for NeonButterfly17<f64> {
                 let m0215b = vfmaq_n_f64(m0215b, x2m15, self.twiddle4.im);
                 let m0215b = vfmaq_n_f64(m0215b, x3m14, self.twiddle6.im);
                 let m0215b = vfmaq_n_f64(m0215b, x4m13, self.twiddle8.im);
-                let m0215b = vfmaq_n_f64(m0215b, x5m12, -self.twiddle7.im);
-                let m0215b = vfmaq_n_f64(m0215b, x6m11, -self.twiddle5.im);
-                let m0215b = vfmaq_n_f64(m0215b, x7m10, -self.twiddle3.im);
-                let m0215b = vfmaq_n_f64(m0215b, x8m9, -self.twiddle1.im);
+                let m0215b = vfmsq_n_f64(m0215b, x5m12, self.twiddle7.im);
+                let m0215b = vfmsq_n_f64(m0215b, x6m11, self.twiddle5.im);
+                let m0215b = vfmsq_n_f64(m0215b, x7m10, self.twiddle3.im);
+                let m0215b = vfmsq_n_f64(m0215b, x8m9, self.twiddle1.im);
                 let (y02, y15) = NeonButterfly::butterfly2_f64(m0215a, m0215b);
 
                 vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y02);
@@ -178,9 +178,9 @@ impl FftExecutor<f64> for NeonButterfly17<f64> {
                 let m0314a = vfmaq_n_f64(m0314a, x8p9, self.twiddle7.re);
                 let m0314b = vmulq_n_f64(x1m16, self.twiddle3.im);
                 let m0314b = vfmaq_n_f64(m0314b, x2m15, self.twiddle6.im);
-                let m0314b = vfmaq_n_f64(m0314b, x3m14, -self.twiddle8.im);
-                let m0314b = vfmaq_n_f64(m0314b, x4m13, -self.twiddle5.im);
-                let m0314b = vfmaq_n_f64(m0314b, x5m12, -self.twiddle2.im);
+                let m0314b = vfmsq_n_f64(m0314b, x3m14, self.twiddle8.im);
+                let m0314b = vfmsq_n_f64(m0314b, x4m13, self.twiddle5.im);
+                let m0314b = vfmsq_n_f64(m0314b, x5m12, self.twiddle2.im);
                 let m0314b = vfmaq_n_f64(m0314b, x6m11, self.twiddle1.im);
                 let m0314b = vfmaq_n_f64(m0314b, x7m10, self.twiddle4.im);
                 let m0314b = vfmaq_n_f64(m0314b, x8m9, self.twiddle7.im);
@@ -199,12 +199,12 @@ impl FftExecutor<f64> for NeonButterfly17<f64> {
                 let m0413a = vfmaq_n_f64(m0413a, x8p9, self.twiddle2.re);
                 let m0413b = vmulq_n_f64(x1m16, self.twiddle4.im);
                 let m0413b = vfmaq_n_f64(m0413b, x2m15, self.twiddle8.im);
-                let m0413b = vfmaq_n_f64(m0413b, x3m14, -self.twiddle5.im);
-                let m0413b = vfmaq_n_f64(m0413b, x4m13, -self.twiddle1.im);
+                let m0413b = vfmsq_n_f64(m0413b, x3m14, self.twiddle5.im);
+                let m0413b = vfmsq_n_f64(m0413b, x4m13, self.twiddle1.im);
                 let m0413b = vfmaq_n_f64(m0413b, x5m12, self.twiddle3.im);
                 let m0413b = vfmaq_n_f64(m0413b, x6m11, self.twiddle7.im);
-                let m0413b = vfmaq_n_f64(m0413b, x7m10, -self.twiddle6.im);
-                let m0413b = vfmaq_n_f64(m0413b, x8m9, -self.twiddle2.im);
+                let m0413b = vfmsq_n_f64(m0413b, x7m10, self.twiddle6.im);
+                let m0413b = vfmsq_n_f64(m0413b, x8m9, self.twiddle2.im);
                 let (y04, y13) = NeonButterfly::butterfly2_f64(m0413a, m0413b);
 
                 vst1q_f64(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y04);
@@ -219,11 +219,11 @@ impl FftExecutor<f64> for NeonButterfly17<f64> {
                 let m0512a = vfmaq_n_f64(m0512a, x7p10, self.twiddle1.re);
                 let m0512a = vfmaq_n_f64(m0512a, x8p9, self.twiddle6.re);
                 let m0512b = vmulq_n_f64(x1m16, self.twiddle5.im);
-                let m0512b = vfmaq_n_f64(m0512b, x2m15, -self.twiddle7.im);
-                let m0512b = vfmaq_n_f64(m0512b, x3m14, -self.twiddle2.im);
+                let m0512b = vfmsq_n_f64(m0512b, x2m15, self.twiddle7.im);
+                let m0512b = vfmsq_n_f64(m0512b, x3m14, self.twiddle2.im);
                 let m0512b = vfmaq_n_f64(m0512b, x4m13, self.twiddle3.im);
                 let m0512b = vfmaq_n_f64(m0512b, x5m12, self.twiddle8.im);
-                let m0512b = vfmaq_n_f64(m0512b, x6m11, -self.twiddle4.im);
+                let m0512b = vfmsq_n_f64(m0512b, x6m11, self.twiddle4.im);
                 let m0512b = vfmaq_n_f64(m0512b, x7m10, self.twiddle1.im);
                 let m0512b = vfmaq_n_f64(m0512b, x8m9, self.twiddle6.im);
                 let (y05, y12) = NeonButterfly::butterfly2_f64(m0512a, m0512b);
@@ -240,13 +240,13 @@ impl FftExecutor<f64> for NeonButterfly17<f64> {
                 let m0611a = vfmaq_n_f64(m0611a, x7p10, self.twiddle8.re);
                 let m0611a = vfmaq_n_f64(m0611a, x8p9, self.twiddle3.re);
                 let m0611b = vmulq_n_f64(x1m16, self.twiddle6.im);
-                let m0611b = vfmaq_n_f64(m0611b, x2m15, -self.twiddle5.im);
+                let m0611b = vfmsq_n_f64(m0611b, x2m15, self.twiddle5.im);
                 let m0611b = vfmaq_n_f64(m0611b, x3m14, self.twiddle1.im);
                 let m0611b = vfmaq_n_f64(m0611b, x4m13, self.twiddle7.im);
-                let m0611b = vfmaq_n_f64(m0611b, x5m12, -self.twiddle4.im);
+                let m0611b = vfmsq_n_f64(m0611b, x5m12, self.twiddle4.im);
                 let m0611b = vfmaq_n_f64(m0611b, x6m11, self.twiddle2.im);
                 let m0611b = vfmaq_n_f64(m0611b, x7m10, self.twiddle8.im);
-                let m0611b = vfmaq_n_f64(m0611b, x8m9, -self.twiddle3.im);
+                let m0611b = vfmsq_n_f64(m0611b, x8m9, self.twiddle3.im);
                 let (y06, y11) = NeonButterfly::butterfly2_f64(m0611a, m0611b);
 
                 vst1q_f64(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), y06);
@@ -261,12 +261,12 @@ impl FftExecutor<f64> for NeonButterfly17<f64> {
                 let m0710a = vfmaq_n_f64(m0710a, x7p10, self.twiddle2.re);
                 let m0710a = vfmaq_n_f64(m0710a, x8p9, self.twiddle5.re);
                 let m0710b = vmulq_n_f64(x1m16, self.twiddle7.im);
-                let m0710b = vfmaq_n_f64(m0710b, x2m15, -self.twiddle3.im);
+                let m0710b = vfmsq_n_f64(m0710b, x2m15, self.twiddle3.im);
                 let m0710b = vfmaq_n_f64(m0710b, x3m14, self.twiddle4.im);
-                let m0710b = vfmaq_n_f64(m0710b, x4m13, -self.twiddle6.im);
+                let m0710b = vfmsq_n_f64(m0710b, x4m13, self.twiddle6.im);
                 let m0710b = vfmaq_n_f64(m0710b, x5m12, self.twiddle1.im);
                 let m0710b = vfmaq_n_f64(m0710b, x6m11, self.twiddle8.im);
-                let m0710b = vfmaq_n_f64(m0710b, x7m10, -self.twiddle2.im);
+                let m0710b = vfmsq_n_f64(m0710b, x7m10, self.twiddle2.im);
                 let m0710b = vfmaq_n_f64(m0710b, x8m9, self.twiddle5.im);
                 let (y07, y10) = NeonButterfly::butterfly2_f64(m0710a, m0710b);
 
@@ -282,13 +282,13 @@ impl FftExecutor<f64> for NeonButterfly17<f64> {
                 let m0809a = vfmaq_n_f64(m0809a, x7p10, self.twiddle5.re);
                 let m0809a = vfmaq_n_f64(m0809a, x8p9, self.twiddle4.re);
                 let m0809b = vmulq_n_f64(x1m16, self.twiddle8.im);
-                let m0809b = vfmaq_n_f64(m0809b, x2m15, -self.twiddle1.im);
+                let m0809b = vfmsq_n_f64(m0809b, x2m15, self.twiddle1.im);
                 let m0809b = vfmaq_n_f64(m0809b, x3m14, self.twiddle7.im);
-                let m0809b = vfmaq_n_f64(m0809b, x4m13, -self.twiddle2.im);
+                let m0809b = vfmsq_n_f64(m0809b, x4m13, self.twiddle2.im);
                 let m0809b = vfmaq_n_f64(m0809b, x5m12, self.twiddle6.im);
-                let m0809b = vfmaq_n_f64(m0809b, x6m11, -self.twiddle3.im);
+                let m0809b = vfmsq_n_f64(m0809b, x6m11, self.twiddle3.im);
                 let m0809b = vfmaq_n_f64(m0809b, x7m10, self.twiddle5.im);
-                let m0809b = vfmaq_n_f64(m0809b, x8m9, -self.twiddle4.im);
+                let m0809b = vfmsq_n_f64(m0809b, x8m9, self.twiddle4.im);
                 let (y08, y09) = NeonButterfly::butterfly2_f64(m0809a, m0809b);
 
                 vst1q_f64(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y08);
@@ -423,10 +423,10 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0215b = vfmaq_n_f32(m0215b, x2m15, self.twiddle4.im);
                 let m0215b = vfmaq_n_f32(m0215b, x3m14, self.twiddle6.im);
                 let m0215b = vfmaq_n_f32(m0215b, x4m13, self.twiddle8.im);
-                let m0215b = vfmaq_n_f32(m0215b, x5m12, -self.twiddle7.im);
-                let m0215b = vfmaq_n_f32(m0215b, x6m11, -self.twiddle5.im);
-                let m0215b = vfmaq_n_f32(m0215b, x7m10, -self.twiddle3.im);
-                let m0215b = vfmaq_n_f32(m0215b, x8m9, -self.twiddle1.im);
+                let m0215b = vfmsq_n_f32(m0215b, x5m12, self.twiddle7.im);
+                let m0215b = vfmsq_n_f32(m0215b, x6m11, self.twiddle5.im);
+                let m0215b = vfmsq_n_f32(m0215b, x7m10, self.twiddle3.im);
+                let m0215b = vfmsq_n_f32(m0215b, x8m9, self.twiddle1.im);
                 let (y02, y15) = NeonButterfly::butterfly2_f32(m0215a, m0215b);
 
                 vst1q_f32(
@@ -448,9 +448,9 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0314a = vfmaq_n_f32(m0314a, x8p9, self.twiddle7.re);
                 let m0314b = vmulq_n_f32(x1m16, self.twiddle3.im);
                 let m0314b = vfmaq_n_f32(m0314b, x2m15, self.twiddle6.im);
-                let m0314b = vfmaq_n_f32(m0314b, x3m14, -self.twiddle8.im);
-                let m0314b = vfmaq_n_f32(m0314b, x4m13, -self.twiddle5.im);
-                let m0314b = vfmaq_n_f32(m0314b, x5m12, -self.twiddle2.im);
+                let m0314b = vfmsq_n_f32(m0314b, x3m14, self.twiddle8.im);
+                let m0314b = vfmsq_n_f32(m0314b, x4m13, self.twiddle5.im);
+                let m0314b = vfmsq_n_f32(m0314b, x5m12, self.twiddle2.im);
                 let m0314b = vfmaq_n_f32(m0314b, x6m11, self.twiddle1.im);
                 let m0314b = vfmaq_n_f32(m0314b, x7m10, self.twiddle4.im);
                 let m0314b = vfmaq_n_f32(m0314b, x8m9, self.twiddle7.im);
@@ -475,12 +475,12 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0413a = vfmaq_n_f32(m0413a, x8p9, self.twiddle2.re);
                 let m0413b = vmulq_n_f32(x1m16, self.twiddle4.im);
                 let m0413b = vfmaq_n_f32(m0413b, x2m15, self.twiddle8.im);
-                let m0413b = vfmaq_n_f32(m0413b, x3m14, -self.twiddle5.im);
-                let m0413b = vfmaq_n_f32(m0413b, x4m13, -self.twiddle1.im);
+                let m0413b = vfmsq_n_f32(m0413b, x3m14, self.twiddle5.im);
+                let m0413b = vfmsq_n_f32(m0413b, x4m13, self.twiddle1.im);
                 let m0413b = vfmaq_n_f32(m0413b, x5m12, self.twiddle3.im);
                 let m0413b = vfmaq_n_f32(m0413b, x6m11, self.twiddle7.im);
-                let m0413b = vfmaq_n_f32(m0413b, x7m10, -self.twiddle6.im);
-                let m0413b = vfmaq_n_f32(m0413b, x8m9, -self.twiddle2.im);
+                let m0413b = vfmsq_n_f32(m0413b, x7m10, self.twiddle6.im);
+                let m0413b = vfmsq_n_f32(m0413b, x8m9, self.twiddle2.im);
                 let (y04, y13) = NeonButterfly::butterfly2_f32(m0413a, m0413b);
 
                 let m0512a = vfmaq_n_f32(u0, x1p16, self.twiddle5.re);
@@ -492,11 +492,11 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0512a = vfmaq_n_f32(m0512a, x7p10, self.twiddle1.re);
                 let m0512a = vfmaq_n_f32(m0512a, x8p9, self.twiddle6.re);
                 let m0512b = vmulq_n_f32(x1m16, self.twiddle5.im);
-                let m0512b = vfmaq_n_f32(m0512b, x2m15, -self.twiddle7.im);
-                let m0512b = vfmaq_n_f32(m0512b, x3m14, -self.twiddle2.im);
+                let m0512b = vfmsq_n_f32(m0512b, x2m15, self.twiddle7.im);
+                let m0512b = vfmsq_n_f32(m0512b, x3m14, self.twiddle2.im);
                 let m0512b = vfmaq_n_f32(m0512b, x4m13, self.twiddle3.im);
                 let m0512b = vfmaq_n_f32(m0512b, x5m12, self.twiddle8.im);
-                let m0512b = vfmaq_n_f32(m0512b, x6m11, -self.twiddle4.im);
+                let m0512b = vfmsq_n_f32(m0512b, x6m11, self.twiddle4.im);
                 let m0512b = vfmaq_n_f32(m0512b, x7m10, self.twiddle1.im);
                 let m0512b = vfmaq_n_f32(m0512b, x8m9, self.twiddle6.im);
                 let (y05, y12) = NeonButterfly::butterfly2_f32(m0512a, m0512b);
@@ -527,13 +527,13 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0611a = vfmaq_n_f32(m0611a, x7p10, self.twiddle8.re);
                 let m0611a = vfmaq_n_f32(m0611a, x8p9, self.twiddle3.re);
                 let m0611b = vmulq_n_f32(x1m16, self.twiddle6.im);
-                let m0611b = vfmaq_n_f32(m0611b, x2m15, -self.twiddle5.im);
+                let m0611b = vfmsq_n_f32(m0611b, x2m15, self.twiddle5.im);
                 let m0611b = vfmaq_n_f32(m0611b, x3m14, self.twiddle1.im);
                 let m0611b = vfmaq_n_f32(m0611b, x4m13, self.twiddle7.im);
-                let m0611b = vfmaq_n_f32(m0611b, x5m12, -self.twiddle4.im);
+                let m0611b = vfmsq_n_f32(m0611b, x5m12, self.twiddle4.im);
                 let m0611b = vfmaq_n_f32(m0611b, x6m11, self.twiddle2.im);
                 let m0611b = vfmaq_n_f32(m0611b, x7m10, self.twiddle8.im);
-                let m0611b = vfmaq_n_f32(m0611b, x8m9, -self.twiddle3.im);
+                let m0611b = vfmsq_n_f32(m0611b, x8m9, self.twiddle3.im);
                 let (y06, y11) = NeonButterfly::butterfly2_f32(m0611a, m0611b);
 
                 vst1q_f32(
@@ -554,12 +554,12 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0710a = vfmaq_n_f32(m0710a, x7p10, self.twiddle2.re);
                 let m0710a = vfmaq_n_f32(m0710a, x8p9, self.twiddle5.re);
                 let m0710b = vmulq_n_f32(x1m16, self.twiddle7.im);
-                let m0710b = vfmaq_n_f32(m0710b, x2m15, -self.twiddle3.im);
+                let m0710b = vfmsq_n_f32(m0710b, x2m15, self.twiddle3.im);
                 let m0710b = vfmaq_n_f32(m0710b, x3m14, self.twiddle4.im);
-                let m0710b = vfmaq_n_f32(m0710b, x4m13, -self.twiddle6.im);
+                let m0710b = vfmsq_n_f32(m0710b, x4m13, self.twiddle6.im);
                 let m0710b = vfmaq_n_f32(m0710b, x5m12, self.twiddle1.im);
                 let m0710b = vfmaq_n_f32(m0710b, x6m11, self.twiddle8.im);
-                let m0710b = vfmaq_n_f32(m0710b, x7m10, -self.twiddle2.im);
+                let m0710b = vfmsq_n_f32(m0710b, x7m10, self.twiddle2.im);
                 let m0710b = vfmaq_n_f32(m0710b, x8m9, self.twiddle5.im);
                 let (y07, y10) = NeonButterfly::butterfly2_f32(m0710a, m0710b);
 
@@ -581,13 +581,13 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0809a = vfmaq_n_f32(m0809a, x7p10, self.twiddle5.re);
                 let m0809a = vfmaq_n_f32(m0809a, x8p9, self.twiddle4.re);
                 let m0809b = vmulq_n_f32(x1m16, self.twiddle8.im);
-                let m0809b = vfmaq_n_f32(m0809b, x2m15, -self.twiddle1.im);
+                let m0809b = vfmsq_n_f32(m0809b, x2m15, self.twiddle1.im);
                 let m0809b = vfmaq_n_f32(m0809b, x3m14, self.twiddle7.im);
-                let m0809b = vfmaq_n_f32(m0809b, x4m13, -self.twiddle2.im);
+                let m0809b = vfmsq_n_f32(m0809b, x4m13, self.twiddle2.im);
                 let m0809b = vfmaq_n_f32(m0809b, x5m12, self.twiddle6.im);
-                let m0809b = vfmaq_n_f32(m0809b, x6m11, -self.twiddle3.im);
+                let m0809b = vfmsq_n_f32(m0809b, x6m11, self.twiddle3.im);
                 let m0809b = vfmaq_n_f32(m0809b, x7m10, self.twiddle5.im);
-                let m0809b = vfmaq_n_f32(m0809b, x8m9, -self.twiddle4.im);
+                let m0809b = vfmsq_n_f32(m0809b, x8m9, self.twiddle4.im);
                 let (y08, y09) = NeonButterfly::butterfly2_f32(m0809a, m0809b);
 
                 vst1q_f32(
@@ -693,10 +693,10 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0215b = vfma_n_f32(m0215b, x2m15, self.twiddle4.im);
                 let m0215b = vfma_n_f32(m0215b, x3m14, self.twiddle6.im);
                 let m0215b = vfma_n_f32(m0215b, x4m13, self.twiddle8.im);
-                let m0215b = vfma_n_f32(m0215b, x5m12, -self.twiddle7.im);
-                let m0215b = vfma_n_f32(m0215b, x6m11, -self.twiddle5.im);
-                let m0215b = vfma_n_f32(m0215b, x7m10, -self.twiddle3.im);
-                let m0215b = vfma_n_f32(m0215b, x8m9, -self.twiddle1.im);
+                let m0215b = vfms_n_f32(m0215b, x5m12, self.twiddle7.im);
+                let m0215b = vfms_n_f32(m0215b, x6m11, self.twiddle5.im);
+                let m0215b = vfms_n_f32(m0215b, x7m10, self.twiddle3.im);
+                let m0215b = vfms_n_f32(m0215b, x8m9, self.twiddle1.im);
                 let (y02, y15) = NeonButterfly::butterfly2h_f32(m0215a, m0215b);
 
                 let m0314a = vfma_n_f32(u0, x1p16, self.twiddle3.re);
@@ -709,9 +709,9 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0314a = vfma_n_f32(m0314a, x8p9, self.twiddle7.re);
                 let m0314b = vmul_n_f32(x1m16, self.twiddle3.im);
                 let m0314b = vfma_n_f32(m0314b, x2m15, self.twiddle6.im);
-                let m0314b = vfma_n_f32(m0314b, x3m14, -self.twiddle8.im);
-                let m0314b = vfma_n_f32(m0314b, x4m13, -self.twiddle5.im);
-                let m0314b = vfma_n_f32(m0314b, x5m12, -self.twiddle2.im);
+                let m0314b = vfms_n_f32(m0314b, x3m14, self.twiddle8.im);
+                let m0314b = vfms_n_f32(m0314b, x4m13, self.twiddle5.im);
+                let m0314b = vfms_n_f32(m0314b, x5m12, self.twiddle2.im);
                 let m0314b = vfma_n_f32(m0314b, x6m11, self.twiddle1.im);
                 let m0314b = vfma_n_f32(m0314b, x7m10, self.twiddle4.im);
                 let m0314b = vfma_n_f32(m0314b, x8m9, self.twiddle7.im);
@@ -736,12 +736,12 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0413a = vfma_n_f32(m0413a, x8p9, self.twiddle2.re);
                 let m0413b = vmul_n_f32(x1m16, self.twiddle4.im);
                 let m0413b = vfma_n_f32(m0413b, x2m15, self.twiddle8.im);
-                let m0413b = vfma_n_f32(m0413b, x3m14, -self.twiddle5.im);
-                let m0413b = vfma_n_f32(m0413b, x4m13, -self.twiddle1.im);
+                let m0413b = vfms_n_f32(m0413b, x3m14, self.twiddle5.im);
+                let m0413b = vfms_n_f32(m0413b, x4m13, self.twiddle1.im);
                 let m0413b = vfma_n_f32(m0413b, x5m12, self.twiddle3.im);
                 let m0413b = vfma_n_f32(m0413b, x6m11, self.twiddle7.im);
-                let m0413b = vfma_n_f32(m0413b, x7m10, -self.twiddle6.im);
-                let m0413b = vfma_n_f32(m0413b, x8m9, -self.twiddle2.im);
+                let m0413b = vfms_n_f32(m0413b, x7m10, self.twiddle6.im);
+                let m0413b = vfms_n_f32(m0413b, x8m9, self.twiddle2.im);
                 let (y04, y13) = NeonButterfly::butterfly2h_f32(m0413a, m0413b);
 
                 let m0512a = vfma_n_f32(u0, x1p16, self.twiddle5.re);
@@ -753,11 +753,11 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0512a = vfma_n_f32(m0512a, x7p10, self.twiddle1.re);
                 let m0512a = vfma_n_f32(m0512a, x8p9, self.twiddle6.re);
                 let m0512b = vmul_n_f32(x1m16, self.twiddle5.im);
-                let m0512b = vfma_n_f32(m0512b, x2m15, -self.twiddle7.im);
-                let m0512b = vfma_n_f32(m0512b, x3m14, -self.twiddle2.im);
+                let m0512b = vfms_n_f32(m0512b, x2m15, self.twiddle7.im);
+                let m0512b = vfms_n_f32(m0512b, x3m14, self.twiddle2.im);
                 let m0512b = vfma_n_f32(m0512b, x4m13, self.twiddle3.im);
                 let m0512b = vfma_n_f32(m0512b, x5m12, self.twiddle8.im);
-                let m0512b = vfma_n_f32(m0512b, x6m11, -self.twiddle4.im);
+                let m0512b = vfms_n_f32(m0512b, x6m11, self.twiddle4.im);
                 let m0512b = vfma_n_f32(m0512b, x7m10, self.twiddle1.im);
                 let m0512b = vfma_n_f32(m0512b, x8m9, self.twiddle6.im);
                 let (y05, y12) = NeonButterfly::butterfly2h_f32(m0512a, m0512b);
@@ -780,13 +780,13 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0611a = vfma_n_f32(m0611a, x7p10, self.twiddle8.re);
                 let m0611a = vfma_n_f32(m0611a, x8p9, self.twiddle3.re);
                 let m0611b = vmul_n_f32(x1m16, self.twiddle6.im);
-                let m0611b = vfma_n_f32(m0611b, x2m15, -self.twiddle5.im);
+                let m0611b = vfms_n_f32(m0611b, x2m15, self.twiddle5.im);
                 let m0611b = vfma_n_f32(m0611b, x3m14, self.twiddle1.im);
                 let m0611b = vfma_n_f32(m0611b, x4m13, self.twiddle7.im);
-                let m0611b = vfma_n_f32(m0611b, x5m12, -self.twiddle4.im);
+                let m0611b = vfms_n_f32(m0611b, x5m12, self.twiddle4.im);
                 let m0611b = vfma_n_f32(m0611b, x6m11, self.twiddle2.im);
                 let m0611b = vfma_n_f32(m0611b, x7m10, self.twiddle8.im);
-                let m0611b = vfma_n_f32(m0611b, x8m9, -self.twiddle3.im);
+                let m0611b = vfms_n_f32(m0611b, x8m9, self.twiddle3.im);
                 let (y06, y11) = NeonButterfly::butterfly2h_f32(m0611a, m0611b);
 
                 let m0710a = vfma_n_f32(u0, x1p16, self.twiddle7.re);
@@ -798,12 +798,12 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0710a = vfma_n_f32(m0710a, x7p10, self.twiddle2.re);
                 let m0710a = vfma_n_f32(m0710a, x8p9, self.twiddle5.re);
                 let m0710b = vmul_n_f32(x1m16, self.twiddle7.im);
-                let m0710b = vfma_n_f32(m0710b, x2m15, -self.twiddle3.im);
+                let m0710b = vfms_n_f32(m0710b, x2m15, self.twiddle3.im);
                 let m0710b = vfma_n_f32(m0710b, x3m14, self.twiddle4.im);
-                let m0710b = vfma_n_f32(m0710b, x4m13, -self.twiddle6.im);
+                let m0710b = vfms_n_f32(m0710b, x4m13, self.twiddle6.im);
                 let m0710b = vfma_n_f32(m0710b, x5m12, self.twiddle1.im);
                 let m0710b = vfma_n_f32(m0710b, x6m11, self.twiddle8.im);
-                let m0710b = vfma_n_f32(m0710b, x7m10, -self.twiddle2.im);
+                let m0710b = vfms_n_f32(m0710b, x7m10, self.twiddle2.im);
                 let m0710b = vfma_n_f32(m0710b, x8m9, self.twiddle5.im);
                 let (y07, y10) = NeonButterfly::butterfly2h_f32(m0710a, m0710b);
 
@@ -825,13 +825,13 @@ impl FftExecutor<f32> for NeonButterfly17<f32> {
                 let m0809a = vfma_n_f32(m0809a, x7p10, self.twiddle5.re);
                 let m0809a = vfma_n_f32(m0809a, x8p9, self.twiddle4.re);
                 let m0809b = vmul_n_f32(x1m16, self.twiddle8.im);
-                let m0809b = vfma_n_f32(m0809b, x2m15, -self.twiddle1.im);
+                let m0809b = vfms_n_f32(m0809b, x2m15, self.twiddle1.im);
                 let m0809b = vfma_n_f32(m0809b, x3m14, self.twiddle7.im);
-                let m0809b = vfma_n_f32(m0809b, x4m13, -self.twiddle2.im);
+                let m0809b = vfms_n_f32(m0809b, x4m13, self.twiddle2.im);
                 let m0809b = vfma_n_f32(m0809b, x5m12, self.twiddle6.im);
-                let m0809b = vfma_n_f32(m0809b, x6m11, -self.twiddle3.im);
+                let m0809b = vfms_n_f32(m0809b, x6m11, self.twiddle3.im);
                 let m0809b = vfma_n_f32(m0809b, x7m10, self.twiddle5.im);
-                let m0809b = vfma_n_f32(m0809b, x8m9, -self.twiddle4.im);
+                let m0809b = vfms_n_f32(m0809b, x8m9, self.twiddle4.im);
                 let (y08, y09) = NeonButterfly::butterfly2h_f32(m0809a, m0809b);
 
                 vst1q_f32(

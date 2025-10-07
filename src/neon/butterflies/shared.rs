@@ -45,11 +45,11 @@ impl NeonButterfly {
             let sum = vadd_f32(u0, xp);
 
             let w_1 = vfma_f32(u0, tw_re, xp);
-            let vw_2 = vmul_f32(tw_w_2, vext_f32::<1>(xn, xn));
+            let xn_rot = vext_f32::<1>(xn, xn);
 
             let y0 = sum;
-            let y1 = vadd_f32(w_1, vw_2);
-            let y2 = vsub_f32(w_1, vw_2);
+            let y1 = vfma_f32(w_1, tw_w_2, xn_rot);
+            let y2 = vfms_f32(w_1, tw_w_2, xn_rot);
             (y0, y1, y2)
         }
     }
@@ -68,11 +68,11 @@ impl NeonButterfly {
             let sum = vaddq_f32(u0, xp);
 
             let w_1 = vfmaq_f32(u0, tw_re, xp);
-            let vw_2 = vmulq_f32(tw_w_2, vrev64q_f32(xn));
+            let xn_rot = vrev64q_f32(xn);
 
             let y0 = sum;
-            let y1 = vaddq_f32(w_1, vw_2);
-            let y2 = vsubq_f32(w_1, vw_2);
+            let y1 = vfmaq_f32(w_1, tw_w_2, xn_rot);
+            let y2 = vfmsq_f32(w_1, tw_w_2, xn_rot);
             (y0, y1, y2)
         }
     }
@@ -113,11 +113,11 @@ impl NeonButterfly {
             let sum = vaddq_f64(u0, xp);
 
             let w_1 = vfmaq_f64(u0, tw_re, xp);
-            let vw_2 = vmulq_f64(tw_w_2, vextq_f64::<1>(xn, xn));
+            let xn_rot = vextq_f64::<1>(xn, xn);
 
             let y0 = sum;
-            let y1 = vaddq_f64(w_1, vw_2);
-            let y2 = vsubq_f64(w_1, vw_2);
+            let y1 = vfmaq_f64(w_1, tw_w_2, xn_rot);
+            let y2 = vfmsq_f64(w_1, tw_w_2, xn_rot);
             (y0, y1, y2)
         }
     }
@@ -128,7 +128,7 @@ impl NeonButterfly {
         b: float64x2_t,
         c: float64x2_t,
         d: float64x2_t,
-        rotate: uint64x2_t,
+        rotate: float64x2_t,
     ) -> (float64x2_t, float64x2_t, float64x2_t, float64x2_t) {
         unsafe {
             let t0 = vaddq_f64(a, c);
@@ -137,7 +137,7 @@ impl NeonButterfly {
             let mut t3 = vsubq_f64(b, d);
             t3 = vreinterpretq_f64_u64(veorq_u64(
                 vreinterpretq_u64_f64(vextq_f64::<1>(t3, t3)),
-                rotate,
+                vreinterpretq_u64_f64(rotate),
             ));
             (
                 vaddq_f64(t0, t2),
@@ -154,7 +154,7 @@ impl NeonButterfly {
         b: float32x2_t,
         c: float32x2_t,
         d: float32x2_t,
-        rotate: uint32x2_t,
+        rotate: float32x2_t,
     ) -> (float32x2_t, float32x2_t, float32x2_t, float32x2_t) {
         unsafe {
             let t0 = vadd_f32(a, c);
@@ -163,7 +163,7 @@ impl NeonButterfly {
             let mut t3 = vsub_f32(b, d);
             t3 = vreinterpret_f32_u32(veor_u32(
                 vreinterpret_u32_f32(vext_f32::<1>(t3, t3)),
-                rotate,
+                vreinterpret_u32_f32(rotate),
             ));
             (
                 vadd_f32(t0, t2),
@@ -180,14 +180,17 @@ impl NeonButterfly {
         b: float32x4_t,
         c: float32x4_t,
         d: float32x4_t,
-        rotate: uint32x4_t,
+        rotate: float32x4_t,
     ) -> (float32x4_t, float32x4_t, float32x4_t, float32x4_t) {
         unsafe {
             let t0 = vaddq_f32(a, c);
             let t1 = vsubq_f32(a, c);
             let t2 = vaddq_f32(b, d);
             let mut t3 = vsubq_f32(b, d);
-            t3 = vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(vrev64q_f32(t3)), rotate));
+            t3 = vreinterpretq_f32_u32(veorq_u32(
+                vreinterpretq_u32_f32(vrev64q_f32(t3)),
+                vreinterpretq_u32_f32(rotate),
+            ));
             (
                 vaddq_f32(t0, t2),
                 vaddq_f32(t1, t3),

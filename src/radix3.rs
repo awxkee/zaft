@@ -30,7 +30,8 @@ use crate::complex_fma::c_mul_fast;
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::{
-    compute_twiddle, digit_reverse_indices, permute_inplace, radixn_floating_twiddles,
+    compute_twiddle, digit_reverse_indices, is_power_of_three, permute_inplace,
+    radixn_floating_twiddles,
 };
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -80,8 +81,8 @@ where
 {
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<Radix3<T>, ZaftError> {
         assert!(
-            size.is_power_of_two() || size % 3 == 0,
-            "Input length must be divisible by 3"
+            is_power_of_three(size as u64),
+            "Input length must be power of 3"
         );
 
         let twiddles = T::make_twiddles(size, fft_direction)?;

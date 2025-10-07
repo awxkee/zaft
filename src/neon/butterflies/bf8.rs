@@ -36,7 +36,6 @@ use std::arch::aarch64::*;
 
 pub(crate) struct NeonButterfly8<T> {
     direction: FftDirection,
-    multiplier: [T; 4],
     root2: T,
 }
 
@@ -47,10 +46,6 @@ where
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            multiplier: match fft_direction {
-                FftDirection::Inverse => [-0.0f64.as_(), 0.0.as_(), -0.0.as_(), 0.0.as_()],
-                FftDirection::Forward => [0.0f64.as_(), -0.0.as_(), 0.0.as_(), -0.0.as_()],
-            },
             root2: 0.5f64.sqrt().as_(),
         }
     }
@@ -66,8 +61,6 @@ impl FftExecutor<f64> for NeonButterfly8<f64> {
         }
 
         unsafe {
-            let z_mul = vld1q_f64(self.multiplier.as_ptr());
-            let v_i_multiplier = vreinterpretq_u64_f64(z_mul);
             let rot_sign = vld1q_f64(match self.direction {
                 FftDirection::Inverse => [-0.0, 0.0].as_ptr(),
                 FftDirection::Forward => [0.0, -0.0].as_ptr(),
@@ -83,10 +76,9 @@ impl FftExecutor<f64> for NeonButterfly8<f64> {
                 let u6 = vld1q_f64(chunk.get_unchecked(6..).as_ptr().cast());
                 let u7 = vld1q_f64(chunk.get_unchecked(7..).as_ptr().cast());
 
-                let (u0, u2, u4, u6) =
-                    NeonButterfly::butterfly4_f64(u0, u2, u4, u6, v_i_multiplier);
+                let (u0, u2, u4, u6) = NeonButterfly::butterfly4_f64(u0, u2, u4, u6, rot_sign);
                 let (u1, mut u3, mut u5, mut u7) =
-                    NeonButterfly::butterfly4_f64(u1, u3, u5, u7, v_i_multiplier);
+                    NeonButterfly::butterfly4_f64(u1, u3, u5, u7, rot_sign);
 
                 u3 = vmulq_n_f64(vaddq_f64(v_rotate90_f64(u3, rot_sign), u3), self.root2);
                 u5 = v_rotate90_f64(u5, rot_sign);
@@ -130,8 +122,6 @@ impl FftExecutor<f32> for NeonButterfly8<f32> {
         }
 
         unsafe {
-            let z_mul = vld1q_f32(self.multiplier.as_ptr());
-            let v_i_multiplier = vreinterpretq_u32_f32(z_mul);
             let rot_sign = vld1q_f32(match self.direction {
                 FftDirection::Inverse => [-0.0, 0.0, -0.0, 0.0].as_ptr(),
                 FftDirection::Forward => [0.0, -0.0, 0.0, -0.0].as_ptr(),
@@ -152,10 +142,9 @@ impl FftExecutor<f32> for NeonButterfly8<f32> {
                 let (u4, u5) = vqtrnq_f32(u4u5, u12u13);
                 let (u6, u7) = vqtrnq_f32(u6u7, u14u15);
 
-                let (u0, u2, u4, u6) =
-                    NeonButterfly::butterfly4_f32(u0, u2, u4, u6, v_i_multiplier);
+                let (u0, u2, u4, u6) = NeonButterfly::butterfly4_f32(u0, u2, u4, u6, rot_sign);
                 let (u1, mut u3, mut u5, mut u7) =
-                    NeonButterfly::butterfly4_f32(u1, u3, u5, u7, v_i_multiplier);
+                    NeonButterfly::butterfly4_f32(u1, u3, u5, u7, rot_sign);
 
                 u3 = vmulq_n_f32(vaddq_f32(v_rotate90_f32(u3, rot_sign), u3), self.root2);
                 u5 = v_rotate90_f32(u5, rot_sign);
@@ -195,9 +184,9 @@ impl FftExecutor<f32> for NeonButterfly8<f32> {
                 let (u6, u7) = (vget_low_f32(u6u7), vget_high_f32(u6u7));
 
                 let (u0, u2, u4, u6) =
-                    NeonButterfly::butterfly4h_f32(u0, u2, u4, u6, vget_low_u32(v_i_multiplier));
+                    NeonButterfly::butterfly4h_f32(u0, u2, u4, u6, vget_low_f32(rot_sign));
                 let (u1, mut u3, mut u5, mut u7) =
-                    NeonButterfly::butterfly4h_f32(u1, u3, u5, u7, vget_low_u32(v_i_multiplier));
+                    NeonButterfly::butterfly4h_f32(u1, u3, u5, u7, vget_low_f32(rot_sign));
 
                 u3 = vmul_n_f32(
                     vadd_f32(vh_rotate90_f32(u3, vget_low_f32(rot_sign)), u3),

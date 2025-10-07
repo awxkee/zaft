@@ -29,7 +29,7 @@
 use crate::neon::util::{fcma_complex_f32, fcma_complex_f64};
 use crate::radix3::Radix3Twiddles;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, permute_inplace};
+use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_three, permute_inplace};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
@@ -51,8 +51,8 @@ where
 {
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<NeonFcmaRadix3<T>, ZaftError> {
         assert!(
-            size.is_power_of_two() || size % 3 == 0,
-            "Input length must be divisible by 3"
+            is_power_of_three(size as u64),
+            "Input length must be power of 3"
         );
 
         let twiddles = T::make_twiddles(size, fft_direction)?;

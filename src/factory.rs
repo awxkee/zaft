@@ -83,6 +83,9 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly17(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly19(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix3(
         n: usize,
         fft_direction: FftDirection,
@@ -382,8 +385,21 @@ impl AlgorithmFactory<f32> for f32 {
     fn butterfly16(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
-        use crate::butterflies::Butterfly16;
-        Ok(Box::new(Butterfly16::new(fft_direction)))
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly16;
+                return Ok(Box::new(NeonFcmaButterfly16::new(fft_direction)));
+            }
+            use crate::neon::NeonButterfly16;
+            Ok(Box::new(NeonButterfly16::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly16;
+            Ok(Box::new(Butterfly16::new(fft_direction)))
+        }
     }
 
     fn butterfly17(
@@ -398,6 +414,21 @@ impl AlgorithmFactory<f32> for f32 {
         {
             use crate::butterflies::Butterfly17;
             Ok(Box::new(Butterfly17::new(fft_direction)))
+        }
+    }
+
+    fn butterfly19(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonButterfly19;
+            Ok(Box::new(NeonButterfly19::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly19;
+            Ok(Box::new(Butterfly19::new(fft_direction)))
         }
     }
 

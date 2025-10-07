@@ -40,6 +40,43 @@ pub(crate) unsafe fn mul_complex_f32(lhs: float32x4_t, rhs: float32x4_t) -> floa
 }
 
 #[inline(always)]
+pub(crate) unsafe fn mul_complex_conj_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_t {
+    // Multiply lhs * conj(rhs)
+    // rhs = [re0, im0, re1, im1]
+    // conj(rhs) = [re0, -im0, re1, -im1]
+
+    unsafe {
+        let temp = vcombine_f64(vneg_f64(vget_high_f64(lhs)), vget_low_f64(lhs));
+        let sum = vmulq_laneq_f64::<0>(lhs, rhs);
+        vfmaq_laneq_f64::<1>(sum, temp, vnegq_f64(rhs))
+    }
+}
+
+#[inline]
+#[cfg(feature = "fcma")]
+#[target_feature(enable = "fcma")]
+pub(crate) unsafe fn fcma_mul_a_to_b_conj(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_t {
+    // Multiply lhs * conj(rhs)
+    vcmlaq_rot270_f64(vcmlaq_f64(vdupq_n_f64(0.), rhs, lhs), rhs, lhs)
+}
+
+#[inline]
+#[cfg(feature = "fcma")]
+#[target_feature(enable = "fcma")]
+pub(crate) unsafe fn fcma_mul_a_to_b_conj_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+    // Multiply lhs * conj(rhs)
+    vcmlaq_rot270_f32(vcmlaq_f32(vdupq_n_f32(0.), rhs, lhs), rhs, lhs)
+}
+
+#[inline]
+#[cfg(feature = "fcma")]
+#[target_feature(enable = "fcma")]
+pub(crate) unsafe fn fcma_mulh_a_to_b_conj_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
+    // Multiply lhs * conj(rhs)
+    vcmla_rot270_f32(vcmla_f32(vdup_n_f32(0.), rhs, lhs), rhs, lhs)
+}
+
+#[inline(always)]
 pub(crate) unsafe fn mulh_complex_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
     unsafe {
         let temp1 = vtrn1_f32(rhs, rhs);
@@ -151,7 +188,7 @@ pub(crate) fn conj_f64(v: float64x2_t, a: float64x2_t) -> float64x2_t {
     }
 }
 
-#[cfg(feature = "fcma")]
+// #[cfg(feature = "fcma")]
 #[inline]
 pub(crate) fn conj_f32(v: float32x2_t, a: float32x2_t) -> float32x2_t {
     unsafe { vreinterpret_f32_u32(veor_u32(vreinterpret_u32_f32(v), vreinterpret_u32_f32(a))) }
