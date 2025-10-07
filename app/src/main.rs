@@ -1,4 +1,4 @@
-#![feature(duration_millis_float)]
+// #![feature(duration_millis_float)]
 /*
  * // Copyright (c) Radzivon Bartoshyk 6/2025. All rights reserved.
  * //
