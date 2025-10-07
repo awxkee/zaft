@@ -68,7 +68,7 @@ use std::fmt::{Display, Formatter};
 
 use crate::c2r::{C2RFftEvenInterceptor, C2RFftOddInterceptor};
 use crate::factory::AlgorithmFactory;
-use crate::prime_factors::{PrimeFactors, split_factors_closest};
+use crate::prime_factors::{PrimeFactors, split_factors_closest, try_greedy_pure_power_split};
 use crate::r2c::{R2CFftEvenInterceptor, R2CFftOddInterceptor};
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
@@ -108,7 +108,10 @@ impl Zaft {
     {
         let factorization = prime_factors.factorization;
 
-        let (n_length, q_length) = split_factors_closest(&factorization);
+        let (n_length, q_length) = match try_greedy_pure_power_split(&factorization) {
+            None => split_factors_closest(&factorization),
+            Some(values) => values,
+        };
 
         let p_fft = Zaft::strategy(n_length as usize, direction)?;
         let q_fft = Zaft::strategy(q_length as usize, direction)?;
