@@ -27,8 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::util::{
-    is_power_of_eleven, is_power_of_five, is_power_of_seven, is_power_of_six, is_power_of_thirteen,
-    is_power_of_three,
+    is_power_of_eleven, is_power_of_five, is_power_of_seven, is_power_of_six, is_power_of_ten,
+    is_power_of_thirteen, is_power_of_three,
 };
 use num_traits::{One, PrimInt, Zero};
 
@@ -143,6 +143,7 @@ pub(crate) struct PrimeFactors {
     pub(crate) is_power_of_five: bool,
     pub(crate) is_power_of_six: bool,
     pub(crate) is_power_of_seven: bool,
+    pub(crate) is_power_of_ten: bool,
     pub(crate) is_power_of_eleven: bool,
     pub(crate) is_power_of_thirteen: bool,
     pub(crate) factorization: Vec<(u64, u32)>,
@@ -156,6 +157,7 @@ impl PrimeFactors {
         let is_power_of_five = is_power_of_five(n);
         let is_power_of_seven = is_power_of_seven(n);
         let is_power_of_eleven = is_power_of_eleven(n);
+        let is_power_of_ten = is_power_of_ten(n);
         let factorization = prime_factorization(n);
         PrimeFactors {
             n,
@@ -165,6 +167,7 @@ impl PrimeFactors {
             is_power_of_three,
             is_power_of_seven,
             is_power_of_eleven,
+            is_power_of_ten,
             is_power_of_thirteen: is_power_of_thirteen(n),
             factorization,
         }
@@ -240,111 +243,28 @@ pub(crate) fn split_factors_closest(factors: &[(u64, u32)]) -> (u64, u64) {
 
 pub(crate) fn try_greedy_pure_power_split(factors: &[(u64, u32)]) -> Option<(u64, u64)> {
     // Preferred bases (note: 4 is composite, but we allow it as "preferred")
-    const PREF_BASES: [u64; 7] = [2, 3, 4, 5, 7, 11, 13];
-    use std::collections::HashMap;
+    const PREF_BASES: [u64; 8] = [2, 3, 4, 5, 7, 10, 11, 13];
+    let number = factors.iter().map(|x| x.0.pow(x.1)).product::<u64>();
 
-    // Build prime -> exponent counts from input
-    let mut counts: HashMap<u64, u32> = HashMap::new();
-    for &(p, exp) in factors {
-        *counts.entry(p).or_insert(0) += exp;
+    // Recursive helper to find max power of `base` that divides `n`
+    fn max_power(n: u64, base: u64) -> (u64, u64) {
+        let mut power = 1;
+        let mut rem = n;
+        while rem % base == 0 {
+            rem /= base;
+            power *= base;
+        }
+        (power, rem)
     }
 
-    // Compute total as u128 (safer for intermediate multiplications)
-    let mut total_u128: u128 = 1;
-    for (&p, &exp) in &counts {
-        for _ in 0..exp {
-            total_u128 = total_u128.saturating_mul(p as u128);
-        }
-    }
-    if total_u128 == 0 {
-        return None;
-    } // guard, though not expected
-
-    // Helper: factor small base into its prime factors -> map prime->exponent
-    fn factor_base(base: u64) -> HashMap<u64, u32> {
-        let mut n = base;
-        let mut out = HashMap::new();
-        let mut d = 2;
-        while d * d <= n {
-            while n % d == 0 {
-                *out.entry(d).or_insert(0) += 1;
-                n /= d;
-            }
-            d += 1;
-        }
-        if n > 1 {
-            *out.entry(n).or_insert(0) += 1;
-        }
-        out
-    }
-
-    // Helper: compute base^k as u128 (returns None on overflow)
-    fn pow_u128(base: u64, exp: u32) -> Option<u128> {
-        let mut acc: u128 = 1;
-        for _ in 0..exp {
-            acc = acc.checked_mul(base as u128)?;
-        }
-        Some(acc)
-    }
-
-    // For each preferred base, compute maximum k such that base^k can be made from counts
-    // (i.e., for each prime q dividing base with exponent e_base, we need e_base * k <= counts[q]).
-    let mut best_value: u128 = 1;
-    for &base in &PREF_BASES {
-        let base_factor = factor_base(base);
-        if base_factor.is_empty() {
-            continue;
-        }
-
-        // Compute k_max for this base
-        let mut k_max: u32 = u32::MAX;
-        for (&q, &e_base) in &base_factor {
-            let available = counts.get(&q).copied().unwrap_or(0);
-            if available == 0 {
-                k_max = 0;
-                break;
-            } else {
-                let k_for_q = available / e_base;
-                k_max = k_max.min(k_for_q);
-            }
-        }
-        if k_max == 0 || k_max == u32::MAX {
-            continue;
-        }
-
-        // We want the largest value base^k (k from k_max down to 1)
-        // but computing base^k_max should be fine: pick that
-        if let Some(val) = pow_u128(base, k_max) {
-            // ensure val > 1 and val divides the total (it will by construction)
-            if val > 1 && total_u128 % val == 0 {
-                if val > best_value {
-                    best_value = val;
-                }
-            }
+    for &base in PREF_BASES.iter().rev() {
+        let (p, a) = max_power(number, base);
+        if p > 1 {
+            return Some((p, a));
         }
     }
 
-    // If we found only 1 (no pure power >1), return None
-    if best_value <= 1 {
-        return None;
-    }
-
-    // Convert back to u64 if possible (if overflowed the original u64 product, bail)
-    let total_u64 = match u64::try_from(total_u128) {
-        Ok(t) => t,
-        Err(_) => return None, // can't represent in u64, let caller handle
-    };
-    let best_u64 = match u64::try_from(best_value) {
-        Ok(b) => b,
-        Err(_) => return None,
-    };
-
-    // Final sanity: best divides total
-    if total_u64 % best_u64 != 0 {
-        return None;
-    }
-
-    Some((best_u64, total_u64 / best_u64))
+    None
 }
 
 #[cfg(test)]
@@ -386,6 +306,10 @@ mod tests {
         assert_eq!(
             split_factors_closest(&vec![(2, 4), (3, 1), (5, 2)]),
             (40, 30)
+        );
+        assert_eq!(
+            try_greedy_pure_power_split(&vec![(2, 2), (5, 3)]), // 500
+            Some((125, 4))
         );
         assert_eq!(
             try_greedy_pure_power_split(&vec![(2, 2), (3, 1), (13, 2)]),

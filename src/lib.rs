@@ -50,6 +50,7 @@ mod neon;
 mod prime_factors;
 mod r2c;
 mod raders;
+mod radix10;
 mod radix11;
 mod radix13;
 mod radix3;
@@ -238,6 +239,8 @@ impl Zaft {
             T::radix6(n, fft_direction)
         } else if prime_factors.is_power_of_seven {
             T::radix7(n, fft_direction)
+        } else if prime_factors.is_power_of_ten {
+            T::radix10(n, fft_direction)
         } else if prime_factors.is_power_of_eleven {
             T::radix11(n, fft_direction)
         } else if prime_factors.is_power_of_thirteen {

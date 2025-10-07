@@ -109,6 +109,10 @@ pub(crate) trait AlgorithmFactory<T> {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn radix10(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix11(
         n: usize,
         fft_direction: FftDirection,
@@ -616,6 +620,30 @@ impl AlgorithmFactory<f32> for f32 {
         {
             use crate::radix7::Radix7;
             Radix7::new(n, fft_direction)
+                .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+        }
+    }
+
+    fn radix10(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaRadix10;
+                return NeonFcmaRadix10::new(n, fft_direction)
+                    .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+            }
+            use crate::neon::NeonRadix10;
+            NeonRadix10::new(n, fft_direction)
+                .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::radix10::Radix10;
+            Radix10::new(n, fft_direction)
                 .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
         }
     }

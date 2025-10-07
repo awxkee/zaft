@@ -8,6 +8,7 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
 use rand::Rng;
 use rustfft::FftPlanner;
+use std::fmt::format;
 use zaft::{Zaft, ZaftError};
 
 pub fn bench_rustfft_averages(c: &mut Criterion) {
@@ -114,6 +115,56 @@ pub fn bench_zaft_average(c: &mut Criterion) {
             },
             BatchSize::LargeInput,
         );
+    });
+}
+
+fn check_power_group(c: &mut Criterion, n: usize, group: String) {
+    let mut input_power = vec![Complex::<f64>::default(); n];
+    for z in input_power.iter_mut() {
+        *z = Complex {
+            re: rand::rng().random(),
+            im: rand::rng().random(),
+        };
+    }
+
+    c.bench_function(format!("rustfft {group}").as_str(), |b| {
+        let plan = FftPlanner::new().plan_fft_forward(input_power.len());
+        let mut working = input_power.to_vec();
+        b.iter(|| {
+            plan.process(&mut working);
+        })
+    });
+
+    c.bench_function(format!("zaft {group}").as_str(), |b| {
+        let plan = Zaft::make_inverse_fft_f64(input_power.len()).unwrap();
+        let mut working = input_power.to_vec();
+        b.iter(|| {
+            plan.execute(&mut working).unwrap();
+        })
+    });
+
+    c.bench_function(format!("rustfft {group}s").as_str(), |b| {
+        let plan = FftPlanner::new().plan_fft_forward(input_power.len());
+        let s = input_power
+            .iter()
+            .map(|&x| Complex::new(x.re as f32, x.im as f32))
+            .collect::<Vec<_>>();
+        let mut working = s.to_vec();
+        b.iter(|| {
+            plan.process(&mut working);
+        })
+    });
+
+    c.bench_function(format!("zaft {group}s").as_str(), |b| {
+        let plan = Zaft::make_inverse_fft_f32(input_power.len()).unwrap();
+        let s = input_power
+            .iter()
+            .map(|&x| Complex::new(x.re as f32, x.im as f32))
+            .collect::<Vec<_>>();
+        let mut working = s.to_vec();
+        b.iter(|| {
+            plan.execute(&mut working).unwrap();
+        })
     });
 }
 
@@ -249,6 +300,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             im: rand::rng().random(),
         };
     }
+
+    check_power_group(c, 1000, "power 10".to_string());
 
     // c.bench_function("rustfft power 13", |b| {
     //     let plan = FftPlanner::new().plan_fft_forward(input_power13.len());

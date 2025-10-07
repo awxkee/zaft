@@ -70,4 +70,5 @@ pub(crate) use bf16_fcma::NeonFcmaButterfly16;
 pub(crate) use bf17::NeonButterfly17;
 pub(crate) use bf19::NeonButterfly19;
 pub(crate) use bf23::NeonButterfly23;
+pub(crate) use fast_bf5::NeonFastButterfly5;
 pub(crate) use shared::NeonButterfly;

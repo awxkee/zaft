@@ -30,6 +30,9 @@ mod butterflies;
 mod f32x2_2x2;
 mod f32x2_4x4;
 mod raders;
+mod radix10;
+#[cfg(feature = "fcma")]
+mod radix10_fcma;
 mod radix11;
 #[cfg(feature = "fcma")]
 mod radix11_fcma;
@@ -81,6 +84,9 @@ pub(crate) use radix6_fcma::NeonFcmaRadix6;
 pub(crate) use radix7::NeonRadix7;
 #[cfg(feature = "fcma")]
 pub(crate) use radix7_fcma::NeonFcmaRadix7;
+pub(crate) use radix10::NeonRadix10;
+#[cfg(feature = "fcma")]
+pub(crate) use radix10_fcma::NeonFcmaRadix10;
 pub(crate) use radix11::NeonRadix11;
 #[cfg(feature = "fcma")]
 pub(crate) use radix11_fcma::NeonFcmaRadix11;
