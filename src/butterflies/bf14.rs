@@ -167,7 +167,7 @@ mod tests {
             let radix_forward = Butterfly14::new(FftDirection::Forward);
             let radix_inverse = Butterfly14::new(FftDirection::Inverse);
 
-            let mut input2 = src.to_vec();
+            let input2 = src.to_vec();
             radix_forward.execute(&mut input).unwrap();
 
             input

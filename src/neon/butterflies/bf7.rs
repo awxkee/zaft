@@ -250,9 +250,6 @@ impl FftExecutor<f64> for NeonButterfly7<f64> {
             static ROT_90: [f64; 2] = [-0.0, 0.0];
             let rot_sign = vld1q_f64(ROT_90.as_ptr());
 
-            let neg_im3 = vdupq_n_f64(-self.twiddle3.im);
-            let neg_im1 = vdupq_n_f64(-self.twiddle1.im);
-
             for chunk in in_place.chunks_exact_mut(7) {
                 let u0 = vld1q_f64(chunk.get_unchecked(0..).as_ptr().cast());
                 let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
@@ -286,15 +283,15 @@ impl FftExecutor<f64> for NeonButterfly7<f64> {
                 let m0205a = vfmaq_n_f64(m0205a, x2p5, self.twiddle3.re);
                 let m0205a = vfmaq_n_f64(m0205a, x3p4, self.twiddle1.re);
                 let m0205b = vmulq_n_f64(x1m6, self.twiddle2.im);
-                let m0205b = vfmaq_f64(m0205b, neg_im3, x2m5);
-                let m0205b = vfmaq_f64(m0205b, neg_im1, x3m4);
+                let m0205b = vfmsq_n_f64(m0205b, x2m5, self.twiddle3.im);
+                let m0205b = vfmsq_n_f64(m0205b, x3m4, self.twiddle1.im);
                 let (y02, y05) = NeonButterfly::butterfly2_f64(m0205a, m0205b);
 
                 let m0304a = vfmaq_n_f64(u0, x1p6, self.twiddle3.re);
                 let m0304a = vfmaq_n_f64(m0304a, x2p5, self.twiddle1.re);
                 let m0304a = vfmaq_n_f64(m0304a, x3p4, self.twiddle2.re);
                 let m0304b = vmulq_n_f64(x1m6, self.twiddle3.im);
-                let m0304b = vfmaq_f64(m0304b, neg_im1, x2m5);
+                let m0304b = vfmsq_n_f64(m0304b, x2m5, self.twiddle1.im);
                 let m0304b = vfmaq_n_f64(m0304b, x3m4, self.twiddle2.im);
                 let (y03, y04) = NeonButterfly::butterfly2_f64(m0304a, m0304b);
 
