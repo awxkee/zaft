@@ -8,6 +8,7 @@ rustfft = { version = "6.4", default-features = false, features = ["avx", "neon"
 zaft = {path = "../", features = ["fcma", "avx"], default-features = false}
 num-complex = "0.4.6"
 rand = "0.9"
+realfft = "3.5"
 
 [dev-dependencies]
 criterion = "0.7.0"

@@ -8,8 +8,7 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
 use rand::Rng;
 use rustfft::FftPlanner;
-use std::fmt::format;
-use zaft::{Zaft, ZaftError};
+use zaft::Zaft;
 
 pub fn bench_rustfft_averages(c: &mut Criterion) {
     c.bench_function("rustfft avg1", |b| {
@@ -68,7 +67,7 @@ pub fn bench_rustfft_average(c: &mut Criterion) {
         b.iter_batched(
             || {
                 // Prepare all inputs and FFT plans
-                (1..=500)
+                (1..=1500)
                     .map(|n| {
                         let input: Vec<Complex<f64>> =
                             (0..n).map(|i| Complex::new(i as f64, 0.0)).collect();
@@ -94,7 +93,7 @@ pub fn bench_zaft_average(c: &mut Criterion) {
         b.iter_batched(
             || {
                 // Prepare all inputs and FFT plans
-                (1..=500)
+                (1..=1500)
                     .map(|n| {
                         let input: Vec<Complex<f64>> =
                             (0..n).map(|i| Complex::new(i as f64, 0.0)).collect();
@@ -301,6 +300,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
+    check_power_group(c, 1920, "Full HD".to_string());
     check_power_group(c, 1000, "power 10".to_string());
 
     // c.bench_function("rustfft power 13", |b| {

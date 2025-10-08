@@ -49,6 +49,7 @@ mod mla;
 mod neon;
 mod prime_factors;
 mod r2c;
+mod r2c_twiddles;
 mod raders;
 mod radix10;
 mod radix11;
@@ -69,7 +70,9 @@ use std::fmt::{Display, Formatter};
 
 use crate::c2r::{C2RFftEvenInterceptor, C2RFftOddInterceptor};
 use crate::factory::AlgorithmFactory;
-use crate::prime_factors::{PrimeFactors, split_factors_closest, try_greedy_pure_power_split};
+use crate::prime_factors::{
+    PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
+};
 use crate::r2c::{R2CFftEvenInterceptor, R2CFftOddInterceptor};
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
@@ -108,10 +111,21 @@ impl Zaft {
         f64: AsPrimitive<T>,
     {
         let factorization = prime_factors.factorization;
+        let product = factorization.iter().map(|&x| x.0.pow(x.1)).product::<u64>();
 
-        let (n_length, q_length) = match try_greedy_pure_power_split(&factorization) {
-            None => split_factors_closest(&factorization),
-            Some(values) => values,
+        let (n_length, q_length) = if product <= 529 {
+            match can_be_two_factors(&factorization) {
+                None => match try_greedy_pure_power_split(&factorization) {
+                    None => split_factors_closest(&factorization),
+                    Some(values) => values,
+                },
+                Some(factors) => factors,
+            }
+        } else {
+            match try_greedy_pure_power_split(&factorization) {
+                None => split_factors_closest(&factorization),
+                Some(values) => values,
+            }
         };
 
         let p_fft = Zaft::strategy(n_length as usize, direction)?;

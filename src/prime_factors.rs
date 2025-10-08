@@ -241,6 +241,34 @@ pub(crate) fn split_factors_closest(factors: &[(u64, u32)]) -> (u64, u64) {
     (n1, n2)
 }
 
+pub(crate) fn can_be_two_factors(factors: &[(u64, u32)]) -> Option<(u64, u64)> {
+    // Allowed numbers
+    const ALLOWED: [u64; 18] = [
+        2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 23,
+    ];
+
+    // Compute the total number from prime factorization
+    let total: u64 = factors.iter().fold(1u64, |acc, &(p, exp)| {
+        acc.checked_mul(p.pow(exp)).unwrap_or(0)
+    });
+    if total == 0 {
+        return None;
+    }
+
+    // Try all pairs of allowed numbers
+    for &a in ALLOWED.iter() {
+        if total % a != 0 {
+            continue;
+        }
+        let b = total / a;
+        if ALLOWED.contains(&b) {
+            return Some((a, b));
+        }
+    }
+
+    None
+}
+
 pub(crate) fn try_greedy_pure_power_split(factors: &[(u64, u32)]) -> Option<(u64, u64)> {
     // Preferred bases (note: 4 is composite, but we allow it as "preferred")
     const PREF_BASES: [u64; 8] = [2, 3, 4, 5, 7, 10, 11, 13];

@@ -27,11 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
+use crate::r2c_twiddles::{R2CTwiddlesFactory, R2CTwiddlesHandler};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
+use std::fmt::Debug;
 use std::ops::{Add, Mul, Neg, Sub};
 
 pub trait R2CFftExecutor<T> {
@@ -45,10 +47,20 @@ pub(crate) struct R2CFftEvenInterceptor<T> {
     twiddles: Vec<Complex<T>>,
     length: usize,
     complex_length: usize,
+    twiddles_handler: Box<dyn R2CTwiddlesHandler<T> + Send + Sync>,
 }
 
-impl<T: Copy + Clone + FftTrigonometry + Mul<T, Output = T> + 'static + Zero + Num + Float>
-    R2CFftEvenInterceptor<T>
+impl<
+    T: Copy
+        + Clone
+        + FftTrigonometry
+        + Mul<T, Output = T>
+        + 'static
+        + Zero
+        + Num
+        + Float
+        + R2CTwiddlesFactory<T>,
+> R2CFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -82,6 +94,7 @@ where
             twiddles,
             length,
             complex_length: length / 2 + 1,
+            twiddles_handler: T::make_r2c_twiddles_handler(),
         })
     }
 }
@@ -94,7 +107,8 @@ impl<
         + Num
         + 'static
         + Neg<Output = T>
-        + MulAdd<T, Output = T>,
+        + MulAdd<T, Output = T>
+        + Debug,
 > R2CFftExecutor<T> for R2CFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
@@ -149,37 +163,8 @@ where
                 }
             }
 
-            for ((twiddle, out), out_rev) in self
-                .twiddles
-                .iter()
-                .zip(output_left.iter_mut())
-                .zip(output_right.iter_mut().rev())
-            {
-                let sum = *out + *out_rev;
-                let diff = *out - *out_rev;
-                let half: T = 0.5f64.as_();
-
-                let twiddled_re_sum = sum * twiddle.re;
-                let twiddled_im_sum = sum * twiddle.im;
-                let twiddled_re_diff = diff * twiddle.re;
-                let twiddled_im_diff = diff * twiddle.im;
-                let half_sum_re = half * sum.re;
-                let half_diff_im = half * diff.im;
-
-                let output_twiddled_real = twiddled_re_sum.im + twiddled_im_diff.re;
-                let output_twiddled_im = twiddled_im_sum.im - twiddled_re_diff.re;
-
-                // We finally have all the data we need to write the transformed data back out where we found it.
-                *out = Complex {
-                    re: half_sum_re + output_twiddled_real,
-                    im: half_diff_im + output_twiddled_im,
-                };
-
-                *out_rev = Complex {
-                    re: half_sum_re - output_twiddled_real,
-                    im: output_twiddled_im - half_diff_im,
-                };
-            }
+            self.twiddles_handler
+                .handle(&self.twiddles, &mut output_left, &mut output_right);
 
             if output.len() % 2 == 1 {
                 if let Some(center_element) = output.get_mut(output.len() / 2) {

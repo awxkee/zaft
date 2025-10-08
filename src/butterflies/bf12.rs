@@ -38,10 +38,11 @@ use std::ops::{Add, Mul, Neg, Sub};
 pub(crate) struct Butterfly12<T> {
     direction: FftDirection,
     phantom_data: PhantomData<T>,
+    bf3: FastButterfly3<T>,
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static> Butterfly12<T>
+impl<T: FftTrigonometry + Float + 'static + Default> Butterfly12<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -49,6 +50,7 @@ where
         Butterfly12 {
             direction: fft_direction,
             phantom_data: PhantomData,
+            bf3: FastButterfly3::new(fft_direction),
         }
     }
 }
@@ -63,8 +65,7 @@ impl<
         + Neg<Output = T>
         + MulAdd<T, Output = T>
         + Float
-        + Default
-        + FftTrigonometry,
+        + Default,
 > FftExecutor<T> for Butterfly12<T>
 where
     f64: AsPrimitive<T>,
@@ -77,7 +78,6 @@ where
             ));
         }
 
-        let bf3 = FastButterfly3::new(self.direction);
         let bf4 = FastButterfly4::new(self.direction);
 
         for chunk in in_place.chunks_exact_mut(12) {
@@ -100,22 +100,24 @@ where
             let (u4, u5, u6, u7) = bf4.butterfly4(u4, u5, u6, u7);
             let (u8, u9, u10, u11) = bf4.butterfly4(u8, u9, u10, u11);
 
-            let (v0, v4, v8) = bf3.butterfly3(u0, u4, u8);
-            let (v1, v5, v9) = bf3.butterfly3(u1, u5, u9);
-            let (v2, v6, v10) = bf3.butterfly3(u2, u6, u10);
-            let (v3, v7, v11) = bf3.butterfly3(u3, u7, u11);
+            let (v0, v4, v8) = self.bf3.butterfly3(u0, u4, u8); // (v0, v4, v8)
+            let (v9, v1, v5) = self.bf3.butterfly3(u1, u5, u9); // (v9, v1, v5)
+            let (v6, v10, v2) = self.bf3.butterfly3(u2, u6, u10); // (v6, v10, v2)
+            let (v3, v7, v11) = self.bf3.butterfly3(u3, u7, u11); // (v3, v7, v11)
 
             chunk[0] = v0;
-            chunk[1] = v5;
-            chunk[2] = v10;
+            chunk[1] = v1;
+            chunk[2] = v2;
             chunk[3] = v3;
+
             chunk[4] = v4;
-            chunk[5] = v9;
-            chunk[6] = v2;
+            chunk[5] = v5;
+            chunk[6] = v6;
             chunk[7] = v7;
+
             chunk[8] = v8;
-            chunk[9] = v1;
-            chunk[10] = v6;
+            chunk[9] = v9;
+            chunk[10] = v10;
             chunk[11] = v11;
         }
         Ok(())

@@ -61,9 +61,11 @@ impl FftExecutor<f64> for NeonButterfly8<f64> {
         }
 
         unsafe {
+            static ROT_90: [f64; 2] = [-0.0, 0.0];
+            static ROT_270: [f64; 2] = [0.0, -0.0];
             let rot_sign = vld1q_f64(match self.direction {
-                FftDirection::Inverse => [-0.0, 0.0].as_ptr(),
-                FftDirection::Forward => [0.0, -0.0].as_ptr(),
+                FftDirection::Inverse => ROT_90.as_ptr(),
+                FftDirection::Forward => ROT_270.as_ptr(),
             });
 
             for chunk in in_place.chunks_exact_mut(8) {

@@ -29,6 +29,7 @@
 mod butterflies;
 mod f32x2_2x2;
 mod f32x2_4x4;
+mod r2c;
 mod raders;
 mod radix10;
 #[cfg(feature = "fcma")]
@@ -61,13 +62,15 @@ mod util;
 
 pub(crate) use butterflies::{
     NeonButterfly2, NeonButterfly3, NeonButterfly4, NeonButterfly5, NeonButterfly6, NeonButterfly7,
-    NeonButterfly8, NeonButterfly9, NeonButterfly10, NeonButterfly11, NeonButterfly13,
-    NeonButterfly15, NeonButterfly16, NeonButterfly17, NeonButterfly19, NeonButterfly23,
+    NeonButterfly8, NeonButterfly9, NeonButterfly10, NeonButterfly11, NeonButterfly12,
+    NeonButterfly13, NeonButterfly15, NeonButterfly16, NeonButterfly17, NeonButterfly19,
+    NeonButterfly23,
 };
 #[cfg(feature = "fcma")]
 pub(crate) use butterflies::{NeonFcmaButterfly9, NeonFcmaButterfly16};
 pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
+pub(crate) use r2c::R2CNeonTwiddles;
 pub(crate) use raders::NeonRadersFft;
 pub(crate) use radix3::NeonRadix3;
 #[cfg(feature = "fcma")]
