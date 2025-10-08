@@ -32,6 +32,7 @@ mod bf4;
 mod bf5;
 mod bf6;
 mod bf8;
+mod bf9;
 mod shared;
 
 pub(crate) use bf2::AvxButterfly2;
@@ -40,4 +41,5 @@ pub(crate) use bf4::AvxButterfly4;
 pub(crate) use bf5::AvxButterfly5;
 pub(crate) use bf6::AvxButterfly6;
 pub(crate) use bf8::AvxButterfly8;
+pub(crate) use bf9::AvxButterfly9;
 pub(crate) use shared::AvxButterfly;

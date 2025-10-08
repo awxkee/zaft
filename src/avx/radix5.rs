@@ -316,8 +316,8 @@ impl AvxFmaRadix5<f32> {
         let tw1_im = _mm256_set1_ps(self.twiddle1.im);
         let tw2_re = _mm256_set1_ps(self.twiddle2.re);
         let tw2_im = _mm256_set1_ps(self.twiddle2.im);
-        let rot_sign =
-            unsafe { _mm256_loadu_ps([-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0].as_ptr()) };
+        static ROT_90: [f32; 8] = [-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0];
+        let rot_sign = unsafe { _mm256_loadu_ps(ROT_90.as_ptr()) };
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
