@@ -87,25 +87,25 @@ fn main() {
 
     let mut planner = FftPlanner::<f32>::new();
     //
-    // for i in 1..1500 {
-    //     let mut data = vec![Complex::<f32>::default(); i];
-    //     for (k, z) in data.iter_mut().enumerate() {
-    //         *z = data0[k % data0.len()];
-    //     }
-    //     let forward = Zaft::make_forward_fft_f32(data.len()).unwrap();
-    //     let new_plan = planner.plan_fft_forward(data.len());
-    //     let s0 = Instant::now();
-    //     forward.execute(&mut data).unwrap();
-    //     let elapsed1 = s0.elapsed();
-    //
-    //     let s1 = Instant::now();
-    //     new_plan.process(&mut data);
-    //     let elapsed2 = s1.elapsed();
-    //     let diff = elapsed1.as_millis_f32() / elapsed2.as_millis_f32();
-    //     if diff > 1.6 {
-    //         println!("Timescale was {diff} on {i}");
-    //     }
-    // }
+    for i in 1..1500 {
+        let mut data = vec![Complex::<f32>::default(); i];
+        for (k, z) in data.iter_mut().enumerate() {
+            *z = data0[k % data0.len()];
+        }
+        let forward = Zaft::make_forward_fft_f32(data.len()).unwrap();
+        let new_plan = planner.plan_fft_forward(data.len());
+        let s0 = Instant::now();
+        forward.execute(&mut data).unwrap();
+        let elapsed1 = s0.elapsed();
+
+        let s1 = Instant::now();
+        new_plan.process(&mut data);
+        let elapsed2 = s1.elapsed();
+        let diff = elapsed1.as_millis_f32() / elapsed2.as_millis_f32();
+        if diff > 1.6 {
+            println!("Timescale was {diff} on {i}");
+        }
+    }
 
     let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
     let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();

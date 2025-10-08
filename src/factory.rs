@@ -74,6 +74,9 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly13(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly14(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly15(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
@@ -380,6 +383,13 @@ impl AlgorithmFactory<f32> for f32 {
             use crate::butterflies::Butterfly13;
             Ok(Box::new(Butterfly13::new(fft_direction)))
         }
+    }
+
+    fn butterfly14(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        use crate::butterflies::Butterfly14;
+        Ok(Box::new(Butterfly14::new(fft_direction)))
     }
 
     fn butterfly15(
