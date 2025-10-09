@@ -25,7 +25,10 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::avx::util::{_mm_unpackhi_ps64, _mm_unpacklo_ps64, shuffle};
+use crate::avx::util::{
+    _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_permute4x64_ps, _mm256s_deinterleave4_epi64,
+    _mm256s_interleave4_epi64, shuffle,
+};
 use crate::traits::FftTrigonometry;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -34,7 +37,7 @@ use std::arch::x86_64::*;
 
 pub(crate) struct AvxButterfly4<T> {
     direction: FftDirection,
-    multiplier: [T; 4],
+    multiplier: [T; 8],
 }
 
 impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> AvxButterfly4<T>
@@ -45,8 +48,26 @@ where
         Self {
             direction: fft_direction,
             multiplier: match fft_direction {
-                FftDirection::Inverse => [-0.0.as_(), 0.0.as_(), -0.0.as_(), 0.0.as_()],
-                FftDirection::Forward => [0.0.as_(), -0.0.as_(), 0.0.as_(), -0.0.as_()],
+                FftDirection::Inverse => [
+                    -0.0.as_(),
+                    0.0.as_(),
+                    -0.0.as_(),
+                    0.0.as_(),
+                    -0.0.as_(),
+                    0.0.as_(),
+                    -0.0.as_(),
+                    0.0.as_(),
+                ],
+                FftDirection::Forward => [
+                    0.0.as_(),
+                    -0.0.as_(),
+                    0.0.as_(),
+                    -0.0.as_(),
+                    0.0.as_(),
+                    -0.0.as_(),
+                    0.0.as_(),
+                    -0.0.as_(),
+                ],
             },
         }
     }
@@ -62,10 +83,46 @@ impl AvxButterfly4<f32> {
             ));
         }
 
-        let v_i_multiplier = unsafe { _mm_loadu_ps(self.multiplier.as_ptr()) };
+        unsafe {
+            let v_i_multiplier = _mm256_loadu_ps(self.multiplier.as_ptr());
 
-        for chunk in in_place.chunks_exact_mut(4) {
-            unsafe {
+            for chunk in in_place.chunks_exact_mut(16) {
+                unsafe {
+                    let aaaa0 = _mm256_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
+                    let bbbb0 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());
+                    let cccc0 = _mm256_loadu_ps(chunk.get_unchecked(8..).as_ptr().cast());
+                    let dddd0 = _mm256_loadu_ps(chunk.get_unchecked(12..).as_ptr().cast());
+
+                    let (a, b, c, d) = _mm256s_deinterleave4_epi64(aaaa0, bbbb0, cccc0, dddd0);
+
+                    let t0 = _mm256_add_ps(a, c);
+                    let t1 = _mm256_sub_ps(a, c);
+                    let t2 = _mm256_add_ps(b, d);
+                    let mut t3 = _mm256_sub_ps(b, d);
+                    const SH: i32 = shuffle(2, 3, 0, 1);
+                    const SH_LANE: i32 = shuffle(3, 1, 2, 0);
+                    t3 = _mm256_xor_ps(
+                        _mm256_permute4x64_ps::<SH_LANE>(_mm256_shuffle_ps::<SH>(t3, t3)),
+                        v_i_multiplier,
+                    );
+
+                    let xy0 = _mm256_add_ps(t0, t2);
+                    let xy1 = _mm256_add_ps(t1, t3);
+                    let xy2 = _mm256_sub_ps(t0, t2);
+                    let xy3 = _mm256_sub_ps(t1, t3);
+
+                    let (y0, y1, y2, y3) = _mm256s_interleave4_epi64(xy0, xy1, xy2, xy3);
+
+                    _mm256_storeu_ps(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
+                    _mm256_storeu_ps(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y1);
+                    _mm256_storeu_ps(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y2);
+                    _mm256_storeu_ps(chunk.get_unchecked_mut(12..).as_mut_ptr().cast(), y3);
+                }
+            }
+
+            let rem = in_place.chunks_exact_mut(16).into_remainder();
+
+            for chunk in rem.chunks_exact_mut(4) {
                 let aaaa0 = _mm256_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
 
                 let a = _mm256_castps256_ps128(aaaa0);
@@ -82,7 +139,10 @@ impl AvxButterfly4<f32> {
                 let t2 = _mm_add_ps(b, d);
                 let mut t3 = _mm_sub_ps(b, d);
                 const SH: i32 = shuffle(2, 3, 0, 1);
-                t3 = _mm_xor_ps(_mm_shuffle_ps::<SH>(t3, t3), v_i_multiplier);
+                t3 = _mm_xor_ps(
+                    _mm_shuffle_ps::<SH>(t3, t3),
+                    _mm256_castps256_ps128(v_i_multiplier),
+                );
 
                 let yy0 = _mm_unpacklo_ps64(_mm_add_ps(t0, t2), _mm_add_ps(t1, t3));
                 let yy1 = _mm_unpacklo_ps64(_mm_sub_ps(t0, t2), _mm_sub_ps(t1, t3));
