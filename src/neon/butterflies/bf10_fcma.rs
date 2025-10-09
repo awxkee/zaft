@@ -145,9 +145,6 @@ impl NeonFcmaButterfly10<f32> {
         }
 
         unsafe {
-            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            let rot_sign = vld1q_f32(ROT_90.as_ptr());
-
             for chunk in in_place.chunks_exact_mut(20) {
                 let u0u1 = vld1q_f32(chunk.as_ptr().cast());
                 let u2u3 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
@@ -166,8 +163,8 @@ impl NeonFcmaButterfly10<f32> {
                 let (u6, u7) = vqtrnq_f32(u6u7, u16u17);
                 let (u8, u9) = vqtrnq_f32(u8u9, u18u19);
 
-                let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
-                let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
+                let mid0 = self.bf5.exec_fcma(u0, u2, u4, u6, u8);
+                let mid1 = self.bf5.exec_fcma(u5, u7, u9, u1, u3);
 
                 // Since this is good-thomas algorithm, we don't need twiddle factors
                 let (zy0, zy1) = NeonButterfly::butterfly2_f32(mid0.0, mid1.0);
@@ -209,13 +206,12 @@ impl NeonFcmaButterfly10<f32> {
                 let (u6, u7) = (vget_low_f32(u6u7), vget_high_f32(u6u7));
                 let (u8, u9) = (vget_low_f32(u8u9), vget_high_f32(u8u9));
 
-                let mid0 = self.bf5.exec(
+                let mid0 = self.bf5.exec_fcma(
                     vcombine_f32(u0, u5),
                     vcombine_f32(u2, u7),
                     vcombine_f32(u4, u9),
                     vcombine_f32(u6, u1),
                     vcombine_f32(u8, u3),
-                    rot_sign,
                 );
 
                 // Since this is good-thomas algorithm, we don't need twiddle factors
