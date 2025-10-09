@@ -26,9 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::util::{
-    fcma_complex_f32, fcma_complex_f64, v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32,
-};
+use crate::neon::util::{fcma_complex_f32, fcma_complex_f64};
 use crate::radix5::Radix5Twiddles;
 use crate::traits::FftTrigonometry;
 use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_five, permute_inplace};
@@ -85,7 +83,6 @@ impl NeonFcmaRadix5<f64> {
         let tw1_im = vdupq_n_f64(self.twiddle1.im);
         let tw2_re = vdupq_n_f64(self.twiddle2.re);
         let tw2_im = vdupq_n_f64(self.twiddle2.im);
-        let rot_sign = unsafe { vld1q_f64([-0.0, 0.0].as_ptr()) };
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
@@ -136,13 +133,10 @@ impl NeonFcmaRadix5<f64> {
                             let temp_b1 = vfmaq_f64(temp_b1_1, tw2_im, x23n);
                             let temp_b2 = vfmsq_f64(temp_b2_1, tw1_im, x23n);
 
-                            let temp_b1_rot = v_rotate90_f64(temp_b1, rot_sign);
-                            let temp_b2_rot = v_rotate90_f64(temp_b2, rot_sign);
-
-                            let y1 = vaddq_f64(temp_a1, temp_b1_rot);
-                            let y2 = vaddq_f64(temp_a2, temp_b2_rot);
-                            let y3 = vsubq_f64(temp_a2, temp_b2_rot);
-                            let y4 = vsubq_f64(temp_a1, temp_b1_rot);
+                            let y1 = vcaddq_rot90_f64(temp_a1, temp_b1);
+                            let y2 = vcaddq_rot90_f64(temp_a2, temp_b2);
+                            let y3 = vcaddq_rot270_f64(temp_a2, temp_b2);
+                            let y4 = vcaddq_rot270_f64(temp_a1, temp_b1);
 
                             vst1q_f64(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
                             vst1q_f64(data.get_unchecked_mut(j + fifth..).as_mut_ptr().cast(), y1);
@@ -199,7 +193,6 @@ impl NeonFcmaRadix5<f32> {
         let tw1_im = vdupq_n_f32(self.twiddle1.im);
         let tw2_re = vdupq_n_f32(self.twiddle2.re);
         let tw2_im = vdupq_n_f32(self.twiddle2.im);
-        let rot_sign = unsafe { vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()) };
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
@@ -262,13 +255,10 @@ impl NeonFcmaRadix5<f32> {
                             let temp_b1 = vfmaq_f32(temp_b1_1, tw2_im, x23n);
                             let temp_b2 = vfmsq_f32(temp_b2_1, tw1_im, x23n);
 
-                            let temp_b1_rot = v_rotate90_f32(temp_b1, rot_sign);
-                            let temp_b2_rot = v_rotate90_f32(temp_b2, rot_sign);
-
-                            let y1 = vaddq_f32(temp_a1, temp_b1_rot);
-                            let y2 = vaddq_f32(temp_a2, temp_b2_rot);
-                            let y3 = vsubq_f32(temp_a2, temp_b2_rot);
-                            let y4 = vsubq_f32(temp_a1, temp_b1_rot);
+                            let y1 = vcaddq_rot90_f32(temp_a1, temp_b1);
+                            let y2 = vcaddq_rot90_f32(temp_a2, temp_b2);
+                            let y3 = vcaddq_rot270_f32(temp_a2, temp_b2);
+                            let y4 = vcaddq_rot270_f32(temp_a1, temp_b1);
 
                             vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
                             vst1q_f32(data.get_unchecked_mut(j + fifth..).as_mut_ptr().cast(), y1);
@@ -340,13 +330,10 @@ impl NeonFcmaRadix5<f32> {
                             let temp_b1 = vfma_f32(temp_b1_1, vget_low_f32(tw2_im), x23n);
                             let temp_b2 = vfms_f32(temp_b2_1, vget_low_f32(tw1_im), x23n);
 
-                            let temp_b1_rot = vh_rotate90_f32(temp_b1, vget_low_f32(rot_sign));
-                            let temp_b2_rot = vh_rotate90_f32(temp_b2, vget_low_f32(rot_sign));
-
-                            let y1 = vadd_f32(temp_a1, temp_b1_rot);
-                            let y2 = vadd_f32(temp_a2, temp_b2_rot);
-                            let y3 = vsub_f32(temp_a2, temp_b2_rot);
-                            let y4 = vsub_f32(temp_a1, temp_b1_rot);
+                            let y1 = vcadd_rot90_f32(temp_a1, temp_b1);
+                            let y2 = vcadd_rot90_f32(temp_a2, temp_b2);
+                            let y3 = vcadd_rot270_f32(temp_a2, temp_b2);
+                            let y4 = vcadd_rot270_f32(temp_a1, temp_b1);
 
                             vst1_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
                             vst1_f32(data.get_unchecked_mut(j + fifth..).as_mut_ptr().cast(), y1);

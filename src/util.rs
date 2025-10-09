@@ -224,7 +224,7 @@ where
     usize: AsPrimitive<T>,
     f64: AsPrimitive<T>,
 {
-    let mut twiddles = Vec::new(); // total twiddles = N-1 for radix-7
+    let mut twiddles = Vec::new();
     twiddles
         .try_reserve_exact(size - 1)
         .map_err(|_| ZaftError::OutOfMemory(size - 1))?;

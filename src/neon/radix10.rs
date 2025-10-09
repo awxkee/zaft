@@ -414,15 +414,36 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
 
                             // Radix-10 butterfly
 
-                            let mid0 = self.bf5.exech(u0, u2, u4, u6, u8, vget_low_f32(rot_sign));
-                            let mid1 = self.bf5.exech(u5, u7, u9, u1, u3, vget_low_f32(rot_sign));
+                            let mid0 = self.bf5.exec(
+                                vcombine_f32(u0, u5),
+                                vcombine_f32(u2, u7),
+                                vcombine_f32(u4, u9),
+                                vcombine_f32(u6, u1),
+                                vcombine_f32(u8, u3),
+                                rot_sign,
+                            );
 
                             // Since this is good-thomas algorithm, we don't need twiddle factors
-                            let (y0, y5) = NeonButterfly::butterfly2h_f32(mid0.0, mid1.0);
-                            let (y6, y1) = NeonButterfly::butterfly2h_f32(mid0.1, mid1.1);
-                            let (y2, y7) = NeonButterfly::butterfly2h_f32(mid0.2, mid1.2);
-                            let (y8, y3) = NeonButterfly::butterfly2h_f32(mid0.3, mid1.3);
-                            let (y4, y9) = NeonButterfly::butterfly2h_f32(mid0.4, mid1.4);
+                            let (y0, y5) = NeonButterfly::butterfly2h_f32(
+                                vget_low_f32(mid0.0),
+                                vget_high_f32(mid0.0),
+                            );
+                            let (y6, y1) = NeonButterfly::butterfly2h_f32(
+                                vget_low_f32(mid0.1),
+                                vget_high_f32(mid0.1),
+                            );
+                            let (y2, y7) = NeonButterfly::butterfly2h_f32(
+                                vget_low_f32(mid0.2),
+                                vget_high_f32(mid0.2),
+                            );
+                            let (y8, y3) = NeonButterfly::butterfly2h_f32(
+                                vget_low_f32(mid0.3),
+                                vget_high_f32(mid0.3),
+                            );
+                            let (y4, y9) = NeonButterfly::butterfly2h_f32(
+                                vget_low_f32(mid0.4),
+                                vget_high_f32(mid0.4),
+                            );
 
                             // Store results
                             vst1_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);

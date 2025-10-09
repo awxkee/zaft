@@ -27,9 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::util::{
-    fcma_complex_f32, fcma_complex_f64, v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32, vqtrnq_f32,
-};
+use crate::neon::util::{fcma_complex_f32, fcma_complex_f64, vqtrnq_f32};
 use crate::radix7::Radix7Twiddles;
 use crate::traits::FftTrigonometry;
 use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_seven, permute_inplace};
@@ -98,9 +96,6 @@ impl NeonFcmaRadix7<f64> {
             ));
         }
         unsafe {
-            static ROT_90: [f64; 2] = [-0.0, 0.0];
-            let rot_sign = vld1q_f64(ROT_90.as_ptr());
-
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
                 permute_inplace(chunk, &self.permutations);
@@ -155,13 +150,13 @@ impl NeonFcmaRadix7<f64> {
                             // Radix-7 butterfly
 
                             let (x1p6, x1m6) = NeonButterfly::butterfly2_f64(u1, u6);
-                            let x1m6 = v_rotate90_f64(x1m6, rot_sign);
+                            let x1m6 = vcaddq_rot90_f64(vdupq_n_f64(0.), x1m6);
                             let y00 = vaddq_f64(u0, x1p6);
                             let (x2p5, x2m5) = NeonButterfly::butterfly2_f64(u2, u5);
-                            let x2m5 = v_rotate90_f64(x2m5, rot_sign);
+                            let x2m5 = vcaddq_rot90_f64(vdupq_n_f64(0.), x2m5);
                             let y00 = vaddq_f64(y00, x2p5);
                             let (x3p4, x3m4) = NeonButterfly::butterfly2_f64(u3, u4);
-                            let x3m4 = v_rotate90_f64(x3m4, rot_sign);
+                            let x3m4 = vcaddq_rot90_f64(vdupq_n_f64(0.), x3m4);
                             let y00 = vaddq_f64(y00, x3p4);
 
                             let m0106a = vfmaq_n_f64(u0, x1p6, self.twiddle1.re);
@@ -261,9 +256,6 @@ impl NeonFcmaRadix7<f32> {
         }
 
         unsafe {
-            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            let rot_sign = vld1q_f32(ROT_90.as_ptr());
-
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
                 permute_inplace(chunk, &self.permutations);
@@ -325,13 +317,13 @@ impl NeonFcmaRadix7<f32> {
                             // Radix-7 butterfly
 
                             let (x1p6, x1m6) = NeonButterfly::butterfly2_f32(u1, u6);
-                            let x1m6 = v_rotate90_f32(x1m6, rot_sign);
+                            let x1m6 = vcaddq_rot90_f32(vdupq_n_f32(0.), x1m6);
                             let y00 = vaddq_f32(u0, x1p6);
                             let (x2p5, x2m5) = NeonButterfly::butterfly2_f32(u2, u5);
-                            let x2m5 = v_rotate90_f32(x2m5, rot_sign);
+                            let x2m5 = vcaddq_rot90_f32(vdupq_n_f32(0.), x2m5);
                             let y00 = vaddq_f32(y00, x2p5);
                             let (x3p4, x3m4) = NeonButterfly::butterfly2_f32(u3, u4);
-                            let x3m4 = v_rotate90_f32(x3m4, rot_sign);
+                            let x3m4 = vcaddq_rot90_f32(vdupq_n_f32(0.), x3m4);
                             let y00 = vaddq_f32(y00, x3p4);
 
                             let m0106a = vfmaq_n_f32(u0, x1p6, self.twiddle1.re);
@@ -439,13 +431,13 @@ impl NeonFcmaRadix7<f32> {
                             // Radix-7 butterfly
 
                             let (x1p6, x1m6) = NeonButterfly::butterfly2h_f32(u1, u6);
-                            let x1m6 = vh_rotate90_f32(x1m6, vget_low_f32(rot_sign));
+                            let x1m6 = vcadd_rot90_f32(vdup_n_f32(0.), x1m6);
                             let y00 = vadd_f32(u0, x1p6);
                             let (x2p5, x2m5) = NeonButterfly::butterfly2h_f32(u2, u5);
-                            let x2m5 = vh_rotate90_f32(x2m5, vget_low_f32(rot_sign));
+                            let x2m5 = vcadd_rot90_f32(vdup_n_f32(0.), x2m5);
                             let y00 = vadd_f32(y00, x2p5);
                             let (x3p4, x3m4) = NeonButterfly::butterfly2h_f32(u3, u4);
-                            let x3m4 = vh_rotate90_f32(x3m4, vget_low_f32(rot_sign));
+                            let x3m4 = vcadd_rot90_f32(vdup_n_f32(0.), x3m4);
                             let y00 = vadd_f32(y00, x3p4);
 
                             let m0106a = vfma_n_f32(u0, x1p6, self.twiddle1.re);

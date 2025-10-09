@@ -82,7 +82,7 @@ where
 
         // compute the multiplicative inverse of primative_root mod len and vice versa.
         // i64::extended_gcd will compute both the inverse of left mod right, and the inverse of right mod left, but we're only goingto use one of them
-        // the primtive root inverse might be negative, if o make it positive by wrapping
+        // the primitive root inverse might be negative, if o make it positive by wrapping
         let gcd_data = i64::extended_gcd(&(primitive_root as i64), &(size as i64));
         let primitive_root_inverse = if gcd_data.x >= 0 {
             gcd_data.x

@@ -86,13 +86,6 @@ impl NeonFcmaRadix4<f64> {
             ));
         }
 
-        let v_i_multiplier = unsafe {
-            vreinterpretq_u64_f64(match self.direction {
-                FftDirection::Inverse => vld1q_f64([-0.0, 0.0].as_ptr()),
-                FftDirection::Forward => vld1q_f64([0.0, -0.0].as_ptr()),
-            })
-        };
-
         let mut scratch = vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
@@ -112,55 +105,111 @@ impl NeonFcmaRadix4<f64> {
                     len *= 4;
                     let quarter = len / 4;
 
-                    for data in chunk.chunks_exact_mut(len) {
-                        for j in 0..quarter {
-                            let a = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
-                            let b = fcma_complex_f64(
-                                vld1q_f64(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                                vld1q_f64(m_twiddles.get_unchecked(3 * j..).as_ptr().cast()),
-                            );
-                            let c = fcma_complex_f64(
-                                vld1q_f64(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
-                                vld1q_f64(m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast()),
-                            );
-                            let d = fcma_complex_f64(
-                                vld1q_f64(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
-                                vld1q_f64(m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast()),
-                            );
+                    if self.direction == FftDirection::Inverse {
+                        for data in chunk.chunks_exact_mut(len) {
+                            for j in 0..quarter {
+                                let a = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
+                                let b = fcma_complex_f64(
+                                    vld1q_f64(data.get_unchecked(j + quarter..).as_ptr().cast()),
+                                    vld1q_f64(m_twiddles.get_unchecked(3 * j..).as_ptr().cast()),
+                                );
+                                let c = fcma_complex_f64(
+                                    vld1q_f64(
+                                        data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
+                                    ),
+                                    vld1q_f64(
+                                        m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
+                                    ),
+                                );
+                                let d = fcma_complex_f64(
+                                    vld1q_f64(
+                                        data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
+                                    ),
+                                    vld1q_f64(
+                                        m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
+                                    ),
+                                );
 
-                            // radix-4 butterfly
-                            let t0 = vaddq_f64(a, c);
-                            let t1 = vsubq_f64(a, c);
-                            let t2 = vaddq_f64(b, d);
-                            let mut t3 = vsubq_f64(b, d);
-                            t3 = vreinterpretq_f64_u64(veorq_u64(
-                                vreinterpretq_u64_f64(vcombine_f64(
-                                    vget_high_f64(t3),
-                                    vget_low_f64(t3),
-                                )),
-                                v_i_multiplier,
-                            ));
+                                // radix-4 butterfly
+                                let t0 = vaddq_f64(a, c);
+                                let t1 = vsubq_f64(a, c);
+                                let t2 = vaddq_f64(b, d);
+                                let t3 = vsubq_f64(b, d);
 
-                            vst1q_f64(
-                                data.get_unchecked_mut(j..).as_mut_ptr().cast(),
-                                vaddq_f64(t0, t2),
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + quarter..).as_mut_ptr().cast(),
-                                vaddq_f64(t1, t3),
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 2 * quarter..)
-                                    .as_mut_ptr()
-                                    .cast(),
-                                vsubq_f64(t0, t2),
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 3 * quarter..)
-                                    .as_mut_ptr()
-                                    .cast(),
-                                vsubq_f64(t1, t3),
-                            );
+                                vst1q_f64(
+                                    data.get_unchecked_mut(j..).as_mut_ptr().cast(),
+                                    vaddq_f64(t0, t2),
+                                );
+                                vst1q_f64(
+                                    data.get_unchecked_mut(j + quarter..).as_mut_ptr().cast(),
+                                    vcaddq_rot90_f64(t1, t3),
+                                );
+                                vst1q_f64(
+                                    data.get_unchecked_mut(j + 2 * quarter..)
+                                        .as_mut_ptr()
+                                        .cast(),
+                                    vsubq_f64(t0, t2),
+                                );
+                                vst1q_f64(
+                                    data.get_unchecked_mut(j + 3 * quarter..)
+                                        .as_mut_ptr()
+                                        .cast(),
+                                    vcaddq_rot270_f64(t1, t3),
+                                );
+                            }
+                        }
+                    } else {
+                        for data in chunk.chunks_exact_mut(len) {
+                            for j in 0..quarter {
+                                let a = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
+                                let b = fcma_complex_f64(
+                                    vld1q_f64(data.get_unchecked(j + quarter..).as_ptr().cast()),
+                                    vld1q_f64(m_twiddles.get_unchecked(3 * j..).as_ptr().cast()),
+                                );
+                                let c = fcma_complex_f64(
+                                    vld1q_f64(
+                                        data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
+                                    ),
+                                    vld1q_f64(
+                                        m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
+                                    ),
+                                );
+                                let d = fcma_complex_f64(
+                                    vld1q_f64(
+                                        data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
+                                    ),
+                                    vld1q_f64(
+                                        m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
+                                    ),
+                                );
+
+                                // radix-4 butterfly
+                                let t0 = vaddq_f64(a, c);
+                                let t1 = vsubq_f64(a, c);
+                                let t2 = vaddq_f64(b, d);
+                                let t3 = vsubq_f64(b, d);
+
+                                vst1q_f64(
+                                    data.get_unchecked_mut(j..).as_mut_ptr().cast(),
+                                    vaddq_f64(t0, t2),
+                                );
+                                vst1q_f64(
+                                    data.get_unchecked_mut(j + quarter..).as_mut_ptr().cast(),
+                                    vcaddq_rot270_f64(t1, t3),
+                                );
+                                vst1q_f64(
+                                    data.get_unchecked_mut(j + 2 * quarter..)
+                                        .as_mut_ptr()
+                                        .cast(),
+                                    vsubq_f64(t0, t2),
+                                );
+                                vst1q_f64(
+                                    data.get_unchecked_mut(j + 3 * quarter..)
+                                        .as_mut_ptr()
+                                        .cast(),
+                                    vcaddq_rot90_f64(t1, t3),
+                                );
+                            }
                         }
                     }
 

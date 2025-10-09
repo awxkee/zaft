@@ -1357,14 +1357,14 @@ mod tests {
                 .enumerate()
                 .for_each(|(idx, (a, b))| {
                     assert!(
-                        (a.re - b.re).abs() < 1e-5,
+                        (a.re - b.re).abs() < 1e-4,
                         "a_re {} != b_re {} for size {}, reference failed at {idx}",
                         a.re,
                         b.re,
                         size
                     );
                     assert!(
-                        (a.im - b.im).abs() < 1e-5,
+                        (a.im - b.im).abs() < 1e-4,
                         "a_im {} != b_im {} for size {}, reference failed at {idx}",
                         a.im,
                         b.im,

@@ -35,12 +35,12 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 
-pub(crate) struct NeonButterfly10<T> {
+pub(crate) struct NeonFcmaButterfly10<T> {
     direction: FftDirection,
     bf5: NeonFastButterfly5<T>,
 }
 
-impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> NeonButterfly10<T>
+impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> NeonFcmaButterfly10<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -52,8 +52,24 @@ where
     }
 }
 
-impl FftExecutor<f64> for NeonButterfly10<f64> {
+impl FftExecutor<f64> for NeonFcmaButterfly10<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_f64(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    #[inline]
+    fn length(&self) -> usize {
+        10
+    }
+}
+
+impl NeonFcmaButterfly10<f64> {
+    #[target_feature(enable = "fcma")]
+    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if in_place.len() % 10 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -62,9 +78,6 @@ impl FftExecutor<f64> for NeonButterfly10<f64> {
         }
 
         unsafe {
-            static ROT_90: [f64; 2] = [-0.0, 0.0];
-            let rot_sign = vld1q_f64(ROT_90.as_ptr());
-
             for chunk in in_place.chunks_exact_mut(10) {
                 let u0 = vld1q_f64(chunk.as_ptr().cast());
                 let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
@@ -77,8 +90,8 @@ impl FftExecutor<f64> for NeonButterfly10<f64> {
                 let u8 = vld1q_f64(chunk.get_unchecked(8..).as_ptr().cast());
                 let u9 = vld1q_f64(chunk.get_unchecked(9..).as_ptr().cast());
 
-                let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
-                let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
+                let mid0 = self.bf5.exec_fcma(u0, u2, u4, u6, u8);
+                let mid1 = self.bf5.exec_fcma(u5, u7, u9, u1, u3);
 
                 // Since this is good-thomas algorithm, we don't need twiddle factors
                 let (y0, y1) = NeonButterfly::butterfly2_f64(mid0.0, mid1.0);
@@ -104,6 +117,12 @@ impl FftExecutor<f64> for NeonButterfly10<f64> {
         }
         Ok(())
     }
+}
+
+impl FftExecutor<f32> for NeonFcmaButterfly10<f32> {
+    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_f32(in_place) }
+    }
 
     fn direction(&self) -> FftDirection {
         self.direction
@@ -115,8 +134,9 @@ impl FftExecutor<f64> for NeonButterfly10<f64> {
     }
 }
 
-impl FftExecutor<f32> for NeonButterfly10<f32> {
-    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+impl NeonFcmaButterfly10<f32> {
+    #[target_feature(enable = "fcma")]
+    unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % 10 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -231,15 +251,6 @@ impl FftExecutor<f32> for NeonButterfly10<f32> {
         }
         Ok(())
     }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        10
-    }
 }
 
 #[cfg(test)]
@@ -265,8 +276,8 @@ mod tests {
             let radix5_reference = Butterfly10::new(FftDirection::Forward);
             let radix5_inv_reference = Butterfly10::new(FftDirection::Inverse);
 
-            let radix_forward = NeonButterfly10::new(FftDirection::Forward);
-            let radix_inverse = NeonButterfly10::new(FftDirection::Inverse);
+            let radix_forward = NeonFcmaButterfly10::new(FftDirection::Forward);
+            let radix_inverse = NeonFcmaButterfly10::new(FftDirection::Inverse);
             radix_forward.execute(&mut input).unwrap();
             radix5_reference.execute(&mut z_ref).unwrap();
 
@@ -344,8 +355,8 @@ mod tests {
 
             let radix10_reference = Butterfly10::new(FftDirection::Forward);
 
-            let radix_forward = NeonButterfly10::new(FftDirection::Forward);
-            let radix_inverse = NeonButterfly10::new(FftDirection::Inverse);
+            let radix_forward = NeonFcmaButterfly10::new(FftDirection::Forward);
+            let radix_inverse = NeonFcmaButterfly10::new(FftDirection::Inverse);
             radix_forward.execute(&mut input).unwrap();
 
             radix10_reference.execute(&mut z_ref).unwrap();
