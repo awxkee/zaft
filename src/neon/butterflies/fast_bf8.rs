@@ -90,6 +90,90 @@ impl NeonFastButterfly8<f64> {
             (y0, y2, y4, y6, y1, y3, y5, y7)
         }
     }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    #[cfg(feature = "fcma")]
+    pub(crate) fn forward(
+        &self,
+        u0: float64x2_t,
+        u1: float64x2_t,
+        u2: float64x2_t,
+        u3: float64x2_t,
+        u4: float64x2_t,
+        u5: float64x2_t,
+        u6: float64x2_t,
+        u7: float64x2_t,
+    ) -> (
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+    ) {
+        unsafe {
+            let (u0, u2, u4, u6) = NeonButterfly::bf4_f64_forward(u0, u2, u4, u6);
+            let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_f64_forward(u1, u3, u5, u7);
+
+            u3 = vmulq_n_f64(vcaddq_rot270_f64(u3, u3), self.root2);
+            u5 = vcaddq_rot270_f64(vdupq_n_f64(0.), u5);
+            u7 = vmulq_n_f64(
+                vsubq_f64(vcaddq_rot270_f64(vdupq_n_f64(0.), u7), u7),
+                self.root2,
+            );
+
+            let (y0, y1) = NeonButterfly::butterfly2_f64(u0, u1);
+            let (y2, y3) = NeonButterfly::butterfly2_f64(u2, u3);
+            let (y4, y5) = NeonButterfly::butterfly2_f64(u4, u5);
+            let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
+            (y0, y2, y4, y6, y1, y3, y5, y7)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    #[cfg(feature = "fcma")]
+    pub(crate) fn backward(
+        &self,
+        u0: float64x2_t,
+        u1: float64x2_t,
+        u2: float64x2_t,
+        u3: float64x2_t,
+        u4: float64x2_t,
+        u5: float64x2_t,
+        u6: float64x2_t,
+        u7: float64x2_t,
+    ) -> (
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+        float64x2_t,
+    ) {
+        unsafe {
+            let (u0, u2, u4, u6) = NeonButterfly::bf4_f64_backward(u0, u2, u4, u6);
+            let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_f64_backward(u1, u3, u5, u7);
+
+            u3 = vmulq_n_f64(vcaddq_rot90_f64(u3, u3), self.root2);
+            u5 = vcaddq_rot90_f64(vdupq_n_f64(0.), u5);
+            u7 = vmulq_n_f64(
+                vsubq_f64(vcaddq_rot90_f64(vdupq_n_f64(0.), u7), u7),
+                self.root2,
+            );
+
+            let (y0, y1) = NeonButterfly::butterfly2_f64(u0, u1);
+            let (y2, y3) = NeonButterfly::butterfly2_f64(u2, u3);
+            let (y4, y5) = NeonButterfly::butterfly2_f64(u4, u5);
+            let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
+            (y0, y2, y4, y6, y1, y3, y5, y7)
+        }
+    }
 }
 
 impl NeonFastButterfly8<f32> {
@@ -165,6 +249,174 @@ impl NeonFastButterfly8<f32> {
             let (y2, y3) = NeonButterfly::butterfly2_f32(u2, u3);
             let (y4, y5) = NeonButterfly::butterfly2_f32(u4, u5);
             let (y6, y7) = NeonButterfly::butterfly2_f32(u6, u7);
+            (y0, y2, y4, y6, y1, y3, y5, y7)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    #[cfg(feature = "fcma")]
+    pub(crate) fn forward(
+        &self,
+        u0: float32x4_t,
+        u1: float32x4_t,
+        u2: float32x4_t,
+        u3: float32x4_t,
+        u4: float32x4_t,
+        u5: float32x4_t,
+        u6: float32x4_t,
+        u7: float32x4_t,
+    ) -> (
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+    ) {
+        unsafe {
+            let (u0, u2, u4, u6) = NeonButterfly::bf4_forward_f32(u0, u2, u4, u6);
+            let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_forward_f32(u1, u3, u5, u7);
+
+            u3 = vmulq_n_f32(vcaddq_rot270_f32(u3, u3), self.root2);
+            u5 = vcaddq_rot270_f32(vdupq_n_f32(0.), u5);
+            u7 = vmulq_n_f32(
+                vsubq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), u7), u7),
+                self.root2,
+            );
+
+            let (y0, y1) = NeonButterfly::butterfly2_f32(u0, u1);
+            let (y2, y3) = NeonButterfly::butterfly2_f32(u2, u3);
+            let (y4, y5) = NeonButterfly::butterfly2_f32(u4, u5);
+            let (y6, y7) = NeonButterfly::butterfly2_f32(u6, u7);
+            (y0, y2, y4, y6, y1, y3, y5, y7)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    #[cfg(feature = "fcma")]
+    pub(crate) fn backward(
+        &self,
+        u0: float32x4_t,
+        u1: float32x4_t,
+        u2: float32x4_t,
+        u3: float32x4_t,
+        u4: float32x4_t,
+        u5: float32x4_t,
+        u6: float32x4_t,
+        u7: float32x4_t,
+    ) -> (
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+        float32x4_t,
+    ) {
+        unsafe {
+            let (u0, u2, u4, u6) = NeonButterfly::bf4_backward_f32(u0, u2, u4, u6);
+            let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_backward_f32(u1, u3, u5, u7);
+
+            u3 = vmulq_n_f32(vcaddq_rot90_f32(u3, u3), self.root2);
+            u5 = vcaddq_rot90_f32(vdupq_n_f32(0.), u5);
+            u7 = vmulq_n_f32(
+                vsubq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), u7), u7),
+                self.root2,
+            );
+
+            let (y0, y1) = NeonButterfly::butterfly2_f32(u0, u1);
+            let (y2, y3) = NeonButterfly::butterfly2_f32(u2, u3);
+            let (y4, y5) = NeonButterfly::butterfly2_f32(u4, u5);
+            let (y6, y7) = NeonButterfly::butterfly2_f32(u6, u7);
+            (y0, y2, y4, y6, y1, y3, y5, y7)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    #[cfg(feature = "fcma")]
+    pub(crate) unsafe fn forwardh(
+        &self,
+        u0: float32x2_t,
+        u1: float32x2_t,
+        u2: float32x2_t,
+        u3: float32x2_t,
+        u4: float32x2_t,
+        u5: float32x2_t,
+        u6: float32x2_t,
+        u7: float32x2_t,
+    ) -> (
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+    ) {
+        unsafe {
+            let (u0, u2, u4, u6) = NeonButterfly::bf4h_forward_f32(u0, u2, u4, u6);
+            let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4h_forward_f32(u1, u3, u5, u7);
+
+            u3 = vmul_n_f32(vcadd_rot270_f32(u3, u3), self.root2);
+            u5 = vcadd_rot270_f32(vdup_n_f32(0.), u5);
+            u7 = vmul_n_f32(
+                vsub_f32(vcadd_rot270_f32(vdup_n_f32(0.), u7), u7),
+                self.root2,
+            );
+
+            let (y0, y1) = NeonButterfly::butterfly2h_f32(u0, u1);
+            let (y2, y3) = NeonButterfly::butterfly2h_f32(u2, u3);
+            let (y4, y5) = NeonButterfly::butterfly2h_f32(u4, u5);
+            let (y6, y7) = NeonButterfly::butterfly2h_f32(u6, u7);
+            (y0, y2, y4, y6, y1, y3, y5, y7)
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    #[cfg(feature = "fcma")]
+    pub(crate) unsafe fn backwardh(
+        &self,
+        u0: float32x2_t,
+        u1: float32x2_t,
+        u2: float32x2_t,
+        u3: float32x2_t,
+        u4: float32x2_t,
+        u5: float32x2_t,
+        u6: float32x2_t,
+        u7: float32x2_t,
+    ) -> (
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+        float32x2_t,
+    ) {
+        unsafe {
+            let (u0, u2, u4, u6) = NeonButterfly::bf4h_backward_f32(u0, u2, u4, u6);
+            let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4h_backward_f32(u1, u3, u5, u7);
+
+            u3 = vmul_n_f32(vcadd_rot90_f32(u3, u3), self.root2);
+            u5 = vcadd_rot90_f32(vdup_n_f32(0.), u5);
+            u7 = vmul_n_f32(
+                vsub_f32(vcadd_rot90_f32(vdup_n_f32(0.), u7), u7),
+                self.root2,
+            );
+
+            let (y0, y1) = NeonButterfly::butterfly2h_f32(u0, u1);
+            let (y2, y3) = NeonButterfly::butterfly2h_f32(u2, u3);
+            let (y4, y5) = NeonButterfly::butterfly2h_f32(u4, u5);
+            let (y6, y7) = NeonButterfly::butterfly2h_f32(u6, u7);
             (y0, y2, y4, y6, y1, y3, y5, y7)
         }
     }

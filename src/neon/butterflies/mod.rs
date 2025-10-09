@@ -61,6 +61,8 @@ mod bf7;
 #[cfg(feature = "fcma")]
 mod bf7_fcma;
 mod bf8;
+#[cfg(feature = "fcma")]
+mod bf8_fcma;
 mod bf9;
 #[cfg(feature = "fcma")]
 mod bf9_fcma;
@@ -80,6 +82,8 @@ pub(crate) use bf7::NeonButterfly7;
 #[cfg(feature = "fcma")]
 pub(crate) use bf7_fcma::NeonFcmaButterfly7;
 pub(crate) use bf8::NeonButterfly8;
+#[cfg(feature = "fcma")]
+pub(crate) use bf8_fcma::NeonFcmaButterfly8;
 pub(crate) use bf9::NeonButterfly9;
 #[cfg(feature = "fcma")]
 pub(crate) use bf9_fcma::NeonFcmaButterfly9;

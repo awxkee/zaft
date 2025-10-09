@@ -148,6 +148,48 @@ impl NeonButterfly {
         }
     }
 
+    #[cfg(feature = "fcma")]
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) unsafe fn bf4_f64_forward(
+        a: float64x2_t,
+        b: float64x2_t,
+        c: float64x2_t,
+        d: float64x2_t,
+    ) -> (float64x2_t, float64x2_t, float64x2_t, float64x2_t) {
+        let t0 = vaddq_f64(a, c);
+        let t1 = vsubq_f64(a, c);
+        let t2 = vaddq_f64(b, d);
+        let t3 = vsubq_f64(b, d);
+        (
+            vaddq_f64(t0, t2),
+            vcaddq_rot270_f64(t1, t3),
+            vsubq_f64(t0, t2),
+            vcaddq_rot90_f64(t1, t3),
+        )
+    }
+
+    #[cfg(feature = "fcma")]
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) unsafe fn bf4_f64_backward(
+        a: float64x2_t,
+        b: float64x2_t,
+        c: float64x2_t,
+        d: float64x2_t,
+    ) -> (float64x2_t, float64x2_t, float64x2_t, float64x2_t) {
+        let t0 = vaddq_f64(a, c);
+        let t1 = vsubq_f64(a, c);
+        let t2 = vaddq_f64(b, d);
+        let t3 = vsubq_f64(b, d);
+        (
+            vaddq_f64(t0, t2),
+            vcaddq_rot90_f64(t1, t3),
+            vsubq_f64(t0, t2),
+            vcaddq_rot270_f64(t1, t3),
+        )
+    }
+
     #[inline]
     pub(crate) fn butterfly4h_f32(
         a: float32x2_t,
@@ -174,6 +216,48 @@ impl NeonButterfly {
         }
     }
 
+    #[cfg(feature = "fcma")]
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) unsafe fn bf4h_forward_f32(
+        a: float32x2_t,
+        b: float32x2_t,
+        c: float32x2_t,
+        d: float32x2_t,
+    ) -> (float32x2_t, float32x2_t, float32x2_t, float32x2_t) {
+        let t0 = vadd_f32(a, c);
+        let t1 = vsub_f32(a, c);
+        let t2 = vadd_f32(b, d);
+        let t3 = vsub_f32(b, d);
+        (
+            vadd_f32(t0, t2),
+            vcadd_rot270_f32(t1, t3),
+            vsub_f32(t0, t2),
+            vcadd_rot90_f32(t1, t3),
+        )
+    }
+
+    #[cfg(feature = "fcma")]
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) unsafe fn bf4h_backward_f32(
+        a: float32x2_t,
+        b: float32x2_t,
+        c: float32x2_t,
+        d: float32x2_t,
+    ) -> (float32x2_t, float32x2_t, float32x2_t, float32x2_t) {
+        let t0 = vadd_f32(a, c);
+        let t1 = vsub_f32(a, c);
+        let t2 = vadd_f32(b, d);
+        let t3 = vsub_f32(b, d);
+        (
+            vadd_f32(t0, t2),
+            vcadd_rot90_f32(t1, t3),
+            vsub_f32(t0, t2),
+            vcadd_rot270_f32(t1, t3),
+        )
+    }
+
     #[inline]
     pub(crate) fn butterfly4_f32(
         a: float32x4_t,
@@ -198,6 +282,48 @@ impl NeonButterfly {
                 vsubq_f32(t1, t3),
             )
         }
+    }
+
+    #[cfg(feature = "fcma")]
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) unsafe fn bf4_forward_f32(
+        a: float32x4_t,
+        b: float32x4_t,
+        c: float32x4_t,
+        d: float32x4_t,
+    ) -> (float32x4_t, float32x4_t, float32x4_t, float32x4_t) {
+        let t0 = vaddq_f32(a, c);
+        let t1 = vsubq_f32(a, c);
+        let t2 = vaddq_f32(b, d);
+        let t3 = vsubq_f32(b, d);
+        (
+            vaddq_f32(t0, t2),
+            vcaddq_rot270_f32(t1, t3),
+            vsubq_f32(t0, t2),
+            vcaddq_rot90_f32(t1, t3),
+        )
+    }
+
+    #[cfg(feature = "fcma")]
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) unsafe fn bf4_backward_f32(
+        a: float32x4_t,
+        b: float32x4_t,
+        c: float32x4_t,
+        d: float32x4_t,
+    ) -> (float32x4_t, float32x4_t, float32x4_t, float32x4_t) {
+        let t0 = vaddq_f32(a, c);
+        let t1 = vsubq_f32(a, c);
+        let t2 = vaddq_f32(b, d);
+        let t3 = vsubq_f32(b, d);
+        (
+            vaddq_f32(t0, t2),
+            vcaddq_rot90_f32(t1, t3),
+            vsubq_f32(t0, t2),
+            vcaddq_rot270_f32(t1, t3),
+        )
     }
 
     #[inline]
