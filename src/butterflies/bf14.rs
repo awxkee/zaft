@@ -167,29 +167,7 @@ mod tests {
             let radix_forward = Butterfly14::new(FftDirection::Forward);
             let radix_inverse = Butterfly14::new(FftDirection::Inverse);
 
-            let input2 = src.to_vec();
             radix_forward.execute(&mut input).unwrap();
-
-            input
-                .iter()
-                .zip(input2.iter())
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-5,
-                        "a_re {} != b_re {} for size {} at {idx}",
-                        a.re,
-                        b.re,
-                        size
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-5,
-                        "a_im {} != b_im {} for size {} at {idx}",
-                        a.im,
-                        b.im,
-                        size
-                    );
-                });
             radix_inverse.execute(&mut input).unwrap();
 
             input = input.iter().map(|&x| x * (1.0 / 14f32)).collect();

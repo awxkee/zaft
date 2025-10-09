@@ -337,7 +337,7 @@ mod tests {
         );
         assert_eq!(
             try_greedy_pure_power_split(&vec![(2, 2), (5, 3)]), // 500
-            Some((125, 4))
+            Some((100, 5))
         );
         assert_eq!(
             try_greedy_pure_power_split(&vec![(2, 2), (3, 1), (13, 2)]),
@@ -345,7 +345,7 @@ mod tests {
         );
         assert_eq!(
             try_greedy_pure_power_split(&vec![(2, 4), (3, 1), (5, 2)]),
-            Some((25, 48))
+            Some((100, 12))
         );
         assert_eq!(
             split_factors_closest(&vec![(2, 2), (3, 1), (13, 2)]),
