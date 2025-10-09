@@ -40,7 +40,7 @@ pub(crate) trait R2CTwiddlesHandler<T> {
 }
 
 #[allow(unused)]
-pub(crate) struct R2CHandler<T> {
+struct R2CHandler<T> {
     phantom_data: PhantomData<T>,
 }
 

@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod butterflies;
+mod c2r;
 mod f32x2_2x2;
 mod f32x2_4x4;
 mod r2c;
@@ -68,6 +69,7 @@ pub(crate) use butterflies::{
 };
 #[cfg(feature = "fcma")]
 pub(crate) use butterflies::{NeonFcmaButterfly9, NeonFcmaButterfly16};
+pub(crate) use c2r::C2RNeonTwiddles;
 pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
 pub(crate) use r2c::R2CNeonTwiddles;

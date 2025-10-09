@@ -35,7 +35,6 @@
 mod avx;
 mod bluestein;
 mod butterflies;
-mod c2r;
 mod complex_fma;
 mod dft;
 mod err;
@@ -49,7 +48,6 @@ mod mla;
 mod neon;
 mod prime_factors;
 mod r2c;
-mod r2c_twiddles;
 mod raders;
 mod radix10;
 mod radix11;
@@ -68,19 +66,19 @@ mod util;
 pub use err::ZaftError;
 use std::fmt::{Display, Formatter};
 
-use crate::c2r::{C2RFftEvenInterceptor, C2RFftOddInterceptor};
 use crate::factory::AlgorithmFactory;
 use crate::prime_factors::{
     PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
 };
-use crate::r2c::{R2CFftEvenInterceptor, R2CFftOddInterceptor};
+use crate::r2c::{
+    C2RFftEvenInterceptor, C2RFftOddInterceptor, R2CFftEvenInterceptor, R2CFftOddInterceptor,
+};
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-pub use c2r::C2RFftExecutor;
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
-pub use r2c::R2CFftExecutor;
+pub use r2c::{C2RFftExecutor, R2CFftExecutor};
 
 pub trait FftExecutor<T> {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError>;

@@ -4,11 +4,21 @@ workspace = { members = ["app"], exclude = ["fuzz"] }
 name = "zaft"
 version = "0.1.0"
 edition = "2024"
+description = "Fast fourier transform"
+readme = "README.md"
+keywords = ["scale", "resize", "image-resize"]
+license = "BSD-3-Clause OR Apache-2.0"
+authors = ["Radzivon Bartoshyk"]
+documentation = "https://github.com/awxkee/zaft"
+categories = ["algorithms", "science"]
+homepage = "https://github.com/awxkee/zaft"
+repository = "https://github.com/awxkee/zaft"
+exclude = ["*.jpg", "/assets", "*.png", "*.sh", "/assets/*"]
 
 [dependencies]
 num-complex = "0.4"
 num-traits = "0.2"
-pxfm = "^0.1.3"
+pxfm = "^0.1.24"
 num-integer = "0.1.46"
 strength_reduce = "0.2.4"
 

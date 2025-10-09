@@ -27,6 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
+use crate::r2c::R2CTwiddlesHandler;
+use crate::r2c::c2r_twiddles::C2RTwiddlesFactory;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -45,10 +47,20 @@ pub(crate) struct C2RFftEvenInterceptor<T> {
     twiddles: Vec<Complex<T>>,
     length: usize,
     complex_length: usize,
+    twiddles_handler: Box<dyn R2CTwiddlesHandler<T> + Send + Sync>,
 }
 
-impl<T: Copy + Clone + FftTrigonometry + Mul<T, Output = T> + 'static + Zero + Num + Float>
-    C2RFftEvenInterceptor<T>
+impl<
+    T: Copy
+        + Clone
+        + FftTrigonometry
+        + Mul<T, Output = T>
+        + 'static
+        + Zero
+        + Num
+        + Float
+        + C2RTwiddlesFactory<T>,
+> C2RFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -82,6 +94,7 @@ where
             twiddles,
             length,
             complex_length: length / 2 + 1,
+            twiddles_handler: T::make_c2r_twiddles_handler(),
         })
     }
 }
@@ -141,37 +154,8 @@ where
                 _ => return Ok(()),
             };
 
-            for ((twiddle, fft_input), fft_input_rev) in self
-                .twiddles
-                .iter()
-                .zip(input_left.iter_mut())
-                .zip(input_right.iter_mut().rev())
-            {
-                let sum = *fft_input + *fft_input_rev;
-                let diff = *fft_input - *fft_input_rev;
-
-                // Apply twiddle factors. Theoretically we'd have to load 2 separate twiddle factors here, one for the beginning
-                // and one for the end. But the twiddle factor for the end is just the twiddle for the beginning, with the
-                // real part negated. Since it's the same twiddle, we can factor out a ton of math ops and cut the number of
-                // multiplications in half.
-                let twiddled_re_sum = sum * twiddle.re;
-                let twiddled_im_sum = sum * twiddle.im;
-                let twiddled_re_diff = diff * twiddle.re;
-                let twiddled_im_diff = diff * twiddle.im;
-
-                let output_twiddled_real = twiddled_re_sum.im + twiddled_im_diff.re;
-                let output_twiddled_im = twiddled_im_sum.im - twiddled_re_diff.re;
-
-                // We finally have all the data we need to write our preprocessed data back where we got it from.
-                *fft_input = Complex {
-                    re: sum.re - output_twiddled_real,
-                    im: diff.im - output_twiddled_im,
-                };
-                *fft_input_rev = Complex {
-                    re: sum.re + output_twiddled_real,
-                    im: -output_twiddled_im - diff.im,
-                }
-            }
+            self.twiddles_handler
+                .handle(&self.twiddles, input_left, input_right);
 
             // If the output len is odd, the loop above can't preprocess the centermost element, so handle that separately
             if scratch.len() % 2 == 1 {

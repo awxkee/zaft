@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::r2c_twiddles::{R2CTwiddlesFactory, R2CTwiddlesHandler};
+use crate::r2c::r2c_twiddles::{R2CTwiddlesFactory, R2CTwiddlesHandler};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
