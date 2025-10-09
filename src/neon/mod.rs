@@ -28,6 +28,8 @@
  */
 mod butterflies;
 mod c2r;
+#[cfg(feature = "fcma")]
+mod c2r_fcma;
 mod f32x2_2x2;
 mod f32x2_4x4;
 mod r2c;
@@ -74,6 +76,8 @@ pub(crate) use butterflies::{
     NeonFcmaButterfly14, NeonFcmaButterfly15, NeonFcmaButterfly16, NeonFcmaButterfly17,
 };
 pub(crate) use c2r::C2RNeonTwiddles;
+#[cfg(feature = "fcma")]
+pub(crate) use c2r_fcma::C2RNeonFcmaTwiddles;
 pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
 pub(crate) use r2c::R2CNeonTwiddles;

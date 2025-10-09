@@ -55,7 +55,7 @@ fn main() {
     let mut real_data_clone = real_data.to_vec();
     let real_data_ref = real_data.clone();
 
-    // println!("real data {:?}", real_data);
+    println!("real data {:?}", real_data);
 
     let forward_r2c = Zaft::make_r2c_fft_f32(data.len()).unwrap();
     let inverse_r2c = Zaft::make_c2r_fft_f32(data.len()).unwrap();
@@ -70,7 +70,7 @@ fn main() {
         .map(|&x| x * (1.0 / real_data.len() as f32))
         .collect();
 
-    // println!("c2r {:?}", real_data);
+    println!("c2r {:?}", real_data);
 
     let r_r2c = RealFftPlanner::new().plan_fft_forward(real_data.len());
     let r_c2r = RealFftPlanner::new().plan_fft_inverse(real_data.len());
