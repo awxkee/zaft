@@ -138,29 +138,29 @@ impl FftExecutor<f32> for NeonButterfly14<f32> {
             let rot_sign = vld1q_f32(ROT_90.as_ptr());
 
             for chunk in in_place.chunks_exact_mut(28) {
-                let u0u7 = vld1q_f32(chunk.as_mut_ptr().cast());
-                let u8u1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
-                let u2u9 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
-                let u10u3 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
-                let u4u11 = vld1q_f32(chunk.get_unchecked(8..).as_ptr().cast());
-                let u12u5 = vld1q_f32(chunk.get_unchecked(10..).as_ptr().cast());
-                let u6u13 = vld1q_f32(chunk.get_unchecked(12..).as_ptr().cast());
+                let u0u3 = vld1q_f32(chunk.as_mut_ptr().cast());
+                let u4u7 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
+                let u8u11 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
+                let u12u1 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
+                let u2u5 = vld1q_f32(chunk.get_unchecked(8..).as_ptr().cast());
+                let u6u9 = vld1q_f32(chunk.get_unchecked(10..).as_ptr().cast());
+                let u10u13 = vld1q_f32(chunk.get_unchecked(12..).as_ptr().cast());
 
-                let u0u7_2 = vld1q_f32(chunk.get_unchecked(14..).as_ptr().cast());
-                let u8u1_2 = vld1q_f32(chunk.get_unchecked(16..).as_ptr().cast());
-                let u2u9_2 = vld1q_f32(chunk.get_unchecked(18..).as_ptr().cast());
-                let u10u3_2 = vld1q_f32(chunk.get_unchecked(20..).as_ptr().cast());
-                let u4u11_2 = vld1q_f32(chunk.get_unchecked(22..).as_ptr().cast());
-                let u12u5_2 = vld1q_f32(chunk.get_unchecked(24..).as_ptr().cast());
-                let u6u13_2 = vld1q_f32(chunk.get_unchecked(26..).as_ptr().cast());
+                let u0u3_2 = vld1q_f32(chunk.get_unchecked(14..).as_ptr().cast());
+                let u4u7_2 = vld1q_f32(chunk.get_unchecked(16..).as_ptr().cast());
+                let u8u11_2 = vld1q_f32(chunk.get_unchecked(18..).as_ptr().cast());
+                let u12u1_2 = vld1q_f32(chunk.get_unchecked(20..).as_ptr().cast());
+                let u2u5_2 = vld1q_f32(chunk.get_unchecked(22..).as_ptr().cast());
+                let u6u9_2 = vld1q_f32(chunk.get_unchecked(24..).as_ptr().cast());
+                let u10u13_2 = vld1q_f32(chunk.get_unchecked(26..).as_ptr().cast());
 
-                let (u0, u7) = vqtrnq_f32(u0u7, u0u7_2);
-                let (u8, u1) = vqtrnq_f32(u8u1, u8u1_2);
-                let (u2, u9) = vqtrnq_f32(u2u9, u2u9_2);
-                let (u10, u3) = vqtrnq_f32(u10u3, u10u3_2);
-                let (u4, u11) = vqtrnq_f32(u4u11, u4u11_2);
-                let (u12, u5) = vqtrnq_f32(u12u5, u12u5_2);
-                let (u6, u13) = vqtrnq_f32(u6u13, u6u13_2);
+                let (u0, u3) = vqtrnq_f32(u0u3, u0u3_2);
+                let (u4, u7) = vqtrnq_f32(u4u7, u4u7_2);
+                let (u8, u11) = vqtrnq_f32(u8u11, u8u11_2);
+                let (u12, u1) = vqtrnq_f32(u12u1, u12u1_2);
+                let (u2, u5) = vqtrnq_f32(u2u5, u2u5_2);
+                let (u6, u9) = vqtrnq_f32(u6u9, u6u9_2);
+                let (u10, u13) = vqtrnq_f32(u10u13, u10u13_2);
 
                 let (u0, u1) = NeonButterfly::butterfly2_f32(u0, u1);
                 let (u2, u3) = NeonButterfly::butterfly2_f32(u2, u3);
@@ -203,28 +203,28 @@ impl FftExecutor<f32> for NeonButterfly14<f32> {
             let rem = in_place.chunks_exact_mut(28).into_remainder();
 
             for chunk in rem.chunks_exact_mut(14) {
-                let u0u7 = vld1q_f32(chunk.as_mut_ptr().cast());
-                let u8u1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
-                let u2u9 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
-                let u10u3 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
-                let u4u11 = vld1q_f32(chunk.get_unchecked(8..).as_ptr().cast());
-                let u12u5 = vld1q_f32(chunk.get_unchecked(10..).as_ptr().cast());
-                let u6u13 = vld1q_f32(chunk.get_unchecked(12..).as_ptr().cast());
+                let u0u3 = vld1q_f32(chunk.as_mut_ptr().cast());
+                let u4u7 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
+                let u8u11 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
+                let u12u1 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
+                let u2u5 = vld1q_f32(chunk.get_unchecked(8..).as_ptr().cast());
+                let u6u9 = vld1q_f32(chunk.get_unchecked(10..).as_ptr().cast());
+                let u10u13 = vld1q_f32(chunk.get_unchecked(12..).as_ptr().cast());
 
-                let u0 = vget_low_f32(u0u7);
-                let u1 = vget_high_f32(u8u1);
-                let u2 = vget_low_f32(u2u9);
-                let u3 = vget_high_f32(u10u3);
-                let u4 = vget_low_f32(u4u11);
-                let u5 = vget_high_f32(u12u5);
-                let u6 = vget_low_f32(u6u13);
-                let u7 = vget_high_f32(u0u7);
-                let u8 = vget_low_f32(u8u1);
-                let u9 = vget_high_f32(u2u9);
-                let u10 = vget_low_f32(u10u3);
-                let u11 = vget_high_f32(u4u11);
-                let u12 = vget_low_f32(u12u5);
-                let u13 = vget_high_f32(u6u13);
+                let u0 = vget_low_f32(u0u3);
+                let u1 = vget_high_f32(u12u1);
+                let u2 = vget_low_f32(u2u5);
+                let u3 = vget_high_f32(u0u3);
+                let u4 = vget_low_f32(u4u7);
+                let u5 = vget_high_f32(u2u5);
+                let u6 = vget_low_f32(u6u9);
+                let u7 = vget_high_f32(u4u7);
+                let u8 = vget_low_f32(u8u11);
+                let u9 = vget_high_f32(u6u9);
+                let u10 = vget_low_f32(u10u13);
+                let u11 = vget_high_f32(u8u11);
+                let u12 = vget_low_f32(u12u1);
+                let u13 = vget_high_f32(u10u13);
 
                 let (u0, u1) = NeonButterfly::butterfly2h_f32(u0, u1);
                 let (u2, u3) = NeonButterfly::butterfly2h_f32(u2, u3);
@@ -234,7 +234,7 @@ impl FftExecutor<f32> for NeonButterfly14<f32> {
                 let (u10, u11) = NeonButterfly::butterfly2h_f32(u10, u11);
                 let (u12, u13) = NeonButterfly::butterfly2h_f32(u12, u13);
 
-                // Outer 7-point butterflies
+                // // Outer 7-point butterflies
                 let (y0y7, y2y9, y4y11, y6y13, y8y1, y10y3, y12y5) = self.bf7.exec(
                     vcombine_f32(u0, u1),
                     vcombine_f32(u2, u3),
@@ -316,8 +316,6 @@ mod tests {
             let radix_inverse = NeonButterfly14::new(FftDirection::Inverse);
             radix_forward.execute(&mut input).unwrap();
             radix14_reference.execute(&mut z_ref).unwrap();
-            println!("forward {:?}", input);
-            println!("reference {:?}", z_ref);
 
             input
                 .iter()

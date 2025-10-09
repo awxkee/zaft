@@ -23,6 +23,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "single_real_complex"
+path = "single_real_complex/single_real_complex.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "double_precision"
 path = "double_precision/double_precision.rs"
 test = false

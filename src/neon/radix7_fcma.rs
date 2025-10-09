@@ -264,248 +264,256 @@ impl NeonFcmaRadix7<f32> {
             static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
             let rot_sign = vld1q_f32(ROT_90.as_ptr());
 
-            // Digit-reversal permutation
-            permute_inplace(in_place, &self.permutations);
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                permute_inplace(chunk, &self.permutations);
 
-            let mut len = 7;
+                let mut len = 7;
 
-            let mut m_twiddles = self.twiddles.as_slice();
+                let mut m_twiddles = self.twiddles.as_slice();
 
-            while len <= self.execution_length {
-                let seventh = len / 7;
+                while len <= self.execution_length {
+                    let seventh = len / 7;
 
-                for data in in_place.chunks_exact_mut(len) {
-                    let mut j = 0usize;
+                    for data in chunk.chunks_exact_mut(len) {
+                        let mut j = 0usize;
 
-                    while j + 2 < seventh {
-                        let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
+                        while j + 2 < seventh {
+                            let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
 
-                        let w0w1 = vld1q_f32(m_twiddles.get_unchecked(6 * j..).as_ptr().cast());
-                        let w2w3 = vld1q_f32(m_twiddles.get_unchecked(6 * j + 2..).as_ptr().cast());
-                        let w4w5 = vld1q_f32(m_twiddles.get_unchecked(6 * j + 4..).as_ptr().cast());
-                        let w6w7 = vld1q_f32(m_twiddles.get_unchecked(6 * j + 6..).as_ptr().cast());
-                        let w8w9 = vld1q_f32(m_twiddles.get_unchecked(6 * j + 8..).as_ptr().cast());
-                        let w10w11 =
-                            vld1q_f32(m_twiddles.get_unchecked(6 * j + 10..).as_ptr().cast());
+                            let w0w1 = vld1q_f32(m_twiddles.get_unchecked(6 * j..).as_ptr().cast());
+                            let w2w3 =
+                                vld1q_f32(m_twiddles.get_unchecked(6 * j + 2..).as_ptr().cast());
+                            let w4w5 =
+                                vld1q_f32(m_twiddles.get_unchecked(6 * j + 4..).as_ptr().cast());
+                            let w6w7 =
+                                vld1q_f32(m_twiddles.get_unchecked(6 * j + 6..).as_ptr().cast());
+                            let w8w9 =
+                                vld1q_f32(m_twiddles.get_unchecked(6 * j + 8..).as_ptr().cast());
+                            let w10w11 =
+                                vld1q_f32(m_twiddles.get_unchecked(6 * j + 10..).as_ptr().cast());
 
-                        let (ww0, ww1) = vqtrnq_f32(w0w1, w6w7);
-                        let (ww2, ww3) = vqtrnq_f32(w2w3, w8w9);
-                        let (ww4, ww5) = vqtrnq_f32(w4w5, w10w11);
+                            let (ww0, ww1) = vqtrnq_f32(w0w1, w6w7);
+                            let (ww2, ww3) = vqtrnq_f32(w2w3, w8w9);
+                            let (ww4, ww5) = vqtrnq_f32(w4w5, w10w11);
 
-                        let u1 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + seventh..).as_ptr().cast()),
-                            ww0,
-                        );
-                        let u2 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
-                            ww1,
-                        );
-                        let u3 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
-                            ww2,
-                        );
-                        let u4 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
-                            ww3,
-                        );
-                        let u5 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
-                            ww4,
-                        );
-                        let u6 = fcma_complex_f32(
-                            vld1q_f32(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),
-                            ww5,
-                        );
+                            let u1 = fcma_complex_f32(
+                                vld1q_f32(data.get_unchecked(j + seventh..).as_ptr().cast()),
+                                ww0,
+                            );
+                            let u2 = fcma_complex_f32(
+                                vld1q_f32(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
+                                ww1,
+                            );
+                            let u3 = fcma_complex_f32(
+                                vld1q_f32(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
+                                ww2,
+                            );
+                            let u4 = fcma_complex_f32(
+                                vld1q_f32(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
+                                ww3,
+                            );
+                            let u5 = fcma_complex_f32(
+                                vld1q_f32(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
+                                ww4,
+                            );
+                            let u6 = fcma_complex_f32(
+                                vld1q_f32(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),
+                                ww5,
+                            );
 
-                        // Radix-7 butterfly
+                            // Radix-7 butterfly
 
-                        let (x1p6, x1m6) = NeonButterfly::butterfly2_f32(u1, u6);
-                        let x1m6 = v_rotate90_f32(x1m6, rot_sign);
-                        let y00 = vaddq_f32(u0, x1p6);
-                        let (x2p5, x2m5) = NeonButterfly::butterfly2_f32(u2, u5);
-                        let x2m5 = v_rotate90_f32(x2m5, rot_sign);
-                        let y00 = vaddq_f32(y00, x2p5);
-                        let (x3p4, x3m4) = NeonButterfly::butterfly2_f32(u3, u4);
-                        let x3m4 = v_rotate90_f32(x3m4, rot_sign);
-                        let y00 = vaddq_f32(y00, x3p4);
+                            let (x1p6, x1m6) = NeonButterfly::butterfly2_f32(u1, u6);
+                            let x1m6 = v_rotate90_f32(x1m6, rot_sign);
+                            let y00 = vaddq_f32(u0, x1p6);
+                            let (x2p5, x2m5) = NeonButterfly::butterfly2_f32(u2, u5);
+                            let x2m5 = v_rotate90_f32(x2m5, rot_sign);
+                            let y00 = vaddq_f32(y00, x2p5);
+                            let (x3p4, x3m4) = NeonButterfly::butterfly2_f32(u3, u4);
+                            let x3m4 = v_rotate90_f32(x3m4, rot_sign);
+                            let y00 = vaddq_f32(y00, x3p4);
 
-                        let m0106a = vfmaq_n_f32(u0, x1p6, self.twiddle1.re);
-                        let m0106a = vfmaq_n_f32(m0106a, x2p5, self.twiddle2.re);
-                        let m0106a = vfmaq_n_f32(m0106a, x3p4, self.twiddle3.re);
-                        let m0106b = vmulq_n_f32(x1m6, self.twiddle1.im);
-                        let m0106b = vfmaq_n_f32(m0106b, x2m5, self.twiddle2.im);
-                        let m0106b = vfmaq_n_f32(m0106b, x3m4, self.twiddle3.im);
-                        let (y01, y06) = NeonButterfly::butterfly2_f32(m0106a, m0106b);
+                            let m0106a = vfmaq_n_f32(u0, x1p6, self.twiddle1.re);
+                            let m0106a = vfmaq_n_f32(m0106a, x2p5, self.twiddle2.re);
+                            let m0106a = vfmaq_n_f32(m0106a, x3p4, self.twiddle3.re);
+                            let m0106b = vmulq_n_f32(x1m6, self.twiddle1.im);
+                            let m0106b = vfmaq_n_f32(m0106b, x2m5, self.twiddle2.im);
+                            let m0106b = vfmaq_n_f32(m0106b, x3m4, self.twiddle3.im);
+                            let (y01, y06) = NeonButterfly::butterfly2_f32(m0106a, m0106b);
 
-                        let m0205a = vfmaq_n_f32(u0, x1p6, self.twiddle2.re);
-                        let m0205a = vfmaq_n_f32(m0205a, x2p5, self.twiddle3.re);
-                        let m0205a = vfmaq_n_f32(m0205a, x3p4, self.twiddle1.re);
-                        let m0205b = vmulq_n_f32(x1m6, self.twiddle2.im);
-                        let m0205b = vfmsq_n_f32(m0205b, x2m5, self.twiddle3.im);
-                        let m0205b = vfmsq_n_f32(m0205b, x3m4, self.twiddle1.im);
-                        let (y02, y05) = NeonButterfly::butterfly2_f32(m0205a, m0205b);
+                            let m0205a = vfmaq_n_f32(u0, x1p6, self.twiddle2.re);
+                            let m0205a = vfmaq_n_f32(m0205a, x2p5, self.twiddle3.re);
+                            let m0205a = vfmaq_n_f32(m0205a, x3p4, self.twiddle1.re);
+                            let m0205b = vmulq_n_f32(x1m6, self.twiddle2.im);
+                            let m0205b = vfmsq_n_f32(m0205b, x2m5, self.twiddle3.im);
+                            let m0205b = vfmsq_n_f32(m0205b, x3m4, self.twiddle1.im);
+                            let (y02, y05) = NeonButterfly::butterfly2_f32(m0205a, m0205b);
 
-                        let m0304a = vfmaq_n_f32(u0, x1p6, self.twiddle3.re);
-                        let m0304a = vfmaq_n_f32(m0304a, x2p5, self.twiddle1.re);
-                        let m0304a = vfmaq_n_f32(m0304a, x3p4, self.twiddle2.re);
-                        let m0304b = vmulq_n_f32(x1m6, self.twiddle3.im);
-                        let m0304b = vfmsq_n_f32(m0304b, x2m5, self.twiddle1.im);
-                        let m0304b = vfmaq_n_f32(m0304b, x3m4, self.twiddle2.im);
-                        let (y03, y04) = NeonButterfly::butterfly2_f32(m0304a, m0304b);
+                            let m0304a = vfmaq_n_f32(u0, x1p6, self.twiddle3.re);
+                            let m0304a = vfmaq_n_f32(m0304a, x2p5, self.twiddle1.re);
+                            let m0304a = vfmaq_n_f32(m0304a, x3p4, self.twiddle2.re);
+                            let m0304b = vmulq_n_f32(x1m6, self.twiddle3.im);
+                            let m0304b = vfmsq_n_f32(m0304b, x2m5, self.twiddle1.im);
+                            let m0304b = vfmaq_n_f32(m0304b, x3m4, self.twiddle2.im);
+                            let (y03, y04) = NeonButterfly::butterfly2_f32(m0304a, m0304b);
 
-                        // Store results
-                        vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y00);
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + seventh..).as_mut_ptr().cast(),
-                            y01,
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + 2 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y02,
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + 3 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y03,
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + 4 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y04,
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + 5 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y05,
-                        );
-                        vst1q_f32(
-                            data.get_unchecked_mut(j + 6 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y06,
-                        );
+                            // Store results
+                            vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y00);
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + seventh..).as_mut_ptr().cast(),
+                                y01,
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 2 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y02,
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 3 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y03,
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 4 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y04,
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 5 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y05,
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 6 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y06,
+                            );
 
-                        j += 2;
+                            j += 2;
+                        }
+
+                        for j in j..seventh {
+                            let u0 = vld1_f32(data.get_unchecked(j..).as_ptr().cast());
+
+                            let w0w1 = vld1q_f32(m_twiddles.get_unchecked(6 * j..).as_ptr().cast());
+                            let w2w3 =
+                                vld1q_f32(m_twiddles.get_unchecked(6 * j + 2..).as_ptr().cast());
+                            let w4w5 =
+                                vld1q_f32(m_twiddles.get_unchecked(6 * j + 4..).as_ptr().cast());
+
+                            let u1u2 = fcma_complex_f32(
+                                vcombine_f32(
+                                    vld1_f32(data.get_unchecked(j + seventh..).as_ptr().cast()),
+                                    vld1_f32(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
+                                ),
+                                w0w1,
+                            );
+                            let u3u4 = fcma_complex_f32(
+                                vcombine_f32(
+                                    vld1_f32(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
+                                    vld1_f32(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
+                                ),
+                                w2w3,
+                            );
+                            let u5u6 = fcma_complex_f32(
+                                vcombine_f32(
+                                    vld1_f32(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
+                                    vld1_f32(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),
+                                ),
+                                w4w5,
+                            );
+
+                            let u1 = vget_low_f32(u1u2);
+                            let u2 = vget_high_f32(u1u2);
+                            let u3 = vget_low_f32(u3u4);
+                            let u4 = vget_high_f32(u3u4);
+                            let u5 = vget_low_f32(u5u6);
+                            let u6 = vget_high_f32(u5u6);
+
+                            // Radix-7 butterfly
+
+                            let (x1p6, x1m6) = NeonButterfly::butterfly2h_f32(u1, u6);
+                            let x1m6 = vh_rotate90_f32(x1m6, vget_low_f32(rot_sign));
+                            let y00 = vadd_f32(u0, x1p6);
+                            let (x2p5, x2m5) = NeonButterfly::butterfly2h_f32(u2, u5);
+                            let x2m5 = vh_rotate90_f32(x2m5, vget_low_f32(rot_sign));
+                            let y00 = vadd_f32(y00, x2p5);
+                            let (x3p4, x3m4) = NeonButterfly::butterfly2h_f32(u3, u4);
+                            let x3m4 = vh_rotate90_f32(x3m4, vget_low_f32(rot_sign));
+                            let y00 = vadd_f32(y00, x3p4);
+
+                            let m0106a = vfma_n_f32(u0, x1p6, self.twiddle1.re);
+                            let m0106a = vfma_n_f32(m0106a, x2p5, self.twiddle2.re);
+                            let m0106a = vfma_n_f32(m0106a, x3p4, self.twiddle3.re);
+                            let m0106b = vmul_n_f32(x1m6, self.twiddle1.im);
+                            let m0106b = vfma_n_f32(m0106b, x2m5, self.twiddle2.im);
+                            let m0106b = vfma_n_f32(m0106b, x3m4, self.twiddle3.im);
+                            let (y01, y06) = NeonButterfly::butterfly2h_f32(m0106a, m0106b);
+
+                            let m0205a = vfma_n_f32(u0, x1p6, self.twiddle2.re);
+                            let m0205a = vfma_n_f32(m0205a, x2p5, self.twiddle3.re);
+                            let m0205a = vfma_n_f32(m0205a, x3p4, self.twiddle1.re);
+                            let m0205b = vmul_n_f32(x1m6, self.twiddle2.im);
+                            let m0205b = vfms_n_f32(m0205b, x2m5, self.twiddle3.im);
+                            let m0205b = vfms_n_f32(m0205b, x3m4, self.twiddle1.im);
+                            let (y02, y05) = NeonButterfly::butterfly2h_f32(m0205a, m0205b);
+
+                            let m0304a = vfma_n_f32(u0, x1p6, self.twiddle3.re);
+                            let m0304a = vfma_n_f32(m0304a, x2p5, self.twiddle1.re);
+                            let m0304a = vfma_n_f32(m0304a, x3p4, self.twiddle2.re);
+                            let m0304b = vmul_n_f32(x1m6, self.twiddle3.im);
+                            let m0304b = vfms_n_f32(m0304b, x2m5, self.twiddle1.im);
+                            let m0304b = vfma_n_f32(m0304b, x3m4, self.twiddle2.im);
+                            let (y03, y04) = NeonButterfly::butterfly2h_f32(m0304a, m0304b);
+
+                            // Store results
+                            vst1_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y00);
+                            vst1_f32(
+                                data.get_unchecked_mut(j + seventh..).as_mut_ptr().cast(),
+                                y01,
+                            );
+                            vst1_f32(
+                                data.get_unchecked_mut(j + 2 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y02,
+                            );
+                            vst1_f32(
+                                data.get_unchecked_mut(j + 3 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y03,
+                            );
+                            vst1_f32(
+                                data.get_unchecked_mut(j + 4 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y04,
+                            );
+                            vst1_f32(
+                                data.get_unchecked_mut(j + 5 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y05,
+                            );
+                            vst1_f32(
+                                data.get_unchecked_mut(j + 6 * seventh..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y06,
+                            );
+                        }
                     }
 
-                    for j in j..seventh {
-                        let u0 = vld1_f32(data.get_unchecked(j..).as_ptr().cast());
-
-                        let w0w1 = vld1q_f32(m_twiddles.get_unchecked(6 * j..).as_ptr().cast());
-                        let w2w3 = vld1q_f32(m_twiddles.get_unchecked(6 * j + 2..).as_ptr().cast());
-                        let w4w5 = vld1q_f32(m_twiddles.get_unchecked(6 * j + 4..).as_ptr().cast());
-
-                        let u1u2 = fcma_complex_f32(
-                            vcombine_f32(
-                                vld1_f32(data.get_unchecked(j + seventh..).as_ptr().cast()),
-                                vld1_f32(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
-                            ),
-                            w0w1,
-                        );
-                        let u3u4 = fcma_complex_f32(
-                            vcombine_f32(
-                                vld1_f32(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
-                                vld1_f32(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
-                            ),
-                            w2w3,
-                        );
-                        let u5u6 = fcma_complex_f32(
-                            vcombine_f32(
-                                vld1_f32(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
-                                vld1_f32(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),
-                            ),
-                            w4w5,
-                        );
-
-                        let u1 = vget_low_f32(u1u2);
-                        let u2 = vget_high_f32(u1u2);
-                        let u3 = vget_low_f32(u3u4);
-                        let u4 = vget_high_f32(u3u4);
-                        let u5 = vget_low_f32(u5u6);
-                        let u6 = vget_high_f32(u5u6);
-
-                        // Radix-7 butterfly
-
-                        let (x1p6, x1m6) = NeonButterfly::butterfly2h_f32(u1, u6);
-                        let x1m6 = vh_rotate90_f32(x1m6, vget_low_f32(rot_sign));
-                        let y00 = vadd_f32(u0, x1p6);
-                        let (x2p5, x2m5) = NeonButterfly::butterfly2h_f32(u2, u5);
-                        let x2m5 = vh_rotate90_f32(x2m5, vget_low_f32(rot_sign));
-                        let y00 = vadd_f32(y00, x2p5);
-                        let (x3p4, x3m4) = NeonButterfly::butterfly2h_f32(u3, u4);
-                        let x3m4 = vh_rotate90_f32(x3m4, vget_low_f32(rot_sign));
-                        let y00 = vadd_f32(y00, x3p4);
-
-                        let m0106a = vfma_n_f32(u0, x1p6, self.twiddle1.re);
-                        let m0106a = vfma_n_f32(m0106a, x2p5, self.twiddle2.re);
-                        let m0106a = vfma_n_f32(m0106a, x3p4, self.twiddle3.re);
-                        let m0106b = vmul_n_f32(x1m6, self.twiddle1.im);
-                        let m0106b = vfma_n_f32(m0106b, x2m5, self.twiddle2.im);
-                        let m0106b = vfma_n_f32(m0106b, x3m4, self.twiddle3.im);
-                        let (y01, y06) = NeonButterfly::butterfly2h_f32(m0106a, m0106b);
-
-                        let m0205a = vfma_n_f32(u0, x1p6, self.twiddle2.re);
-                        let m0205a = vfma_n_f32(m0205a, x2p5, self.twiddle3.re);
-                        let m0205a = vfma_n_f32(m0205a, x3p4, self.twiddle1.re);
-                        let m0205b = vmul_n_f32(x1m6, self.twiddle2.im);
-                        let m0205b = vfms_n_f32(m0205b, x2m5, self.twiddle3.im);
-                        let m0205b = vfms_n_f32(m0205b, x3m4, self.twiddle1.im);
-                        let (y02, y05) = NeonButterfly::butterfly2h_f32(m0205a, m0205b);
-
-                        let m0304a = vfma_n_f32(u0, x1p6, self.twiddle3.re);
-                        let m0304a = vfma_n_f32(m0304a, x2p5, self.twiddle1.re);
-                        let m0304a = vfma_n_f32(m0304a, x3p4, self.twiddle2.re);
-                        let m0304b = vmul_n_f32(x1m6, self.twiddle3.im);
-                        let m0304b = vfms_n_f32(m0304b, x2m5, self.twiddle1.im);
-                        let m0304b = vfma_n_f32(m0304b, x3m4, self.twiddle2.im);
-                        let (y03, y04) = NeonButterfly::butterfly2h_f32(m0304a, m0304b);
-
-                        // Store results
-                        vst1_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y00);
-                        vst1_f32(
-                            data.get_unchecked_mut(j + seventh..).as_mut_ptr().cast(),
-                            y01,
-                        );
-                        vst1_f32(
-                            data.get_unchecked_mut(j + 2 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y02,
-                        );
-                        vst1_f32(
-                            data.get_unchecked_mut(j + 3 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y03,
-                        );
-                        vst1_f32(
-                            data.get_unchecked_mut(j + 4 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y04,
-                        );
-                        vst1_f32(
-                            data.get_unchecked_mut(j + 5 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y05,
-                        );
-                        vst1_f32(
-                            data.get_unchecked_mut(j + 6 * seventh..)
-                                .as_mut_ptr()
-                                .cast(),
-                            y06,
-                        );
-                    }
+                    m_twiddles = &m_twiddles[seventh * 6..];
+                    len *= 7;
                 }
-
-                m_twiddles = &m_twiddles[seventh * 6..];
-                len *= 7;
             }
         }
         Ok(())
