@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    __m256_fcmul_ps, _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2,
+    _m256_fcmul_ps, _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2,
     _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm128s_deinterleave3_epi64,
     _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
     _mm256s_deinterleave3_epi64, shuffle,
@@ -318,9 +318,9 @@ impl AvxFmaRadix4<f32> {
 
                             let (xw0, xw1, xw2) = _mm256s_deinterleave3_epi64(tw0, tw1, tw2);
 
-                            let b0 = __m256_fcmul_ps(rk1, xw0);
-                            let c0 = __m256_fcmul_ps(rk2, xw1);
-                            let d0 = __m256_fcmul_ps(rk3, xw2);
+                            let b0 = _m256_fcmul_ps(rk1, xw0);
+                            let c0 = _m256_fcmul_ps(rk2, xw1);
+                            let d0 = _m256_fcmul_ps(rk3, xw2);
 
                             // radix-4 butterfly
                             let q0t0 = _mm256_add_ps(a0, c0);
@@ -378,7 +378,7 @@ impl AvxFmaRadix4<f32> {
                                 tw2,
                             );
 
-                            let b0c0 = __m256_fcmul_ps(
+                            let b0c0 = _m256_fcmul_ps(
                                 _mm256_create_ps(rk1, rk2),
                                 _mm256_create_ps(xw0, xw1),
                             );
