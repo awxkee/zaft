@@ -205,6 +205,29 @@ impl AvxButterfly {
 
     #[target_feature(enable = "avx")]
     #[inline]
+    pub(crate) unsafe fn butterfly4_f32(
+        a: __m256,
+        b: __m256,
+        c: __m256,
+        d: __m256,
+        rotate: __m256,
+    ) -> (__m256, __m256, __m256, __m256) {
+        let t0 = _mm256_add_ps(a, c);
+        let t1 = _mm256_sub_ps(a, c);
+        let t2 = _mm256_add_ps(b, d);
+        let mut t3 = _mm256_sub_ps(b, d);
+        const SH: i32 = shuffle(2, 3, 0, 1);
+        t3 = _mm256_xor_ps(_mm256_permute_ps::<SH>(t3), rotate);
+        (
+            _mm256_add_ps(t0, t2),
+            _mm256_add_ps(t1, t3),
+            _mm256_sub_ps(t0, t2),
+            _mm256_sub_ps(t1, t3),
+        )
+    }
+
+    #[target_feature(enable = "avx")]
+    #[inline]
     pub(crate) unsafe fn butterfly4_f64(
         a: __m256d,
         b: __m256d,

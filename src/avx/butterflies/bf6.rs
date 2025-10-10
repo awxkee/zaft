@@ -215,23 +215,26 @@ impl AvxButterfly6<f32> {
                 let u4 = _mm_castpd_ps(_mm_shuffle_pd::<0x0>(u4u5, u10u11));
                 let u5 = _mm_castpd_ps(_mm_shuffle_pd::<0b11>(u4u5, u10u11));
 
-                let (t0, t2, t4) = AvxButterfly::butterfly3_f32_m128(
-                    u0,
-                    u2,
-                    u4,
-                    _mm256_castps256_ps128(twiddle_re),
-                    _mm256_castps256_ps128(twiddle_w_2),
+                let (t0t1, t2t3, t4t5) = AvxButterfly::butterfly3_f32(
+                    _mm256_create_ps(u0, u3),
+                    _mm256_create_ps(u2, u5),
+                    _mm256_create_ps(u4, u1),
+                    twiddle_re,
+                    twiddle_w_2,
                 );
-                let (t1, t3, t5) = AvxButterfly::butterfly3_f32_m128(
-                    u3,
-                    u5,
-                    u1,
-                    _mm256_castps256_ps128(twiddle_re),
-                    _mm256_castps256_ps128(twiddle_w_2),
+
+                let (y0, y3) = AvxButterfly::butterfly2_f32_m128(
+                    _mm256_castps256_ps128(t0t1),
+                    _mm256_extractf128_ps::<1>(t0t1),
                 );
-                let (y0, y3) = AvxButterfly::butterfly2_f32_m128(t0, t1);
-                let (y4, y1) = AvxButterfly::butterfly2_f32_m128(t2, t3);
-                let (y2, y5) = AvxButterfly::butterfly2_f32_m128(t4, t5);
+                let (y4, y1) = AvxButterfly::butterfly2_f32_m128(
+                    _mm256_castps256_ps128(t2t3),
+                    _mm256_extractf128_ps::<1>(t2t3),
+                );
+                let (y2, y5) = AvxButterfly::butterfly2_f32_m128(
+                    _mm256_castps256_ps128(t4t5),
+                    _mm256_extractf128_ps::<1>(t4t5),
+                );
 
                 let y0y1y2y3 =
                     _mm256_create_ps(_mm_unpacklo_ps64(y0, y1), _mm_unpacklo_ps64(y2, y3));

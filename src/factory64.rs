@@ -91,6 +91,11 @@ impl AlgorithmFactory<f64> for f64 {
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly4;
+                return Ok(Box::new(NeonFcmaButterfly4::new(fft_direction)));
+            }
             use crate::neon::NeonButterfly4;
             return Ok(Box::new(NeonButterfly4::new(fft_direction)));
         }
@@ -585,6 +590,16 @@ impl AlgorithmFactory<f64> for f64 {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxFmaRadix7;
+                    return AvxFmaRadix7::new(n, fft_direction)
+                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
+                }
+            }
             use crate::radix7::Radix7;
             Radix7::new(n, fft_direction)
                 .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)

@@ -42,7 +42,7 @@ pub(crate) unsafe fn _m128d_fma_mul_complex(a: __m128d, b: __m128d) -> __m128d {
 
 #[inline]
 #[target_feature(enable = "avx2", enable = "fma")]
-pub(crate) unsafe fn _m256d_mul_complex(a: __m256d, b: __m256d) -> __m256d {
+pub(crate) unsafe fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
     let a_yx = _mm256_permute_pd::<0b0101>(a); // [a_im, a_re, b_im, b_re]
 
@@ -303,6 +303,27 @@ pub(crate) unsafe fn _mm256_create_pd(a: __m128d, b: __m128d) -> __m256d {
     _mm256_insertf128_pd::<1>(_mm256_castpd128_pd256(a), b)
 }
 
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm256_unpacklo_ps64(a: __m256, b: __m256) -> __m256 {
+    _mm256_castpd_ps(_mm256_unpacklo_pd(_mm256_castps_pd(a), _mm256_castps_pd(b)))
+}
+
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm256_blend_ps64<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
+    _mm256_castpd_ps(_mm256_blend_pd::<IMM8>(
+        _mm256_castps_pd(a),
+        _mm256_castps_pd(b),
+    ))
+}
+
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm256_unpackhi_ps64(a: __m256, b: __m256) -> __m256 {
+    _mm256_castpd_ps(_mm256_unpackhi_pd(_mm256_castps_pd(a), _mm256_castps_pd(b)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,7 +341,7 @@ mod tests {
         unsafe {
             let a0 = _mm256_loadu_pd(values_a.as_ptr().cast());
             let b0 = _mm256_loadu_pd(values_b.as_ptr().cast());
-            let product = _m256d_mul_complex(a0, b0);
+            let product = _mm256_fcmul_pd(a0, b0);
             let mut vec_b = vec![Complex::<f64>::default(); 2];
             _mm256_storeu_pd(vec_b.as_mut_ptr().cast(), product);
             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {

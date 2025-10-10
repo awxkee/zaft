@@ -34,6 +34,8 @@ mod radix3;
 mod radix4;
 mod radix5;
 mod radix6;
+mod radix7;
+mod rotate;
 mod spectrum_arithmetic;
 mod util;
 
@@ -48,4 +50,5 @@ pub(crate) use radix3::AvxFmaRadix3;
 pub(crate) use radix4::AvxFmaRadix4;
 pub(crate) use radix5::AvxFmaRadix5;
 pub(crate) use radix6::AvxFmaRadix6;
+pub(crate) use radix7::AvxFmaRadix7;
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;

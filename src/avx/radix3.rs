@@ -28,8 +28,8 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
-    _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, shuffle,
+    _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_unpackhi_pd2,
+    _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, shuffle,
 };
 use crate::radix3::Radix3Twiddles;
 use crate::traits::FftTrigonometry;
@@ -125,8 +125,8 @@ impl AvxFmaRadix3<f64> {
                                 data.get_unchecked(j + 2 * third..).as_ptr().cast(),
                             );
 
-                            let u1 = _m256d_mul_complex(rk1, _mm256_unpacklo_pd2(tw0, tw1));
-                            let u2 = _m256d_mul_complex(rk2, _mm256_unpackhi_pd2(tw0, tw1));
+                            let u1 = _mm256_fcmul_pd(rk1, _mm256_unpacklo_pd2(tw0, tw1));
+                            let u2 = _mm256_fcmul_pd(rk2, _mm256_unpackhi_pd2(tw0, tw1));
 
                             // Radix-3 butterfly
                             let xp = _mm256_add_pd(u1, u2);

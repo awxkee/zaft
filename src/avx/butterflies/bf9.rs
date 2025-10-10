@@ -26,12 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 use crate::avx::butterflies::AvxButterfly;
-use crate::avx::util::{
-    _m256d_mul_complex, 
-    _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps,
-    _mm256s_deinterleave2_epi64, _mm256s_interleave2_epi64, shuffle,
-};
-use crate::complex_fma::c_mul_fast;
+use crate::avx::util::{_mm256_create_pd, _mm256_fcmul_pd};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -109,31 +104,23 @@ impl AvxButterfly9<f64> {
                 let u6u7 = _mm256_loadu_pd(chunk.get_unchecked(6..).as_ptr().cast());
                 let u8 = _mm_loadu_pd(chunk.get_unchecked(8..).as_ptr().cast());
 
-                let u0 = _mm256_castpd256_pd128(u0u1);
-                let u1 = _mm256_extractf128_pd::<1>(u0u1);
+                const HI_LO: i32 = 0b0010_0001;
+                const LO_LO: i32 = 0b0010_0000;
+
                 let u2 = _mm256_castpd256_pd128(u2u3);
-                let u3 = _mm256_extractf128_pd::<1>(u2u3);
-                let u4 = _mm256_castpd256_pd128(u4u5);
                 let u5 = _mm256_extractf128_pd::<1>(u4u5);
-                let u6 = _mm256_castpd256_pd128(u6u7);
-                let u7 = _mm256_extractf128_pd::<1>(u6u7);
 
                 // Radix-9 butterfly
 
-                let (u0, u3, u6) = AvxButterfly::butterfly3_f64_m128(
-                    u0,
-                    u3,
-                    u6,
-                    _mm256_castpd256_pd128(tw3_re),
-                    _mm256_castpd256_pd128(tw3_im),
+                let (u0u1, u3u4, u6u7) = AvxButterfly::butterfly3_f64(
+                    u0u1,
+                    _mm256_permute2f128_pd::<HI_LO>(u2u3, u4u5),
+                    u6u7,
+                    tw3_re,
+                    tw3_im,
                 );
-                let (u1, mut u4, mut u7) = AvxButterfly::butterfly3_f64_m128(
-                    u1,
-                    u4,
-                    u7,
-                    _mm256_castpd256_pd128(tw3_re),
-                    _mm256_castpd256_pd128(tw3_im),
-                );
+                let mut u4 = _mm256_extractf128_pd::<1>(u3u4);
+                let mut u7 = _mm256_extractf128_pd::<1>(u6u7);
                 let (u2, mut u5, mut u8) = AvxButterfly::butterfly3_f64_m128(
                     u2,
                     u5,
@@ -142,39 +129,32 @@ impl AvxButterfly9<f64> {
                     _mm256_castpd256_pd128(tw3_im),
                 );
 
-                let u4u7 = _m256d_mul_complex(_mm256_create_pd(u4, u7), tw1tw2);
+                let u4u7 = _mm256_fcmul_pd(_mm256_create_pd(u4, u7), tw1tw2);
                 u4 = _mm256_castpd256_pd128(u4u7);
                 u7 = _mm256_extractf128_pd::<1>(u4u7);
-                let u5u8 = _m256d_mul_complex(_mm256_create_pd(u5, u8), tw2tw4);
+                let u5u8 = _mm256_fcmul_pd(_mm256_create_pd(u5, u8), tw2tw4);
                 u5 = _mm256_castpd256_pd128(u5u8);
                 u8 = _mm256_extractf128_pd::<1>(u5u8);
 
-                let (zu0, zu3, zu6) = AvxButterfly::butterfly3_f64_m128(
-                    u0,
-                    u1,
-                    u2,
-                    _mm256_castpd256_pd128(tw3_re),
-                    _mm256_castpd256_pd128(tw3_im),
-                );
-                let (zu1, zu4, zu7) = AvxButterfly::butterfly3_f64_m128(
-                    u3,
-                    u4,
-                    u5,
-                    _mm256_castpd256_pd128(tw3_re),
-                    _mm256_castpd256_pd128(tw3_im),
+                let (zu0zu1, zu3zu4, zu6zu7) = AvxButterfly::butterfly3_f64(
+                    _mm256_permute2f128_pd::<LO_LO>(u0u1, u3u4),
+                    _mm256_permute2f128_pd::<HI_LO>(u0u1, _mm256_castpd128_pd256(u4)),
+                    _mm256_create_pd(u2, u5),
+                    tw3_re,
+                    tw3_im,
                 );
                 let (zu2, zu5, zu8) = AvxButterfly::butterfly3_f64_m128(
-                    u6,
+                    _mm256_castpd256_pd128(u6u7),
                     u7,
                     u8,
                     _mm256_castpd256_pd128(tw3_re),
                     _mm256_castpd256_pd128(tw3_im),
                 );
 
-                let y0 = _mm256_create_pd(zu0, zu1);
-                let y1 = _mm256_create_pd(zu2, zu3);
-                let y2 = _mm256_create_pd(zu4, zu5);
-                let y3 = _mm256_create_pd(zu6, zu7);
+                let y0 = zu0zu1;
+                let y1 = _mm256_permute2f128_pd::<LO_LO>(_mm256_castpd128_pd256(zu2), zu3zu4);
+                let y2 = _mm256_permute2f128_pd::<HI_LO>(zu3zu4, _mm256_castpd128_pd256(zu5));
+                let y3 = zu6zu7;
 
                 _mm256_storeu_pd(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
                 _mm256_storeu_pd(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y1);
@@ -481,14 +461,14 @@ mod test {
                 .for_each(|(idx, (a, b))| {
                     assert!(
                         (a.re - b.re).abs() < 1e-9,
-                        "forward at {idx} a_re {} != b_re {} for size {}",
+                        "forward at {idx} a_re {} != b_re {} for size {} at {idx}",
                         a.re,
                         b.re,
                         size
                     );
                     assert!(
                         (a.im - b.im).abs() < 1e-9,
-                        "forward at {idx} a_im {} != b_im {} for size {}",
+                        "forward at {idx} a_im {} != b_im {} for size {} at {idx}",
                         a.im,
                         b.im,
                         size
@@ -499,22 +479,26 @@ mod test {
 
             input = input.iter().map(|&x| x * (1.0 / 9f64)).collect();
 
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-9,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-9,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
+            input
+                .iter()
+                .zip(src.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
         }
     }
 }

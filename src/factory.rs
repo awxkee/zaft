@@ -208,6 +208,11 @@ impl AlgorithmFactory<f32> for f32 {
     ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly4;
+                return Ok(Box::new(NeonFcmaButterfly4::new(fft_direction)));
+            }
             use crate::neon::NeonButterfly4;
             return Ok(Box::new(NeonButterfly4::new(fft_direction)));
         }

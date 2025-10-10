@@ -28,7 +28,7 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_ps,
+    _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_pd,
     _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64, shuffle,
 };
 use crate::radix5::Radix5Twiddles;
@@ -119,23 +119,23 @@ impl AvxFmaRadix5<f64> {
                                 m_twiddles.get_unchecked(4 * (j + 1) + 2..).as_ptr().cast(),
                             );
 
-                            let u1 = _m256d_mul_complex(
+                            let u1 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(data.get_unchecked(j + fifth..).as_ptr().cast()),
                                 _mm256_unpacklo_pd2(tw0, tw1),
                             );
-                            let u2 = _m256d_mul_complex(
+                            let u2 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 2 * fifth..).as_ptr().cast(),
                                 ),
                                 _mm256_unpackhi_pd2(tw0, tw1),
                             );
-                            let u3 = _m256d_mul_complex(
+                            let u3 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 3 * fifth..).as_ptr().cast(),
                                 ),
                                 _mm256_unpacklo_pd2(tw2, tw3),
                             );
-                            let u4 = _m256d_mul_complex(
+                            let u4 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 4 * fifth..).as_ptr().cast(),
                                 ),

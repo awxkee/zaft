@@ -55,6 +55,8 @@ mod bf2;
 mod bf23;
 mod bf3;
 mod bf4;
+#[cfg(feature = "fcma")]
+mod bf4_fcma;
 mod bf5;
 #[cfg(feature = "fcma")]
 mod bf5_fcma;
@@ -76,6 +78,8 @@ mod shared;
 pub(crate) use bf2::NeonButterfly2;
 pub(crate) use bf3::NeonButterfly3;
 pub(crate) use bf4::NeonButterfly4;
+#[cfg(feature = "fcma")]
+pub(crate) use bf4_fcma::NeonFcmaButterfly4;
 pub(crate) use bf5::NeonButterfly5;
 #[cfg(feature = "fcma")]
 pub(crate) use bf5_fcma::NeonFcmaButterfly5;

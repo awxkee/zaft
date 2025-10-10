@@ -71,9 +71,10 @@ pub(crate) use butterflies::{
 };
 #[cfg(feature = "fcma")]
 pub(crate) use butterflies::{
-    NeonFcmaButterfly5, NeonFcmaButterfly7, NeonFcmaButterfly8, NeonFcmaButterfly9,
-    NeonFcmaButterfly10, NeonFcmaButterfly11, NeonFcmaButterfly12, NeonFcmaButterfly13,
-    NeonFcmaButterfly14, NeonFcmaButterfly15, NeonFcmaButterfly16, NeonFcmaButterfly17,
+    NeonFcmaButterfly4, NeonFcmaButterfly5, NeonFcmaButterfly7, NeonFcmaButterfly8,
+    NeonFcmaButterfly9, NeonFcmaButterfly10, NeonFcmaButterfly11, NeonFcmaButterfly12,
+    NeonFcmaButterfly13, NeonFcmaButterfly14, NeonFcmaButterfly15, NeonFcmaButterfly16,
+    NeonFcmaButterfly17,
 };
 pub(crate) use c2r::C2RNeonTwiddles;
 #[cfg(feature = "fcma")]

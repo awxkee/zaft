@@ -28,9 +28,9 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
-    _mm128s_deinterleave3_epi64, _mm256_create_pd, _mm256_create_ps, _mm256_unpackhi_pd2,
-    _mm256_unpacklo_pd2, _mm256s_deinterleave3_epi64, shuffle,
+    _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm128s_deinterleave3_epi64,
+    _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
+    _mm256s_deinterleave3_epi64, shuffle,
 };
 use crate::factory::AlgorithmFactory;
 use crate::radix4::Radix4Twiddles;
@@ -125,17 +125,17 @@ impl AvxFmaRadix4<f64> {
                                 m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast(),
                             );
 
-                            let b = _m256d_mul_complex(
+                            let b = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(data.get_unchecked(j + quarter..).as_ptr().cast()),
                                 _mm256_unpacklo_pd2(tw0, tw1),
                             );
-                            let c = _m256d_mul_complex(
+                            let c = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
                                 ),
                                 _mm256_unpackhi_pd2(tw0, tw1),
                             );
-                            let d = _m256d_mul_complex(
+                            let d = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
                                 ),
@@ -181,7 +181,7 @@ impl AvxFmaRadix4<f64> {
                             let tw0 =
                                 _mm256_loadu_pd(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
 
-                            let bc = _m256d_mul_complex(
+                            let bc = _mm256_fcmul_pd(
                                 _mm256_create_pd(
                                     _mm_loadu_pd(data.get_unchecked(j + quarter..).as_ptr().cast()),
                                     _mm_loadu_pd(

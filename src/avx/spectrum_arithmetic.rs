@@ -28,7 +28,7 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256d_mul_complex, _m256s_mul_complex,
+    _m256s_mul_complex, _mm256_fcmul_pd,
 };
 use crate::spectrum_arithmetic::SpectrumOps;
 use num_complex::Complex;
@@ -275,10 +275,10 @@ impl AvxSpectrumArithmetic<f64> {
                 let q2 = _mm256_loadu_pd(twiddle.get_unchecked(4..).as_ptr().cast());
                 let q3 = _mm256_loadu_pd(twiddle.get_unchecked(6..).as_ptr().cast());
 
-                let p0 = _m256d_mul_complex(s0, q0);
-                let p1 = _m256d_mul_complex(s1, q1);
-                let p2 = _m256d_mul_complex(s2, q2);
-                let p3 = _m256d_mul_complex(s3, q3);
+                let p0 = _mm256_fcmul_pd(s0, q0);
+                let p1 = _mm256_fcmul_pd(s1, q1);
+                let p2 = _mm256_fcmul_pd(s2, q2);
+                let p3 = _mm256_fcmul_pd(s3, q3);
 
                 _mm256_storeu_pd(dst.as_mut_ptr().cast(), p0);
                 _mm256_storeu_pd(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), p1);
@@ -316,10 +316,10 @@ impl AvxSpectrumArithmetic<f64> {
                 let q2 = _mm256_loadu_pd(twiddle.get_unchecked(4..).as_ptr().cast());
                 let q3 = _mm256_loadu_pd(twiddle.get_unchecked(6..).as_ptr().cast());
 
-                let mut p0 = _m256d_mul_complex(s0, q0);
-                let mut p1 = _m256d_mul_complex(s1, q1);
-                let mut p2 = _m256d_mul_complex(s2, q2);
-                let mut p3 = _m256d_mul_complex(s3, q3);
+                let mut p0 = _mm256_fcmul_pd(s0, q0);
+                let mut p1 = _mm256_fcmul_pd(s1, q1);
+                let mut p2 = _mm256_fcmul_pd(s2, q2);
+                let mut p3 = _mm256_fcmul_pd(s3, q3);
 
                 p0 = _mm256_xor_pd(p0, factors);
                 p1 = _mm256_xor_pd(p1, factors);
@@ -377,10 +377,10 @@ impl AvxSpectrumArithmetic<f64> {
                 let q2 = _mm256_loadu_pd(twiddle.get_unchecked(4..).as_ptr().cast());
                 let q3 = _mm256_loadu_pd(twiddle.get_unchecked(6..).as_ptr().cast());
 
-                let p0 = _m256d_mul_complex(s0, q0);
-                let p1 = _m256d_mul_complex(s1, q1);
-                let p2 = _m256d_mul_complex(s2, q2);
-                let p3 = _m256d_mul_complex(s3, q3);
+                let p0 = _mm256_fcmul_pd(s0, q0);
+                let p1 = _mm256_fcmul_pd(s1, q1);
+                let p2 = _mm256_fcmul_pd(s2, q2);
+                let p3 = _mm256_fcmul_pd(s3, q3);
 
                 _mm256_storeu_pd(dst.as_mut_ptr().cast(), p0);
                 _mm256_storeu_pd(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), p1);
