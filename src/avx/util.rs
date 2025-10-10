@@ -78,7 +78,7 @@ pub(crate) unsafe fn _m128s_store_f32x2(a: *mut Complex<f32>, b: __m128) {
 
 #[inline]
 #[target_feature(enable = "avx2", enable = "fma")]
-pub(crate) unsafe fn _m256s_mul_complex(a: __m256, b: __m256) -> __m256 {
+pub(crate) unsafe fn __m256_fcmul_ps(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
     let ar = _mm256_moveldup_ps(a); // duplicate even lanes (re parts)
     let ai = _mm256_movehdup_ps(a); // duplicate odd lanes (im parts)

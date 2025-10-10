@@ -64,7 +64,7 @@ impl TransposeFactory<f32> for f32 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if _width > 15 && _height > 15 {
+                if _width > 10 && _height > 10 {
                     if std::arch::is_x86_feature_detected!("avx2") {
                         return Box::new(AvxDefaultExecutorSingle {});
                     }

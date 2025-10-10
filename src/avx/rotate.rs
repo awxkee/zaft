@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
+use crate::avx::util::shuffle;
 use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
 use std::marker::PhantomData;
@@ -93,5 +94,24 @@ impl AvxRotate<f64> {
     #[inline]
     pub(crate) unsafe fn rotate_m256d(&self, v: __m256d) -> __m256d {
         _mm256_xor_pd(_mm256_permute_pd::<0b0101>(v), self.rot_flag)
+    }
+}
+
+impl AvxRotate<f32> {
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn rotate_m128(&self, v: __m128) -> __m128 {
+        const SH: i32 = shuffle(2, 3, 0, 1);
+        _mm_xor_ps(
+            _mm_shuffle_ps::<SH>(v, v),
+            _mm_castpd_ps(_mm256_castpd256_pd128(self.rot_flag)),
+        )
+    }
+
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn rotate_m256d(&self, v: __m256) -> __m256 {
+        const SH: i32 = shuffle(2, 3, 0, 1);
+        _mm256_xor_ps(_mm256_permute_ps::<SH>(v), _mm256_castpd_ps(self.rot_flag))
     }
 }

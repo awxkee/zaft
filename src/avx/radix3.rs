@@ -27,8 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256s_mul_complex, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_unpackhi_pd2,
+    __m256_fcmul_ps, _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2,
+    _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_unpackhi_pd2,
     _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, shuffle,
 };
 use crate::radix3::Radix3Twiddles;
@@ -260,8 +260,8 @@ impl AvxFmaRadix3<f32> {
 
                             let (xw0, xw1) = _mm256s_deinterleave2_epi64(tw0, tw1);
 
-                            let u1 = _m256s_mul_complex(rk1, xw0);
-                            let u2 = _m256s_mul_complex(rk2, xw1);
+                            let u1 = __m256_fcmul_ps(rk1, xw0);
+                            let u2 = __m256_fcmul_ps(rk2, xw1);
 
                             // Radix-3 butterfly
                             let xp_0 = _mm256_add_ps(u1, u2);

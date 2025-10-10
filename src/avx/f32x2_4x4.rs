@@ -55,10 +55,14 @@ pub(crate) unsafe fn avx_transpose_u64_4x4_impl(
     // out[1]: 01 11 21 31
     // out[2]: 02 12 22 32
     // out[3]: 03 13 23 33
-    let o0 = _mm256_inserti128_si256::<1>(a0, _mm256_castsi256_si128(a1));
-    let o1 = _mm256_inserti128_si256::<1>(a2, _mm256_castsi256_si128(a3));
-    let o2 = _mm256_inserti128_si256::<0>(a1, _mm256_extracti128_si256::<1>(a0));
-    let o3 = _mm256_inserti128_si256::<0>(a3, _mm256_extracti128_si256::<1>(a2));
+
+    const HI_HI: i32 = 0b0011_0001;
+    const LO_LO: i32 = 0b0010_0000;
+
+    let o0 = _mm256_permute2f128_si256::<LO_LO>(a0, a1);
+    let o1 = _mm256_permute2f128_si256::<LO_LO>(a2, a3);
+    let o2 = _mm256_permute2f128_si256::<HI_HI>(a0, a1);
+    let o3 = _mm256_permute2f128_si256::<HI_HI>(a2, a3);
     (o0, o1, o2, o3)
 }
 
