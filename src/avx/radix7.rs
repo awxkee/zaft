@@ -29,7 +29,7 @@
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
-    __m256_fcmul_ps, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
+    _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2, _m256_fcmul_ps,
     _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_fcmul_pd, _mm256_load4_f32x2,
 };
 use crate::radix7::Radix7Twiddles;
@@ -282,7 +282,7 @@ impl AvxFmaRadix7<f32> {
                             let tw4tw5 =
                                 _mm_loadu_ps(m_twiddles.get_unchecked(twi + 4..).as_ptr().cast());
 
-                            let u1u2u3u4 = __m256_fcmul_ps(
+                            let u1u2u3u4 = _m256_fcmul_ps(
                                 _mm256_load4_f32x2(
                                     data.get_unchecked(j + seventh..),
                                     data.get_unchecked(j + 2 * seventh..),
