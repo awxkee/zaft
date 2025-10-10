@@ -207,18 +207,21 @@ impl AvxFmaRadix6<f64> {
                                 _mm256_create_pd(
                                     _mm_loadu_pd(data.get_unchecked(j + sixth..).as_ptr().cast()),
                                     _mm_loadu_pd(
-                                        data.get_unchecked(j + sixth + 1..).as_ptr().cast(),
+                                        data.get_unchecked(j + 2 * sixth..).as_ptr().cast(),
                                     ),
                                 ),
                                 tw0,
                             );
-                            let u3 = _m128d_fma_mul_complex(
-                                _mm_loadu_pd(data.get_unchecked(j + 3 * sixth..).as_ptr().cast()),
-                                _mm256_castpd256_pd128(tw1),
-                            );
-                            let u4 = _m128d_fma_mul_complex(
-                                _mm_loadu_pd(data.get_unchecked(j + 4 * sixth..).as_ptr().cast()),
-                                _mm256_extractf128_pd::<1>(tw1),
+                            let u3u4 = _mm256_fcmul_pd(
+                                _mm256_create_pd(
+                                    _mm_loadu_pd(
+                                        data.get_unchecked(j + 3 * sixth..).as_ptr().cast(),
+                                    ),
+                                    _mm_loadu_pd(
+                                        data.get_unchecked(j + 4 * sixth..).as_ptr().cast(),
+                                    ),
+                                ),
+                                tw1,
                             );
                             let u5 = _m128d_fma_mul_complex(
                                 _mm_loadu_pd(data.get_unchecked(j + 5 * sixth..).as_ptr().cast()),
@@ -228,12 +231,12 @@ impl AvxFmaRadix6<f64> {
                             let (t0, t2, t4) = AvxButterfly::butterfly3_f64_m128(
                                 u0,
                                 _mm256_extractf128_pd::<1>(u1u2),
-                                u4,
+                                _mm256_extractf128_pd::<1>(u3u4),
                                 _mm256_castpd256_pd128(twiddle_re),
                                 _mm256_castpd256_pd128(twiddle_w_2),
                             );
                             let (t1, t3, t5) = AvxButterfly::butterfly3_f64_m128(
-                                u3,
+                                _mm256_castpd256_pd128(u3u4),
                                 u5,
                                 _mm256_castpd256_pd128(u1u2),
                                 _mm256_castpd256_pd128(twiddle_re),
@@ -662,7 +665,7 @@ mod tests {
     }
 
     #[test]
-    fn test_neon_radix6_f64() {
+    fn test_avx_radix6_f64() {
         for i in 1..7 {
             let size = 6usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];

@@ -40,8 +40,8 @@ mod spectrum_arithmetic;
 mod util;
 
 pub(crate) use butterflies::{
-    AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5, AvxButterfly6, AvxButterfly8,
-    AvxButterfly9,
+    AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5, AvxButterfly6, AvxButterfly7,
+    AvxButterfly8, AvxButterfly9,
 };
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
