@@ -82,6 +82,11 @@ impl NeonFcmaButterfly5<f32> {
             let tw2_re = vdupq_n_f32(self.twiddle2.re);
             let tw2_im = vdupq_n_f32(self.twiddle2.im);
 
+            let tw1_tw2_im = vcombine_f32(vget_low_f32(tw1_im), vget_low_f32(tw2_im));
+            let tw2_ntw1_im = vcombine_f32(vget_low_f32(tw2_im), vdup_n_f32(-self.twiddle1.im));
+            let a1_a2 = vcombine_f32(vget_low_f32(tw1_re), vget_low_f32(tw2_re));
+            let a1_a2_2 = vcombine_f32(vget_low_f32(tw2_re), vget_low_f32(tw1_re));
+
             for chunk in in_place.chunks_exact_mut(10) {
                 let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
@@ -154,43 +159,42 @@ impl NeonFcmaButterfly5<f32> {
 
                 // Radix-5 butterfly
 
-                let x14p = vadd_f32(u1, u4);
-                let x14n = vsub_f32(u1, u4);
-                let x23p = vadd_f32(u2, u3);
-                let x23n = vsub_f32(u2, u3);
-                let y0 = vadd_f32(vadd_f32(u0, x14p), x23p);
-
-                let temp_b1_1 = vmul_f32(vget_low_f32(tw1_im), x14n);
-                let temp_b2_1 = vmul_f32(vget_low_f32(tw2_im), x14n);
-
-                let temp_a1 = vfma_f32(
-                    vfma_f32(u0, vget_low_f32(tw1_re), x14p),
-                    vget_low_f32(tw2_re),
-                    x23p,
-                );
-                let temp_a2 = vfma_f32(
-                    vfma_f32(u0, vget_low_f32(tw2_re), x14p),
-                    vget_low_f32(tw1_re),
-                    x23p,
+                let x14px23p = vaddq_f32(vcombine_f32(u1, u2), vcombine_f32(u4, u3));
+                let x14nx23n = vsubq_f32(vcombine_f32(u1, u2), vcombine_f32(u4, u3));
+                let y0 = vadd_f32(
+                    vadd_f32(u0, vget_low_f32(x14px23p)),
+                    vget_high_f32(x14px23p),
                 );
 
-                let temp_b1 = vfma_f32(temp_b1_1, vget_low_f32(tw2_im), x23n);
-                let temp_b2 = vfms_f32(temp_b2_1, vget_low_f32(tw1_im), x23n);
+                let temp_b1_1_b2_1 = vmulq_f32(
+                    tw1_tw2_im,
+                    vcombine_f32(vget_low_f32(x14nx23n), vget_low_f32(x14nx23n)),
+                );
 
-                let y1 = vcadd_rot90_f32(temp_a1, temp_b1);
-                let y2 = vcadd_rot90_f32(temp_a2, temp_b2);
-                let y3 = vcadd_rot270_f32(temp_a2, temp_b2);
-                let y4 = vcadd_rot270_f32(temp_a1, temp_b1);
+                let wx23p = vcombine_f32(vget_high_f32(x14px23p), vget_high_f32(x14px23p));
+                let wx23n = vcombine_f32(vget_high_f32(x14nx23n), vget_high_f32(x14nx23n));
 
+                let temp_a1_a2 = vfmaq_f32(
+                    vfmaq_f32(
+                        vcombine_f32(u0, u0),
+                        a1_a2,
+                        vcombine_f32(vget_low_f32(x14px23p), vget_low_f32(x14px23p)),
+                    ),
+                    a1_a2_2,
+                    wx23p,
+                );
+
+                let temp_b1_b2 = vfmaq_f32(temp_b1_1_b2_1, tw2_ntw1_im, wx23n);
+
+                let y1y2 = vcaddq_rot90_f32(temp_a1_a2, temp_b1_b2);
+                let y4y3 = vcaddq_rot270_f32(temp_a1_a2, temp_b1_b2);
+
+                vst1_f32(chunk.as_mut_ptr().cast(), y0);
+                vst1q_f32(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1y2);
                 vst1q_f32(
-                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                    vcombine_f32(y0, y1),
+                    chunk.get_unchecked_mut(3..).as_mut_ptr().cast(),
+                    vcombine_f32(vget_high_f32(y4y3), vget_low_f32(y4y3)),
                 );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    vcombine_f32(y2, y3),
-                );
-                vst1_f32(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
             }
         }
         Ok(())
@@ -296,22 +300,26 @@ mod tests {
             radix_forward.execute(&mut input).unwrap();
             radix5_reference.execute(&mut z_ref).unwrap();
 
-            input.iter().zip(z_ref.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-5,
-                    "a_re {} != b_re {} for size {}, reference failed",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-5,
-                    "a_im {} != b_im {} for size {}, reference failed",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
+            input
+                .iter()
+                .zip(z_ref.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-5,
+                        "a_re {} != b_re {} for size {}, reference failed at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-5,
+                        "a_im {} != b_im {} for size {}, reference failed at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
 
             radix_inverse.execute(&mut input).unwrap();
             radix5_inv_reference.execute(&mut z_ref).unwrap();

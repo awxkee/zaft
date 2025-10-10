@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::util::{v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32};
+use crate::neon::util::{v_rotate90_f32, v_rotate90_f64};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -61,14 +61,14 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
                 self.length(),
             ));
         }
-        let tw1_re = unsafe { vdupq_n_f32(self.twiddle1.re) };
-        let tw1_im = unsafe { vdupq_n_f32(self.twiddle1.im) };
-        let tw2_re = unsafe { vdupq_n_f32(self.twiddle2.re) };
-        let tw2_im = unsafe { vdupq_n_f32(self.twiddle2.im) };
-        let rot_sign = unsafe { vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()) };
+        unsafe {
+            let tw1_re = vdupq_n_f32(self.twiddle1.re);
+            let tw1_im = vdupq_n_f32(self.twiddle1.im);
+            let tw2_re = vdupq_n_f32(self.twiddle2.re);
+            let tw2_im = vdupq_n_f32(self.twiddle2.im);
+            let rot_sign = vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr());
 
-        for chunk in in_place.chunks_exact_mut(10) {
-            unsafe {
+            for chunk in in_place.chunks_exact_mut(10) {
                 let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
@@ -128,12 +128,15 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
                     vcombine_f32(vget_high_f32(y3), vget_high_f32(y4)),
                 );
             }
-        }
 
-        let rem = in_place.chunks_exact_mut(10).into_remainder();
+            let rem = in_place.chunks_exact_mut(10).into_remainder();
 
-        for chunk in rem.chunks_exact_mut(5) {
-            unsafe {
+            let tw1_tw2_im = vcombine_f32(vget_low_f32(tw1_im), vget_low_f32(tw2_im));
+            let tw2_ntw1_im = vcombine_f32(vget_low_f32(tw2_im), vdup_n_f32(-self.twiddle1.im));
+            let a1_a2 = vcombine_f32(vget_low_f32(tw1_re), vget_low_f32(tw2_re));
+            let a1_a2_2 = vcombine_f32(vget_low_f32(tw2_re), vget_low_f32(tw1_re));
+
+            for chunk in rem.chunks_exact_mut(5) {
                 let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
 
@@ -145,46 +148,44 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
 
                 // Radix-5 butterfly
 
-                let x14p = vadd_f32(u1, u4);
-                let x14n = vsub_f32(u1, u4);
-                let x23p = vadd_f32(u2, u3);
-                let x23n = vsub_f32(u2, u3);
-                let y0 = vadd_f32(vadd_f32(u0, x14p), x23p);
-
-                let temp_b1_1 = vmul_f32(vget_low_f32(tw1_im), x14n);
-                let temp_b2_1 = vmul_f32(vget_low_f32(tw2_im), x14n);
-
-                let temp_a1 = vfma_f32(
-                    vfma_f32(u0, vget_low_f32(tw1_re), x14p),
-                    vget_low_f32(tw2_re),
-                    x23p,
-                );
-                let temp_a2 = vfma_f32(
-                    vfma_f32(u0, vget_low_f32(tw2_re), x14p),
-                    vget_low_f32(tw1_re),
-                    x23p,
+                let x14px23p = vaddq_f32(vcombine_f32(u1, u2), vcombine_f32(u4, u3));
+                let x14nx23n = vsubq_f32(vcombine_f32(u1, u2), vcombine_f32(u4, u3));
+                let y0 = vadd_f32(
+                    vadd_f32(u0, vget_low_f32(x14px23p)),
+                    vget_high_f32(x14px23p),
                 );
 
-                let temp_b1 = vfma_f32(temp_b1_1, vget_low_f32(tw2_im), x23n);
-                let temp_b2 = vfms_f32(temp_b2_1, vget_low_f32(tw1_im), x23n);
+                let temp_b1_1_b2_1 = vmulq_f32(
+                    tw1_tw2_im,
+                    vcombine_f32(vget_low_f32(x14nx23n), vget_low_f32(x14nx23n)),
+                );
 
-                let temp_b1_rot = vh_rotate90_f32(temp_b1, vget_low_f32(rot_sign));
-                let temp_b2_rot = vh_rotate90_f32(temp_b2, vget_low_f32(rot_sign));
+                let wx23p = vcombine_f32(vget_high_f32(x14px23p), vget_high_f32(x14px23p));
+                let wx23n = vcombine_f32(vget_high_f32(x14nx23n), vget_high_f32(x14nx23n));
 
-                let y1 = vadd_f32(temp_a1, temp_b1_rot);
-                let y2 = vadd_f32(temp_a2, temp_b2_rot);
-                let y3 = vsub_f32(temp_a2, temp_b2_rot);
-                let y4 = vsub_f32(temp_a1, temp_b1_rot);
+                let temp_a1_a2 = vfmaq_f32(
+                    vfmaq_f32(
+                        vcombine_f32(u0, u0),
+                        a1_a2,
+                        vcombine_f32(vget_low_f32(x14px23p), vget_low_f32(x14px23p)),
+                    ),
+                    a1_a2_2,
+                    wx23p,
+                );
 
+                let temp_b1_b2 = vfmaq_f32(temp_b1_1_b2_1, tw2_ntw1_im, wx23n);
+
+                let temp_b1_b2_rot = v_rotate90_f32(temp_b1_b2, rot_sign);
+
+                let y1y2 = vaddq_f32(temp_a1_a2, temp_b1_b2_rot);
+                let y4y3 = vsubq_f32(temp_a1_a2, temp_b1_b2_rot);
+
+                vst1_f32(chunk.as_mut_ptr().cast(), y0);
+                vst1q_f32(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1y2);
                 vst1q_f32(
-                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                    vcombine_f32(y0, y1),
+                    chunk.get_unchecked_mut(3..).as_mut_ptr().cast(),
+                    vcombine_f32(vget_high_f32(y4y3), vget_low_f32(y4y3)),
                 );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    vcombine_f32(y2, y3),
-                );
-                vst1_f32(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
             }
         }
         Ok(())
