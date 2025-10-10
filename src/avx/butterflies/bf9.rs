@@ -27,8 +27,8 @@
 
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::util::{
-    _m128s_store_f32x2, _m256_fcmul_ps, _mm256_blend_ps64, _mm256_create_pd, _mm256_create_ps,
-    _mm256_fcmul_pd, _mm256_permute4x64_ps, shuffle,
+    _m128s_store_f32x2, _m256_fcmul_ps, _mm256_blend_ps64, _mm256_create_pd, _mm256_fcmul_pd,
+    _mm256_permute4x64_ps, shuffle,
 };
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;

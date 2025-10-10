@@ -26,10 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_pd,
-    _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64, shuffle,
+    _m256_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps,
+    _mm256_fcmul_pd, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64,
+    shuffle,
 };
 use crate::radix5::Radix5Twiddles;
 use crate::traits::FftTrigonometry;
@@ -46,6 +48,10 @@ pub(crate) struct AvxFmaRadix5<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     direction: FftDirection,
+    tw1tw2_im: [T; 8],
+    tw2ntw1_im: [T; 8],
+    tw1tw2_re: [T; 8],
+    tw2tw1_re: [T; 8],
 }
 
 impl<T: Default + Clone + Radix5Twiddles + 'static + Copy + FftTrigonometry + Float> AvxFmaRadix5<T>
@@ -61,12 +67,27 @@ where
         let twiddles = T::make_twiddles(size, fft_direction)?;
         let rev = digit_reverse_indices(size, 5)?;
 
+        let tw1 = compute_twiddle(1, 5, fft_direction);
+        let tw2 = compute_twiddle(2, 5, fft_direction);
+
         Ok(AvxFmaRadix5 {
             permutations: rev,
             execution_length: size,
             twiddles,
-            twiddle1: compute_twiddle(1, 5, fft_direction),
-            twiddle2: compute_twiddle(2, 5, fft_direction),
+            twiddle1: tw1,
+            twiddle2: tw2,
+            tw1tw2_im: [
+                tw1.im, tw1.im, tw2.im, tw2.im, tw1.im, tw1.im, tw2.im, tw2.im,
+            ],
+            tw2ntw1_im: [
+                tw2.im, tw2.im, -tw1.im, -tw1.im, tw2.im, tw2.im, -tw1.im, -tw1.im,
+            ],
+            tw1tw2_re: [
+                tw1.re, tw1.re, tw2.re, tw2.re, tw1.re, tw1.re, tw2.re, tw2.re,
+            ],
+            tw2tw1_re: [
+                tw2.re, tw2.re, tw1.re, tw1.re, tw2.re, tw2.re, tw1.re, tw1.re,
+            ],
             direction: fft_direction,
         })
     }
@@ -82,21 +103,20 @@ impl AvxFmaRadix5<f64> {
             ));
         }
 
-        let tw1_re = _mm256_set1_pd(self.twiddle1.re);
-        let tw1_im = _mm256_set1_pd(self.twiddle1.im);
-        let tw2_re = _mm256_set1_pd(self.twiddle2.re);
-        let tw2_im = _mm256_set1_pd(self.twiddle2.im);
-        let rot_sign = unsafe {
-            _mm256_loadu_pd([-0.0f64, 0.0, -0.0f64, 0.0, -0.0f64, 0.0, -0.0f64, 0.0].as_ptr())
-        };
+        unsafe {
+            let tw1_re = _mm256_set1_pd(self.twiddle1.re);
+            let tw1_im = _mm256_set1_pd(self.twiddle1.im);
+            let tw2_re = _mm256_set1_pd(self.twiddle2.re);
+            let tw2_im = _mm256_set1_pd(self.twiddle2.im);
+            let rot_sign =
+                _mm256_loadu_pd([-0.0f64, 0.0, -0.0f64, 0.0, -0.0f64, 0.0, -0.0f64, 0.0].as_ptr());
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                permute_inplace(chunk, &self.permutations);
 
-            let mut len = 5;
+                let mut len = 5;
 
-            unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();
 
                 while len <= self.execution_length {
@@ -192,6 +212,12 @@ impl AvxFmaRadix5<f64> {
                             j += 2;
                         }
 
+                        let tw1tw2_im = _mm256_loadu_pd(self.tw1tw2_im.as_ptr().cast());
+                        let tw2ntw1_im = _mm256_loadu_pd(self.tw2ntw1_im.as_ptr().cast());
+                        let tw1tw2_re = _mm256_loadu_pd(self.tw1tw2_re.as_ptr().cast());
+                        let tw2tw1_re = _mm256_loadu_pd(self.tw2tw1_re.as_ptr().cast());
+                        let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
+
                         for j in j..fifth {
                             let u0 = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
 
@@ -220,61 +246,62 @@ impl AvxFmaRadix5<f64> {
 
                             // Radix-5 butterfly
 
-                            let x14p = _mm_add_pd(u1, u4);
-                            let x14n = _mm_sub_pd(u1, u4);
-                            let x23p = _mm_add_pd(u2, u3);
-                            let x23n = _mm_sub_pd(u2, u3);
-                            let y0 = _mm_add_pd(_mm_add_pd(u0, x14p), x23p);
+                            const HI_HI: i32 = 0b0011_0001;
+                            const LO_LO: i32 = 0b0010_0000;
 
-                            let temp_b1_1 = _mm_mul_pd(_mm256_castpd256_pd128(tw1_im), x14n);
-                            let temp_b2_1 = _mm_mul_pd(_mm256_castpd256_pd128(tw2_im), x14n);
+                            let u1u2 = _mm256_create_pd(u1, u2);
+                            let u4u3 = _mm256_create_pd(u4, u3);
 
-                            let temp_a1 = _mm_fmadd_pd(
-                                _mm256_castpd256_pd128(tw2_re),
-                                x23p,
-                                _mm_fmadd_pd(_mm256_castpd256_pd128(tw1_re), x14p, u0),
-                            );
-                            let temp_a2 = _mm_fmadd_pd(
-                                _mm256_castpd256_pd128(tw1_re),
-                                x23p,
-                                _mm_fmadd_pd(_mm256_castpd256_pd128(tw2_re), x14p, u0),
+                            let u0u0 = _mm256_create_pd(u0, u0);
+
+                            let x14px23p = _mm256_add_pd(u1u2, u4u3);
+                            let x14nx23n = _mm256_sub_pd(u1u2, u4u3);
+                            let y0 = _mm_add_pd(
+                                _mm_add_pd(u0, _mm256_castpd256_pd128(x14px23p)),
+                                _mm256_extractf128_pd::<1>(x14px23p),
                             );
 
-                            let temp_b1 =
-                                _mm_fmadd_pd(_mm256_castpd256_pd128(tw2_im), x23n, temp_b1_1);
-                            let temp_b2 =
-                                _mm_fnmadd_pd(_mm256_castpd256_pd128(tw1_im), x23n, temp_b2_1);
-
-                            let temp_b1_rot = _mm_xor_pd(
-                                _mm_shuffle_pd::<0b01>(temp_b1, temp_b1),
-                                _mm256_castpd256_pd128(rot_sign),
-                            );
-                            let temp_b2_rot = _mm_xor_pd(
-                                _mm_shuffle_pd::<0b01>(temp_b2, temp_b2),
-                                _mm256_castpd256_pd128(rot_sign),
+                            let temp_b1_1_b2_1 = _mm256_mul_pd(
+                                tw1tw2_im,
+                                _mm256_permute2f128_pd::<LO_LO>(x14nx23n, x14nx23n),
                             );
 
-                            let y1 = _mm_add_pd(temp_a1, temp_b1_rot);
-                            let y2 = _mm_add_pd(temp_a2, temp_b2_rot);
-                            let y3 = _mm_sub_pd(temp_a2, temp_b2_rot);
-                            let y4 = _mm_sub_pd(temp_a1, temp_b1_rot);
+                            let wx23p = _mm256_permute2f128_pd::<HI_HI>(x14px23p, x14px23p);
+                            let wx23n = _mm256_permute2f128_pd::<HI_HI>(x14nx23n, x14nx23n);
+
+                            let temp_a1_a2 = _mm256_fmadd_pd(
+                                tw2tw1_re,
+                                wx23p,
+                                _mm256_fmadd_pd(
+                                    _mm256_permute2f128_pd::<LO_LO>(x14px23p, x14px23p),
+                                    tw1tw2_re,
+                                    u0u0,
+                                ),
+                            );
+
+                            let temp_b1_b2 = _mm256_fmadd_pd(tw2ntw1_im, wx23n, temp_b1_1_b2_1);
+
+                            let temp_b1_b2_rot = rotate.rotate_m256d(temp_b1_b2);
+
+                            let y1y2 = _mm256_add_pd(temp_a1_a2, temp_b1_b2_rot);
+                            let y4y3 = _mm256_sub_pd(temp_a1_a2, temp_b1_b2_rot);
 
                             _mm_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
                             _mm_storeu_pd(
                                 data.get_unchecked_mut(j + fifth..).as_mut_ptr().cast(),
-                                y1,
+                                _mm256_castpd256_pd128(y1y2),
                             );
                             _mm_storeu_pd(
                                 data.get_unchecked_mut(j + 2 * fifth..).as_mut_ptr().cast(),
-                                y2,
+                                _mm256_extractf128_pd::<1>(y1y2),
                             );
                             _mm_storeu_pd(
                                 data.get_unchecked_mut(j + 3 * fifth..).as_mut_ptr().cast(),
-                                y3,
+                                _mm256_extractf128_pd::<1>(y4y3),
                             );
                             _mm_storeu_pd(
                                 data.get_unchecked_mut(j + 4 * fifth..).as_mut_ptr().cast(),
-                                y4,
+                                _mm256_castpd256_pd128(y4y3),
                             );
                         }
                     }
@@ -312,20 +339,20 @@ impl AvxFmaRadix5<f32> {
             ));
         }
 
-        let tw1_re = _mm256_set1_ps(self.twiddle1.re);
-        let tw1_im = _mm256_set1_ps(self.twiddle1.im);
-        let tw2_re = _mm256_set1_ps(self.twiddle2.re);
-        let tw2_im = _mm256_set1_ps(self.twiddle2.im);
-        static ROT_90: [f32; 8] = [-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0];
-        let rot_sign = unsafe { _mm256_loadu_ps(ROT_90.as_ptr()) };
+        unsafe {
+            let tw1_re = _mm256_set1_ps(self.twiddle1.re);
+            let tw1_im = _mm256_set1_ps(self.twiddle1.im);
+            let tw2_re = _mm256_set1_ps(self.twiddle2.re);
+            let tw2_im = _mm256_set1_ps(self.twiddle2.im);
+            static ROT_90: [f32; 8] = [-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0];
+            let rot_sign = _mm256_loadu_ps(ROT_90.as_ptr());
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                permute_inplace(chunk, &self.permutations);
 
-            let mut len = 5;
+                let mut len = 5;
 
-            unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();
 
                 while len <= self.execution_length {
