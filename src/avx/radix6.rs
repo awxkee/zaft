@@ -28,8 +28,8 @@
  */
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::util::{
-    _m256_fcmul_ps, _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2,
-    _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps,
+    _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
+    _m256_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps,
     _mm256_fcmul_pd, _mm256_load4_f32x2, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
     _mm256s_deinterleave4_epi64, shuffle,
 };

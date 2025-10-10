@@ -27,8 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _m256_fcmul_ps, _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2,
-    _m128s_store_f32x2, _mm256_fcmul_pd,
+    _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
+    _m256_fcmul_ps, _mm256_fcmul_pd,
 };
 use crate::spectrum_arithmetic::SpectrumOps;
 use num_complex::Complex;
