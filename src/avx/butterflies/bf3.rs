@@ -42,7 +42,6 @@ pub(crate) struct AvxButterfly3<T> {
     direction: FftDirection,
     twiddle: Complex<T>,
     tw1: [T; 8],
-    tw2: [T; 8],
 }
 
 impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> AvxButterfly3<T>
@@ -65,16 +64,6 @@ where
                 -twiddle.im,
                 twiddle.im,
             ],
-            tw2: [
-                twiddle.im,
-                -twiddle.im,
-                twiddle.im,
-                -twiddle.im,
-                twiddle.im,
-                -twiddle.im,
-                twiddle.im,
-                -twiddle.im,
-            ],
         }
     }
 }
@@ -92,7 +81,6 @@ impl AvxButterfly3<f32> {
         unsafe {
             let twiddle_re = _mm256_set1_ps(self.twiddle.re);
             let tw1 = _mm256_loadu_ps(self.tw1.as_ptr());
-            let tw2 = _mm256_loadu_ps(self.tw2.as_ptr());
 
             for chunk in in_place.chunks_exact_mut(12) {
                 let u0u1u2u3 = _mm256_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
@@ -112,7 +100,7 @@ impl AvxButterfly3<f32> {
 
                 let zy0 = sum;
                 let zy1 = _mm256_fmadd_ps(tw1, xn_rot, w_1);
-                let zy2 = _mm256_fmadd_ps(tw2, xn_rot, w_1);
+                let zy2 = _mm256_fnmadd_ps(tw1, xn_rot, w_1);
 
                 let (y0, y1, y2) = _mm256s_interleave3_epi64(zy0, zy1, zy2);
 
@@ -146,7 +134,7 @@ impl AvxButterfly3<f32> {
 
                 let zy0 = sum;
                 let zy1 = _mm_fmadd_ps(_mm256_castps256_ps128(tw1), xn_rot, w_1);
-                let zy2 = _mm_fmadd_ps(_mm256_castps256_ps128(tw2), xn_rot, w_1);
+                let zy2 = _mm_fnmadd_ps(_mm256_castps256_ps128(tw1), xn_rot, w_1);
 
                 let y0 = _mm_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(zy0, zy1);
                 let y1 = _mm_shuffle_ps::<{ shuffle(3, 2, 1, 0) }>(zy2, zy0);
@@ -178,7 +166,7 @@ impl AvxButterfly3<f32> {
 
                 let y0 = sum;
                 let y1 = _mm_fmadd_ps(_mm256_castps256_ps128(tw1), xn_rot, w_1);
-                let y2 = _mm_fmadd_ps(_mm256_castps256_ps128(tw2), xn_rot, w_1);
+                let y2 = _mm_fnmadd_ps(_mm256_castps256_ps128(tw1), xn_rot, w_1);
 
                 _mm_storeu_pd(
                     chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
@@ -207,7 +195,6 @@ impl AvxButterfly3<f64> {
         unsafe {
             let twiddle_re = _mm256_set1_pd(self.twiddle.re);
             let tw1 = _mm256_loadu_pd(self.tw1.as_ptr());
-            let tw2 = _mm256_loadu_pd(self.tw2.as_ptr());
 
             for chunk in in_place.chunks_exact_mut(6) {
                 let uz01 = _mm256_loadu_pd(chunk.as_ptr().cast());
@@ -233,7 +220,7 @@ impl AvxButterfly3<f64> {
 
                 let zy0 = sum;
                 let zy1 = _mm256_fmadd_pd(tw1, xn_rot, w_1);
-                let zy2 = _mm256_fmadd_pd(tw2, xn_rot, w_1);
+                let zy2 = _mm256_fnmadd_pd(tw1, xn_rot, w_1);
 
                 let u0 = _mm256_permute2f128_pd::<LO_LO>(zy0, zy1);
                 let u1 = _mm256_permute2f128_pd::<LO_HI>(zy2, zy0);
@@ -263,7 +250,7 @@ impl AvxButterfly3<f64> {
 
                 let y0 = sum;
                 let y1 = _mm_fmadd_pd(_mm256_castpd256_pd128(tw1), xn_rot, w_1);
-                let y2 = _mm_fmadd_pd(_mm256_castpd256_pd128(tw2), xn_rot, w_1);
+                let y2 = _mm_fnmadd_pd(_mm256_castpd256_pd128(tw1), xn_rot, w_1);
 
                 let y01 = _mm256_insertf128_pd::<1>(_mm256_castpd128_pd256(y0), y1);
 

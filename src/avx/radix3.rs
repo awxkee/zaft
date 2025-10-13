@@ -171,12 +171,11 @@ impl AvxFmaRadix3<f64> {
                             let sum = _mm256_add_pd(u0, xp);
 
                             let w_1 = _mm256_fmadd_pd(twiddle_re, xp, u0);
-                            let perm = _mm256_permute_pd::<0b0101>(xn);
-                            let vw_2 = _mm256_mul_pd(twiddle_w_2, perm);
+                            let xn_rot = _mm256_permute_pd::<0b0101>(xn);
 
                             let vy0 = sum;
-                            let vy1 = _mm256_add_pd(w_1, vw_2);
-                            let vy2 = _mm256_sub_pd(w_1, vw_2);
+                            let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot, w_1);
+                            let vy2 = _mm256_fnmadd_pd(twiddle_w_2, xn_rot, w_1);
 
                             _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             _mm256_storeu_pd(
@@ -208,14 +207,13 @@ impl AvxFmaRadix3<f64> {
                             let sum = _mm_add_pd(u0, xp);
 
                             let w_1 = _mm_fmadd_pd(_mm256_castpd256_pd128(twiddle_re), xp, u0);
-                            let vw_2 = _mm_mul_pd(
-                                _mm256_castpd256_pd128(twiddle_w_2),
-                                _mm_shuffle_pd::<0b01>(xn, xn),
-                            );
+                            let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
 
                             let vy0 = sum;
-                            let vy1 = _mm_add_pd(w_1, vw_2);
-                            let vy2 = _mm_sub_pd(w_1, vw_2);
+                            let vy1 =
+                                _mm_fmadd_pd(_mm256_castpd256_pd128(twiddle_w_2), xn_rot, w_1);
+                            let vy2 =
+                                _mm_fnmadd_pd(_mm256_castpd256_pd128(twiddle_w_2), xn_rot, w_1);
 
                             _mm_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             _mm_storeu_pd(
@@ -313,11 +311,11 @@ impl AvxFmaRadix3<f32> {
                             const SH: i32 = shuffle(2, 3, 0, 1);
 
                             let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
-                            let vw_2_1 = _mm256_mul_ps(twiddle_w_2, _mm256_permute_ps::<SH>(xn_0));
+                            let xn_rot = _mm256_permute_ps::<SH>(xn_0);
 
                             let vy0 = sum_0;
-                            let vy1 = _mm256_add_ps(vw_1_1, vw_2_1);
-                            let vy2 = _mm256_sub_ps(vw_1_1, vw_2_1);
+                            let vy1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
+                            let vy2 = _mm256_fnmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
 
                             _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             _mm256_storeu_ps(
@@ -357,14 +355,13 @@ impl AvxFmaRadix3<f32> {
                             const SH: i32 = shuffle(2, 3, 0, 1);
 
                             let w_1 = _mm_fmadd_ps(_mm256_castps256_ps128(twiddle_re), xp, u0);
-                            let vw_2 = _mm_mul_ps(
-                                _mm256_castps256_ps128(twiddle_w_2),
-                                _mm_shuffle_ps::<SH>(xn, xn),
-                            );
+                            let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
 
                             let vy0 = sum;
-                            let vy1 = _mm_add_ps(w_1, vw_2);
-                            let vy2 = _mm_sub_ps(w_1, vw_2);
+                            let vy1 =
+                                _mm_fmadd_ps(_mm256_castps256_ps128(twiddle_w_2), xn_rot, w_1);
+                            let vy2 =
+                                _mm_fnmadd_ps(_mm256_castps256_ps128(twiddle_w_2), xn_rot, w_1);
 
                             _m128s_store_f32x2(
                                 data.get_unchecked_mut(j..).as_mut_ptr().cast(),

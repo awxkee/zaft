@@ -39,7 +39,6 @@ pub(crate) struct NeonButterfly3<T> {
     direction: FftDirection,
     twiddle: Complex<T>,
     tw1: [T; 4],
-    tw2: [T; 4],
 }
 
 impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> NeonButterfly3<T>
@@ -53,7 +52,6 @@ where
             phantom_data: PhantomData,
             twiddle,
             tw1: [-twiddle.im, twiddle.im, -twiddle.im, twiddle.im],
-            tw2: [twiddle.im, -twiddle.im, twiddle.im, -twiddle.im],
         }
     }
 }
@@ -64,12 +62,11 @@ impl FftExecutor<f64> for NeonButterfly3<f64> {
             return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 3));
         }
 
-        let twiddle_re = unsafe { vdupq_n_f64(self.twiddle.re) };
-        let tw1 = unsafe { vld1q_f64(self.tw1.as_ptr()) };
-        let tw2 = unsafe { vld1q_f64(self.tw2.as_ptr()) };
+        unsafe {
+            let twiddle_re = vdupq_n_f64(self.twiddle.re);
+            let tw1 = vld1q_f64(self.tw1.as_ptr());
 
-        for chunk in in_place.chunks_exact_mut(3) {
-            unsafe {
+            for chunk in in_place.chunks_exact_mut(3) {
                 let u0 = vld1q_f64(chunk.get_unchecked(0..).as_ptr().cast());
                 let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
                 let u2 = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
@@ -84,7 +81,7 @@ impl FftExecutor<f64> for NeonButterfly3<f64> {
 
                 let y0 = sum;
                 let y1 = vfmaq_f64(w_1, tw1, xn_rot);
-                let y2 = vfmaq_f64(w_1, tw2, xn_rot);
+                let y2 = vfmsq_f64(w_1, tw1, xn_rot);
 
                 vst1q_f64(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
                 vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
@@ -111,13 +108,13 @@ impl FftExecutor<f32> for NeonButterfly3<f32> {
                 self.length(),
             ));
         }
-        let twiddle_re = unsafe { vdupq_n_f32(self.twiddle.re) };
 
-        let tw1 = unsafe { vld1q_f32(self.tw1.as_ptr()) };
-        let tw2 = unsafe { vld1q_f32(self.tw2.as_ptr()) };
+        unsafe {
+            let twiddle_re = vdupq_n_f32(self.twiddle.re);
 
-        for chunk in in_place.chunks_exact_mut(12) {
-            unsafe {
+            let tw1 = vld1q_f32(self.tw1.as_ptr());
+
+            for chunk in in_place.chunks_exact_mut(12) {
                 let uz0 = vld3q_f64(chunk.as_ptr().cast());
                 let uz1 = vld3q_f64(chunk.get_unchecked(6..).as_ptr().cast());
 
@@ -145,11 +142,11 @@ impl FftExecutor<f32> for NeonButterfly3<f32> {
 
                 let y0 = sum0;
                 let y1 = vfmaq_f32(w_1, tw1, xn_rot0);
-                let y2 = vfmaq_f32(w_1, tw2, xn_rot0);
+                let y2 = vfmsq_f32(w_1, tw1, xn_rot0);
 
                 let y3 = sum1;
                 let y4 = vfmaq_f32(w_2, tw1, xn_rot1);
-                let y5 = vfmaq_f32(w_2, tw2, xn_rot1);
+                let y5 = vfmsq_f32(w_2, tw1, xn_rot1);
 
                 vst3q_f64(
                     chunk.as_mut_ptr().cast(),
@@ -168,12 +165,10 @@ impl FftExecutor<f32> for NeonButterfly3<f32> {
                     ),
                 );
             }
-        }
 
-        let rem = in_place.chunks_exact_mut(12).into_remainder();
+            let rem = in_place.chunks_exact_mut(12).into_remainder();
 
-        for chunk in rem.chunks_exact_mut(6) {
-            unsafe {
+            for chunk in rem.chunks_exact_mut(6) {
                 let uz = vld3q_f64(chunk.as_ptr().cast());
                 let u0 = vreinterpretq_f32_f64(uz.0);
                 let u1 = vreinterpretq_f32_f64(uz.1);
@@ -189,7 +184,7 @@ impl FftExecutor<f32> for NeonButterfly3<f32> {
 
                 let y0 = sum;
                 let y1 = vfmaq_f32(w_1, tw1, xn_rot);
-                let y2 = vfmaq_f32(w_1, tw2, xn_rot);
+                let y2 = vfmsq_f32(w_1, tw1, xn_rot);
 
                 vst3q_f64(
                     chunk.as_mut_ptr().cast(),
@@ -200,12 +195,10 @@ impl FftExecutor<f32> for NeonButterfly3<f32> {
                     ),
                 );
             }
-        }
 
-        let rem = rem.chunks_exact_mut(6).into_remainder();
+            let rem = rem.chunks_exact_mut(6).into_remainder();
 
-        for chunk in rem.chunks_exact_mut(3) {
-            unsafe {
+            for chunk in rem.chunks_exact_mut(3) {
                 let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
 
                 let u0 = vget_low_f32(uz0);
@@ -222,7 +215,7 @@ impl FftExecutor<f32> for NeonButterfly3<f32> {
 
                 let y0 = sum;
                 let y1 = vfma_f32(w_1, vget_low_f32(tw1), xn_rot);
-                let y2 = vfma_f32(w_1, vget_low_f32(tw2), xn_rot);
+                let y2 = vfms_f32(w_1, vget_low_f32(tw1), xn_rot);
 
                 vst1q_f32(
                     chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),

@@ -47,11 +47,11 @@ impl AvxButterfly {
 
         const SH: i32 = shuffle(2, 3, 0, 1);
         let w_1 = _mm256_fmadd_ps(tw_re, xp, u0);
-        let vw_2 = _mm256_mul_ps(tw_w_2, _mm256_shuffle_ps::<SH>(xn, xn));
+        let xn_rot = _mm256_shuffle_ps::<SH>(xn, xn);
 
         let y0 = sum;
-        let y1 = _mm256_add_ps(w_1, vw_2);
-        let y2 = _mm256_sub_ps(w_1, vw_2);
+        let y1 = _mm256_fmadd_ps(xn_rot, tw_w_2, w_1);
+        let y2 = _mm256_fnmadd_ps(xn_rot, tw_w_2, w_1);
         (y0, y1, y2)
     }
 
@@ -79,11 +79,11 @@ impl AvxButterfly {
 
         const SH: i32 = shuffle(2, 3, 0, 1);
         let w_1 = _mm_fmadd_ps(tw_re, xp, u0);
-        let vw_2 = _mm_mul_ps(tw_w_2, _mm_shuffle_ps::<SH>(xn, xn));
+        let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
 
         let y0 = sum;
-        let y1 = _mm_add_ps(w_1, vw_2);
-        let y2 = _mm_sub_ps(w_1, vw_2);
+        let y1 = _mm_fmadd_ps(tw_w_2, xn_rot, w_1);
+        let y2 = _mm_fnmadd_ps(tw_w_2, xn_rot, w_1);
         (y0, y1, y2)
     }
 
