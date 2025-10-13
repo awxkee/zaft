@@ -57,6 +57,7 @@ pub(crate) trait Radix7Twiddles {
     where
         Self: Sized;
 
+    #[allow(unused)]
     fn make_twiddles_with_base(
         base: usize,
         size: usize,
