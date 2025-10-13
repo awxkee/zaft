@@ -174,7 +174,7 @@ pub(crate) unsafe fn _mm256s_deinterleave4_epi64(
 #[inline]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn _mm256_permute4x64_ps<const IMM: i32>(a: __m256) -> __m256 {
-    _mm256_castsi256_ps(_mm256_permute4x64_epi64::<IMM>(_mm256_castps_si256(a)))
+    _mm256_castpd_ps(_mm256_permute4x64_pd::<IMM>(_mm256_castps_pd(a)))
 }
 
 #[inline]
