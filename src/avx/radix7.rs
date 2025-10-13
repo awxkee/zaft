@@ -32,25 +32,45 @@ use crate::avx::util::{
     _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2, _m256_fcmul_ps,
     _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_fcmul_pd, _mm256_load4_f32x2,
 };
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::radix7::Radix7Twiddles;
+use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_seven, permute_inplace};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeFactory;
+use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_seven};
+use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::x86_64::*;
+use std::fmt::Display;
 
 pub(crate) struct AvxFmaRadix7<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     twiddle3: Complex<T>,
     direction: FftDirection,
+    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix7Twiddles + 'static + Copy + FftTrigonometry + Float> AvxFmaRadix7<T>
+impl<
+    T: Default
+        + Clone
+        + Radix7Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + Send
+        + Sync
+        + AlgorithmFactory<T>
+        + MulAdd<T, Output = T>
+        + SpectrumOpsFactory<T>
+        + Display
+        + TransposeFactory<T>,
+> AvxFmaRadix7<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -60,16 +80,16 @@ where
             "Input length must be a power of 7"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 7)?;
+        let twiddles = T::make_twiddles_with_base(7, size, fft_direction)?;
+
         Ok(AvxFmaRadix7 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             twiddle1: compute_twiddle(1, 7, fft_direction),
             twiddle2: compute_twiddle(2, 7, fft_direction),
             twiddle3: compute_twiddle(3, 7, fft_direction),
             direction: fft_direction,
+            butterfly: Zaft::strategy(7, fft_direction)?,
         })
     }
 }
@@ -87,18 +107,23 @@ impl AvxFmaRadix7<f64> {
         unsafe {
             let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
 
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f64>, 7>(7, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 7;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 7;
                     let seventh = len / 7;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < seventh {
@@ -378,9 +403,9 @@ impl AvxFmaRadix7<f64> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[seventh * 6..];
-                    len *= 7;
+                    m_twiddles = &m_twiddles[columns * 6..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -412,20 +437,25 @@ impl AvxFmaRadix7<f32> {
         }
 
         unsafe {
+            let rotate = AvxRotate::<f32>::new(FftDirection::Inverse);
+
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f32>, 7>(7, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 7;
 
-                let rotate = AvxRotate::<f32>::new(FftDirection::Inverse);
-
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 7;
                     let seventh = len / 7;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         for j in 0..seventh {
                             let u0 = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
                             let twi = 6 * j;
@@ -537,9 +567,9 @@ impl AvxFmaRadix7<f32> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[seventh * 6..];
-                    len *= 7;
+                    m_twiddles = &m_twiddles[columns * 6..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())

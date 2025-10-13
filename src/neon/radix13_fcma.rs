@@ -26,19 +26,23 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::util::{fcma_complex_f32, fcma_complex_f64, vqtrnq_f32};
 use crate::radix13::Radix13Twiddles;
+use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_thirteen, permute_inplace};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeFactory;
+use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_thirteen};
+use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
+use std::fmt::Display;
 
 pub(crate) struct NeonFcmaRadix13<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
@@ -47,10 +51,25 @@ pub(crate) struct NeonFcmaRadix13<T> {
     twiddle5: Complex<T>,
     twiddle6: Complex<T>,
     direction: FftDirection,
+    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix13Twiddles + 'static + Copy + FftTrigonometry + Float>
-    NeonFcmaRadix13<T>
+impl<
+    T: Default
+        + Clone
+        + Radix13Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + Send
+        + Sync
+        + AlgorithmFactory<T>
+        + MulAdd<T, Output = T>
+        + SpectrumOpsFactory<T>
+        + Display
+        + TransposeFactory<T>,
+> NeonFcmaRadix13<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -60,11 +79,9 @@ where
             "Input length must be a power of 13"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 13)?;
+        let twiddles = T::make_twiddles_with_base(13, size, fft_direction)?;
 
         Ok(NeonFcmaRadix13 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             twiddle1: compute_twiddle(1, 13, fft_direction),
@@ -74,6 +91,7 @@ where
             twiddle5: compute_twiddle(5, 13, fft_direction),
             twiddle6: compute_twiddle(6, 13, fft_direction),
             direction: fft_direction,
+            butterfly: Zaft::strategy(13, fft_direction)?,
         })
     }
 }
@@ -102,18 +120,23 @@ impl NeonFcmaRadix13<f64> {
             ));
         }
         unsafe {
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f64>, 13>(13, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 13;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 13;
                     let thirteenth = len / 13;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         for j in 0..thirteenth {
                             let tw0 = vld1q_f64(m_twiddles.get_unchecked(12 * j..).as_ptr().cast());
                             let tw1 =
@@ -376,9 +399,9 @@ impl NeonFcmaRadix13<f64> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[thirteenth * 12..];
-                    len *= 13;
+                    m_twiddles = &m_twiddles[columns * 12..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -410,16 +433,23 @@ impl NeonFcmaRadix13<f32> {
         }
 
         unsafe {
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f32>, 13>(13, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 13;
+
                 let mut m_twiddles = self.twiddles.as_slice();
-                while len <= self.execution_length {
+
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 13;
                     let thirteenth = len / 13;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < thirteenth {
@@ -969,9 +999,9 @@ impl NeonFcmaRadix13<f32> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[thirteenth * 12..];
-                    len *= 13;
+                    m_twiddles = &m_twiddles[columns * 12..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())

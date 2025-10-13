@@ -31,7 +31,7 @@ use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::{
     compute_twiddle, digit_reverse_indices, is_power_of_eleven, permute_inplace,
-    radixn_floating_twiddles,
+    radixn_floating_twiddles, radixn_floating_twiddles_from_base,
 };
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -58,6 +58,15 @@ pub(crate) trait Radix11Twiddles {
     ) -> Result<Vec<Complex<Self>>, ZaftError>
     where
         Self: Sized;
+
+    #[allow(unused)]
+    fn make_twiddles_with_base(
+        base: usize,
+        size: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Vec<Complex<Self>>, ZaftError>
+    where
+        Self: Sized;
 }
 
 impl Radix11Twiddles for f64 {
@@ -67,6 +76,17 @@ impl Radix11Twiddles for f64 {
     ) -> Result<Vec<Complex<f64>>, ZaftError> {
         radixn_floating_twiddles::<f64, 11>(size, fft_direction)
     }
+
+    fn make_twiddles_with_base(
+        base: usize,
+        size: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Vec<Complex<Self>>, ZaftError>
+    where
+        Self: Sized,
+    {
+        radixn_floating_twiddles_from_base::<f64, 11>(base, size, fft_direction)
+    }
 }
 
 impl Radix11Twiddles for f32 {
@@ -75,6 +95,17 @@ impl Radix11Twiddles for f32 {
         fft_direction: FftDirection,
     ) -> Result<Vec<Complex<f32>>, ZaftError> {
         radixn_floating_twiddles::<f32, 11>(size, fft_direction)
+    }
+
+    fn make_twiddles_with_base(
+        base: usize,
+        size: usize,
+        fft_direction: FftDirection,
+    ) -> Result<Vec<Complex<Self>>, ZaftError>
+    where
+        Self: Sized,
+    {
+        radixn_floating_twiddles_from_base::<f32, 11>(base, size, fft_direction)
     }
 }
 

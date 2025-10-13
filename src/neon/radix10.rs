@@ -26,25 +26,45 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::{NeonButterfly, NeonFastButterfly5};
 use crate::neon::util::{mul_complex_f32, mul_complex_f64, mulh_complex_f32};
 use crate::radix10::Radix10Twiddles;
+use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
-use crate::util::{digit_reverse_indices, is_power_of_ten, permute_inplace};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeFactory;
+use crate::util::{bitreversed_transpose, is_power_of_ten};
+use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
+use std::fmt::Display;
 
 pub(crate) struct NeonRadix10<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     bf5: NeonFastButterfly5<T>,
     direction: FftDirection,
+    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix10Twiddles + 'static + Copy + FftTrigonometry + Float> NeonRadix10<T>
+impl<
+    T: Default
+        + Clone
+        + Radix10Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + Send
+        + Sync
+        + AlgorithmFactory<T>
+        + MulAdd<T, Output = T>
+        + SpectrumOpsFactory<T>
+        + Display
+        + TransposeFactory<T>,
+> NeonRadix10<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -54,15 +74,14 @@ where
             "Input length must be a power of 10"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 10)?;
+        let twiddles = T::make_twiddles_with_base(10, size, fft_direction)?;
 
         Ok(NeonRadix10 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             bf5: NeonFastButterfly5::new(fft_direction),
             direction: fft_direction,
+            butterfly: Zaft::strategy(10, fft_direction)?,
         })
     }
 }
@@ -79,18 +98,23 @@ impl FftExecutor<f64> for NeonRadix10<f64> {
             static ROT_90: [f64; 2] = [-0.0, 0.0];
             let rot_sign = vld1q_f64(ROT_90.as_ptr());
 
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f64>, 10>(10, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 10;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 10;
                     let tenth = len / 10;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         for j in 0..tenth {
                             let td = 9 * j;
                             let tw0 = vld1q_f64(m_twiddles.get_unchecked(td..).as_ptr().cast());
@@ -191,9 +215,10 @@ impl FftExecutor<f64> for NeonRadix10<f64> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[tenth * 9..];
-                    len *= 10;
+                    m_twiddles = &m_twiddles[columns * 9..];
                 }
+
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -221,18 +246,23 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
             static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
             let rot_sign = vld1q_f32(ROT_90.as_ptr());
 
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f32>, 10>(10, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 10;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 10;
                     let tenth = len / 10;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < tenth {
@@ -483,9 +513,9 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[tenth * 9..];
-                    len *= 10;
+                    m_twiddles = &m_twiddles[columns * 9..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())

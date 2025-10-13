@@ -172,14 +172,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     bench_rustfft_averages(c);
     bench_zaft_averages(c);
 
-    let mut input_power7 = vec![Complex::<f64>::default(); 7 * 7 * 7];
-    for z in input_power7.iter_mut() {
-        *z = Complex {
-            re: rand::rng().random(),
-            im: rand::rng().random(),
-        };
-    }
-
     let mut input_1295 = vec![Complex::<f32>::default(); 1295];
     for z in input_1295.iter_mut() {
         *z = Complex {
@@ -260,22 +252,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    let mut input_power5 = vec![Complex::<f64>::default(); 3125];
-    for z in input_power5.iter_mut() {
-        *z = Complex {
-            re: rand::rng().random(),
-            im: rand::rng().random(),
-        };
-    }
-
-    let mut input_power5s = vec![Complex::<f32>::default(); 3125];
-    for z in input_power5s.iter_mut() {
-        *z = Complex {
-            re: rand::rng().random(),
-            im: rand::rng().random(),
-        };
-    }
-
     let mut input_power6 = vec![Complex::<f64>::default(); 1296];
     for z in input_power6.iter_mut() {
         *z = Complex {
@@ -295,7 +271,9 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // check_power_group(c, 1920, "Full HD".to_string());
     // check_power_group(c, 1000, "power 10".to_string());
     // check_power_group(c, 13 * 13 * 13, "power 13".to_string());
+    // check_power_group(c, 3125, "power 5".to_string());
     check_power_group(c, 7 * 7 * 7, "power 7".to_string());
+    // check_power_group(c, 11 * 11 * 11, "power 11".to_string());
 
     c.bench_function("rustfft prime 1201", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_1201.len());
@@ -484,38 +462,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("zaft power3s", |b| {
         let plan = Zaft::make_forward_fft_f32(input_power3s.len()).unwrap();
         let mut working = input_power3s.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft power5", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power5.len());
-        let mut working = input_power5.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power5", |b| {
-        let plan = Zaft::make_forward_fft_f64(input_power5.len()).unwrap();
-        let mut working = input_power5.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft power5s", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power5s.len());
-        let mut working = input_power5s.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power5s", |b| {
-        let plan = Zaft::make_forward_fft_f32(input_power5s.len()).unwrap();
-        let mut working = input_power5s.to_vec();
         b.iter(|| {
             plan.execute(&mut working).unwrap();
         })

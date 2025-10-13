@@ -26,25 +26,45 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::neon::util::{mul_complex_f32, mul_complex_f64, v_rotate90_f32, v_rotate90_f64};
 use crate::radix5::Radix5Twiddles;
+use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_five, permute_inplace};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeFactory;
+use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_five};
+use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
+use std::fmt::Display;
 
 pub(crate) struct NeonRadix5<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     direction: FftDirection,
+    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix5Twiddles + 'static + Copy + FftTrigonometry + Float> NeonRadix5<T>
+impl<
+    T: Default
+        + Clone
+        + Radix5Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + Send
+        + Sync
+        + AlgorithmFactory<T>
+        + MulAdd<T, Output = T>
+        + SpectrumOpsFactory<T>
+        + Display
+        + TransposeFactory<T>,
+> NeonRadix5<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -54,16 +74,15 @@ where
             "Input length must be a power of 5"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 5)?;
+        let twiddles = T::make_twiddles_with_base(5, size, fft_direction)?;
 
         Ok(NeonRadix5 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             twiddle1: compute_twiddle(1, 5, fft_direction),
             twiddle2: compute_twiddle(2, 5, fft_direction),
             direction: fft_direction,
+            butterfly: Zaft::strategy(5, fft_direction)?,
         })
     }
 }
@@ -77,25 +96,30 @@ impl FftExecutor<f64> for NeonRadix5<f64> {
             ));
         }
 
-        let tw1_re = unsafe { vdupq_n_f64(self.twiddle1.re) };
-        let tw1_im = unsafe { vdupq_n_f64(self.twiddle1.im) };
-        let tw2_re = unsafe { vdupq_n_f64(self.twiddle2.re) };
-        let tw2_im = unsafe { vdupq_n_f64(self.twiddle2.im) };
-        let rot_sign = unsafe { vld1q_f64([-0.0, 0.0].as_ptr()) };
+        unsafe {
+            let tw1_re = vdupq_n_f64(self.twiddle1.re);
+            let tw1_im = vdupq_n_f64(self.twiddle1.im);
+            let tw2_re = vdupq_n_f64(self.twiddle2.re);
+            let tw2_im = vdupq_n_f64(self.twiddle2.im);
+            let rot_sign = vld1q_f64([-0.0, 0.0].as_ptr());
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                bitreversed_transpose::<Complex<f64>, 5>(5, chunk, &mut scratch);
 
-            let mut len = 5;
+                self.butterfly.execute(&mut scratch)?;
 
-            unsafe {
+                let mut len = 5;
+
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 5;
                     let fifth = len / 5;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         for j in 0..fifth {
                             let u0 = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
                             let u1 = mul_complex_f64(
@@ -157,9 +181,9 @@ impl FftExecutor<f64> for NeonRadix5<f64> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[fifth * 4..];
-                    len *= 5;
+                    m_twiddles = &m_twiddles[columns * 4..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -195,18 +219,23 @@ impl FftExecutor<f32> for NeonRadix5<f32> {
             let a1_a2 = vcombine_f32(vget_low_f32(tw1_re), vget_low_f32(tw2_re));
             let a1_a2_2 = vcombine_f32(vget_low_f32(tw2_re), vget_low_f32(tw1_re));
 
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f32>, 5>(5, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 5;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 5;
                     let fifth = len / 5;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < fifth {
@@ -364,9 +393,10 @@ impl FftExecutor<f32> for NeonRadix5<f32> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[fifth * 4..];
-                    len *= 5;
+                    m_twiddles = &m_twiddles[columns * 4..];
                 }
+
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())

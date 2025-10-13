@@ -66,7 +66,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo clippy --features avx,neon -- -D warnings
+      - run: cargo clippy --features avx -- -D warnings
+      - run: cargo clippy --no-default-features -- -D warnings
 
   clippy_x86_nightly:
     name: Clippy x86 Nightly
@@ -90,7 +91,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        feature: [ "", neon ]
+        feature: [ "", neon, fcma ]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

@@ -252,6 +252,11 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
 ) {
     let width = input.len() / height;
 
+    if width == 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
     // Let's make sure the arguments are ok
     assert!(D > 1 && input.len() % height == 0 && input.len() == output.len());
 
@@ -266,6 +271,11 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
     } else {
         compute_logarithm::<D>(width).unwrap()
     };
+
+    if strided_width == 0 {
+        output.copy_from_slice(input);
+        return;
+    }
 
     for x in 0..strided_width {
         let mut i = 0;
@@ -313,7 +323,7 @@ fn reverse_bits<const D: usize>(value: usize, rev_digits: u32) -> usize {
 }
 
 // computes `n` such that `D ^ n == value`. Returns `None` if `value` is not a perfect power of `D`, otherwise returns `Some(n)`
-fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
+pub(crate) fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
     if value == 0 || D < 2 {
         return None;
     }

@@ -26,26 +26,46 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::util::{mul_complex_f32, mul_complex_f64, mulh_complex_f32};
 use crate::radix6::Radix6Twiddles;
+use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_six, permute_inplace};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeFactory;
+use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_six};
+use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
+use std::fmt::Display;
 
 pub(crate) struct NeonRadix6<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     twiddle_re: T,
     twiddle_im: [T; 4],
     direction: FftDirection,
+    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix6Twiddles + 'static + Copy + FftTrigonometry + Float> NeonRadix6<T>
+impl<
+    T: Default
+        + Clone
+        + Radix6Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + Send
+        + Sync
+        + AlgorithmFactory<T>
+        + MulAdd<T, Output = T>
+        + SpectrumOpsFactory<T>
+        + Display
+        + TransposeFactory<T>,
+> NeonRadix6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -55,18 +75,17 @@ where
             "Input length must be a power of 6"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 6)?;
+        let twiddles = T::make_twiddles_with_base(6, size, fft_direction)?;
 
         let twiddle = compute_twiddle::<T>(1, 3, fft_direction);
 
         Ok(NeonRadix6 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             twiddle_re: twiddle.re,
             twiddle_im: [-twiddle.im, twiddle.im, -twiddle.im, twiddle.im],
             direction: fft_direction,
+            butterfly: Zaft::strategy(6, fft_direction)?,
         })
     }
 }
@@ -80,22 +99,27 @@ impl FftExecutor<f64> for NeonRadix6<f64> {
             ));
         }
 
-        let twiddle_re = unsafe { vdupq_n_f64(self.twiddle_re) };
-        let twiddle_w_2 = unsafe { vld1q_f64(self.twiddle_im.as_ptr().cast()) };
+        unsafe {
+            let twiddle_re = vdupq_n_f64(self.twiddle_re);
+            let twiddle_w_2 = vld1q_f64(self.twiddle_im.as_ptr().cast());
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                bitreversed_transpose::<Complex<f64>, 6>(6, chunk, &mut scratch);
 
-            let mut len = 6;
+                self.butterfly.execute(&mut scratch)?;
 
-            unsafe {
+                let mut len = 6;
+
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 6;
                     let sixth = len / 6;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         for j in 0..sixth {
                             let u0 = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
                             let u1 = mul_complex_f64(
@@ -149,9 +173,9 @@ impl FftExecutor<f64> for NeonRadix6<f64> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[sixth * 5..];
-                    len *= 6;
+                    m_twiddles = &m_twiddles[columns * 5..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -175,22 +199,27 @@ impl FftExecutor<f32> for NeonRadix6<f32> {
             ));
         }
 
-        let twiddle_re = unsafe { vdupq_n_f32(self.twiddle_re) };
-        let twiddle_w_2 = unsafe { vld1q_f32(self.twiddle_im.as_ptr().cast()) };
+        unsafe {
+            let twiddle_re = vdupq_n_f32(self.twiddle_re);
+            let twiddle_w_2 = vld1q_f32(self.twiddle_im.as_ptr().cast());
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                bitreversed_transpose::<Complex<f32>, 6>(6, chunk, &mut scratch);
 
-            let mut len = 6;
+                self.butterfly.execute(&mut scratch)?;
 
-            unsafe {
+                let mut len = 6;
+
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 6;
                     let sixth = len / 6;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < sixth {
@@ -333,9 +362,9 @@ impl FftExecutor<f32> for NeonRadix6<f32> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[sixth * 5..];
-                    len *= 6;
+                    m_twiddles = &m_twiddles[columns * 5..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
