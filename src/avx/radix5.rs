@@ -33,17 +33,21 @@ use crate::avx::util::{
     _mm256_fcmul_pd, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64,
     shuffle,
 };
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::radix5::Radix5Twiddles;
+use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_five, permute_inplace};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeFactory;
+use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_five};
+use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::x86_64::*;
+use std::fmt::Display;
 
 pub(crate) struct AvxFmaRadix5<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
@@ -52,9 +56,25 @@ pub(crate) struct AvxFmaRadix5<T> {
     tw2ntw1_im: [T; 8],
     tw1tw2_re: [T; 8],
     tw2tw1_re: [T; 8],
+    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix5Twiddles + 'static + Copy + FftTrigonometry + Float> AvxFmaRadix5<T>
+impl<
+    T: Default
+        + Clone
+        + Radix5Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + Send
+        + Sync
+        + AlgorithmFactory<T>
+        + MulAdd<T, Output = T>
+        + SpectrumOpsFactory<T>
+        + Display
+        + TransposeFactory<T>,
+> AvxFmaRadix5<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -64,14 +84,12 @@ where
             "Input length must be a power of 5"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 5)?;
+        let twiddles = T::make_twiddles_with_base(5, size, fft_direction)?;
 
         let tw1 = compute_twiddle(1, 5, fft_direction);
         let tw2 = compute_twiddle(2, 5, fft_direction);
 
         Ok(AvxFmaRadix5 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             twiddle1: tw1,
@@ -89,6 +107,7 @@ where
                 tw2.re, tw2.re, tw1.re, tw1.re, tw2.re, tw2.re, tw1.re, tw1.re,
             ],
             direction: fft_direction,
+            butterfly: Zaft::strategy(5, fft_direction)?,
         })
     }
 }
@@ -111,18 +130,23 @@ impl AvxFmaRadix5<f64> {
             let rot_sign =
                 _mm256_loadu_pd([-0.0f64, 0.0, -0.0f64, 0.0, -0.0f64, 0.0, -0.0f64, 0.0].as_ptr());
 
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f64>, 5>(5, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 5;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 5;
                     let fifth = len / 5;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
                         while j + 2 < fifth {
                             let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
@@ -306,9 +330,9 @@ impl AvxFmaRadix5<f64> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[fifth * 4..];
-                    len *= 5;
+                    m_twiddles = &m_twiddles[columns * 4..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -347,18 +371,23 @@ impl AvxFmaRadix5<f32> {
             static ROT_90: [f32; 8] = [-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0];
             let rot_sign = _mm256_loadu_ps(ROT_90.as_ptr());
 
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                permute_inplace(chunk, &self.permutations);
+                bitreversed_transpose::<Complex<f32>, 5>(5, chunk, &mut scratch);
+
+                self.butterfly.execute(&mut scratch)?;
 
                 let mut len = 5;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 5;
                     let fifth = len / 5;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 4 < fifth {
@@ -660,9 +689,9 @@ impl AvxFmaRadix5<f32> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[fifth * 4..];
-                    len *= 5;
+                    m_twiddles = &m_twiddles[columns * 4..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
 

@@ -33,24 +33,44 @@ use crate::avx::util::{
     _mm256_fcmul_pd, _mm256_load4_f32x2, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
     _mm256s_deinterleave4_epi64, shuffle,
 };
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::radix6::Radix6Twiddles;
+use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_twiddle, digit_reverse_indices, is_power_of_six, permute_inplace};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeFactory;
+use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_six};
+use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::x86_64::*;
+use std::fmt::Display;
 
 pub(crate) struct AvxFmaRadix6<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     twiddle_re: T,
     twiddle_im: [T; 8],
     direction: FftDirection,
+    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix6Twiddles + 'static + Copy + FftTrigonometry + Float> AvxFmaRadix6<T>
+impl<
+    T: Default
+        + Clone
+        + Radix6Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + Send
+        + Sync
+        + AlgorithmFactory<T>
+        + MulAdd<T, Output = T>
+        + SpectrumOpsFactory<T>
+        + Display
+        + TransposeFactory<T>,
+> AvxFmaRadix6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -60,13 +80,11 @@ where
             "Input length must be a power of 6"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 6)?;
+        let twiddles = T::make_twiddles_with_base(6, size, fft_direction)?;
 
         let twiddle = compute_twiddle::<T>(1, 3, fft_direction);
 
         Ok(AvxFmaRadix6 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             twiddle_re: twiddle.re,
@@ -81,6 +99,7 @@ where
                 twiddle.im,
             ],
             direction: fft_direction,
+            butterfly: Zaft::strategy(6, fft_direction)?,
         })
     }
 }
@@ -95,22 +114,27 @@ impl AvxFmaRadix6<f64> {
             ));
         }
 
-        let twiddle_re = _mm256_set1_pd(self.twiddle_re);
-        let twiddle_w_2 = unsafe { _mm256_loadu_pd(self.twiddle_im.as_ptr().cast()) };
+        unsafe {
+            let twiddle_re = _mm256_set1_pd(self.twiddle_re);
+            let twiddle_w_2 = _mm256_loadu_pd(self.twiddle_im.as_ptr().cast());
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                bitreversed_transpose::<Complex<f64>, 6>(6, chunk, &mut scratch);
 
-            let mut len = 6;
+                self.butterfly.execute(&mut scratch)?;
 
-            unsafe {
+                let mut len = 6;
+
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 6;
                     let sixth = len / 6;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < sixth {
@@ -271,9 +295,9 @@ impl AvxFmaRadix6<f64> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[sixth * 5..];
-                    len *= 6;
+                    m_twiddles = &m_twiddles[columns * 5..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
 
@@ -305,22 +329,27 @@ impl AvxFmaRadix6<f32> {
             ));
         }
 
-        let twiddle_re = _mm256_set1_ps(self.twiddle_re);
-        let twiddle_w_2 = unsafe { _mm256_loadu_ps(self.twiddle_im.as_ptr().cast()) };
+        unsafe {
+            let twiddle_re = _mm256_set1_ps(self.twiddle_re);
+            let twiddle_w_2 = _mm256_loadu_ps(self.twiddle_im.as_ptr().cast());
 
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                bitreversed_transpose::<Complex<f32>, 6>(6, chunk, &mut scratch);
 
-            let mut len = 6;
+                self.butterfly.execute(&mut scratch)?;
 
-            unsafe {
+                let mut len = 6;
+
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 6;
                     let sixth = len / 6;
 
-                    for data in chunk.chunks_exact_mut(len) {
+                    for data in scratch.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 4 < sixth {
@@ -594,9 +623,9 @@ impl AvxFmaRadix6<f32> {
                         }
                     }
 
-                    m_twiddles = &m_twiddles[sixth * 5..];
-                    len *= 6;
+                    m_twiddles = &m_twiddles[columns * 5..];
                 }
+                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())

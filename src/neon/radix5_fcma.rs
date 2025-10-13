@@ -97,21 +97,21 @@ impl NeonFcmaRadix5<f64> {
             ));
         }
 
-        let tw1_re = vdupq_n_f64(self.twiddle1.re);
-        let tw1_im = vdupq_n_f64(self.twiddle1.im);
-        let tw2_re = vdupq_n_f64(self.twiddle2.re);
-        let tw2_im = vdupq_n_f64(self.twiddle2.im);
+        unsafe {
+            let tw1_re = vdupq_n_f64(self.twiddle1.re);
+            let tw1_im = vdupq_n_f64(self.twiddle1.im);
+            let tw2_re = vdupq_n_f64(self.twiddle2.re);
+            let tw2_im = vdupq_n_f64(self.twiddle2.im);
 
-        let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
-        for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Digit-reversal permutation
-            bitreversed_transpose::<Complex<f64>, 5>(5, chunk, &mut scratch);
+            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
+            for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                // Digit-reversal permutation
+                bitreversed_transpose::<Complex<f64>, 5>(5, chunk, &mut scratch);
 
-            self.butterfly.execute(&mut scratch)?;
+                self.butterfly.execute(&mut scratch)?;
 
-            let mut len = 5;
+                let mut len = 5;
 
-            unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();
 
                 while len < self.execution_length {
@@ -180,11 +180,10 @@ impl NeonFcmaRadix5<f64> {
 
                     m_twiddles = &m_twiddles[columns * 4..];
                 }
+
+                chunk.copy_from_slice(&scratch);
             }
-
-            chunk.copy_from_slice(&scratch);
         }
-
         Ok(())
     }
 }
