@@ -822,7 +822,6 @@ impl NeonFcmaButterfly19<f32> {
                 let m0217b = vfms_n_f32(m0217b, x7m12, self.twiddle5.im);
                 let m0217b = vfms_n_f32(m0217b, x8m11, self.twiddle3.im);
                 let m0217b = vfms_n_f32(m0217b, x9m10, self.twiddle1.im);
-                let (y02, y17) = NeonButterfly::butterfly2h_f32(m0217a, m0217b);
 
                 let m0316a = vfma_n_f32(u0, x1p18, self.twiddle3.re);
                 let m0316a = vfma_n_f32(m0316a, x2p17, self.twiddle6.re);
@@ -842,15 +841,15 @@ impl NeonFcmaButterfly19<f32> {
                 let m0316b = vfma_n_f32(m0316b, x7m12, self.twiddle2.im);
                 let m0316b = vfma_n_f32(m0316b, x8m11, self.twiddle5.im);
                 let m0316b = vfma_n_f32(m0316b, x9m10, self.twiddle8.im);
-                let (y03, y16) = NeonButterfly::butterfly2h_f32(m0316a, m0316b);
-
-                vst1q_f32(
-                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    vcombine_f32(y02, y03),
+                let (y02y03, y17y16) = NeonButterfly::butterfly2_f32(
+                    vcombine_f32(m0217a, m0316a),
+                    vcombine_f32(m0217b, m0316b),
                 );
+
+                vst1q_f32(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y02y03);
                 vst1q_f32(
                     chunk.get_unchecked_mut(16..).as_mut_ptr().cast(),
-                    vcombine_f32(y16, y17),
+                    vcombine_f32(vget_high_f32(y17y16), vget_low_f32(y17y16)),
                 );
 
                 let m0415a = vfma_n_f32(u0, x1p18, self.twiddle4.re);
@@ -920,7 +919,6 @@ impl NeonFcmaButterfly19<f32> {
                 let m0613b = vfma_n_f32(m0613b, x7m12, self.twiddle4.im);
                 let m0613b = vfms_n_f32(m0613b, x8m11, self.twiddle9.im);
                 let m0613b = vfms_n_f32(m0613b, x9m10, self.twiddle3.im);
-                let (y06, y13) = NeonButterfly::butterfly2h_f32(m0613a, m0613b);
 
                 let m0712a = vfma_n_f32(u0, x1p18, self.twiddle7.re);
                 let m0712a = vfma_n_f32(m0712a, x2p17, self.twiddle5.re);
@@ -940,15 +938,15 @@ impl NeonFcmaButterfly19<f32> {
                 let m0712b = vfms_n_f32(m0712b, x7m12, self.twiddle8.im);
                 let m0712b = vfms_n_f32(m0712b, x8m11, self.twiddle1.im);
                 let m0712b = vfma_n_f32(m0712b, x9m10, self.twiddle6.im);
-                let (y07, y12) = NeonButterfly::butterfly2h_f32(m0712a, m0712b);
-
-                vst1q_f32(
-                    chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
-                    vcombine_f32(y06, y07),
+                let (y0607, y13y12) = NeonButterfly::butterfly2_f32(
+                    vcombine_f32(m0613a, m0712a),
+                    vcombine_f32(m0613b, m0712b),
                 );
+
+                vst1q_f32(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), y0607);
                 vst1q_f32(
                     chunk.get_unchecked_mut(12..).as_mut_ptr().cast(),
-                    vcombine_f32(y12, y13),
+                    vcombine_f32(vget_high_f32(y13y12), vget_low_f32(y13y12)),
                 );
 
                 let m0811a = vfma_n_f32(u0, x1p18, self.twiddle8.re);
@@ -969,7 +967,6 @@ impl NeonFcmaButterfly19<f32> {
                 let m0811b = vfms_n_f32(m0811b, x7m12, self.twiddle1.im);
                 let m0811b = vfma_n_f32(m0811b, x8m11, self.twiddle7.im);
                 let m0811b = vfms_n_f32(m0811b, x9m10, self.twiddle4.im);
-                let (y08, y11) = NeonButterfly::butterfly2h_f32(m0811a, m0811b);
 
                 let m0910a = vfma_n_f32(u0, x1p18, self.twiddle9.re);
                 let m0910a = vfma_n_f32(m0910a, x2p17, self.twiddle1.re);
@@ -989,15 +986,15 @@ impl NeonFcmaButterfly19<f32> {
                 let m0910b = vfma_n_f32(m0910b, x7m12, self.twiddle6.im);
                 let m0910b = vfms_n_f32(m0910b, x8m11, self.twiddle4.im);
                 let m0910b = vfma_n_f32(m0910b, x9m10, self.twiddle5.im);
-                let (y09, y10) = NeonButterfly::butterfly2h_f32(m0910a, m0910b);
-
-                vst1q_f32(
-                    chunk.get_unchecked_mut(8..).as_mut_ptr().cast(),
-                    vcombine_f32(y08, y09),
+                let (y08u09, y11y10) = NeonButterfly::butterfly2_f32(
+                    vcombine_f32(m0811a, m0910a),
+                    vcombine_f32(m0811b, m0910b),
                 );
+
+                vst1q_f32(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y08u09);
                 vst1q_f32(
                     chunk.get_unchecked_mut(10..).as_mut_ptr().cast(),
-                    vcombine_f32(y10, y11),
+                    vcombine_f32(vget_high_f32(y11y10), vget_low_f32(y11y10)),
                 );
             }
         }

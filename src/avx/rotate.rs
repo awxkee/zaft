@@ -108,10 +108,10 @@ impl AvxRotate<f32> {
         )
     }
 
-    // #[target_feature(enable = "avx")]
-    // #[inline]
-    // pub(crate) unsafe fn rotate_m256(&self, v: __m256) -> __m256 {
-    //     const SH: i32 = shuffle(2, 3, 0, 1);
-    //     _mm256_xor_ps(_mm256_permute_ps::<SH>(v), _mm256_castpd_ps(self.rot_flag))
-    // }
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn rotate_m256(&self, v: __m256) -> __m256 {
+        const SH: i32 = shuffle(2, 3, 0, 1);
+        _mm256_xor_ps(_mm256_permute_ps::<SH>(v), _mm256_castpd_ps(self.rot_flag))
+    }
 }
