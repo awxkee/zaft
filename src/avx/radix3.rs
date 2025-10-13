@@ -407,6 +407,7 @@ impl FftExecutor<f32> for AvxFmaRadix3<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::radix3::Radix3;
     use rand::Rng;
 
     #[test]
@@ -421,9 +422,36 @@ mod tests {
                 };
             }
             let src = input.to_vec();
+            let mut z_ref = input.to_vec();
+
+            let radix3_forward_ref = Radix3::new(size, FftDirection::Forward).unwrap();
+
             let radix_forward = AvxFmaRadix3::new(size, FftDirection::Forward).unwrap();
             let radix_inverse = AvxFmaRadix3::new(size, FftDirection::Inverse).unwrap();
             radix_forward.execute(&mut input).unwrap();
+            radix3_forward_ref.execute(&mut z_ref).unwrap();
+
+            input
+                .iter()
+                .zip(z_ref.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-4,
+                        "a_re {} != b_re {} for size {}, reference failed at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-4,
+                        "a_im {} != b_im {} for size {}, reference failed at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
             radix_inverse.execute(&mut input).unwrap();
 
             input = input
@@ -432,22 +460,26 @@ mod tests {
                 .map(|x| Complex::new(x.re as f32, x.im as f32))
                 .collect();
 
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-5,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-5,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
+            input
+                .iter()
+                .zip(src.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-5,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-5,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
         }
     }
 
