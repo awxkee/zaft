@@ -252,7 +252,7 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
 ) {
     let width = input.len() / height;
 
-    if width == 1 {
+    if width <= 1 {
         output.copy_from_slice(input);
         return;
     }

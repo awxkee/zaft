@@ -27,14 +27,15 @@
 
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::util::{
-    _m128s_store_f32x2, _m256_fcmul_ps, _mm256_blend_ps64, _mm256_create_pd, _mm256_fcmul_pd,
-    _mm256_permute4x64_ps, shuffle,
+    _m128s_store_f32x2, _m256_fcmul_ps, _mm256_create_pd, _mm256_fcmul_pd,
+    _mm256_permute4x64_ps, _mm256_unpackhi_ps64, _mm256_unpacklo_ps64, shuffle,
 };
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
+use std::any::TypeId;
 use std::arch::x86_64::*;
 
 pub(crate) struct AvxButterfly9<T> {
@@ -56,12 +57,38 @@ where
         let tw3_bf3 = compute_twiddle::<T>(1, 3, fft_direction);
         Self {
             direction: fft_direction,
-            tw1tw2: [
-                tw1.re, tw1.im, tw2.re, tw2.im, tw1.re, tw1.im, tw2.re, tw2.im,
-            ],
-            tw2tw4: [
-                tw2.re, tw2.im, tw4.re, tw4.im, tw2.re, tw2.im, tw4.re, tw4.im,
-            ],
+            tw1tw2: if TypeId::of::<T>() == TypeId::of::<f64>() {
+                [
+                    tw1.re, tw1.im, tw2.re, tw2.im, tw1.re, tw1.im, tw2.re, tw2.im,
+                ]
+            } else {
+                [
+                    1f64.as_(),
+                    0f64.as_(),
+                    tw1.re,
+                    tw1.im,
+                    tw2.re,
+                    tw2.im,
+                    tw2.re,
+                    tw2.im,
+                ]
+            },
+            tw2tw4: if TypeId::of::<T>() == TypeId::of::<f64>() {
+                [
+                    tw2.re, tw2.im, tw4.re, tw4.im, tw2.re, tw2.im, tw4.re, tw4.im,
+                ]
+            } else {
+                [
+                    1f64.as_(),
+                    0f64.as_(),
+                    tw2.re,
+                    tw2.im,
+                    tw4.re,
+                    tw4.im,
+                    tw4.re,
+                    tw4.im,
+                ]
+            },
             tw3_re: tw3_bf3.re,
             tw3_im: [
                 -tw3_bf3.im,
@@ -201,19 +228,36 @@ impl AvxButterfly9<f32> {
 
                 let u6u7u8 = _mm256_permute4x64_ps::<{ shuffle(0, 3, 2, 1) }>(u5u6u7u8);
 
-                let (u0u1u2u3, u3u4u5, u6u7u8) =
+                let (u0u1u2u3, zu3u4u5, zu6u7u8) =
                     AvxButterfly::butterfly3_f32(u0u1u2u3, u3u4u5u6, u6u7u8, tw3_re, tw3_im);
 
-                let g0u4u5 = _m256_fcmul_ps(u3u4u5, tw1tw2);
-                let g0u7u8 = _m256_fcmul_ps(u6u7u8, tw2tw4);
+                // Radix-9 butterfly
 
-                let u3u4u5 = _mm256_blend_ps64::<0b0110>(u3u4u5, g0u4u5);
-                let u6u7u8 = _mm256_blend_ps64::<0b0110>(u6u7u8, g0u7u8);
+                let g3u4u5 = _m256_fcmul_ps(zu3u4u5, tw1tw2);
+                let g6u7u8 = _m256_fcmul_ps(zu6u7u8, tw2tw4);
+
+                const HI_HI: i32 = 0b0011_0001;
+                const LO_HI: i32 = 0b0011_0000;
+
+                let u3u6u5u8 = _mm256_unpacklo_ps64(g3u4u5, g6u7u8);
+                let u4u7 = _mm256_unpackhi_ps64(g3u4u5, g6u7u8);
+                let r0 = _mm256_unpacklo_ps64(g3u4u5, g6u7u8);
+                let u5u8 = _mm256_permute2f128_ps::<HI_HI>(r0, r0);
+
+                let u0u3u6 = _mm256_permute4x64_ps::<{ shuffle(3, 3, 2, 0) }>(
+                    _mm256_insertf128_ps::<1>(u0u1u2u3, _mm256_castps256_ps128(u3u6u5u8)),
+                );
+                let u1u4u7 = _mm256_permute4x64_ps::<{ shuffle(3, 3, 2, 1) }>(
+                    _mm256_insertf128_ps::<1>(u0u1u2u3, _mm256_castps256_ps128(u4u7)),
+                );
+                let u2u5u8 = _mm256_permute4x64_ps::<{ shuffle(3, 1, 0, 2) }>(
+                    _mm256_permute2f128_ps::<LO_HI>(u5u8, u0u1u2u3),
+                );
 
                 let (y0y1y2, y3y4y5, y6y7y8) =
-                    AvxButterfly::butterfly3_f32(u0u1u2u3, u3u4u5, u6u7u8, tw3_re, tw3_im);
+                    AvxButterfly::butterfly3_f32(u0u3u6, u1u4u7, u2u5u8, tw3_re, tw3_im);
 
-                _mm256_storeu_ps(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0y1y2);
+                _mm256_storeu_ps(chunk.as_mut_ptr().cast(), y0y1y2);
                 _mm256_storeu_ps(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), y3y4y5);
                 _mm_storeu_ps(
                     chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
@@ -247,6 +291,7 @@ impl FftExecutor<f32> for AvxButterfly9<f32> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::butterflies::Butterfly9;
     use rand::Rng;
 
     #[test]
@@ -265,7 +310,7 @@ mod test {
             let radix_forward = AvxButterfly9::new(FftDirection::Forward);
             let radix_inverse = AvxButterfly9::new(FftDirection::Inverse);
 
-            let radix_forward_ref = AvxButterfly9::new(FftDirection::Forward);
+            let radix_forward_ref = Butterfly9::new(FftDirection::Forward);
 
             radix_forward.execute(&mut input).unwrap();
             radix_forward_ref.execute(&mut ref0).unwrap();
@@ -334,7 +379,7 @@ mod test {
             let radix_forward = AvxButterfly9::new(FftDirection::Forward);
             let radix_inverse = AvxButterfly9::new(FftDirection::Inverse);
 
-            let radix_forward_ref = AvxButterfly9::new(FftDirection::Forward);
+            let radix_forward_ref = Butterfly9::new(FftDirection::Forward);
 
             radix_forward.execute(&mut input).unwrap();
             radix_forward_ref.execute(&mut ref0).unwrap();
