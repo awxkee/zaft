@@ -29,11 +29,11 @@
 
 mod c2r;
 mod c2r_twiddles;
-mod r2c;
 mod r2c_twiddles;
+mod real_to_complex;
 
 pub use c2r::C2RFftExecutor;
 pub(crate) use c2r::{C2RFftEvenInterceptor, C2RFftOddInterceptor};
-pub use r2c::R2CFftExecutor;
-pub(crate) use r2c::{R2CFftEvenInterceptor, R2CFftOddInterceptor};
 pub(crate) use r2c_twiddles::R2CTwiddlesHandler;
+pub use real_to_complex::R2CFftExecutor;
+pub(crate) use real_to_complex::{R2CFftEvenInterceptor, R2CFftOddInterceptor};

@@ -164,12 +164,12 @@ where
             }
 
             self.twiddles_handler
-                .handle(&self.twiddles, &mut output_left, &mut output_right);
+                .handle(&self.twiddles, output_left, output_right);
 
-            if output.len() % 2 == 1 {
-                if let Some(center_element) = output.get_mut(output.len() / 2) {
-                    center_element.im = -center_element.im;
-                }
+            if output.len() % 2 == 1
+                && let Some(center_element) = output.get_mut(output.len() / 2)
+            {
+                center_element.im = -center_element.im;
             }
         }
 

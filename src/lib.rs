@@ -26,6 +26,13 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(
+    clippy::manual_is_multiple_of,
+    clippy::assign_op_pattern,
+    clippy::only_used_in_recursion,
+    clippy::too_many_arguments,
+    clippy::type_complexity
+)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(
     all(feature = "fcma", target_arch = "aarch64"),

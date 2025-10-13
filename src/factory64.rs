@@ -51,7 +51,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             use crate::neon::NeonButterfly2;
-            return Ok(Box::new(NeonButterfly2::new(fft_direction)));
+            Ok(Box::new(NeonButterfly2::new(fft_direction)))
         }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         if std::arch::is_x86_feature_detected!("avx2") {
@@ -77,7 +77,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             use crate::neon::NeonButterfly3;
-            return Ok(Box::new(NeonButterfly3::new(fft_direction)));
+            Ok(Box::new(NeonButterfly3::new(fft_direction)))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -97,7 +97,7 @@ impl AlgorithmFactory<f64> for f64 {
                 return Ok(Box::new(NeonFcmaButterfly4::new(fft_direction)));
             }
             use crate::neon::NeonButterfly4;
-            return Ok(Box::new(NeonButterfly4::new(fft_direction)));
+            Ok(Box::new(NeonButterfly4::new(fft_direction)))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -701,13 +701,12 @@ impl AlgorithmFactory<f64> for f64 {
         {
             if std::arch::is_x86_feature_detected!("avx2")
                 && std::arch::is_x86_feature_detected!("fma")
+                && n < (u32::MAX - 100_000u32) as usize
             {
-                if n < (u32::MAX - 100_000u32) as usize {
-                    use crate::avx::AvxRadersFft;
-                    unsafe {
-                        return AvxRadersFft::new(n, convolve_fft, fft_direction)
-                            .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
-                    }
+                use crate::avx::AvxRadersFft;
+                unsafe {
+                    return AvxRadersFft::new(n, convolve_fft, fft_direction)
+                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
                 }
             }
         }

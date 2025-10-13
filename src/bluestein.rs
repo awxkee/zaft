@@ -176,7 +176,7 @@ where
             self.spectrum_ops
                 .mul(chunk, &self.twiddles, &mut inner_input[..chunk.len()]);
 
-            for inner in (&mut inner_input[chunk.len()..]).iter_mut() {
+            for inner in inner_input[chunk.len()..].iter_mut() {
                 *inner = Complex::zero();
             }
 
@@ -192,7 +192,7 @@ where
 
             // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
             self.spectrum_ops.conjugate_mul_by_b(
-                &mut inner_input[..chunk.len()],
+                &inner_input[..chunk.len()],
                 &self.twiddles,
                 chunk,
             );

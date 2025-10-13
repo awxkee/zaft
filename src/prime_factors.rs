@@ -206,11 +206,7 @@ pub(crate) fn split_factors_closest(factors: &[(u64, u32)]) -> (u64, u64) {
     ) {
         if index == primes.len() {
             let other = total / prod;
-            let diff = if prod > other {
-                prod - other
-            } else {
-                other - prod
-            };
+            let diff = prod.abs_diff(other);
             if diff < *best {
                 *best = diff;
                 *best_prod = prod;
