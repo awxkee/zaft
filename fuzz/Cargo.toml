@@ -14,6 +14,12 @@ num-complex = "0.4"
 
 [dependencies.zaft]
 path = ".."
+default-features = false
+
+[features]
+default = []
+avx = ["zaft/avx"]
+neon = ["zaft/neon"]
 
 [[bin]]
 name = "single_precision"
