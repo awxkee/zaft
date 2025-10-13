@@ -245,7 +245,7 @@ where
     Ok(twiddles)
 }
 
-pub fn bitreversed_transpose<T: Copy, const D: usize>(
+pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
     height: usize,
     input: &[T],
     output: &mut [T],
