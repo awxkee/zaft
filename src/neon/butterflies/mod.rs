@@ -51,6 +51,8 @@ mod bf17;
 #[cfg(feature = "fcma")]
 mod bf17_fcma;
 mod bf19;
+#[cfg(feature = "fcma")]
+mod bf19_fcma;
 mod bf2;
 mod bf23;
 mod bf3;
@@ -118,6 +120,8 @@ pub(crate) use bf17::NeonButterfly17;
 #[cfg(feature = "fcma")]
 pub(crate) use bf17_fcma::NeonFcmaButterfly17;
 pub(crate) use bf19::NeonButterfly19;
+#[cfg(feature = "fcma")]
+pub(crate) use bf19_fcma::NeonFcmaButterfly19;
 pub(crate) use bf23::NeonButterfly23;
 pub(crate) use fast_bf5::NeonFastButterfly5;
 pub(crate) use shared::NeonButterfly;
