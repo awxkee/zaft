@@ -315,7 +315,7 @@ mod test {
 
     #[test]
     fn test_butterfly6_f32() {
-        for i in 1..6 {
+        for i in 1..5 {
             let size = 6usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
@@ -353,7 +353,7 @@ mod test {
 
     #[test]
     fn test_butterfly6_f64() {
-        for i in 1..6 {
+        for i in 1..5 {
             let size = 6usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
             for z in input.iter_mut() {

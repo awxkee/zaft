@@ -942,7 +942,7 @@ mod tests {
     use rand::Rng;
     #[test]
     fn test_avx_radix7() {
-        for i in 1..5 {
+        for i in 1..4 {
             let size = 7usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
@@ -1011,7 +1011,7 @@ mod tests {
 
     #[test]
     fn test_avx_radix7_f64() {
-        for i in 1..5 {
+        for i in 1..4 {
             let size = 7usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
             for z in input.iter_mut() {

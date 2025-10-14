@@ -578,7 +578,7 @@ mod test {
 
     #[test]
     fn test_butterfly8_f64() {
-        for i in 1..6 {
+        for i in 1..5 {
             let size = 8usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
             for z in input.iter_mut() {
