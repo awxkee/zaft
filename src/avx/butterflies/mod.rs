@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod bf11;
+mod bf13;
 mod bf2;
 mod bf3;
 mod bf4;
@@ -46,4 +47,5 @@ pub(crate) use bf7::AvxButterfly7;
 pub(crate) use bf8::AvxButterfly8;
 pub(crate) use bf9::AvxButterfly9;
 pub(crate) use bf11::AvxButterfly11;
+pub(crate) use bf13::AvxButterfly13;
 pub(crate) use shared::AvxButterfly;

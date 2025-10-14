@@ -110,11 +110,11 @@ impl AvxButterfly {
         let sum = _mm256_add_pd(u0, xp);
 
         let w_1 = _mm256_fmadd_pd(tw_re, xp, u0);
-        let vw_2 = _mm256_mul_pd(tw_w_2, _mm256_permute_pd::<0b0101>(xn));
+        let xn_rot = _mm256_permute_pd::<0b0101>(xn);
 
         let y0 = sum;
-        let y1 = _mm256_add_pd(w_1, vw_2);
-        let y2 = _mm256_sub_pd(w_1, vw_2);
+        let y1 = _mm256_fmadd_pd(tw_w_2, xn_rot, w_1);
+        let y2 = _mm256_fnmadd_pd(tw_w_2, xn_rot, w_1);
         (y0, y1, y2)
     }
 
@@ -132,11 +132,11 @@ impl AvxButterfly {
         let sum = _mm_add_pd(u0, xp);
 
         let w_1 = _mm_fmadd_pd(tw_re, xp, u0);
-        let vw_2 = _mm_mul_pd(tw_w_2, _mm_shuffle_pd::<0b01>(xn, xn));
+        let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
 
         let y0 = sum;
-        let y1 = _mm_add_pd(w_1, vw_2);
-        let y2 = _mm_sub_pd(w_1, vw_2);
+        let y1 = _mm_fmadd_pd(tw_w_2, xn_rot, w_1);
+        let y2 = _mm_fnmadd_pd(tw_w_2, xn_rot, w_1);
         (y0, y1, y2)
     }
 

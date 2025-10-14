@@ -133,9 +133,9 @@ impl FftExecutor<f64> for NeonButterfly13<f64> {
                 let m0211b = vmulq_n_f64(x1m12, self.twiddle2.im);
                 let m0211b = vfmaq_n_f64(m0211b, x2m11, self.twiddle4.im);
                 let m0211b = vfmaq_n_f64(m0211b, x3m10, self.twiddle6.im);
-                let m0211b = vfmaq_n_f64(m0211b, x4m9, -self.twiddle5.im);
-                let m0211b = vfmaq_n_f64(m0211b, x5m8, -self.twiddle3.im);
-                let m0211b = vfmaq_n_f64(m0211b, x6m7, -self.twiddle1.im);
+                let m0211b = vfmsq_n_f64(m0211b, x4m9, self.twiddle5.im);
+                let m0211b = vfmsq_n_f64(m0211b, x5m8, self.twiddle3.im);
+                let m0211b = vfmsq_n_f64(m0211b, x6m7, self.twiddle1.im);
                 let (y02, y11) = NeonButterfly::butterfly2_f64(m0211a, m0211b);
 
                 let m0310a = vfmaq_n_f64(u0, x1p12, self.twiddle3.re);

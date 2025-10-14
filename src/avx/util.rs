@@ -32,12 +32,11 @@ use std::arch::x86_64::*;
 #[inline]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) unsafe fn _m128d_fma_mul_complex(a: __m128d, b: __m128d) -> __m128d {
-    let mut temp1 = _mm_unpacklo_pd(b, b);
+    let temp1 = _mm_unpacklo_pd(b, b);
     let mut temp2 = _mm_unpackhi_pd(b, b);
-    temp1 = _mm_mul_pd(temp1, a);
     temp2 = _mm_mul_pd(temp2, a);
-    temp2 = _mm_shuffle_pd::<0x01>(temp2, temp2);
-    _mm_addsub_pd(temp1, temp2)
+    temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
+    _mm_fmaddsub_pd(temp1, a, temp2)
 }
 
 #[inline]
@@ -324,6 +323,58 @@ pub(crate) unsafe fn _mm256_unpackhi_ps64(a: __m256, b: __m256) -> __m256 {
     _mm256_castpd_ps(_mm256_unpackhi_pd(_mm256_castps_pd(a), _mm256_castps_pd(b)))
 }
 
+// a.conj() * b
+#[inline]
+#[target_feature(enable = "avx2", enable = "fma")]
+pub(crate) unsafe fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
+    // Extract real and imag parts from a
+    let ar = _mm256_moveldup_ps(a); // duplicate even lanes (re parts)
+    let ai = _mm256_movehdup_ps(a); // duplicate odd lanes (im parts)
+
+    // Swap real/imag of b for cross terms
+    let bswap = _mm256_permute_ps::<0b10110001>(b); // [im, re, im, re, ...]
+
+    // re = ar*br - -ai*bi
+    // im = ar*bi - ai*br
+    _mm256_fmsubadd_ps(ar, b, _mm256_mul_ps(ai, bswap))
+}
+
+// a.conj() * b
+#[inline]
+#[target_feature(enable = "avx2", enable = "fma")]
+pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
+    let temp1 = _mm_shuffle_ps::<0xA0>(a, a);
+    let temp2 = _mm_shuffle_ps::<0xF5>(a, a);
+    let mul2 = _mm_mul_ps(b, temp2);
+    let mul2 = _mm_shuffle_ps::<0xB1>(mul2, mul2);
+    _mm_fmsubadd_ps(b, temp1, mul2)
+}
+
+// a.conj() * b
+#[inline]
+#[target_feature(enable = "avx2", enable = "fma")]
+pub(crate) unsafe fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
+    // Swap real and imaginary parts of 'a' for FMA
+    let a_yx = _mm256_permute_pd::<0b0101>(a); // [a_im, a_re, b_im, b_re]
+
+    // Duplicate real and imaginary parts of 'b'
+    let b_xx = _mm256_permute_pd::<0b0000>(b); // [c_re, c_re, d_re, d_re]
+    let b_yy = _mm256_permute_pd::<0b1111>(b); // [c_im, c_im, d_im, d_im]
+
+    _mm256_fmsubadd_pd(a_yx, b_yy, _mm256_mul_pd(a, b_xx))
+}
+
+// a.conj() * b
+#[inline]
+#[target_feature(enable = "avx2", enable = "fma")]
+pub(crate) unsafe fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
+    let temp1 = _mm_unpacklo_pd(a, a); // [b.re, b.re]
+    let mut temp2 = _mm_unpackhi_pd(a, a); // [b.im, b.im]
+    temp2 = _mm_mul_pd(temp2, b); // [b.im * a.re, b.im * a.im]
+    temp2 = _mm_shuffle_pd::<0x01>(temp2, temp2); // [b.im * a.im, b.im * a.im]
+    _mm_fmsubadd_pd(temp1, b, temp2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,6 +397,90 @@ mod tests {
             _mm256_storeu_pd(vec_b.as_mut_ptr().cast(), product);
             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
                 assert!((a - b).abs() < 1e-10);
+            });
+        }
+    }
+
+    #[test]
+    fn complexd_a_to_b_conj_avx() {
+        let values_a = [Complex::new(7.0f64, 5.0), Complex::new(5.0, -1.15)];
+        let values_b = [Complex::new(-5.0f64, 3.0), Complex::new(-1.0, 1.15)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a.conj() * b)
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = _mm256_loadu_pd(values_a.as_ptr().cast());
+            let b0 = _mm256_loadu_pd(values_b.as_ptr().cast());
+            let product = _mm256_fcmul_pd_conj_a(a0, b0);
+            let mut vec_b = vec![Complex::<f64>::default(); 2];
+            _mm256_storeu_pd(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-10);
+            });
+        }
+    }
+
+    #[test]
+    fn complexd_a_to_b_conj_sse() {
+        let values_a = [Complex::new(7.0f64, 5.0)];
+        let values_b = [Complex::new(-5.0f64, 3.0)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a.conj() * b)
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = _mm_loadu_pd(values_a.as_ptr().cast());
+            let b0 = _mm_loadu_pd(values_b.as_ptr().cast());
+            let product = _mm_fcmul_pd_conj_a(a0, b0);
+            let mut vec_b = vec![Complex::<f64>::default(); 1];
+            _mm_storeu_pd(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-10, "a {a}, b {b}");
+            });
+        }
+    }
+
+    #[test]
+    fn complex_a_to_b_conj_avx() {
+        let values_a = [Complex::new(7.0f32, 5.0), Complex::new(5.0, -1.15)];
+        let values_b = [Complex::new(-5.0f32, 3.0), Complex::new(-1.0, 1.15)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a.conj() * b)
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = _mm256_loadu_ps(values_a.as_ptr().cast());
+            let b0 = _mm256_loadu_ps(values_b.as_ptr().cast());
+            let product = _mm256_fcmul_ps_conj_a(a0, b0);
+            let mut vec_b = vec![Complex::<f32>::default(); 2];
+            _mm256_storeu_ps(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_avx a {a}, b {b}");
+            });
+        }
+    }
+
+    #[test]
+    fn complex_a_to_b_conj_sse() {
+        let values_a = [Complex::new(7.0f32, 5.0)];
+        let values_b = [Complex::new(-5.0f32, 3.0)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a.conj() * b)
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = _mm_loadu_ps(values_a.as_ptr().cast());
+            let b0 = _mm_loadu_ps(values_b.as_ptr().cast());
+            let product = _mm_fcmul_ps_conj_a(a0, b0);
+            let mut vec_b = vec![Complex::<f32>::default(); 1];
+            _mm_storeu_ps(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");
             });
         }
     }

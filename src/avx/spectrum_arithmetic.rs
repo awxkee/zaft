@@ -28,7 +28,8 @@
  */
 use crate::avx::util::{
     _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256_fcmul_ps, _mm256_fcmul_pd,
+    _m256_fcmul_ps, _mm_fcmul_pd_conj_a, _mm_fcmul_ps_conj_a, _mm256_fcmul_pd,
+    _mm256_fcmul_pd_conj_a, _mm256_fcmul_ps_conj_a,
 };
 use crate::spectrum_arithmetic::SpectrumOps;
 use num_complex::Complex;
@@ -170,31 +171,25 @@ impl AvxSpectrumArithmetic<f32> {
         dst: &mut [Complex<f32>],
     ) {
         unsafe {
-            let factors = _mm256_loadu_ps([0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0].as_ptr());
             for ((dst, src), twiddle) in dst
                 .chunks_exact_mut(16)
                 .zip(a.chunks_exact(16))
                 .zip(b.chunks_exact(16))
             {
-                let mut s0 = _mm256_loadu_ps(src.as_ptr().cast());
-                let mut s1 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
-                let mut s2 = _mm256_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
-                let mut s3 = _mm256_loadu_ps(src.get_unchecked(12..).as_ptr().cast());
-
-                s0 = _mm256_xor_ps(s0, factors);
-                s1 = _mm256_xor_ps(s1, factors);
-                s2 = _mm256_xor_ps(s2, factors);
-                s3 = _mm256_xor_ps(s3, factors);
+                let s0 = _mm256_loadu_ps(src.as_ptr().cast());
+                let s1 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
+                let s2 = _mm256_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
+                let s3 = _mm256_loadu_ps(src.get_unchecked(12..).as_ptr().cast());
 
                 let q0 = _mm256_loadu_ps(twiddle.as_ptr().cast());
                 let q1 = _mm256_loadu_ps(twiddle.get_unchecked(4..).as_ptr().cast());
                 let q2 = _mm256_loadu_ps(twiddle.get_unchecked(8..).as_ptr().cast());
                 let q3 = _mm256_loadu_ps(twiddle.get_unchecked(12..).as_ptr().cast());
 
-                let p0 = _m256_fcmul_ps(s0, q0);
-                let p1 = _m256_fcmul_ps(s1, q1);
-                let p2 = _m256_fcmul_ps(s2, q2);
-                let p3 = _m256_fcmul_ps(s3, q3);
+                let p0 = _mm256_fcmul_ps_conj_a(s0, q0);
+                let p1 = _mm256_fcmul_ps_conj_a(s1, q1);
+                let p2 = _mm256_fcmul_ps_conj_a(s2, q2);
+                let p3 = _mm256_fcmul_ps_conj_a(s3, q3);
 
                 _mm256_storeu_ps(dst.as_mut_ptr().cast(), p0);
                 _mm256_storeu_ps(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), p1);
@@ -211,12 +206,10 @@ impl AvxSpectrumArithmetic<f32> {
                 .zip(a.chunks_exact(2))
                 .zip(b.chunks_exact(2))
             {
-                let mut s0 = _mm_loadu_ps(src.as_ptr().cast());
+                let s0 = _mm_loadu_ps(src.as_ptr().cast());
                 let q0 = _mm_loadu_ps(twiddle.as_ptr().cast());
 
-                s0 = _mm_xor_ps(s0, _mm256_castps256_ps128(factors));
-
-                let p0 = _m128s_fma_mul_complex(s0, q0);
+                let p0 = _mm_fcmul_ps_conj_a(s0, q0);
 
                 _mm_storeu_ps(dst.as_mut_ptr().cast(), p0);
             }
@@ -226,12 +219,10 @@ impl AvxSpectrumArithmetic<f32> {
             let b = b.chunks_exact(2).remainder();
 
             for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-                let mut s0 = _m128s_load_f32x2(src as *const Complex<f32>);
+                let s0 = _m128s_load_f32x2(src as *const Complex<f32>);
                 let q0 = _m128s_load_f32x2(twiddle as *const Complex<f32>);
 
-                s0 = _mm_xor_ps(s0, _mm256_castps256_ps128(factors));
-
-                let p0 = _m128s_fma_mul_complex(s0, q0);
+                let p0 = _mm_fcmul_ps_conj_a(s0, q0);
 
                 _m128s_store_f32x2(dst as *mut Complex<f32>, p0);
             }
@@ -356,31 +347,25 @@ impl AvxSpectrumArithmetic<f64> {
         dst: &mut [Complex<f64>],
     ) {
         unsafe {
-            let factors = _mm256_loadu_pd([0.0f64, -0.0, 0.0, -0.0].as_ptr());
             for ((dst, src), twiddle) in dst
                 .chunks_exact_mut(8)
                 .zip(a.chunks_exact(8))
                 .zip(b.chunks_exact(8))
             {
-                let mut s0 = _mm256_loadu_pd(src.as_ptr().cast());
-                let mut s1 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
-                let mut s2 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
-                let mut s3 = _mm256_loadu_pd(src.get_unchecked(6..).as_ptr().cast());
-
-                s0 = _mm256_xor_pd(s0, factors);
-                s1 = _mm256_xor_pd(s1, factors);
-                s2 = _mm256_xor_pd(s2, factors);
-                s3 = _mm256_xor_pd(s3, factors);
+                let s0 = _mm256_loadu_pd(src.as_ptr().cast());
+                let s1 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
+                let s2 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
+                let s3 = _mm256_loadu_pd(src.get_unchecked(6..).as_ptr().cast());
 
                 let q0 = _mm256_loadu_pd(twiddle.as_ptr().cast());
                 let q1 = _mm256_loadu_pd(twiddle.get_unchecked(2..).as_ptr().cast());
                 let q2 = _mm256_loadu_pd(twiddle.get_unchecked(4..).as_ptr().cast());
                 let q3 = _mm256_loadu_pd(twiddle.get_unchecked(6..).as_ptr().cast());
 
-                let p0 = _mm256_fcmul_pd(s0, q0);
-                let p1 = _mm256_fcmul_pd(s1, q1);
-                let p2 = _mm256_fcmul_pd(s2, q2);
-                let p3 = _mm256_fcmul_pd(s3, q3);
+                let p0 = _mm256_fcmul_pd_conj_a(s0, q0);
+                let p1 = _mm256_fcmul_pd_conj_a(s1, q1);
+                let p2 = _mm256_fcmul_pd_conj_a(s2, q2);
+                let p3 = _mm256_fcmul_pd_conj_a(s3, q3);
 
                 _mm256_storeu_pd(dst.as_mut_ptr().cast(), p0);
                 _mm256_storeu_pd(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), p1);
@@ -393,12 +378,10 @@ impl AvxSpectrumArithmetic<f64> {
             let b = b.chunks_exact(4).remainder();
 
             for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-                let mut s0 = _mm_loadu_pd(src as *const Complex<f64> as *const f64);
+                let s0 = _mm_loadu_pd(src as *const Complex<f64> as *const f64);
                 let q0 = _mm_loadu_pd(twiddle as *const Complex<f64> as *const f64);
 
-                s0 = _mm_xor_pd(s0, _mm256_castpd256_pd128(factors));
-
-                let p0 = _m128d_fma_mul_complex(s0, q0);
+                let p0 = _mm_fcmul_pd_conj_a(s0, q0);
 
                 _mm_storeu_pd(dst as *mut Complex<f64> as *mut f64, p0);
             }
