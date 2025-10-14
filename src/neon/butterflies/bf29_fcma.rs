@@ -673,9 +673,6 @@ impl NeonFcmaButterfly29<f32> {
         }
 
         unsafe {
-            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            let rot_sign = vld1q_f32(ROT_90.as_ptr());
-
             for chunk in in_place.chunks_exact_mut(29) {
                 let u0u1 = vld1q_f32(chunk.as_mut_ptr().cast());
                 let u2u3 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
