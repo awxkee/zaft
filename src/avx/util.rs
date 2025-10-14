@@ -414,7 +414,7 @@ mod tests {
             let a0 = _mm256_loadu_pd(values_a.as_ptr().cast());
             let b0 = _mm256_loadu_pd(values_b.as_ptr().cast());
             let product = _mm256_fcmul_pd_conj_a(a0, b0);
-            let mut vec_b = vec![Complex::<f64>::default(); 2];
+            let mut vec_b = vec![Complex::<f64>::default(); 4];
             _mm256_storeu_pd(vec_b.as_mut_ptr().cast(), product);
             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
                 assert!((a - b).abs() < 1e-10);
@@ -435,7 +435,7 @@ mod tests {
             let a0 = _mm_loadu_pd(values_a.as_ptr().cast());
             let b0 = _mm_loadu_pd(values_b.as_ptr().cast());
             let product = _mm_fcmul_pd_conj_a(a0, b0);
-            let mut vec_b = vec![Complex::<f64>::default(); 1];
+            let mut vec_b = vec![Complex::<f64>::default(); 2];
             _mm_storeu_pd(vec_b.as_mut_ptr().cast(), product);
             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
                 assert!((a - b).abs() < 1e-10, "a {a}, b {b}");
@@ -456,7 +456,7 @@ mod tests {
             let a0 = _mm256_loadu_ps(values_a.as_ptr().cast());
             let b0 = _mm256_loadu_ps(values_b.as_ptr().cast());
             let product = _mm256_fcmul_ps_conj_a(a0, b0);
-            let mut vec_b = vec![Complex::<f32>::default(); 2];
+            let mut vec_b = vec![Complex::<f32>::default(); 4];
             _mm256_storeu_ps(vec_b.as_mut_ptr().cast(), product);
             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
                 assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_avx a {a}, b {b}");
@@ -477,7 +477,7 @@ mod tests {
             let a0 = _mm_loadu_ps(values_a.as_ptr().cast());
             let b0 = _mm_loadu_ps(values_b.as_ptr().cast());
             let product = _mm_fcmul_ps_conj_a(a0, b0);
-            let mut vec_b = vec![Complex::<f32>::default(); 1];
+            let mut vec_b = vec![Complex::<f32>::default(); 2];
             _mm_storeu_ps(vec_b.as_mut_ptr().cast(), product);
             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
                 assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");

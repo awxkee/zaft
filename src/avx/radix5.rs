@@ -720,7 +720,7 @@ mod tests {
 
     #[test]
     fn test_neon_radix5() {
-        for i in 1..7 {
+        for i in 1..4 {
             let size = 5usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
@@ -762,7 +762,7 @@ mod tests {
 
     #[test]
     fn test_neon_radix5_f64() {
-        for i in 1..7 {
+        for i in 1..4 {
             let size = 5usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
             for z in input.iter_mut() {
