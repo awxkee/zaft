@@ -27,7 +27,6 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::util::{v_rotate90_f64, vh_rotate90_f32};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -35,7 +34,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 
-pub(crate) struct NeonButterfly23<T> {
+pub(crate) struct NeonFcmaButterfly23<T> {
     direction: FftDirection,
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
@@ -50,7 +49,7 @@ pub(crate) struct NeonButterfly23<T> {
     twiddle11: Complex<T>,
 }
 
-impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> NeonButterfly23<T>
+impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> NeonFcmaButterfly23<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -71,9 +70,24 @@ where
         }
     }
 }
-
-impl FftExecutor<f64> for NeonButterfly23<f64> {
+impl FftExecutor<f64> for NeonFcmaButterfly23<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_f64(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    #[inline]
+    fn length(&self) -> usize {
+        23
+    }
+}
+
+impl NeonFcmaButterfly23<f64> {
+    #[target_feature(enable = "fcma")]
+    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if in_place.len() % 23 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -82,9 +96,6 @@ impl FftExecutor<f64> for NeonButterfly23<f64> {
         }
 
         unsafe {
-            static ROT_90: [f64; 2] = [-0.0, 0.0];
-            let rot_sign = vld1q_f64(ROT_90.as_ptr());
-
             for chunk in in_place.chunks_exact_mut(23) {
                 let u0 = vld1q_f64(chunk.as_ptr().cast());
                 let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
@@ -112,37 +123,37 @@ impl FftExecutor<f64> for NeonButterfly23<f64> {
 
                 let y00 = u0;
                 let (x1p22, x1m22) = NeonButterfly::butterfly2_f64(u1, u22);
-                let x1m22 = v_rotate90_f64(x1m22, rot_sign);
+                let x1m22 = vcaddq_rot90_f64(vdupq_n_f64(0.), x1m22);
                 let y00 = vaddq_f64(y00, x1p22);
                 let (x2p21, x2m21) = NeonButterfly::butterfly2_f64(u2, u21);
-                let x2m21 = v_rotate90_f64(x2m21, rot_sign);
+                let x2m21 = vcaddq_rot90_f64(vdupq_n_f64(0.), x2m21);
                 let y00 = vaddq_f64(y00, x2p21);
                 let (x3p20, x3m20) = NeonButterfly::butterfly2_f64(u3, u20);
-                let x3m20 = v_rotate90_f64(x3m20, rot_sign);
+                let x3m20 = vcaddq_rot90_f64(vdupq_n_f64(0.), x3m20);
                 let y00 = vaddq_f64(y00, x3p20);
                 let (x4p19, x4m19) = NeonButterfly::butterfly2_f64(u4, u19);
-                let x4m19 = v_rotate90_f64(x4m19, rot_sign);
+                let x4m19 = vcaddq_rot90_f64(vdupq_n_f64(0.), x4m19);
                 let y00 = vaddq_f64(y00, x4p19);
                 let (x5p18, x5m18) = NeonButterfly::butterfly2_f64(u5, u18);
-                let x5m18 = v_rotate90_f64(x5m18, rot_sign);
+                let x5m18 = vcaddq_rot90_f64(vdupq_n_f64(0.), x5m18);
                 let y00 = vaddq_f64(y00, x5p18);
                 let (x6p17, x6m17) = NeonButterfly::butterfly2_f64(u6, u17);
-                let x6m17 = v_rotate90_f64(x6m17, rot_sign);
+                let x6m17 = vcaddq_rot90_f64(vdupq_n_f64(0.), x6m17);
                 let y00 = vaddq_f64(y00, x6p17);
                 let (x7p16, x7m16) = NeonButterfly::butterfly2_f64(u7, u16);
-                let x7m16 = v_rotate90_f64(x7m16, rot_sign);
+                let x7m16 = vcaddq_rot90_f64(vdupq_n_f64(0.), x7m16);
                 let y00 = vaddq_f64(y00, x7p16);
                 let (x8p15, x8m15) = NeonButterfly::butterfly2_f64(u8, u15);
-                let x8m15 = v_rotate90_f64(x8m15, rot_sign);
+                let x8m15 = vcaddq_rot90_f64(vdupq_n_f64(0.), x8m15);
                 let y00 = vaddq_f64(y00, x8p15);
                 let (x9p14, x9m14) = NeonButterfly::butterfly2_f64(u9, u14);
-                let x9m14 = v_rotate90_f64(x9m14, rot_sign);
+                let x9m14 = vcaddq_rot90_f64(vdupq_n_f64(0.), x9m14);
                 let y00 = vaddq_f64(y00, x9p14);
                 let (x10p13, x10m13) = NeonButterfly::butterfly2_f64(u10, u13);
-                let x10m13 = v_rotate90_f64(x10m13, rot_sign);
+                let x10m13 = vcaddq_rot90_f64(vdupq_n_f64(0.), x10m13);
                 let y00 = vaddq_f64(y00, x10p13);
                 let (x11p12, x11m12) = NeonButterfly::butterfly2_f64(u11, u12);
-                let x11m12 = v_rotate90_f64(x11m12, rot_sign);
+                let x11m12 = vcaddq_rot90_f64(vdupq_n_f64(0.), x11m12);
                 let y00 = vaddq_f64(y00, x11p12);
 
                 vst1q_f64(chunk.as_mut_ptr().cast(), y00);
@@ -447,6 +458,12 @@ impl FftExecutor<f64> for NeonButterfly23<f64> {
         }
         Ok(())
     }
+}
+
+impl FftExecutor<f32> for NeonFcmaButterfly23<f32> {
+    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_f32(in_place) }
+    }
 
     fn direction(&self) -> FftDirection {
         self.direction
@@ -458,8 +475,9 @@ impl FftExecutor<f64> for NeonButterfly23<f64> {
     }
 }
 
-impl FftExecutor<f32> for NeonButterfly23<f32> {
-    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+impl NeonFcmaButterfly23<f32> {
+    #[target_feature(enable = "fcma")]
+    unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % 23 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -468,9 +486,6 @@ impl FftExecutor<f32> for NeonButterfly23<f32> {
         }
 
         unsafe {
-            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            let rot_sign = vld1q_f32(ROT_90.as_ptr());
-
             for chunk in in_place.chunks_exact_mut(23) {
                 let u0u1 = vld1q_f32(chunk.as_mut_ptr().cast());
                 let u2u3 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
@@ -510,37 +525,37 @@ impl FftExecutor<f32> for NeonButterfly23<f32> {
 
                 let y00 = u0;
                 let (x1p22, x1m22) = NeonButterfly::butterfly2h_f32(u1, u22);
-                let x1m22 = vh_rotate90_f32(x1m22, vget_low_f32(rot_sign));
+                let x1m22 = vcadd_rot90_f32(vdup_n_f32(0.), x1m22);
                 let y00 = vadd_f32(y00, x1p22);
                 let (x2p21, x2m21) = NeonButterfly::butterfly2h_f32(u2, u21);
-                let x2m21 = vh_rotate90_f32(x2m21, vget_low_f32(rot_sign));
+                let x2m21 = vcadd_rot90_f32(vdup_n_f32(0.), x2m21);
                 let y00 = vadd_f32(y00, x2p21);
                 let (x3p20, x3m20) = NeonButterfly::butterfly2h_f32(u3, u20);
-                let x3m20 = vh_rotate90_f32(x3m20, vget_low_f32(rot_sign));
+                let x3m20 = vcadd_rot90_f32(vdup_n_f32(0.), x3m20);
                 let y00 = vadd_f32(y00, x3p20);
                 let (x4p19, x4m19) = NeonButterfly::butterfly2h_f32(u4, u19);
-                let x4m19 = vh_rotate90_f32(x4m19, vget_low_f32(rot_sign));
+                let x4m19 = vcadd_rot90_f32(vdup_n_f32(0.), x4m19);
                 let y00 = vadd_f32(y00, x4p19);
                 let (x5p18, x5m18) = NeonButterfly::butterfly2h_f32(u5, u18);
-                let x5m18 = vh_rotate90_f32(x5m18, vget_low_f32(rot_sign));
+                let x5m18 = vcadd_rot90_f32(vdup_n_f32(0.), x5m18);
                 let y00 = vadd_f32(y00, x5p18);
                 let (x6p17, x6m17) = NeonButterfly::butterfly2h_f32(u6, u17);
-                let x6m17 = vh_rotate90_f32(x6m17, vget_low_f32(rot_sign));
+                let x6m17 = vcadd_rot90_f32(vdup_n_f32(0.), x6m17);
                 let y00 = vadd_f32(y00, x6p17);
                 let (x7p16, x7m16) = NeonButterfly::butterfly2h_f32(u7, u16);
-                let x7m16 = vh_rotate90_f32(x7m16, vget_low_f32(rot_sign));
+                let x7m16 = vcadd_rot90_f32(vdup_n_f32(0.), x7m16);
                 let y00 = vadd_f32(y00, x7p16);
                 let (x8p15, x8m15) = NeonButterfly::butterfly2h_f32(u8, u15);
-                let x8m15 = vh_rotate90_f32(x8m15, vget_low_f32(rot_sign));
+                let x8m15 = vcadd_rot90_f32(vdup_n_f32(0.), x8m15);
                 let y00 = vadd_f32(y00, x8p15);
                 let (x9p14, x9m14) = NeonButterfly::butterfly2h_f32(u9, u14);
-                let x9m14 = vh_rotate90_f32(x9m14, vget_low_f32(rot_sign));
+                let x9m14 = vcadd_rot90_f32(vdup_n_f32(0.), x9m14);
                 let y00 = vadd_f32(y00, x9p14);
                 let (x10p13, x10m13) = NeonButterfly::butterfly2h_f32(u10, u13);
-                let x10m13 = vh_rotate90_f32(x10m13, vget_low_f32(rot_sign));
+                let x10m13 = vcadd_rot90_f32(vdup_n_f32(0.), x10m13);
                 let y00 = vadd_f32(y00, x10p13);
                 let (x11p12, x11m12) = NeonButterfly::butterfly2h_f32(u11, u12);
-                let x11m12 = vh_rotate90_f32(x11m12, vget_low_f32(rot_sign));
+                let x11m12 = vcadd_rot90_f32(vdup_n_f32(0.), x11m12);
                 let y00 = vadd_f32(y00, x11p12);
 
                 let m0122a = vfma_n_f32(u0, x1p22, self.twiddle1.re);
@@ -858,15 +873,6 @@ impl FftExecutor<f32> for NeonButterfly23<f32> {
         }
         Ok(())
     }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        23
-    }
 }
 
 #[cfg(test)]
@@ -892,8 +898,8 @@ mod tests {
             let radix23_reference = Butterfly23::new(FftDirection::Forward);
             let radix23_inv_reference = Butterfly23::new(FftDirection::Inverse);
 
-            let radix_forward = NeonButterfly23::new(FftDirection::Forward);
-            let radix_inverse = NeonButterfly23::new(FftDirection::Inverse);
+            let radix_forward = NeonFcmaButterfly23::new(FftDirection::Forward);
+            let radix_inverse = NeonFcmaButterfly23::new(FftDirection::Inverse);
             radix_forward.execute(&mut input).unwrap();
             radix23_reference.execute(&mut z_ref).unwrap();
 
@@ -980,8 +986,8 @@ mod tests {
 
             let bf23_reference = Butterfly23::new(FftDirection::Forward);
 
-            let radix_forward = NeonButterfly23::new(FftDirection::Forward);
-            let radix_inverse = NeonButterfly23::new(FftDirection::Inverse);
+            let radix_forward = NeonFcmaButterfly23::new(FftDirection::Forward);
+            let radix_inverse = NeonFcmaButterfly23::new(FftDirection::Inverse);
             radix_forward.execute(&mut input).unwrap();
             bf23_reference.execute(&mut z_ref).unwrap();
 
