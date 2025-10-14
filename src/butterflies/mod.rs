@@ -42,6 +42,7 @@ mod bf17;
 mod bf19;
 mod bf2;
 mod bf23;
+mod bf29;
 mod bf3;
 mod bf4;
 mod bf5;
@@ -90,6 +91,8 @@ pub(crate) use bf17::Butterfly17;
 pub(crate) use bf19::Butterfly19;
 #[allow(unused)]
 pub(crate) use bf23::Butterfly23;
+#[allow(unused)]
+pub(crate) use bf29::Butterfly29;
 
 pub(crate) fn rotate_90<T: Copy + Neg<Output = T>>(
     value: Complex<T>,
