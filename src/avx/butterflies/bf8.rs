@@ -87,13 +87,7 @@ impl AvxButterfly8<f64> {
                 ));
             }
 
-            let z_mul = _mm256_loadu_pd(self.multiplier.as_ptr());
-            static ROT_SIGN_INVERSE: [f64; 4] = [-0.0, 0.0, -0.0, 0.0];
-            static ROT_SIGN_FORWARD: [f64; 4] = [0.0, -0.0, 0.0, -0.0];
-            let rot_sign = _mm256_loadu_pd(match self.direction {
-                FftDirection::Inverse => ROT_SIGN_INVERSE.as_ptr(),
-                FftDirection::Forward => ROT_SIGN_FORWARD.as_ptr(),
-            });
+            let rotate = _mm256_loadu_pd(self.multiplier.as_ptr());
             let root2 = _mm256_set1_pd(self.root2);
 
             for chunk in in_place.chunks_exact_mut(16) {
@@ -118,17 +112,17 @@ impl AvxButterfly8<f64> {
                 let u6 = _mm256_permute2f128_pd::<LO_LO>(u6u7, u14u15);
                 let u7 = _mm256_permute2f128_pd::<HI_HI>(u6u7, u14u15);
 
-                let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f64(u0, u2, u4, u6, z_mul);
+                let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f64(u0, u2, u4, u6, rotate);
                 let (u1, mut u3, mut u5, mut u7) =
-                    AvxButterfly::butterfly4_f64(u1, u3, u5, u7, z_mul);
+                    AvxButterfly::butterfly4_f64(u1, u3, u5, u7, rotate);
 
                 u3 = _mm256_mul_pd(
-                    _mm256_add_pd(_mm256_xor_pd(_mm256_permute_pd::<0b0101>(u3), rot_sign), u3),
+                    _mm256_add_pd(_mm256_xor_pd(_mm256_permute_pd::<0b0101>(u3), rotate), u3),
                     root2,
                 );
-                u5 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(u5), rot_sign);
+                u5 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(u5), rotate);
                 u7 = _mm256_mul_pd(
-                    _mm256_sub_pd(_mm256_xor_pd(_mm256_permute_pd::<0b0101>(u7), rot_sign), u7),
+                    _mm256_sub_pd(_mm256_xor_pd(_mm256_permute_pd::<0b0101>(u7), rotate), u7),
                     root2,
                 );
 
@@ -176,15 +170,15 @@ impl AvxButterfly8<f64> {
                 let u7 = _mm256_extractf128_pd::<1>(u6u7);
 
                 let (u0, u2, u4, u6) =
-                    AvxButterfly::butterfly4h_f64(u0, u2, u4, u6, _mm256_castpd256_pd128(z_mul));
+                    AvxButterfly::butterfly4h_f64(u0, u2, u4, u6, _mm256_castpd256_pd128(rotate));
                 let (u1, mut u3, mut u5, mut u7) =
-                    AvxButterfly::butterfly4h_f64(u1, u3, u5, u7, _mm256_castpd256_pd128(z_mul));
+                    AvxButterfly::butterfly4h_f64(u1, u3, u5, u7, _mm256_castpd256_pd128(rotate));
 
                 u3 = _mm_mul_pd(
                     _mm_add_pd(
                         _mm_xor_pd(
                             _mm_shuffle_pd::<0b01>(u3, u3),
-                            _mm256_castpd256_pd128(rot_sign),
+                            _mm256_castpd256_pd128(rotate),
                         ),
                         u3,
                     ),
@@ -192,13 +186,13 @@ impl AvxButterfly8<f64> {
                 );
                 u5 = _mm_xor_pd(
                     _mm_shuffle_pd::<0b01>(u5, u5),
-                    _mm256_castpd256_pd128(rot_sign),
+                    _mm256_castpd256_pd128(rotate),
                 );
                 u7 = _mm_mul_pd(
                     _mm_sub_pd(
                         _mm_xor_pd(
                             _mm_shuffle_pd::<0b01>(u7, u7),
-                            _mm256_castpd256_pd128(rot_sign),
+                            _mm256_castpd256_pd128(rotate),
                         ),
                         u7,
                     ),
@@ -258,13 +252,7 @@ impl AvxButterfly8<f32> {
                 ));
             }
 
-            let z_mul = _mm256_loadu_ps(self.multiplier.as_ptr());
-            static ROT_SIGN_INVERSE: [f32; 8] = [-0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0];
-            static ROT_SIGN_FORWARD: [f32; 8] = [0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0];
-            let rot_sign = _mm256_loadu_ps(match self.direction {
-                FftDirection::Inverse => ROT_SIGN_INVERSE.as_ptr(),
-                FftDirection::Forward => ROT_SIGN_FORWARD.as_ptr(),
-            });
+            let rotate = _mm256_loadu_ps(self.multiplier.as_ptr());
             let root2 = _mm256_set1_ps(self.root2);
 
             for chunk in in_place.chunks_exact_mut(32) {
@@ -296,19 +284,19 @@ impl AvxButterfly8<f32> {
                 let u6 = _mm256_permute2f128_ps::<LO_LO>(u6u14u7u15, u6u14u7u15_2);
                 let u7 = _mm256_permute2f128_ps::<HI_HI>(u6u14u7u15, u6u14u7u15_2);
 
-                let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f32(u0, u2, u4, u6, z_mul);
+                let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f32(u0, u2, u4, u6, rotate);
                 let (u1, mut u3, mut u5, mut u7) =
-                    AvxButterfly::butterfly4_f32(u1, u3, u5, u7, z_mul);
+                    AvxButterfly::butterfly4_f32(u1, u3, u5, u7, rotate);
 
                 const SH: i32 = shuffle(2, 3, 0, 1);
 
                 u3 = _mm256_mul_ps(
-                    _mm256_add_ps(_mm256_xor_ps(_mm256_permute_ps::<SH>(u3), rot_sign), u3),
+                    _mm256_add_ps(_mm256_xor_ps(_mm256_permute_ps::<SH>(u3), rotate), u3),
                     root2,
                 );
-                u5 = _mm256_xor_ps(_mm256_permute_ps::<SH>(u5), rot_sign);
+                u5 = _mm256_xor_ps(_mm256_permute_ps::<SH>(u5), rotate);
                 u7 = _mm256_mul_ps(
-                    _mm256_sub_ps(_mm256_xor_ps(_mm256_permute_ps::<SH>(u7), rot_sign), u7),
+                    _mm256_sub_ps(_mm256_xor_ps(_mm256_permute_ps::<SH>(u7), rotate), u7),
                     root2,
                 );
 
@@ -364,32 +352,23 @@ impl AvxButterfly8<f32> {
                 let u7 = _mm256_extractf128_ps::<1>(u6u14u7u15);
 
                 let (u0, u2, u4, u6) =
-                    AvxButterfly::butterfly4h_f32(u0, u2, u4, u6, _mm256_castps256_ps128(z_mul));
+                    AvxButterfly::butterfly4h_f32(u0, u2, u4, u6, _mm256_castps256_ps128(rotate));
                 let (u1, mut u3, mut u5, mut u7) =
-                    AvxButterfly::butterfly4h_f32(u1, u3, u5, u7, _mm256_castps256_ps128(z_mul));
+                    AvxButterfly::butterfly4h_f32(u1, u3, u5, u7, _mm256_castps256_ps128(rotate));
 
                 const SH: i32 = shuffle(2, 3, 0, 1);
 
                 u3 = _mm_mul_ps(
                     _mm_add_ps(
-                        _mm_xor_ps(
-                            _mm_shuffle_ps::<SH>(u3, u3),
-                            _mm256_castps256_ps128(rot_sign),
-                        ),
+                        _mm_xor_ps(_mm_shuffle_ps::<SH>(u3, u3), _mm256_castps256_ps128(rotate)),
                         u3,
                     ),
                     _mm256_castps256_ps128(root2),
                 );
-                u5 = _mm_xor_ps(
-                    _mm_shuffle_ps::<SH>(u5, u5),
-                    _mm256_castps256_ps128(rot_sign),
-                );
+                u5 = _mm_xor_ps(_mm_shuffle_ps::<SH>(u5, u5), _mm256_castps256_ps128(rotate));
                 u7 = _mm_mul_ps(
                     _mm_sub_ps(
-                        _mm_xor_ps(
-                            _mm_shuffle_ps::<SH>(u7, u7),
-                            _mm256_castps256_ps128(rot_sign),
-                        ),
+                        _mm_xor_ps(_mm_shuffle_ps::<SH>(u7, u7), _mm256_castps256_ps128(rotate)),
                         u7,
                     ),
                     _mm256_castps256_ps128(root2),
@@ -435,32 +414,23 @@ impl AvxButterfly8<f32> {
                 let u7 = _mm_unpackhi_ps64(u6u7, u6u7);
 
                 let (u0, u2, u4, u6) =
-                    AvxButterfly::butterfly4h_f32(u0, u2, u4, u6, _mm256_castps256_ps128(z_mul));
+                    AvxButterfly::butterfly4h_f32(u0, u2, u4, u6, _mm256_castps256_ps128(rotate));
                 let (u1, mut u3, mut u5, mut u7) =
-                    AvxButterfly::butterfly4h_f32(u1, u3, u5, u7, _mm256_castps256_ps128(z_mul));
+                    AvxButterfly::butterfly4h_f32(u1, u3, u5, u7, _mm256_castps256_ps128(rotate));
 
                 const SH: i32 = shuffle(2, 3, 0, 1);
 
                 u3 = _mm_mul_ps(
                     _mm_add_ps(
-                        _mm_xor_ps(
-                            _mm_shuffle_ps::<SH>(u3, u3),
-                            _mm256_castps256_ps128(rot_sign),
-                        ),
+                        _mm_xor_ps(_mm_shuffle_ps::<SH>(u3, u3), _mm256_castps256_ps128(rotate)),
                         u3,
                     ),
                     _mm256_castps256_ps128(root2),
                 );
-                u5 = _mm_xor_ps(
-                    _mm_shuffle_ps::<SH>(u5, u5),
-                    _mm256_castps256_ps128(rot_sign),
-                );
+                u5 = _mm_xor_ps(_mm_shuffle_ps::<SH>(u5, u5), _mm256_castps256_ps128(rotate));
                 u7 = _mm_mul_ps(
                     _mm_sub_ps(
-                        _mm_xor_ps(
-                            _mm_shuffle_ps::<SH>(u7, u7),
-                            _mm256_castps256_ps128(rot_sign),
-                        ),
+                        _mm_xor_ps(_mm_shuffle_ps::<SH>(u7, u7), _mm256_castps256_ps128(rotate)),
                         u7,
                     ),
                     _mm256_castps256_ps128(root2),

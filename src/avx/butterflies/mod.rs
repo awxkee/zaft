@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod bf11;
+mod bf12;
 mod bf13;
 mod bf2;
 mod bf3;
@@ -36,6 +37,8 @@ mod bf6;
 mod bf7;
 mod bf8;
 mod bf9;
+mod fast_bf3;
+mod fast_bf4;
 mod shared;
 
 pub(crate) use bf2::AvxButterfly2;
@@ -47,5 +50,6 @@ pub(crate) use bf7::AvxButterfly7;
 pub(crate) use bf8::AvxButterfly8;
 pub(crate) use bf9::AvxButterfly9;
 pub(crate) use bf11::AvxButterfly11;
+pub(crate) use bf12::AvxButterfly12;
 pub(crate) use bf13::AvxButterfly13;
 pub(crate) use shared::AvxButterfly;
