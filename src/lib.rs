@@ -156,6 +156,12 @@ impl Zaft {
                 if let Some(q_fft_opt) = q_fft_opt {
                     return Ok(q_fft_opt);
                 }
+            } else if min_length == 5 {
+                let q_fft = Zaft::strategy(max_length as usize, direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly5(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(q_fft_opt);
+                }
             }
         }
 
