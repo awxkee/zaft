@@ -404,7 +404,6 @@ impl FftExecutor<f32> for AvxFmaRadix3<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::Butterfly9;
     use crate::radix3::Radix3;
     use rand::Rng;
 
