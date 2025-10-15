@@ -133,6 +133,32 @@ impl Zaft {
             }
         };
 
+        let min_length = n_length.min(q_length);
+        let max_length = n_length.max(q_length);
+
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            if min_length == 2 {
+                let q_fft = Zaft::strategy(max_length as usize, direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly2(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(q_fft_opt);
+                }
+            } else if min_length == 3 {
+                let q_fft = Zaft::strategy(max_length as usize, direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly3(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(q_fft_opt);
+                }
+            } else if min_length == 4 {
+                let q_fft = Zaft::strategy(max_length as usize, direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly4(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(q_fft_opt);
+                }
+            }
+        }
+
         let p_fft = Zaft::strategy(n_length as usize, direction)?;
         let q_fft = Zaft::strategy(q_length as usize, direction)?;
         if num_integer::gcd(q_length, n_length) == 1 && q_length < 33 && n_length <= 33 {

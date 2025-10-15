@@ -413,7 +413,7 @@ impl AvxFmaRadix11<f32> {
                     let eleventh = len / 11;
 
                     for data in scratch.chunks_exact_mut(len) {
-                        let mut j = 0usize;
+                        let j = 0usize;
 
                         for j in j..eleventh {
                             let u0 = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
