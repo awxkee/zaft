@@ -51,7 +51,7 @@ impl ColumnButterfly5d {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreD; 5]) -> [NeonStoreD; 5] {
         unsafe {
             let x14p = vaddq_f64(store[1].v, store[4].v);
@@ -105,56 +105,52 @@ pub(crate) struct ColumnFcmaButterfly5d {
 impl ColumnFcmaButterfly5d {
     #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
-        unsafe {
-            Self {
-                twiddle1: compute_twiddle(1, 5, direction),
-                twiddle2: compute_twiddle(2, 5, direction),
-            }
+        Self {
+            twiddle1: compute_twiddle(1, 5, direction),
+            twiddle2: compute_twiddle(2, 5, direction),
         }
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 5]) -> [NeonStoreD; 5] {
-        unsafe {
-            let x14p = vaddq_f64(store[1].v, store[4].v);
-            let x14n = vsubq_f64(store[1].v, store[4].v);
-            let x23p = vaddq_f64(store[2].v, store[3].v);
-            let x23n = vsubq_f64(store[2].v, store[3].v);
-            let y0 = vaddq_f64(vaddq_f64(store[0].v, x14p), x23p);
+        let x14p = vaddq_f64(store[1].v, store[4].v);
+        let x14n = vsubq_f64(store[1].v, store[4].v);
+        let x23p = vaddq_f64(store[2].v, store[3].v);
+        let x23n = vsubq_f64(store[2].v, store[3].v);
+        let y0 = vaddq_f64(vaddq_f64(store[0].v, x14p), x23p);
 
-            let temp_b1_1 = vmulq_n_f64(x14n, self.twiddle1.im);
-            let temp_b2_1 = vmulq_n_f64(x14n, self.twiddle2.im);
+        let temp_b1_1 = vmulq_n_f64(x14n, self.twiddle1.im);
+        let temp_b2_1 = vmulq_n_f64(x14n, self.twiddle2.im);
 
-            let temp_a1 = vfmaq_n_f64(
-                vfmaq_n_f64(store[0].v, x14p, self.twiddle1.re),
-                x23p,
-                self.twiddle2.re,
-            );
-            let temp_a2 = vfmaq_n_f64(
-                vfmaq_n_f64(store[0].v, x14p, self.twiddle2.re),
-                x23p,
-                self.twiddle1.re,
-            );
+        let temp_a1 = vfmaq_n_f64(
+            vfmaq_n_f64(store[0].v, x14p, self.twiddle1.re),
+            x23p,
+            self.twiddle2.re,
+        );
+        let temp_a2 = vfmaq_n_f64(
+            vfmaq_n_f64(store[0].v, x14p, self.twiddle2.re),
+            x23p,
+            self.twiddle1.re,
+        );
 
-            let temp_b1 = vfmaq_n_f64(temp_b1_1, x23n, self.twiddle2.im);
-            let temp_b2 = vfmsq_n_f64(temp_b2_1, x23n, self.twiddle1.im);
+        let temp_b1 = vfmaq_n_f64(temp_b1_1, x23n, self.twiddle2.im);
+        let temp_b2 = vfmsq_n_f64(temp_b2_1, x23n, self.twiddle1.im);
 
-            let temp_b1_rot = vcaddq_rot90_f64(vdupq_n_f64(0.), temp_b1);
-            let temp_b2_rot = vcaddq_rot90_f64(vdupq_n_f64(0.), temp_b2);
+        let temp_b1_rot = vcaddq_rot90_f64(vdupq_n_f64(0.), temp_b1);
+        let temp_b2_rot = vcaddq_rot90_f64(vdupq_n_f64(0.), temp_b2);
 
-            let y1 = vaddq_f64(temp_a1, temp_b1_rot);
-            let y2 = vaddq_f64(temp_a2, temp_b2_rot);
-            let y3 = vsubq_f64(temp_a2, temp_b2_rot);
-            let y4 = vsubq_f64(temp_a1, temp_b1_rot);
-            [
-                NeonStoreD::raw(y0),
-                NeonStoreD::raw(y1),
-                NeonStoreD::raw(y2),
-                NeonStoreD::raw(y3),
-                NeonStoreD::raw(y4),
-            ]
-        }
+        let y1 = vaddq_f64(temp_a1, temp_b1_rot);
+        let y2 = vaddq_f64(temp_a2, temp_b2_rot);
+        let y3 = vsubq_f64(temp_a2, temp_b2_rot);
+        let y4 = vsubq_f64(temp_a1, temp_b1_rot);
+        [
+            NeonStoreD::raw(y0),
+            NeonStoreD::raw(y1),
+            NeonStoreD::raw(y2),
+            NeonStoreD::raw(y3),
+            NeonStoreD::raw(y4),
+        ]
     }
 }
 
@@ -176,7 +172,7 @@ impl ColumnButterfly5f {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreF; 5]) -> [NeonStoreF; 5] {
         unsafe {
             let x14p = vaddq_f32(store[1].v, store[4].v);
@@ -219,7 +215,7 @@ impl ColumnButterfly5f {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 5]) -> [NeonStoreFh; 5] {
         unsafe {
             let x14p = vadd_f32(store[1].v, store[4].v);
@@ -269,102 +265,97 @@ pub(crate) struct ColumnFcmaButterfly5f {
     twiddle2: Complex<f32>,
 }
 
+#[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly5f {
     #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
-        unsafe {
-            Self {
-                twiddle1: compute_twiddle(1, 5, direction),
-                twiddle2: compute_twiddle(2, 5, direction),
-            }
+        Self {
+            twiddle1: compute_twiddle(1, 5, direction),
+            twiddle2: compute_twiddle(2, 5, direction),
         }
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 5]) -> [NeonStoreF; 5] {
-        unsafe {
-            let x14p = vaddq_f32(store[1].v, store[4].v);
-            let x14n = vsubq_f32(store[1].v, store[4].v);
-            let x23p = vaddq_f32(store[2].v, store[3].v);
-            let x23n = vsubq_f32(store[2].v, store[3].v);
-            let y0 = vaddq_f32(vaddq_f32(store[0].v, x14p), x23p);
+        let x14p = vaddq_f32(store[1].v, store[4].v);
+        let x14n = vsubq_f32(store[1].v, store[4].v);
+        let x23p = vaddq_f32(store[2].v, store[3].v);
+        let x23n = vsubq_f32(store[2].v, store[3].v);
+        let y0 = vaddq_f32(vaddq_f32(store[0].v, x14p), x23p);
 
-            let temp_b1_1 = vmulq_n_f32(x14n, self.twiddle1.im);
-            let temp_b2_1 = vmulq_n_f32(x14n, self.twiddle2.im);
+        let temp_b1_1 = vmulq_n_f32(x14n, self.twiddle1.im);
+        let temp_b2_1 = vmulq_n_f32(x14n, self.twiddle2.im);
 
-            let temp_a1 = vfmaq_n_f32(
-                vfmaq_n_f32(store[0].v, x14p, self.twiddle1.re),
-                x23p,
-                self.twiddle2.re,
-            );
-            let temp_a2 = vfmaq_n_f32(
-                vfmaq_n_f32(store[0].v, x14p, self.twiddle2.re),
-                x23p,
-                self.twiddle1.re,
-            );
+        let temp_a1 = vfmaq_n_f32(
+            vfmaq_n_f32(store[0].v, x14p, self.twiddle1.re),
+            x23p,
+            self.twiddle2.re,
+        );
+        let temp_a2 = vfmaq_n_f32(
+            vfmaq_n_f32(store[0].v, x14p, self.twiddle2.re),
+            x23p,
+            self.twiddle1.re,
+        );
 
-            let temp_b1 = vfmaq_n_f32(temp_b1_1, x23n, self.twiddle2.im);
-            let temp_b2 = vfmsq_n_f32(temp_b2_1, x23n, self.twiddle1.im);
+        let temp_b1 = vfmaq_n_f32(temp_b1_1, x23n, self.twiddle2.im);
+        let temp_b2 = vfmsq_n_f32(temp_b2_1, x23n, self.twiddle1.im);
 
-            let temp_b1_rot = vcaddq_rot90_f32(vdupq_n_f32(0.), temp_b1);
-            let temp_b2_rot = vcaddq_rot90_f32(vdupq_n_f32(0.), temp_b2);
+        let temp_b1_rot = vcaddq_rot90_f32(vdupq_n_f32(0.), temp_b1);
+        let temp_b2_rot = vcaddq_rot90_f32(vdupq_n_f32(0.), temp_b2);
 
-            let y1 = vaddq_f32(temp_a1, temp_b1_rot);
-            let y2 = vaddq_f32(temp_a2, temp_b2_rot);
-            let y3 = vsubq_f32(temp_a2, temp_b2_rot);
-            let y4 = vsubq_f32(temp_a1, temp_b1_rot);
-            [
-                NeonStoreF::raw(y0),
-                NeonStoreF::raw(y1),
-                NeonStoreF::raw(y2),
-                NeonStoreF::raw(y3),
-                NeonStoreF::raw(y4),
-            ]
-        }
+        let y1 = vaddq_f32(temp_a1, temp_b1_rot);
+        let y2 = vaddq_f32(temp_a2, temp_b2_rot);
+        let y3 = vsubq_f32(temp_a2, temp_b2_rot);
+        let y4 = vsubq_f32(temp_a1, temp_b1_rot);
+        [
+            NeonStoreF::raw(y0),
+            NeonStoreF::raw(y1),
+            NeonStoreF::raw(y2),
+            NeonStoreF::raw(y3),
+            NeonStoreF::raw(y4),
+        ]
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 5]) -> [NeonStoreFh; 5] {
-        unsafe {
-            let x14p = vadd_f32(store[1].v, store[4].v);
-            let x14n = vsub_f32(store[1].v, store[4].v);
-            let x23p = vadd_f32(store[2].v, store[3].v);
-            let x23n = vsub_f32(store[2].v, store[3].v);
-            let y0 = vadd_f32(vadd_f32(store[0].v, x14p), x23p);
+        let x14p = vadd_f32(store[1].v, store[4].v);
+        let x14n = vsub_f32(store[1].v, store[4].v);
+        let x23p = vadd_f32(store[2].v, store[3].v);
+        let x23n = vsub_f32(store[2].v, store[3].v);
+        let y0 = vadd_f32(vadd_f32(store[0].v, x14p), x23p);
 
-            let temp_b1_1 = vmul_n_f32(x14n, self.twiddle1.im);
-            let temp_b2_1 = vmul_n_f32(x14n, self.twiddle2.im);
+        let temp_b1_1 = vmul_n_f32(x14n, self.twiddle1.im);
+        let temp_b2_1 = vmul_n_f32(x14n, self.twiddle2.im);
 
-            let temp_a1 = vfma_n_f32(
-                vfma_n_f32(store[0].v, x14p, self.twiddle1.re),
-                x23p,
-                self.twiddle2.re,
-            );
-            let temp_a2 = vfma_n_f32(
-                vfma_n_f32(store[0].v, x14p, self.twiddle2.re),
-                x23p,
-                self.twiddle1.re,
-            );
+        let temp_a1 = vfma_n_f32(
+            vfma_n_f32(store[0].v, x14p, self.twiddle1.re),
+            x23p,
+            self.twiddle2.re,
+        );
+        let temp_a2 = vfma_n_f32(
+            vfma_n_f32(store[0].v, x14p, self.twiddle2.re),
+            x23p,
+            self.twiddle1.re,
+        );
 
-            let temp_b1 = vfma_n_f32(temp_b1_1, x23n, self.twiddle2.im);
-            let temp_b2 = vfms_n_f32(temp_b2_1, x23n, self.twiddle1.im);
+        let temp_b1 = vfma_n_f32(temp_b1_1, x23n, self.twiddle2.im);
+        let temp_b2 = vfms_n_f32(temp_b2_1, x23n, self.twiddle1.im);
 
-            let temp_b1_rot = vcadd_rot90_f32(vdup_n_f32(0.), temp_b1);
-            let temp_b2_rot = vcadd_rot90_f32(vdup_n_f32(0.), temp_b2);
+        let temp_b1_rot = vcadd_rot90_f32(vdup_n_f32(0.), temp_b1);
+        let temp_b2_rot = vcadd_rot90_f32(vdup_n_f32(0.), temp_b2);
 
-            let y1 = vadd_f32(temp_a1, temp_b1_rot);
-            let y2 = vadd_f32(temp_a2, temp_b2_rot);
-            let y3 = vsub_f32(temp_a2, temp_b2_rot);
-            let y4 = vsub_f32(temp_a1, temp_b1_rot);
-            [
-                NeonStoreFh::raw(y0),
-                NeonStoreFh::raw(y1),
-                NeonStoreFh::raw(y2),
-                NeonStoreFh::raw(y3),
-                NeonStoreFh::raw(y4),
-            ]
-        }
+        let y1 = vadd_f32(temp_a1, temp_b1_rot);
+        let y2 = vadd_f32(temp_a2, temp_b2_rot);
+        let y3 = vsub_f32(temp_a2, temp_b2_rot);
+        let y4 = vsub_f32(temp_a1, temp_b1_rot);
+        [
+            NeonStoreFh::raw(y0),
+            NeonStoreFh::raw(y1),
+            NeonStoreFh::raw(y2),
+            NeonStoreFh::raw(y3),
+            NeonStoreFh::raw(y4),
+        ]
     }
 }

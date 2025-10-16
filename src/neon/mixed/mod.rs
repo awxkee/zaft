@@ -30,6 +30,7 @@ mod bf2;
 mod bf3;
 mod bf4;
 mod bf5;
+mod bf6;
 mod mixed_radix;
 mod neon_store;
 
@@ -40,5 +41,5 @@ pub(crate) use mixed_radix::{
 };
 pub(crate) use mixed_radix::{
     NeonMixedRadix2, NeonMixedRadix2f, NeonMixedRadix3, NeonMixedRadix3f, NeonMixedRadix4,
-    NeonMixedRadix4f, NeonMixedRadix5, NeonMixedRadix5f,
+    NeonMixedRadix4f, NeonMixedRadix5, NeonMixedRadix5f, NeonMixedRadix6, NeonMixedRadix6f,
 };

@@ -27,21 +27,18 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
+use crate::neon::butterflies::NeonButterfly;
 use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
 use crate::util::compute_twiddle;
 use std::arch::aarch64::*;
 
-pub(crate) struct ColumnButterfly3d {
+pub(crate) struct ColumnButterfly6d {
     tw_re: float64x2_t,
     tw_im: float64x2_t,
 }
 
-pub(crate) struct ColumnButterfly3f {
-    tw_re: float32x4_t,
-    tw_im: float32x4_t,
-}
-
-impl ColumnButterfly3d {
+impl ColumnButterfly6d {
+    #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
         let twiddle = compute_twiddle::<f64>(1, 3, direction);
         unsafe {
@@ -52,30 +49,34 @@ impl ColumnButterfly3d {
         }
     }
 
-    #[inline]
-    pub(crate) fn exec(&self, store: [NeonStoreD; 3]) -> [NeonStoreD; 3] {
-        unsafe {
-            let xp = vaddq_f64(store[1].v, store[2].v);
-            let xn = vsubq_f64(store[1].v, store[2].v);
-            let sum = vaddq_f64(store[0].v, xp);
-
-            let w_1 = vfmaq_f64(store[0].v, self.tw_re, xp);
-
-            let xn_rot = vextq_f64::<1>(xn, xn);
-
-            let y0 = sum;
-            let y1 = vfmaq_f64(w_1, self.tw_im, xn_rot);
-            let y2 = vfmsq_f64(w_1, self.tw_im, xn_rot);
-            [
-                NeonStoreD::raw(y0),
-                NeonStoreD::raw(y1),
-                NeonStoreD::raw(y2),
-            ]
-        }
+    #[inline(always)]
+    pub(crate) fn exec(&self, store: [NeonStoreD; 6]) -> [NeonStoreD; 6] {
+        let (t0, t2, t4) = NeonButterfly::butterfly3_f64(
+            store[0].v, store[2].v, store[4].v, self.tw_re, self.tw_im,
+        );
+        let (t1, t3, t5) = NeonButterfly::butterfly3_f64(
+            store[3].v, store[5].v, store[1].v, self.tw_re, self.tw_im,
+        );
+        let (y0, y3) = NeonButterfly::butterfly2_f64(t0, t1);
+        let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);
+        let (y2, y5) = NeonButterfly::butterfly2_f64(t4, t5);
+        [
+            NeonStoreD::raw(y0),
+            NeonStoreD::raw(y1),
+            NeonStoreD::raw(y2),
+            NeonStoreD::raw(y3),
+            NeonStoreD::raw(y4),
+            NeonStoreD::raw(y5),
+        ]
     }
 }
 
-impl ColumnButterfly3f {
+pub(crate) struct ColumnButterfly6f {
+    tw_re: float32x4_t,
+    tw_im: float32x4_t,
+}
+
+impl ColumnButterfly6f {
     pub(crate) fn new(direction: FftDirection) -> Self {
         let twiddle = compute_twiddle::<f32>(1, 3, direction);
         unsafe {
@@ -90,46 +91,54 @@ impl ColumnButterfly3f {
         }
     }
 
-    #[inline]
-    pub(crate) fn exec(&self, store: [NeonStoreF; 3]) -> [NeonStoreF; 3] {
-        unsafe {
-            let xp = vaddq_f32(store[1].v, store[2].v);
-            let xn = vsubq_f32(store[1].v, store[2].v);
-            let sum = vaddq_f32(store[0].v, xp);
-
-            let w_1 = vfmaq_f32(store[0].v, self.tw_re, xp);
-
-            let xn_rot = vrev64q_f32(xn);
-
-            let y0 = sum;
-            let y1 = vfmaq_f32(w_1, self.tw_im, xn_rot);
-            let y2 = vfmsq_f32(w_1, self.tw_im, xn_rot);
-            [
-                NeonStoreF::raw(y0),
-                NeonStoreF::raw(y1),
-                NeonStoreF::raw(y2),
-            ]
-        }
+    #[inline(always)]
+    pub(crate) fn exec(&self, store: [NeonStoreF; 6]) -> [NeonStoreF; 6] {
+        let (t0, t2, t4) = NeonButterfly::butterfly3_f32(
+            store[0].v, store[2].v, store[4].v, self.tw_re, self.tw_im,
+        );
+        let (t1, t3, t5) = NeonButterfly::butterfly3_f32(
+            store[3].v, store[5].v, store[1].v, self.tw_re, self.tw_im,
+        );
+        let (y0, y3) = NeonButterfly::butterfly2_f32(t0, t1);
+        let (y4, y1) = NeonButterfly::butterfly2_f32(t2, t3);
+        let (y2, y5) = NeonButterfly::butterfly2_f32(t4, t5);
+        [
+            NeonStoreF::raw(y0),
+            NeonStoreF::raw(y1),
+            NeonStoreF::raw(y2),
+            NeonStoreF::raw(y3),
+            NeonStoreF::raw(y4),
+            NeonStoreF::raw(y5),
+        ]
     }
 
-    #[inline]
-    pub(crate) fn exech(&self, store: [NeonStoreFh; 3]) -> [NeonStoreFh; 3] {
+    #[inline(always)]
+    pub(crate) fn exech(&self, store: [NeonStoreFh; 6]) -> [NeonStoreFh; 6] {
         unsafe {
-            let xp = vadd_f32(store[1].v, store[2].v);
-            let xn = vsub_f32(store[1].v, store[2].v);
-            let sum = vadd_f32(store[0].v, xp);
-
-            let w_1 = vfma_f32(store[0].v, vget_low_f32(self.tw_re), xp);
-
-            let xn_rot = vext_f32::<1>(xn, xn);
-
-            let y0 = sum;
-            let y1 = vfma_f32(w_1, vget_low_f32(self.tw_im), xn_rot);
-            let y2 = vfms_f32(w_1, vget_low_f32(self.tw_im), xn_rot);
+            let (t0, t2, t4) = NeonButterfly::butterfly3h_f32(
+                store[0].v,
+                store[2].v,
+                store[4].v,
+                vget_low_f32(self.tw_re),
+                vget_low_f32(self.tw_im),
+            );
+            let (t1, t3, t5) = NeonButterfly::butterfly3h_f32(
+                store[3].v,
+                store[5].v,
+                store[1].v,
+                vget_low_f32(self.tw_re),
+                vget_low_f32(self.tw_im),
+            );
+            let (y0, y3) = NeonButterfly::butterfly2h_f32(t0, t1);
+            let (y4, y1) = NeonButterfly::butterfly2h_f32(t2, t3);
+            let (y2, y5) = NeonButterfly::butterfly2h_f32(t4, t5);
             [
                 NeonStoreFh::raw(y0),
                 NeonStoreFh::raw(y1),
                 NeonStoreFh::raw(y2),
+                NeonStoreFh::raw(y3),
+                NeonStoreFh::raw(y4),
+                NeonStoreFh::raw(y5),
             ]
         }
     }

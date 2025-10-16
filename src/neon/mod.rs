@@ -89,7 +89,7 @@ pub(crate) use mixed::{
 };
 pub(crate) use mixed::{
     NeonMixedRadix2, NeonMixedRadix2f, NeonMixedRadix3, NeonMixedRadix3f, NeonMixedRadix4,
-    NeonMixedRadix4f, NeonMixedRadix5, NeonMixedRadix5f,
+    NeonMixedRadix4f, NeonMixedRadix5, NeonMixedRadix5f, NeonMixedRadix6, NeonMixedRadix6f,
 };
 pub(crate) use r2c::R2CNeonTwiddles;
 pub(crate) use raders::NeonRadersFft;

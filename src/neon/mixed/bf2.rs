@@ -34,14 +34,12 @@ pub(crate) struct ColumnButterfly2d {}
 pub(crate) struct ColumnButterfly2f {}
 
 impl ColumnButterfly2d {
-    #[inline]
     pub(crate) fn new(_: FftDirection) -> ColumnButterfly2d {
         ColumnButterfly2d {}
     }
 }
 
 impl ColumnButterfly2f {
-    #[inline]
     pub(crate) fn new(_: FftDirection) -> ColumnButterfly2f {
         ColumnButterfly2f {}
     }

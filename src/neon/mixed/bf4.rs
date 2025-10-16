@@ -47,7 +47,7 @@ impl ColumnButterfly4d {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreD; 4]) -> [NeonStoreD; 4] {
         unsafe {
             let t0 = vaddq_f64(store[0].v, store[2].v);
@@ -117,7 +117,6 @@ pub(crate) struct ColumnButterfly4f {
 }
 
 impl ColumnButterfly4f {
-    #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
         unsafe {
             Self {
@@ -129,7 +128,7 @@ impl ColumnButterfly4f {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreF; 4]) -> [NeonStoreF; 4] {
         unsafe {
             let t0 = vaddq_f32(store[0].v, store[2].v);
@@ -149,7 +148,7 @@ impl ColumnButterfly4f {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 4]) -> [NeonStoreFh; 4] {
         unsafe {
             let t0 = vadd_f32(store[0].v, store[2].v);
