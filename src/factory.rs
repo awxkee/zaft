@@ -919,6 +919,16 @@ impl AlgorithmFactory<f32> for f32 {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxFmaRadix13;
+                    return AvxFmaRadix13::new(n, fft_direction)
+                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                }
+            }
             use crate::radix13::Radix13;
             Radix13::new(n, fft_direction)
                 .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
