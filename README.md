@@ -2,12 +2,6 @@
 
 This example demonstrates how to perform real-to-complex (R2C) and complex-to-real (C2R) FFTs, as well as standard complex-to-complex forward and inverse FFTs using Zaft.
 
----
-
-This crate has excellent optimizations only for aarch64, for other platforms it can do fft faster than naive approaches, but nothing like `extremely fast`.
-
----
-
 ## Real-to-Complex (R2C) and Complex-to-Real (C2R)
 
 ```rust
