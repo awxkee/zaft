@@ -793,6 +793,7 @@ impl AlgorithmFactory<f64> for f64 {
             .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)
     }
 
+    #[allow(unused)]
     fn mixed_radix_butterfly2(
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
@@ -807,8 +808,8 @@ impl AlgorithmFactory<f64> for f64 {
                 }
             }
             use crate::neon::NeonMixedRadix2;
-            return NeonMixedRadix2::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+            NeonMixedRadix2::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -816,6 +817,7 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    #[allow(unused)]
     fn mixed_radix_butterfly3(
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
@@ -830,8 +832,8 @@ impl AlgorithmFactory<f64> for f64 {
                 }
             }
             use crate::neon::NeonMixedRadix3;
-            return NeonMixedRadix3::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+            NeonMixedRadix3::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -839,6 +841,7 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    #[allow(unused)]
     fn mixed_radix_butterfly4(
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
@@ -853,8 +856,8 @@ impl AlgorithmFactory<f64> for f64 {
                 }
             }
             use crate::neon::NeonMixedRadix4;
-            return NeonMixedRadix4::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+            NeonMixedRadix4::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -862,6 +865,7 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    #[allow(unused)]
     fn mixed_radix_butterfly5(
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
@@ -876,8 +880,8 @@ impl AlgorithmFactory<f64> for f64 {
                 }
             }
             use crate::neon::NeonMixedRadix5;
-            return NeonMixedRadix5::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+            NeonMixedRadix5::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -885,6 +889,7 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    #[allow(unused)]
     fn mixed_radix_butterfly6(
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
@@ -900,6 +905,7 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    #[allow(unused)]
     fn mixed_radix_butterfly7(
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
@@ -914,8 +920,8 @@ impl AlgorithmFactory<f64> for f64 {
                 }
             }
             use crate::neon::NeonMixedRadix7;
-            return NeonMixedRadix7::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+            NeonMixedRadix7::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -923,6 +929,7 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    #[allow(unused)]
     fn mixed_radix_butterfly8(
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
@@ -937,8 +944,80 @@ impl AlgorithmFactory<f64> for f64 {
                 }
             }
             use crate::neon::NeonMixedRadix8;
-            return NeonMixedRadix8::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+            NeonMixedRadix8::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            Ok(None)
+        }
+    }
+
+    #[allow(unused)]
+    fn mixed_radix_butterfly9(
+        right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
+    ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::NeonFcmaMixedRadix9;
+                    return NeonFcmaMixedRadix9::new(right_fft)
+                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+                }
+            }
+            use crate::neon::NeonMixedRadix9;
+            NeonMixedRadix9::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            Ok(None)
+        }
+    }
+
+    #[allow(unused)]
+    fn mixed_radix_butterfly10(
+        right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
+    ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::NeonFcmaMixedRadix10;
+                    return NeonFcmaMixedRadix10::new(right_fft)
+                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+                }
+            }
+            use crate::neon::NeonMixedRadix10;
+            NeonMixedRadix10::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            Ok(None)
+        }
+    }
+
+    #[allow(unused)]
+    fn mixed_radix_butterfly11(
+        right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
+    ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::NeonFcmaMixedRadix11;
+                    return NeonFcmaMixedRadix11::new(right_fft)
+                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+                }
+            }
+            use crate::neon::NeonMixedRadix11;
+            NeonMixedRadix11::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {

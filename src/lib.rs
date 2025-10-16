@@ -133,11 +133,10 @@ impl Zaft {
             }
         };
 
-        let min_length = n_length.min(q_length);
-        let max_length = n_length.max(q_length);
-
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            let min_length = n_length.min(q_length);
+            let max_length = n_length.max(q_length);
             if min_length == 2 {
                 let q_fft = Zaft::strategy(max_length as usize, direction)?;
                 let q_fft_opt = T::mixed_radix_butterfly2(q_fft)?;
@@ -177,6 +176,24 @@ impl Zaft {
             } else if min_length == 8 {
                 let q_fft = Zaft::strategy(max_length as usize, direction)?;
                 let q_fft_opt = T::mixed_radix_butterfly8(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(q_fft_opt);
+                }
+            } else if min_length == 9 {
+                let q_fft = Zaft::strategy(max_length as usize, direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly9(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(q_fft_opt);
+                }
+            } else if min_length == 10 {
+                let q_fft = Zaft::strategy(max_length as usize, direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly10(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(q_fft_opt);
+                }
+            } else if min_length == 11 {
+                let q_fft = Zaft::strategy(max_length as usize, direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly11(q_fft)?;
                 if let Some(q_fft_opt) = q_fft_opt {
                     return Ok(q_fft_opt);
                 }
