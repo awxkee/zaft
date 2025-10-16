@@ -4,6 +4,10 @@ This example demonstrates how to perform real-to-complex (R2C) and complex-to-re
 
 ---
 
+This crate has excellent optimizations only for aarch64, for other platforms it can do fft faster than naive approaches, but nothing like `extremely fast`.
+
+---
+
 ## Real-to-Complex (R2C) and Complex-to-Real (C2R)
 
 ```rust
