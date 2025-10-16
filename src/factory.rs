@@ -179,6 +179,7 @@ pub(crate) trait AlgorithmFactory<T> {
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly8(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
