@@ -108,6 +108,7 @@ pub(crate) struct ColumnFcmaButterfly12d {
     tw_im: float64x2_t,
 }
 
+#[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly12d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         let twiddle = compute_twiddle::<f64>(1, 3, fft_direction);
