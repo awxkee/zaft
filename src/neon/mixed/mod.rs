@@ -28,6 +28,7 @@
  */
 mod bf10;
 mod bf11;
+mod bf12;
 mod bf2;
 mod bf3;
 mod bf4;
@@ -45,11 +46,12 @@ pub(crate) use mixed_radix::{
     NeonFcmaMixedRadix4, NeonFcmaMixedRadix4f, NeonFcmaMixedRadix5, NeonFcmaMixedRadix5f,
     NeonFcmaMixedRadix7, NeonFcmaMixedRadix7f, NeonFcmaMixedRadix8, NeonFcmaMixedRadix8f,
     NeonFcmaMixedRadix9, NeonFcmaMixedRadix9f, NeonFcmaMixedRadix10, NeonFcmaMixedRadix10f,
-    NeonFcmaMixedRadix11, NeonFcmaMixedRadix11f,
+    NeonFcmaMixedRadix11, NeonFcmaMixedRadix11f, NeonFcmaMixedRadix12, NeonFcmaMixedRadix12f,
 };
 pub(crate) use mixed_radix::{
     NeonMixedRadix2, NeonMixedRadix2f, NeonMixedRadix3, NeonMixedRadix3f, NeonMixedRadix4,
     NeonMixedRadix4f, NeonMixedRadix5, NeonMixedRadix5f, NeonMixedRadix6, NeonMixedRadix6f,
     NeonMixedRadix7, NeonMixedRadix7f, NeonMixedRadix8, NeonMixedRadix8f, NeonMixedRadix9,
     NeonMixedRadix9f, NeonMixedRadix10, NeonMixedRadix10f, NeonMixedRadix11, NeonMixedRadix11f,
+    NeonMixedRadix12, NeonMixedRadix12f,
 };

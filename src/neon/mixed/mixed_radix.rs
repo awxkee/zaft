@@ -270,7 +270,10 @@ macro_rules! define_mixed_radix_neon_d_fcma {
                             }
                         }
 
-                        let output = self.inner_bf.exec(columns);
+                        #[allow(unused_unsafe)]
+                        let output = unsafe {
+                            self.inner_bf.exec(columns)
+                        };
 
                         unsafe {
                             output[0].write(scratch.get_unchecked_mut(index_base..));
@@ -411,7 +414,11 @@ macro_rules! define_mixed_radix_neon_f {
                             }
                         }
 
-                        let output = self.inner_bf.exec(columns);
+                        #[allow(unused_unsafe)]
+                        let output = unsafe {
+                            self.inner_bf.exec(columns)
+                        };
+
 
                         unsafe {
                             output[0].write(scratch.get_unchecked_mut(index_base..));
@@ -449,7 +456,10 @@ macro_rules! define_mixed_radix_neon_f {
                         }
 
                         // apply our butterfly function down the columns
-                        let output = self.inner_bf.exech(columns);
+                        #[allow(unused_unsafe)]
+                        let output = unsafe {
+                            self.inner_bf.exech(columns)
+                        };
 
                         // always write the first row without twiddles
                         unsafe {
@@ -590,7 +600,10 @@ macro_rules! define_mixed_radix_neon_f_fcma {
                             }
                         }
 
-                        let output = self.inner_bf.exec(columns);
+                        #[allow(unused_unsafe)]
+                        let output = unsafe {
+                            self.inner_bf.exec(columns)
+                        };
 
                         unsafe {
                             output[0].write(scratch.get_unchecked_mut(index_base..));
@@ -628,7 +641,10 @@ macro_rules! define_mixed_radix_neon_f_fcma {
                         }
 
                         // apply our butterfly function down the columns
-                        let output = self.inner_bf.exech(columns);
+                        #[allow(unused_unsafe)]
+                        let output = unsafe {
+                            self.inner_bf.exech(columns)
+                        };
 
                         // always write the first row without twiddles
                         unsafe {
@@ -684,6 +700,7 @@ use crate::neon::mixed::bf8::*;
 use crate::neon::mixed::bf9::*;
 use crate::neon::mixed::bf10::*;
 use crate::neon::mixed::bf11::*;
+use crate::neon::mixed::bf12::*;
 
 define_mixed_radix_neon_d!(NeonMixedRadix2, ColumnButterfly2d, 2);
 define_mixed_radix_neon_d!(NeonMixedRadix3, ColumnButterfly3d, 3);
@@ -695,6 +712,7 @@ define_mixed_radix_neon_d!(NeonMixedRadix8, ColumnButterfly8d, 8);
 define_mixed_radix_neon_d!(NeonMixedRadix9, ColumnButterfly9d, 9);
 define_mixed_radix_neon_d!(NeonMixedRadix10, ColumnButterfly10d, 10);
 define_mixed_radix_neon_d!(NeonMixedRadix11, ColumnButterfly11d, 11);
+define_mixed_radix_neon_d!(NeonMixedRadix12, ColumnButterfly12d, 12);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix2, ColumnButterfly2d, 2);
 #[cfg(feature = "fcma")]
@@ -716,6 +734,8 @@ define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix9, ColumnFcmaButterfly9d, 9);
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix10, ColumnFcmaButterfly10d, 10);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix11, ColumnFcmaButterfly11d, 11);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix12, ColumnFcmaButterfly12d, 12);
 define_mixed_radix_neon_f!(NeonMixedRadix2f, ColumnButterfly2f, 2);
 define_mixed_radix_neon_f!(NeonMixedRadix3f, ColumnButterfly3f, 3);
 define_mixed_radix_neon_f!(NeonMixedRadix4f, ColumnButterfly4f, 4);
@@ -726,6 +746,7 @@ define_mixed_radix_neon_f!(NeonMixedRadix8f, ColumnButterfly8f, 8);
 define_mixed_radix_neon_f!(NeonMixedRadix9f, ColumnButterfly9f, 9);
 define_mixed_radix_neon_f!(NeonMixedRadix10f, ColumnButterfly10f, 10);
 define_mixed_radix_neon_f!(NeonMixedRadix11f, ColumnButterfly11f, 11);
+define_mixed_radix_neon_f!(NeonMixedRadix12f, ColumnButterfly12f, 12);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix2f, ColumnButterfly2f, 2);
 #[cfg(feature = "fcma")]
@@ -744,6 +765,8 @@ define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix9f, ColumnFcmaButterfly9f, 9);
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix10f, ColumnFcmaButterfly10f, 10);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix11f, ColumnFcmaButterfly11f, 11);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix12f, ColumnFcmaButterfly12f, 12);
 
 // pub(crate) struct NeonMixedRadix<T> {
 //     execution_length: usize,
