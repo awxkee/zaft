@@ -679,6 +679,7 @@ macro_rules! define_mixed_radix_neon_f_fcma {
 use crate::neon::mixed::bf5::*;
 use crate::neon::mixed::bf6::{ColumnButterfly6d, ColumnButterfly6f};
 use crate::neon::mixed::bf7::*;
+use crate::neon::mixed::bf8::*;
 
 define_mixed_radix_neon_d!(NeonMixedRadix2, ColumnButterfly2d, 2);
 define_mixed_radix_neon_d!(NeonMixedRadix3, ColumnButterfly3d, 3);
@@ -686,6 +687,7 @@ define_mixed_radix_neon_d!(NeonMixedRadix4, ColumnButterfly4d, 4);
 define_mixed_radix_neon_d!(NeonMixedRadix5, ColumnButterfly5d, 5);
 define_mixed_radix_neon_d!(NeonMixedRadix6, ColumnButterfly6d, 6);
 define_mixed_radix_neon_d!(NeonMixedRadix7, ColumnButterfly7d, 7);
+define_mixed_radix_neon_d!(NeonMixedRadix8, ColumnButterfly8d, 8);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix2, ColumnButterfly2d, 2);
 #[cfg(feature = "fcma")]
@@ -699,12 +701,15 @@ define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix4, ColumnFcmaButterfly4d, 4);
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix5, ColumnFcmaButterfly5d, 5);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix7, ColumnFcmaButterfly7d, 7);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix8, ColumnFcmaButterfly8d, 8);
 define_mixed_radix_neon_f!(NeonMixedRadix2f, ColumnButterfly2f, 2);
 define_mixed_radix_neon_f!(NeonMixedRadix3f, ColumnButterfly3f, 3);
 define_mixed_radix_neon_f!(NeonMixedRadix4f, ColumnButterfly4f, 4);
 define_mixed_radix_neon_f!(NeonMixedRadix5f, ColumnButterfly5f, 5);
 define_mixed_radix_neon_f!(NeonMixedRadix6f, ColumnButterfly6f, 6);
 define_mixed_radix_neon_f!(NeonMixedRadix7f, ColumnButterfly7f, 7);
+define_mixed_radix_neon_f!(NeonMixedRadix8f, ColumnButterfly8f, 8);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix2f, ColumnButterfly2f, 2);
 #[cfg(feature = "fcma")]
@@ -715,6 +720,8 @@ define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix4f, ColumnFcmaButterfly4f, 4);
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix5f, ColumnFcmaButterfly5f, 5);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix7f, ColumnFcmaButterfly7f, 7);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix8f, ColumnFcmaButterfly8f, 8);
 
 // pub(crate) struct NeonMixedRadix<T> {
 //     execution_length: usize,

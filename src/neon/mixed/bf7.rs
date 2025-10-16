@@ -42,7 +42,6 @@ pub(crate) struct ColumnButterfly7d {
 }
 
 impl ColumnButterfly7d {
-    #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
         unsafe {
             static ROT_90: [f64; 2] = [-0.0, 0.0];
@@ -115,7 +114,6 @@ pub(crate) struct ColumnFcmaButterfly7d {
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly7d {
-    #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
         Self {
             twiddle1: compute_twiddle(1, 7, direction),
@@ -180,7 +178,6 @@ pub(crate) struct ColumnButterfly7f {
 }
 
 impl ColumnButterfly7f {
-    #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
         unsafe {
             static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
@@ -301,7 +298,6 @@ pub(crate) struct ColumnFcmaButterfly7f {
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly7f {
-    #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
         Self {
             twiddle1: compute_twiddle(1, 7, direction),
