@@ -149,26 +149,32 @@ pub(crate) trait AlgorithmFactory<T> {
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly2(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly3(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly4(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly5(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly6(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly7(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
@@ -177,19 +183,28 @@ pub(crate) trait AlgorithmFactory<T> {
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly9(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly10(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly11(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
+    #[allow(unused)]
     fn mixed_radix_butterfly12(
+        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+
+    #[allow(unused)]
+    fn mixed_radix_butterfly13(
         right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
@@ -1212,6 +1227,30 @@ impl AlgorithmFactory<f32> for f32 {
             }
             use crate::neon::NeonMixedRadix12f;
             NeonMixedRadix12f::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            Ok(None)
+        }
+    }
+
+    #[allow(unused)]
+    fn mixed_radix_butterfly13(
+        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::NeonFcmaMixedRadix13f;
+                    return NeonFcmaMixedRadix13f::new(right_fft)
+                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                }
+            }
+            use crate::neon::NeonMixedRadix13f;
+            NeonMixedRadix13f::new(right_fft)
                 .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
