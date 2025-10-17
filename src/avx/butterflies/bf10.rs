@@ -69,9 +69,6 @@ impl AvxButterfly10d {
                 let u8u9 = _mm256_loadu_pd(chunk.get_unchecked(8..).as_ptr().cast());
 
                 const LO_HI: i32 = 0b0011_0000;
-                const HI_LO: i32 = 0b0010_0001;
-                const HI_HI: i32 = 0b0011_0001;
-                const LO_LO: i32 = 0b0010_0000;
 
                 let u0u5 = _mm256_permute2f128_pd::<LO_HI>(u0u1, u4u5);
                 let u2u7 = _mm256_permute2f128_pd::<LO_HI>(u2u3, u6u7);

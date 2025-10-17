@@ -27,9 +27,9 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _mm_fcmul_pd, _mm_fcmul_ps, _m128s_load_f32x2, _m128s_store_f32x2,
-    _m256_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm128s_deinterleave3_epi64,
-    _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
+    _m128s_load_f32x2, _m128s_store_f32x2, _m256_fcmul_ps, _mm_fcmul_pd, _mm_fcmul_ps,
+    _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm128s_deinterleave3_epi64, _mm256_create_pd,
+    _mm256_create_ps, _mm256_fcmul_pd, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
     _mm256s_deinterleave3_epi64, shuffle,
 };
 use crate::factory::AlgorithmFactory;
