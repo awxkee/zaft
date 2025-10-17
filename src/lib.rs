@@ -96,6 +96,125 @@ pub trait FftExecutor<T> {
 pub struct Zaft {}
 
 impl Zaft {
+    #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+    fn could_do_split_mixed_radix() -> bool {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if !std::arch::is_x86_feature_detected!("avx2")
+            || !std::arch::is_x86_feature_detected!("fma")
+        {
+            return false;
+        }
+        true
+    }
+
+    #[cfg(any(
+        all(target_arch = "aarch64", feature = "neon"),
+        all(target_arch = "x86_64", feature = "avx")
+    ))]
+    fn try_split_mixed_radix_butterflies<
+        T: AlgorithmFactory<T>
+            + FftTrigonometry
+            + Float
+            + 'static
+            + Send
+            + Sync
+            + MulAdd<T, Output = T>
+            + SpectrumOpsFactory<T>
+            + TransposeFactory<T>
+            + Copy
+            + Display,
+    >(
+        n_length: u64,
+        q_length: u64,
+        direction: FftDirection,
+    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>
+    where
+        f64: AsPrimitive<T>,
+    {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if !std::arch::is_x86_feature_detected!("avx2")
+            || !std::arch::is_x86_feature_detected!("fma")
+        {
+            return Ok(None);
+        }
+        let min_length = n_length.min(q_length);
+        let max_length = n_length.max(q_length);
+        if min_length == 2 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly2(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 3 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly3(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 4 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly4(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 5 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly5(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 6 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly6(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 7 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly7(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 8 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly8(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 9 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly9(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 10 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly10(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 11 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly11(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 12 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly12(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        } else if min_length == 13 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly13(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
+        }
+        Ok(None)
+    }
+
     fn make_mixed_radix<
         T: AlgorithmFactory<T>
             + FftTrigonometry
@@ -133,82 +252,17 @@ impl Zaft {
             }
         };
 
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        #[cfg(any(
+            all(target_arch = "aarch64", feature = "neon"),
+            all(target_arch = "x86_64", feature = "avx")
+        ))]
         {
-            let min_length = n_length.min(q_length);
-            let max_length = n_length.max(q_length);
-            if min_length == 2 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly2(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 3 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly3(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 4 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly4(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 5 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly5(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 6 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly6(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 7 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly7(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 8 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly8(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 9 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly9(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 10 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly10(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 11 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly11(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 12 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly12(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
-            } else if min_length == 13 {
-                let q_fft = Zaft::strategy(max_length as usize, direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly13(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(q_fft_opt);
-                }
+            match Zaft::try_split_mixed_radix_butterflies(n_length, q_length, direction) {
+                Ok(value) => match value {
+                    None => {}
+                    Some(executor) => return Ok(executor),
+                },
+                Err(err) => return Err(err),
             }
         }
 
@@ -330,6 +384,20 @@ impl Zaft {
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {
             // Use Radix-3 if divisible by 3
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if Zaft::could_do_split_mixed_radix() {
+                    let r = n / 3;
+                    if r == 3 {
+                        // actually should not happen here, just a stub
+                        return T::butterfly9(fft_direction);
+                    }
+                    let right_fft = T::radix3(r, fft_direction)?;
+                    if let Ok(Some(v)) = T::mixed_radix_butterfly3(right_fft) {
+                        return Ok(v);
+                    }
+                }
+            }
             T::radix3(n, fft_direction)
         } else if prime_factors.is_power_of_five {
             // Use Radix-5 if power of 5
