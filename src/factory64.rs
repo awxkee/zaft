@@ -968,6 +968,16 @@ impl AlgorithmFactory<f64> for f64 {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxMixedRadix6d;
+                    return AvxMixedRadix6d::new(right_fft)
+                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+                }
+            }
             Ok(None)
         }
     }
@@ -992,6 +1002,16 @@ impl AlgorithmFactory<f64> for f64 {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxMixedRadix7d;
+                    return AvxMixedRadix7d::new(right_fft)
+                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+                }
+            }
             Ok(None)
         }
     }

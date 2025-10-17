@@ -64,7 +64,7 @@ impl TransposeFactory<f32> for f32 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if _width > 10 && _height > 10 && std::arch::is_x86_feature_detected!("avx2") {
+                if std::arch::is_x86_feature_detected!("avx2") {
                     return Box::new(AvxDefaultExecutorSingle {});
                 }
             }
@@ -86,6 +86,12 @@ impl TransposeFactory<f64> for f64 {
         width: usize,
         height: usize,
     ) -> Box<dyn TransposeExecutor<f64> + Send + Sync> {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx") {
+                return Box::new(AvxDefaultExecutorDouble {});
+            }
+        }
         if width > 31 && height > 31 {
             use crate::transpose_arbitrary::TransposeArbitrary;
             return Box::new(TransposeArbitrary {
@@ -500,6 +506,82 @@ impl TransposeExecutor<f32> for AvxDefaultExecutorSingle {
         }
 
         transpose_section::<Complex<f32>>(
+            input,
+            input_stride,
+            output,
+            output_stride,
+            width,
+            height,
+            y,
+        );
+    }
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
+struct TransposeBlockAvx2x2F64x2 {}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
+impl TransposeBlock<f64> for TransposeBlockAvx2x2F64x2 {
+    #[inline]
+    #[target_feature(enable = "avx")]
+    unsafe fn transpose_block(
+        &self,
+        src: &[Complex<f64>],
+        src_stride: usize,
+        dst: &mut [Complex<f64>],
+        dst_stride: usize,
+    ) {
+        use crate::avx::avx_transpose_f64x2_2x2;
+        unsafe {
+            avx_transpose_f64x2_2x2(src, src_stride, dst, dst_stride);
+        }
+    }
+}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
+struct AvxDefaultExecutorDouble {}
+
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
+impl TransposeExecutor<f64> for AvxDefaultExecutorDouble {
+    fn transpose(
+        &self,
+        input: &[Complex<f64>],
+        output: &mut [Complex<f64>],
+        width: usize,
+        height: usize,
+    ) {
+        let mut y = 0usize;
+
+        let input_stride = width;
+        let output_stride = height;
+        //
+        // unsafe {
+        //     y = transpose_executor::<f32, 4>(
+        //         input,
+        //         input_stride,
+        //         output,
+        //         output_stride,
+        //         width,
+        //         height,
+        //         y,
+        //         TransposeBlockAvx4x4F32x4 {},
+        //     );
+        // }
+
+        unsafe {
+            y = transpose_executor::<f64, 2>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockAvx2x2F64x2 {},
+            );
+        }
+
+        transpose_section::<Complex<f64>>(
             input,
             input_stride,
             output,

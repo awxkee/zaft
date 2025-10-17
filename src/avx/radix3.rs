@@ -420,7 +420,6 @@ mod tests {
             }
             let src = input.to_vec();
             let mut z_ref = input.to_vec();
-            let mut z_ref2 = input.to_vec();
 
             let radix3_forward_ref = Radix3::new(size, FftDirection::Forward).unwrap();
 

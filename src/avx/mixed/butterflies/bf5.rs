@@ -46,7 +46,7 @@ impl ColumnButterfly5d {
         let tw1 = compute_twiddle(1, 5, direction);
         let tw2 = compute_twiddle(2, 5, direction);
         Self {
-            rotate: AvxRotate::new(direction),
+            rotate: AvxRotate::new(FftDirection::Inverse),
             tw1_re: _mm256_set1_pd(tw1.re),
             tw1_im: _mm256_set1_pd(tw1.im),
             tw2_re: _mm256_set1_pd(tw2.re),

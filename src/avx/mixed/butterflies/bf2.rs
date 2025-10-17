@@ -26,8 +26,8 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::mixed::avx_store::AvxStoreD;
 use crate::FftDirection;
+use crate::avx::mixed::avx_store::AvxStoreD;
 use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly2d {}

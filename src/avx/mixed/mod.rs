@@ -30,4 +30,7 @@ mod avx_store;
 mod butterflies;
 mod mixed_radix;
 
-pub(crate) use mixed_radix::{AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d};
+pub(crate) use mixed_radix::{
+    AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,
+    AvxMixedRadix7d,
+};

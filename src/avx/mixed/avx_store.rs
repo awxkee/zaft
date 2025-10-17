@@ -51,7 +51,7 @@ impl AvxStoreD {
             }
         }
     }
-    
+
     #[inline]
     #[target_feature(enable = "avx")]
     pub(crate) fn from_complex(complex: &Complex<f64>) -> Self {

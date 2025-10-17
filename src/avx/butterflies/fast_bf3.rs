@@ -102,26 +102,26 @@ impl AvxFastButterfly3<f64> {
         (y0, y1, y2)
     }
 
-    // #[target_feature(enable = "avx", enable = "fma")]
-    // #[inline]
-    // pub(crate) unsafe fn exec(
-    //     &self,
-    //     u0: __m256d,
-    //     u1: __m256d,
-    //     u2: __m256d,
-    // ) -> (__m256d, __m256d, __m256d) {
-    //     let xp = _mm256_add_pd(u1, u2);
-    //     let xn = _mm256_sub_pd(u1, u2);
-    //     let sum = _mm256_add_pd(u0, xp);
-    //
-    //     let w_1 = _mm256_fmadd_pd(self.twiddle_re, xp, u0);
-    //     let xn_rot = _mm256_permute_pd::<0b0101>(xn);
-    //
-    //     let y0 = sum;
-    //     let y1 = _mm256_fmadd_pd(self.twiddle_im, xn_rot, w_1);
-    //     let y2 = _mm256_fnmadd_pd(self.twiddle_im, xn_rot, w_1);
-    //     (y0, y1, y2)
-    // }
+    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline]
+    pub(crate) unsafe fn exec(
+        &self,
+        u0: __m256d,
+        u1: __m256d,
+        u2: __m256d,
+    ) -> (__m256d, __m256d, __m256d) {
+        let xp = _mm256_add_pd(u1, u2);
+        let xn = _mm256_sub_pd(u1, u2);
+        let sum = _mm256_add_pd(u0, xp);
+
+        let w_1 = _mm256_fmadd_pd(self.twiddle_re, xp, u0);
+        let xn_rot = _mm256_permute_pd::<0b0101>(xn);
+
+        let y0 = sum;
+        let y1 = _mm256_fmadd_pd(self.twiddle_im, xn_rot, w_1);
+        let y2 = _mm256_fnmadd_pd(self.twiddle_im, xn_rot, w_1);
+        (y0, y1, y2)
+    }
 }
 
 impl AvxFastButterfly3<f32> {

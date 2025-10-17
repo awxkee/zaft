@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 10/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -26,51 +26,35 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::FftDirection;
-use crate::avx::mixed::avx_store::AvxStoreD;
+
+use num_complex::Complex;
 use std::arch::x86_64::*;
 
-pub(crate) struct ColumnButterfly4d {
-    rotate: __m256d,
-}
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn avx_transpose_f64x2_2x2(
+    src: &[Complex<f64>],
+    src_stride: usize,
+    dst: &mut [Complex<f64>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let row0 = _mm256_loadu_pd(src.as_ptr().cast());
+        let row1 = _mm256_loadu_pd(src.get_unchecked(src_stride..).as_ptr().cast());
 
-impl ColumnButterfly4d {
-    #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly4d {
-        unsafe {
-            Self {
-                rotate: _mm256_loadu_pd(match direction {
-                    FftDirection::Inverse => {
-                        [-0.0f64, 0.0, -0.0, 0.0, -0.0f64, 0.0, -0.0, 0.0].as_ptr()
-                    }
-                    FftDirection::Forward => {
-                        [0.0f64, -0.0, 0.0, -0.0, 0.0f64, -0.0, 0.0, -0.0].as_ptr()
-                    }
-                }),
-            }
-        }
-    }
-}
+        const HI_HI: i32 = 0b0011_0001;
+        const LO_LO: i32 = 0b0010_0000;
 
-impl ColumnButterfly4d {
-    #[target_feature(enable = "avx")]
-    #[inline]
-    pub(crate) unsafe fn exec(&self, v: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
-        let t0 = _mm256_add_pd(v[0].v, v[2].v);
-        let t1 = _mm256_sub_pd(v[0].v, v[2].v);
-        let t2 = _mm256_add_pd(v[1].v, v[3].v);
-        let mut t3 = _mm256_sub_pd(v[1].v, v[3].v);
-        t3 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3), self.rotate);
+        // a0 a1
+        // a2 a3
+        // --->
+        // a1 a3
+        // a0 a2
 
-        let y0 = _mm256_add_pd(t0, t2);
-        let y1 = _mm256_add_pd(t1, t3);
-        let y2 = _mm256_sub_pd(t0, t2);
-        let y3 = _mm256_sub_pd(t1, t3);
-        [
-            AvxStoreD::raw(y0),
-            AvxStoreD::raw(y1),
-            AvxStoreD::raw(y2),
-            AvxStoreD::raw(y3),
-        ]
+        let v0 = _mm256_permute2f128_pd::<LO_LO>(row0, row1);
+        let v1 = _mm256_permute2f128_pd::<HI_HI>(row0, row1);
+
+        _mm256_storeu_pd(dst.as_mut_ptr().cast(), v0);
+        _mm256_storeu_pd(dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(), v1);
     }
 }
