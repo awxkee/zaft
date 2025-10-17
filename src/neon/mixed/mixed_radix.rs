@@ -653,7 +653,7 @@ macro_rules! define_mixed_radix_neon_f_fcma {
 
                         // for the remaining rows, apply twiddle factors and then write back to memory
                         for i in 1..ROW_COUNT {
-                            let twiddle = final_twiddle_chunk[i * COMPLEX_PER_VECTOR - 2];
+                            let twiddle = final_twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR];
                             unsafe {
                                 let output =
                                     NeonStoreFh::fcmul_fcma(output[i], NeonStoreFh::from_complex(&twiddle));

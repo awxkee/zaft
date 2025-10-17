@@ -26,12 +26,51 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-mod bf2;
-mod bf3;
-mod bf4;
-mod bf5;
+use crate::FftDirection;
+use crate::avx::mixed::avx_store::AvxStoreD;
+use std::arch::x86_64::*;
 
-pub(crate) use bf2::ColumnButterfly2d;
-pub(crate) use bf3::ColumnButterfly3d;
-pub(crate) use bf4::ColumnButterfly4d;
-pub(crate) use bf5::ColumnButterfly5d;
+pub(crate) struct ColumnButterfly4d {
+    rotate: __m256d,
+}
+
+impl ColumnButterfly4d {
+    #[target_feature(enable = "avx")]
+    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly4d {
+        unsafe {
+            Self {
+                rotate: _mm256_loadu_pd(match direction {
+                    FftDirection::Inverse => {
+                        [-0.0f64, 0.0, -0.0, 0.0, -0.0f64, 0.0, -0.0, 0.0].as_ptr()
+                    }
+                    FftDirection::Forward => {
+                        [0.0f64, -0.0, 0.0, -0.0, 0.0f64, -0.0, 0.0, -0.0].as_ptr()
+                    }
+                }),
+            }
+        }
+    }
+}
+
+impl ColumnButterfly4d {
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn exec(&self, v: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
+        let t0 = _mm256_add_pd(v[0].v, v[2].v);
+        let t1 = _mm256_sub_pd(v[0].v, v[2].v);
+        let t2 = _mm256_add_pd(v[2].v, v[3].v);
+        let mut t3 = _mm256_sub_pd(v[2].v, v[3].v);
+        t3 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3), self.rotate);
+
+        let y0 = _mm256_add_pd(t0, t2);
+        let y1 = _mm256_add_pd(t1, t3);
+        let y2 = _mm256_sub_pd(t0, t2);
+        let y3 = _mm256_sub_pd(t1, t3);
+        [
+            AvxStoreD::raw(y0),
+            AvxStoreD::raw(y1),
+            AvxStoreD::raw(y2),
+            AvxStoreD::raw(y3),
+        ]
+    }
+}

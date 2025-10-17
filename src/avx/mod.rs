@@ -50,7 +50,7 @@ pub(crate) use butterflies::{
 };
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
-pub(crate) use mixed::{AvxMixedRadix2d, AvxMixedRadix3d};
+pub(crate) use mixed::{AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d};
 pub(crate) use raders::AvxRadersFft;
 pub(crate) use radix3::AvxFmaRadix3;
 pub(crate) use radix4::AvxFmaRadix4;

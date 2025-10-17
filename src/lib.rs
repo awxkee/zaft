@@ -384,26 +384,50 @@ impl Zaft {
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {
             // Use Radix-3 if divisible by 3
+            T::radix3(n, fft_direction)
+        } else if prime_factors.is_power_of_five {
+            // Use Radix-5 if power of 5
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
                 if Zaft::could_do_split_mixed_radix() {
-                    let r = n / 3;
-                    if r == 3 {
+                    let r = n / 5;
+                    if r == 5 {
                         // actually should not happen here, just a stub
-                        return T::butterfly9(fft_direction);
+                        let right_fft = T::butterfly5(fft_direction)?;
+                        if let Ok(Some(v)) = T::mixed_radix_butterfly5(right_fft) {
+                            return Ok(v);
+                        }
                     }
-                    let right_fft = T::radix3(r, fft_direction)?;
-                    if let Ok(Some(v)) = T::mixed_radix_butterfly3(right_fft) {
+                    let right_fft = T::radix5(r, fft_direction)?;
+                    if let Ok(Some(v)) = T::mixed_radix_butterfly5(right_fft) {
                         return Ok(v);
                     }
                 }
             }
-            T::radix3(n, fft_direction)
-        } else if prime_factors.is_power_of_five {
-            // Use Radix-5 if power of 5
             T::radix5(n, fft_direction)
         } else if prime_factors.is_power_of_two {
             // Use Radix-4 if a power of 2
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if Zaft::could_do_split_mixed_radix() {
+                    fn is_power_of_four(n: u64) -> bool {
+                        n != 0 && (n & (n - 1)) == 0 && (n & 0x5555_5555_5555_5555) != 0
+                    }
+                    if is_power_of_four(n as u64) {
+                        let r = n / 4;
+                        let right_fft = T::radix4(r, fft_direction)?;
+                        if let Ok(Some(v)) = T::mixed_radix_butterfly4(right_fft) {
+                            return Ok(v);
+                        }
+                    } else {
+                        let r = n / 2;
+                        let right_fft = T::radix4(r, fft_direction)?;
+                        if let Ok(Some(v)) = T::mixed_radix_butterfly2(right_fft) {
+                            return Ok(v);
+                        }
+                    }
+                }
+            }
             T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_six {
             T::radix6(n, fft_direction)
@@ -522,4 +546,15 @@ impl Display for FftDirection {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    #[test]
+    fn power_of_four() {
+        fn is_power_of_four(n: u64) -> bool {
+            n != 0 && (n & (n - 1)) == 0 && (n & 0x5555_5555_5555_5555) != 0
+        }
+        assert_eq!(is_power_of_four(4), true);
+        assert_eq!(is_power_of_four(8), false);
+        assert_eq!(is_power_of_four(16), true);
+        assert_eq!(is_power_of_four(20), false);
+    }
+}

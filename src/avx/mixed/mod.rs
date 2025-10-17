@@ -26,8 +26,8 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-mod mixed_radix;
 mod avx_store;
 mod butterflies;
+mod mixed_radix;
 
-pub(crate) use mixed_radix::{AvxMixedRadix2d, AvxMixedRadix3d};
+pub(crate) use mixed_radix::{AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d};
