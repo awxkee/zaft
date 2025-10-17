@@ -73,7 +73,10 @@ macro_rules! define_mixed_radixd {
                 let remainder = len_per_row % COMPLEX_PER_VECTOR;
 
                 let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-                let mut twiddles = Vec::with_capacity(num_twiddle_columns * TWIDDLES_PER_COLUMN);
+                let mut twiddles = Vec::new();
+                twiddles
+                    .try_reserve_exact(num_twiddle_columns * TWIDDLES_PER_COLUMN)
+                    .map_err(|_| ZaftError::OutOfMemory(num_twiddle_columns * TWIDDLES_PER_COLUMN))?;
                 for x in 0..num_twiddle_columns {
                     for y in 1..ROW_COUNT {
                         for i in 0..COMPLEX_PER_VECTOR {
@@ -265,7 +268,10 @@ impl AvxMixedRadix {
         let remainder = len_per_row % COMPLEX_PER_VECTOR;
 
         let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-        let mut twiddles = Vec::with_capacity(num_twiddle_columns * TWIDDLES_PER_COLUMN);
+        let mut twiddles = Vec::new();
+        twiddles
+            .try_reserve_exact(num_twiddle_columns * TWIDDLES_PER_COLUMN)
+            .map_err(|_| ZaftError::OutOfMemory(num_twiddle_columns * TWIDDLES_PER_COLUMN))?;
         for x in 0..num_twiddle_columns {
             for y in 1..ROW_COUNT {
                 for i in 0..COMPLEX_PER_VECTOR {
