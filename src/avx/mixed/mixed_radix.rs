@@ -29,7 +29,7 @@
 use crate::avx::mixed::avx_store::AvxStoreD;
 use crate::avx::mixed::butterflies::{
     ColumnButterfly2d, ColumnButterfly3d, ColumnButterfly4d, ColumnButterfly5d, ColumnButterfly6d,
-    ColumnButterfly7d,
+    ColumnButterfly7d, ColumnButterfly8d,
 };
 use crate::err::try_vec;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
@@ -227,6 +227,7 @@ define_mixed_radixd!(AvxMixedRadix4d, ColumnButterfly4d, 4);
 define_mixed_radixd!(AvxMixedRadix5d, ColumnButterfly5d, 5);
 define_mixed_radixd!(AvxMixedRadix6d, ColumnButterfly6d, 6);
 define_mixed_radixd!(AvxMixedRadix7d, ColumnButterfly7d, 7);
+define_mixed_radixd!(AvxMixedRadix8d, ColumnButterfly8d, 8);
 
 pub(crate) struct AvxMixedRadix {
     execution_length: usize,
@@ -485,7 +486,7 @@ impl FftExecutor<f64> for AvxMixedRadix {
 
                 // for the remaining rows, apply twiddle factors and then write back to memory
                 for i in 1..ROW_COUNT {
-                    let twiddle = final_twiddle_chunk[i - 1];
+                    let twiddle = final_twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR];
                     let output =
                         NeonStoreFh::mul_by_complex(output[i], NeonStoreFh::from_complex(&twiddle));
                     unsafe {
@@ -742,6 +743,53 @@ mod tests {
         let neon_mixed_rust =
             AvxMixedRadix7d::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
         let bf8 = Zaft::strategy(14, FftDirection::Forward).unwrap();
+        let mut reference_value = src.to_vec();
+        bf8.execute(&mut reference_value).unwrap();
+        let mut test_value = src.to_vec();
+        neon_mixed_rust.execute(&mut test_value).unwrap();
+        reference_value
+            .iter()
+            .zip(test_value.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
+    }
+
+    #[test]
+    fn test_avx_mixed_radix8_f64() {
+        let src: [Complex<f64>; 16] = [
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+        ];
+        let neon_mixed_rust =
+            AvxMixedRadix8d::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
+        let bf8 = Zaft::strategy(16, FftDirection::Forward).unwrap();
         let mut reference_value = src.to_vec();
         bf8.execute(&mut reference_value).unwrap();
         let mut test_value = src.to_vec();

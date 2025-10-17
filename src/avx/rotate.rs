@@ -34,7 +34,7 @@ use std::marker::PhantomData;
 use std::ops::Neg;
 
 pub(crate) struct AvxRotate<T> {
-    rot_flag: __m256d,
+    pub(crate) rot_flag: __m256d,
     phantom_data: PhantomData<T>,
 }
 
