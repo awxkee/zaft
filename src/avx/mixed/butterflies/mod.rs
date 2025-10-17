@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+mod bf10;
 mod bf2;
 mod bf3;
 mod bf4;
@@ -43,3 +44,4 @@ pub(crate) use bf6::ColumnButterfly6d;
 pub(crate) use bf7::ColumnButterfly7d;
 pub(crate) use bf8::ColumnButterfly8d;
 pub(crate) use bf9::ColumnButterfly9d;
+pub(crate) use bf10::ColumnButterfly10d;
