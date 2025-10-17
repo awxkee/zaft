@@ -56,6 +56,5 @@ pub(crate) use bf11::AvxButterfly11;
 pub(crate) use bf12::AvxButterfly12;
 pub(crate) use bf13::AvxButterfly13;
 pub(crate) use fast_bf3::AvxFastButterfly3;
-pub(crate) use fast_bf4::AvxFastButterfly4;
 pub(crate) use fast_bf5::{AvxFastButterfly5d, AvxFastButterfly5f};
 pub(crate) use shared::AvxButterfly;

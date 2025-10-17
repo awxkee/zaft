@@ -27,53 +27,63 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::avx::butterflies::AvxButterfly;
+use crate::avx::butterflies::AvxFastButterfly3;
 use crate::avx::mixed::avx_store::AvxStoreD;
-use crate::avx::rotate::AvxRotate;
+use crate::avx::util::_mm256_fcmul_pd;
+use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
 
-pub(crate) struct ColumnButterfly8d {
-    rotate: AvxRotate<f64>,
-    root2: __m256d,
+pub(crate) struct ColumnButterfly9d {
+    bf3: AvxFastButterfly3<f64>,
+    twiddle1: __m256d,
+    twiddle2: __m256d,
+    twiddle4: __m256d,
 }
 
-impl ColumnButterfly8d {
+impl ColumnButterfly9d {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly8d {
-        Self {
-            rotate: AvxRotate::new(direction),
-            root2: _mm256_set1_pd(0.5f64.sqrt()),
+    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly9d {
+        let tw1 = compute_twiddle::<f64>(1, 9, direction);
+        let tw2 = compute_twiddle::<f64>(2, 9, direction);
+        let tw4 = compute_twiddle::<f64>(4, 9, direction);
+        unsafe {
+            Self {
+                twiddle1: _mm256_loadu_pd([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr().cast()),
+                twiddle2: _mm256_loadu_pd([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr().cast()),
+                twiddle4: _mm256_loadu_pd([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr().cast()),
+                bf3: AvxFastButterfly3::<f64>::new(direction),
+            }
         }
     }
 }
 
-impl ColumnButterfly8d {
+impl ColumnButterfly9d {
     #[target_feature(enable = "avx")]
     #[inline]
-    pub(crate) unsafe fn exec(&self, v: [AvxStoreD; 8]) -> [AvxStoreD; 8] {
+    pub(crate) unsafe fn exec(&self, v: [AvxStoreD; 9]) -> [AvxStoreD; 9] {
         unsafe {
-            let (u0, u2, u4, u6) =
-                AvxButterfly::butterfly4_f64(v[0].v, v[2].v, v[4].v, v[6].v, self.rotate.rot_flag);
-            let (u1, mut u3, mut u5, mut u7) =
-                AvxButterfly::butterfly4_f64(v[1].v, v[3].v, v[5].v, v[7].v, self.rotate.rot_flag);
+            let (u0, u3, u6) = self.bf3.exec(v[0].v, v[3].v, v[6].v);
+            let (u1, mut u4, mut u7) = self.bf3.exec(v[1].v, v[4].v, v[7].v);
+            let (u2, mut u5, mut u8) = self.bf3.exec(v[2].v, v[5].v, v[8].v);
 
-            u3 = _mm256_mul_pd(_mm256_add_pd(self.rotate.rotate_m256d(u3), u3), self.root2);
-            u5 = self.rotate.rotate_m256d(u5);
-            u7 = _mm256_mul_pd(_mm256_sub_pd(self.rotate.rotate_m256d(u7), u7), self.root2);
+            u4 = _mm256_fcmul_pd(u4, self.twiddle1);
+            u7 = _mm256_fcmul_pd(u7, self.twiddle2);
+            u5 = _mm256_fcmul_pd(u5, self.twiddle2);
+            u8 = _mm256_fcmul_pd(u8, self.twiddle4);
 
-            let (y0, y1) = AvxButterfly::butterfly2_f64(u0, u1);
-            let (y2, y3) = AvxButterfly::butterfly2_f64(u2, u3);
-            let (y4, y5) = AvxButterfly::butterfly2_f64(u4, u5);
-            let (y6, y7) = AvxButterfly::butterfly2_f64(u6, u7);
+            let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
+            let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
+            let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
             [
                 AvxStoreD::raw(y0),
-                AvxStoreD::raw(y2),
-                AvxStoreD::raw(y4),
-                AvxStoreD::raw(y6),
                 AvxStoreD::raw(y1),
+                AvxStoreD::raw(y2),
                 AvxStoreD::raw(y3),
+                AvxStoreD::raw(y4),
                 AvxStoreD::raw(y5),
+                AvxStoreD::raw(y6),
                 AvxStoreD::raw(y7),
+                AvxStoreD::raw(y8),
             ]
         }
     }

@@ -33,6 +33,7 @@ mod bf5;
 mod bf6;
 mod bf7;
 mod bf8;
+mod bf9;
 
 pub(crate) use bf2::ColumnButterfly2d;
 pub(crate) use bf3::ColumnButterfly3d;
@@ -41,3 +42,4 @@ pub(crate) use bf5::ColumnButterfly5d;
 pub(crate) use bf6::ColumnButterfly6d;
 pub(crate) use bf7::ColumnButterfly7d;
 pub(crate) use bf8::ColumnButterfly8d;
+pub(crate) use bf9::ColumnButterfly9d;
