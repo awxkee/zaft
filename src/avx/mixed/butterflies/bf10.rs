@@ -27,11 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::avx::butterflies::{AvxButterfly, AvxFastButterfly3, AvxFastButterfly5d};
+use crate::avx::butterflies::{AvxButterfly, AvxFastButterfly5d};
 use crate::avx::mixed::avx_store::AvxStoreD;
-use crate::avx::util::_mm256_fcmul_pd;
-use crate::util::compute_twiddle;
-use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly10d {
     bf5: AvxFastButterfly5d,

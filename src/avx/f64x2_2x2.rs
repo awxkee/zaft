@@ -32,6 +32,23 @@ use std::arch::x86_64::*;
 
 #[inline]
 #[target_feature(enable = "avx")]
+pub(crate) unsafe fn transpose_f64x2_2x2(v0: __m256d, v1: __m256d) -> (__m256d, __m256d) {
+    const HI_HI: i32 = 0b0011_0001;
+    const LO_LO: i32 = 0b0010_0000;
+
+    // a0 a1
+    // a2 a3
+    // --->
+    // a1 a3
+    // a0 a2
+
+    let q0 = _mm256_permute2f128_pd::<LO_LO>(v0, v1);
+    let q1 = _mm256_permute2f128_pd::<HI_HI>(v0, v1);
+    (q0, q1)
+}
+
+#[inline]
+#[target_feature(enable = "avx")]
 pub(crate) unsafe fn avx_transpose_f64x2_2x2(
     src: &[Complex<f64>],
     src_stride: usize,
@@ -42,17 +59,7 @@ pub(crate) unsafe fn avx_transpose_f64x2_2x2(
         let row0 = _mm256_loadu_pd(src.as_ptr().cast());
         let row1 = _mm256_loadu_pd(src.get_unchecked(src_stride..).as_ptr().cast());
 
-        const HI_HI: i32 = 0b0011_0001;
-        const LO_LO: i32 = 0b0010_0000;
-
-        // a0 a1
-        // a2 a3
-        // --->
-        // a1 a3
-        // a0 a2
-
-        let v0 = _mm256_permute2f128_pd::<LO_LO>(row0, row1);
-        let v1 = _mm256_permute2f128_pd::<HI_HI>(row0, row1);
+        let (v0, v1) = transpose_f64x2_2x2(row0, row1);
 
         _mm256_storeu_pd(dst.as_mut_ptr().cast(), v0);
         _mm256_storeu_pd(dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(), v1);
