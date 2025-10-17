@@ -29,7 +29,7 @@
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
-    _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2, _m256_fcmul_ps,
+    _mm_fcmul_ps, _m128s_load_f32x2, _m128s_store_f32x2, _m256_fcmul_ps,
     _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd,
     _mm256_load4_f32x2, _mm256_permute4x64_ps, shuffle,
 };
@@ -978,7 +978,7 @@ impl AvxFmaRadix11<f32> {
                                 tw4tw5tw6tw7,
                             );
 
-                            let u9u10 = _m128s_fma_mul_complex(
+                            let u9u10 = _mm_fcmul_ps(
                                 _mm_unpacklo_ps64(
                                     _m128s_load_f32x2(
                                         data.get_unchecked(j + 9 * eleventh..).as_ptr().cast(),

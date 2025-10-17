@@ -31,7 +31,7 @@ use std::arch::x86_64::*;
 
 #[inline]
 #[target_feature(enable = "avx2", enable = "fma")]
-pub(crate) unsafe fn _m128d_fma_mul_complex(a: __m128d, b: __m128d) -> __m128d {
+pub(crate) unsafe fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_unpacklo_pd(b, b);
     let mut temp2 = _mm_unpackhi_pd(b, b);
     temp2 = _mm_mul_pd(temp2, a);
@@ -55,7 +55,7 @@ pub(crate) unsafe fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
 
 #[inline]
 #[target_feature(enable = "avx2", enable = "fma")]
-pub(crate) unsafe fn _m128s_fma_mul_complex(a: __m128, b: __m128) -> __m128 {
+pub(crate) unsafe fn _mm_fcmul_ps(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(b, b);
     let temp2 = _mm_shuffle_ps::<0xF5>(b, b);
     let mul2 = _mm_mul_ps(a, temp2);

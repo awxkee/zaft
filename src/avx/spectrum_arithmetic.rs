@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
+    _mm_fcmul_pd, _mm_fcmul_ps, _m128s_load_f32x2, _m128s_store_f32x2,
     _m256_fcmul_ps, _mm_fcmul_pd_conj_a, _mm_fcmul_ps_conj_a, _mm256_fcmul_pd,
     _mm256_fcmul_pd_conj_a, _mm256_fcmul_ps_conj_a,
 };
@@ -82,7 +82,7 @@ impl AvxSpectrumArithmetic<f32> {
                 let s0 = _mm_loadu_ps(src.as_ptr().cast());
                 let q0 = _mm_loadu_ps(twiddle.as_ptr().cast());
 
-                let p0 = _m128s_fma_mul_complex(s0, q0);
+                let p0 = _mm_fcmul_ps(s0, q0);
 
                 _mm_storeu_ps(dst.as_mut_ptr().cast(), p0);
             }
@@ -95,7 +95,7 @@ impl AvxSpectrumArithmetic<f32> {
                 let s0 = _m128s_load_f32x2(src as *const Complex<f32>);
                 let q0 = _m128s_load_f32x2(twiddle as *const Complex<f32>);
 
-                let p0 = _m128s_fma_mul_complex(s0, q0);
+                let p0 = _mm_fcmul_ps(s0, q0);
 
                 _m128s_store_f32x2(dst as *mut Complex<f32>, p0);
             }
@@ -140,7 +140,7 @@ impl AvxSpectrumArithmetic<f32> {
                 let s0 = _mm_loadu_ps(dst.as_ptr().cast());
                 let q0 = _mm_loadu_ps(twiddle.as_ptr().cast());
 
-                let mut p0 = _m128s_fma_mul_complex(s0, q0);
+                let mut p0 = _mm_fcmul_ps(s0, q0);
 
                 p0 = _mm_xor_ps(p0, _mm256_castps256_ps128(factors));
 
@@ -154,7 +154,7 @@ impl AvxSpectrumArithmetic<f32> {
                 let s0 = _m128s_load_f32x2(dst as *const Complex<f32>);
                 let q0 = _m128s_load_f32x2(twiddle as *const Complex<f32>);
 
-                let mut p0 = _m128s_fma_mul_complex(s0, q0);
+                let mut p0 = _mm_fcmul_ps(s0, q0);
 
                 p0 = _mm_xor_ps(p0, _mm256_castps256_ps128(factors));
 
@@ -285,7 +285,7 @@ impl AvxSpectrumArithmetic<f64> {
                 let s0 = _mm_loadu_pd(src as *const Complex<f64> as *const f64);
                 let q0 = _mm_loadu_pd(twiddle as *const Complex<f64> as *const f64);
 
-                let p0 = _m128d_fma_mul_complex(s0, q0);
+                let p0 = _mm_fcmul_pd(s0, q0);
 
                 _mm_storeu_pd(dst as *mut Complex<f64> as *mut f64, p0);
             }
@@ -330,7 +330,7 @@ impl AvxSpectrumArithmetic<f64> {
                 let s0 = _mm_loadu_pd(dst as *const Complex<f64> as *const f64);
                 let q0 = _mm_loadu_pd(twiddle as *const Complex<f64> as *const f64);
 
-                let mut p0 = _m128d_fma_mul_complex(s0, q0);
+                let mut p0 = _mm_fcmul_pd(s0, q0);
 
                 p0 = _mm_xor_pd(p0, _mm256_castpd256_pd128(factors));
 

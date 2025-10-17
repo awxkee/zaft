@@ -258,6 +258,13 @@ impl AlgorithmFactory<f64> for f64 {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            if std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
+            {
+                use crate::avx::AvxButterfly10d;
+                return Ok(Box::new(AvxButterfly10d::new(fft_direction)));
+            }
             use crate::butterflies::Butterfly10;
             Ok(Box::new(Butterfly10::new(fft_direction)))
         }
@@ -682,6 +689,16 @@ impl AlgorithmFactory<f64> for f64 {
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    use crate::avx::AvxFmaRadix10d;
+                    return AvxFmaRadix10d::new(n, fft_direction)
+                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
+                }
+            }
             use crate::radix10::Radix10;
             Radix10::new(n, fft_direction)
                 .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>)

@@ -28,7 +28,7 @@
  */
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
-    _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
+    _mm_fcmul_pd, _mm_fcmul_ps, _m128s_load_f32x2, _m128s_store_f32x2,
     _m256_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps,
     _mm256_fcmul_pd, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64,
     shuffle,
@@ -251,19 +251,19 @@ impl AvxFmaRadix5<f64> {
                                 m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast(),
                             );
 
-                            let u1 = _m128d_fma_mul_complex(
+                            let u1 = _mm_fcmul_pd(
                                 _mm_loadu_pd(data.get_unchecked(j + fifth..).as_ptr().cast()),
                                 _mm256_castpd256_pd128(tw0),
                             );
-                            let u2 = _m128d_fma_mul_complex(
+                            let u2 = _mm_fcmul_pd(
                                 _mm_loadu_pd(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
                                 _mm256_extractf128_pd::<1>(tw0),
                             );
-                            let u3 = _m128d_fma_mul_complex(
+                            let u3 = _mm_fcmul_pd(
                                 _mm_loadu_pd(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
                                 _mm256_castpd256_pd128(tw1),
                             );
-                            let u4 = _m128d_fma_mul_complex(
+                            let u4 = _mm_fcmul_pd(
                                 _mm_loadu_pd(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
                                 _mm256_extractf128_pd::<1>(tw1),
                             );
@@ -599,7 +599,7 @@ impl AvxFmaRadix5<f32> {
                             let tw2 =
                                 _mm_loadu_ps(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast());
 
-                            let u1u2 = _m128s_fma_mul_complex(
+                            let u1u2 = _mm_fcmul_ps(
                                 _mm_unpacklo_ps64(
                                     _m128s_load_f32x2(
                                         data.get_unchecked(j + fifth..).as_ptr().cast(),
@@ -610,7 +610,7 @@ impl AvxFmaRadix5<f32> {
                                 ),
                                 tw0,
                             );
-                            let u3u4 = _m128s_fma_mul_complex(
+                            let u3u4 = _mm_fcmul_ps(
                                 _mm_unpacklo_ps64(
                                     _m128s_load_f32x2(
                                         data.get_unchecked(j + 3 * fifth..).as_ptr().cast(),

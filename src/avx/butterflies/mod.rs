@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+mod bf10;
 mod bf11;
 mod bf12;
 mod bf13;
@@ -39,6 +40,7 @@ mod bf8;
 mod bf9;
 mod fast_bf3;
 mod fast_bf4;
+mod fast_bf5;
 mod shared;
 
 pub(crate) use bf2::AvxButterfly2;
@@ -49,7 +51,9 @@ pub(crate) use bf6::AvxButterfly6;
 pub(crate) use bf7::AvxButterfly7;
 pub(crate) use bf8::AvxButterfly8;
 pub(crate) use bf9::AvxButterfly9;
+pub(crate) use bf10::{AvxButterfly10d, AvxButterfly10f};
 pub(crate) use bf11::AvxButterfly11;
 pub(crate) use bf12::AvxButterfly12;
 pub(crate) use bf13::AvxButterfly13;
+pub(crate) use fast_bf5::{AvxFastButterfly5d, AvxFastButterfly5f};
 pub(crate) use shared::AvxButterfly;

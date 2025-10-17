@@ -30,6 +30,7 @@ mod butterflies;
 mod f32x2_2x2;
 mod f32x2_4x4;
 mod raders;
+mod radix10;
 mod radix11;
 mod radix13;
 mod radix3;
@@ -43,7 +44,8 @@ mod util;
 
 pub(crate) use butterflies::{
     AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5, AvxButterfly6, AvxButterfly7,
-    AvxButterfly8, AvxButterfly9, AvxButterfly11, AvxButterfly12, AvxButterfly13,
+    AvxButterfly8, AvxButterfly9, AvxButterfly10d, AvxButterfly10f, AvxButterfly11, AvxButterfly12,
+    AvxButterfly13,
 };
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
@@ -53,6 +55,7 @@ pub(crate) use radix4::AvxFmaRadix4;
 pub(crate) use radix5::AvxFmaRadix5;
 pub(crate) use radix6::AvxFmaRadix6;
 pub(crate) use radix7::AvxFmaRadix7;
+pub(crate) use radix10::{AvxFmaRadix10d, AvxFmaRadix10f};
 pub(crate) use radix11::AvxFmaRadix11;
 pub(crate) use radix13::AvxFmaRadix13;
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;

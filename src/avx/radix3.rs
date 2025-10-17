@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _m128d_fma_mul_complex, _m128s_fma_mul_complex, _m128s_load_f32x2, _m128s_store_f32x2,
+    _mm_fcmul_pd, _mm_fcmul_ps, _m128s_load_f32x2, _m128s_store_f32x2,
     _m256_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_unpackhi_pd2,
     _mm256_unpacklo_pd2, _mm256s_deinterleave2_epi64, shuffle,
 };
@@ -192,11 +192,11 @@ impl AvxFmaRadix3<f64> {
 
                         for j in j..third {
                             let u0 = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
-                            let u1 = _m128d_fma_mul_complex(
+                            let u1 = _mm_fcmul_pd(
                                 _mm_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast()),
                                 _mm_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
                             );
-                            let u2 = _m128d_fma_mul_complex(
+                            let u2 = _mm_fcmul_pd(
                                 _mm_loadu_pd(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
                                 _mm_loadu_pd(m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast()),
                             );
@@ -342,7 +342,7 @@ impl AvxFmaRadix3<f32> {
                                 data.get_unchecked(j + 2 * third..).as_ptr().cast(),
                             );
 
-                            let u1u2 = _m128s_fma_mul_complex(_mm_unpacklo_ps64(rk1, rk2), tw);
+                            let u1u2 = _mm_fcmul_ps(_mm_unpacklo_ps64(rk1, rk2), tw);
 
                             let u1 = u1u2;
                             let u2 = _mm_unpackhi_ps64(u1u2, u1u2);
