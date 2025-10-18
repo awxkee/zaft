@@ -27,47 +27,27 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
+use crate::avx::rotate::AvxRotate;
 use crate::avx::util::shuffle;
+use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
 use std::marker::PhantomData;
+use std::ops::Neg;
 
 pub(crate) struct AvxFastButterfly4<T> {
-    rotate: __m256d,
+    rotate: AvxRotate<T>,
     phantom_data: PhantomData<T>,
 }
 
-impl AvxFastButterfly4<f64> {
+impl<T: Copy + 'static + Neg<Output = T>> AvxFastButterfly4<T>
+where
+    f64: AsPrimitive<T>,
+{
     #[target_feature(enable = "avx")]
     pub(crate) unsafe fn new(direction: FftDirection) -> Self {
         unsafe {
             Self {
-                rotate: _mm256_loadu_pd(match direction {
-                    FftDirection::Inverse => {
-                        [-0.0f64, 0.0, -0.0, 0.0, -0.0f64, 0.0, -0.0, 0.0].as_ptr()
-                    }
-                    FftDirection::Forward => {
-                        [0.0f64, -0.0, 0.0, -0.0, 0.0f64, -0.0, 0.0, -0.0].as_ptr()
-                    }
-                }),
-                phantom_data: PhantomData,
-            }
-        }
-    }
-}
-
-impl AvxFastButterfly4<f32> {
-    #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> Self {
-        unsafe {
-            Self {
-                rotate: _mm256_castps_pd(_mm256_loadu_ps(match direction {
-                    FftDirection::Inverse => {
-                        [-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0].as_ptr()
-                    }
-                    FftDirection::Forward => {
-                        [0.0f32, -0.0, 0.0, -0.0, 0.0f32, -0.0, 0.0, -0.0].as_ptr()
-                    }
-                })),
+                rotate: AvxRotate::<T>::new(direction),
                 phantom_data: PhantomData,
             }
         }
@@ -84,21 +64,20 @@ impl AvxFastButterfly4<f32> {
         c: __m128,
         d: __m128,
     ) -> (__m128, __m128, __m128, __m128) {
-        let t0 = _mm_add_ps(a, c);
-        let t1 = _mm_sub_ps(a, c);
-        let t2 = _mm_add_ps(b, d);
-        let mut t3 = _mm_sub_ps(b, d);
-        const SH: i32 = shuffle(2, 3, 0, 1);
-        t3 = _mm_xor_ps(
-            _mm_shuffle_ps::<SH>(t3, t3),
-            _mm256_castps256_ps128(_mm256_castpd_ps(self.rotate)),
-        );
-        (
-            _mm_add_ps(t0, t2),
-            _mm_add_ps(t1, t3),
-            _mm_sub_ps(t0, t2),
-            _mm_sub_ps(t1, t3),
-        )
+        unsafe {
+            let t0 = _mm_add_ps(a, c);
+            let t1 = _mm_sub_ps(a, c);
+            let t2 = _mm_add_ps(b, d);
+            let mut t3 = _mm_sub_ps(b, d);
+            const SH: i32 = shuffle(2, 3, 0, 1);
+            t3 = self.rotate.rotate_m128(t3);
+            (
+                _mm_add_ps(t0, t2),
+                _mm_add_ps(t1, t3),
+                _mm_sub_ps(t0, t2),
+                _mm_sub_ps(t1, t3),
+            )
+        }
     }
 }
 
@@ -112,19 +91,42 @@ impl AvxFastButterfly4<f64> {
         c: __m128d,
         d: __m128d,
     ) -> (__m128d, __m128d, __m128d, __m128d) {
-        let t0 = _mm_add_pd(a, c);
-        let t1 = _mm_sub_pd(a, c);
-        let t2 = _mm_add_pd(b, d);
-        let mut t3 = _mm_sub_pd(b, d);
-        t3 = _mm_xor_pd(
-            _mm_shuffle_pd::<0b01>(t3, t3),
-            _mm256_castpd256_pd128(self.rotate),
-        );
-        (
-            _mm_add_pd(t0, t2),
-            _mm_add_pd(t1, t3),
-            _mm_sub_pd(t0, t2),
-            _mm_sub_pd(t1, t3),
-        )
+        unsafe {
+            let t0 = _mm_add_pd(a, c);
+            let t1 = _mm_sub_pd(a, c);
+            let t2 = _mm_add_pd(b, d);
+            let mut t3 = _mm_sub_pd(b, d);
+            t3 = self.rotate.rotate_m128d(t3);
+            (
+                _mm_add_pd(t0, t2),
+                _mm_add_pd(t1, t3),
+                _mm_sub_pd(t0, t2),
+                _mm_sub_pd(t1, t3),
+            )
+        }
+    }
+
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn exec(
+        &self,
+        a: __m256d,
+        b: __m256d,
+        c: __m256d,
+        d: __m256d,
+    ) -> (__m256d, __m256d, __m256d, __m256d) {
+        unsafe {
+            let t0 = _mm256_add_pd(a, c);
+            let t1 = _mm256_sub_pd(a, c);
+            let t2 = _mm256_add_pd(b, d);
+            let mut t3 = _mm256_sub_pd(b, d);
+            t3 = self.rotate.rotate_m256d(t3);
+            (
+                _mm256_add_pd(t0, t2),
+                _mm256_add_pd(t1, t3),
+                _mm256_sub_pd(t0, t2),
+                _mm256_sub_pd(t1, t3),
+            )
+        }
     }
 }

@@ -28,6 +28,7 @@
  */
 mod bf10;
 mod bf11;
+mod bf12;
 mod bf2;
 mod bf3;
 mod bf4;
@@ -36,6 +37,7 @@ mod bf6;
 mod bf7;
 mod bf8;
 mod bf9;
+mod bf13;
 
 pub(crate) use bf2::ColumnButterfly2d;
 pub(crate) use bf3::ColumnButterfly3d;
@@ -47,3 +49,5 @@ pub(crate) use bf8::ColumnButterfly8d;
 pub(crate) use bf9::ColumnButterfly9d;
 pub(crate) use bf10::ColumnButterfly10d;
 pub(crate) use bf11::ColumnButterfly11d;
+pub(crate) use bf12::ColumnButterfly12d;
+pub(crate) use bf13::ColumnButterfly13d;
