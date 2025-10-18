@@ -63,7 +63,7 @@ impl AvxFastButterfly5d {
 }
 
 impl AvxFastButterfly5d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
     pub(crate) unsafe fn exec(
         &self,
@@ -119,7 +119,7 @@ impl AvxFastButterfly5f {
 }
 
 impl AvxFastButterfly5f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
     pub(crate) unsafe fn _m256_exec(
         &self,
@@ -158,7 +158,7 @@ impl AvxFastButterfly5f {
         }
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
     pub(crate) unsafe fn exec(
         &self,

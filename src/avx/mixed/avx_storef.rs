@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::util::{_mm256_fcmul_pd, _mm256_fcmul_ps};
+use crate::avx::util::_mm256_fcmul_ps;
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
@@ -60,6 +60,28 @@ impl AvxStoreF {
                 v: _mm256_castps128_ps256(_mm_castsi128_ps(_mm_loadu_si64(
                     complex as *const Complex<f32> as *const u8,
                 ))),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn from_complex2(complex: &[Complex<f32>]) -> Self {
+        unsafe {
+            AvxStoreF {
+                v: _mm256_castps128_ps256(_mm_loadu_ps(complex.as_ptr().cast())),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn from_complex3(complex: &[Complex<f32>]) -> Self {
+        unsafe {
+            let lo = _mm256_castps128_ps256(_mm_loadu_ps(complex.as_ptr().cast()));
+            let hi = _mm_castsi128_ps(_mm_loadu_si64(complex.get_unchecked(2..).as_ptr().cast()));
+            AvxStoreF {
+                v: _mm256_insertf128_ps::<1>(lo, hi),
             }
         }
     }

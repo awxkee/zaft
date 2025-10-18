@@ -52,9 +52,6 @@ pub(crate) unsafe fn avx_transpose_f64x2_4x4(
         let d0 = _mm256_loadu_pd(src.get_unchecked(src_stride * 2 + 2..).as_ptr().cast());
         let d1 = _mm256_loadu_pd(src.get_unchecked(src_stride * 3 + 2..).as_ptr().cast());
 
-        const HI_HI: i32 = 0b0011_0001;
-        const LO_LO: i32 = 0b0010_0000;
-
         // Perform an 4 x 4 matrix transpose by building on top of the existing 2 x 2
         // matrix transpose implementation:
         // [ A B ]^T => [ A^T C^T ]

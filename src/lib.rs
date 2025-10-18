@@ -387,47 +387,9 @@ impl Zaft {
             T::radix3(n, fft_direction)
         } else if prime_factors.is_power_of_five {
             // Use Radix-5 if power of 5
-            // #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            // {
-            //     if Zaft::could_do_split_mixed_radix() {
-            //         let r = n / 5;
-            //         if r == 5 {
-            //             // actually should not happen here, just a stub
-            //             let right_fft = T::butterfly5(fft_direction)?;
-            //             if let Ok(Some(v)) = T::mixed_radix_butterfly5(right_fft) {
-            //                 return Ok(v);
-            //             }
-            //         }
-            //         let right_fft = T::radix5(r, fft_direction)?;
-            //         if let Ok(Some(v)) = T::mixed_radix_butterfly5(right_fft) {
-            //             return Ok(v);
-            //         }
-            //     }
-            // }
             T::radix5(n, fft_direction)
         } else if prime_factors.is_power_of_two {
             // Use Radix-4 if a power of 2
-            // #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            // {
-            //     if Zaft::could_do_split_mixed_radix() {
-            //         fn is_power_of_four(n: u64) -> bool {
-            //             n != 0 && (n & (n - 1)) == 0 && (n & 0x5555_5555_5555_5555) != 0
-            //         }
-            //         if is_power_of_four(n as u64) {
-            //             let r = n / 4;
-            //             let right_fft = T::radix4(r, fft_direction)?;
-            //             if let Ok(Some(v)) = T::mixed_radix_butterfly4(right_fft) {
-            //                 return Ok(v);
-            //             }
-            //         } else {
-            //             let r = n / 2;
-            //             let right_fft = T::radix4(r, fft_direction)?;
-            //             if let Ok(Some(v)) = T::mixed_radix_butterfly2(right_fft) {
-            //                 return Ok(v);
-            //             }
-            //         }
-            //     }
-            // }
             T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_six {
             T::radix6(n, fft_direction)
@@ -455,6 +417,22 @@ impl Zaft {
         } else if prime_factors.is_power_of_eleven {
             T::radix11(n, fft_direction)
         } else if prime_factors.is_power_of_thirteen {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if Zaft::could_do_split_mixed_radix() {
+                    let r = n / 13;
+                    if r == 13 {
+                        let right_fft = T::butterfly13(fft_direction)?;
+                        if let Ok(Some(v)) = T::mixed_radix_butterfly13(right_fft) {
+                            return Ok(v);
+                        }
+                    }
+                    let right_fft = T::radix13(r, fft_direction)?;
+                    if let Ok(Some(v)) = T::mixed_radix_butterfly13(right_fft) {
+                        return Ok(v);
+                    }
+                }
+            }
             T::radix13(n, fft_direction)
         } else if prime_factors.may_be_represented_in_mixed_radix() {
             Zaft::make_mixed_radix(fft_direction, prime_factors)

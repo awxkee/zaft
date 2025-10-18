@@ -28,7 +28,6 @@
  */
 use crate::FftDirection;
 use crate::avx::rotate::AvxRotate;
-use crate::avx::util::shuffle;
 use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
 use std::marker::PhantomData;
@@ -45,11 +44,9 @@ where
 {
     #[target_feature(enable = "avx")]
     pub(crate) unsafe fn new(direction: FftDirection) -> Self {
-        unsafe {
-            Self {
-                rotate: AvxRotate::<T>::new(direction),
-                phantom_data: PhantomData,
-            }
+        Self {
+            rotate: AvxRotate::<T>::new(direction),
+            phantom_data: PhantomData,
         }
     }
 }
@@ -69,13 +66,36 @@ impl AvxFastButterfly4<f32> {
             let t1 = _mm_sub_ps(a, c);
             let t2 = _mm_add_ps(b, d);
             let mut t3 = _mm_sub_ps(b, d);
-            const SH: i32 = shuffle(2, 3, 0, 1);
             t3 = self.rotate.rotate_m128(t3);
             (
                 _mm_add_ps(t0, t2),
                 _mm_add_ps(t1, t3),
                 _mm_sub_ps(t0, t2),
                 _mm_sub_ps(t1, t3),
+            )
+        }
+    }
+
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn exec(
+        &self,
+        a: __m256,
+        b: __m256,
+        c: __m256,
+        d: __m256,
+    ) -> (__m256, __m256, __m256, __m256) {
+        unsafe {
+            let t0 = _mm256_add_ps(a, c);
+            let t1 = _mm256_sub_ps(a, c);
+            let t2 = _mm256_add_ps(b, d);
+            let mut t3 = _mm256_sub_ps(b, d);
+            t3 = self.rotate.rotate_m256(t3);
+            (
+                _mm256_add_ps(t0, t2),
+                _mm256_add_ps(t1, t3),
+                _mm256_sub_ps(t0, t2),
+                _mm256_sub_ps(t1, t3),
             )
         }
     }

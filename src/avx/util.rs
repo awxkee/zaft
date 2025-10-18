@@ -30,7 +30,7 @@ use num_complex::Complex;
 use std::arch::x86_64::*;
 
 #[inline]
-#[target_feature(enable = "avx2", enable = "fma")]
+#[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_unpacklo_pd(b, b);
     let mut temp2 = _mm_unpackhi_pd(b, b);
@@ -40,7 +40,7 @@ pub(crate) unsafe fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
 }
 
 #[inline]
-#[target_feature(enable = "avx2", enable = "fma")]
+#[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
     let a_yx = _mm256_permute_pd::<0b0101>(a); // [a_im, a_re, b_im, b_re]
@@ -54,7 +54,7 @@ pub(crate) unsafe fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
 }
 
 #[inline]
-#[target_feature(enable = "avx2", enable = "fma")]
+#[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm_fcmul_ps(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(b, b);
     let temp2 = _mm_shuffle_ps::<0xF5>(b, b);
@@ -76,7 +76,7 @@ pub(crate) unsafe fn _m128s_store_f32x2(a: *mut Complex<f32>, b: __m128) {
 }
 
 #[inline]
-#[target_feature(enable = "avx2", enable = "fma")]
+#[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm256_fcmul_ps(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
     let ar = _mm256_moveldup_ps(a); // duplicate even lanes (re parts)
@@ -325,7 +325,7 @@ pub(crate) unsafe fn _mm256_unpackhi_ps64(a: __m256, b: __m256) -> __m256 {
 
 // a.conj() * b
 #[inline]
-#[target_feature(enable = "avx2", enable = "fma")]
+#[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
     let ar = _mm256_moveldup_ps(a); // duplicate even lanes (re parts)
@@ -341,7 +341,7 @@ pub(crate) unsafe fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
 
 // a.conj() * b
 #[inline]
-#[target_feature(enable = "avx2", enable = "fma")]
+#[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(a, a);
     let temp2 = _mm_shuffle_ps::<0xF5>(a, a);
@@ -352,7 +352,7 @@ pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
 
 // a.conj() * b
 #[inline]
-#[target_feature(enable = "avx2", enable = "fma")]
+#[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
     let a_yx = _mm256_permute_pd::<0b0101>(a); // [a_im, a_re, b_im, b_re]
@@ -366,7 +366,7 @@ pub(crate) unsafe fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
 
 // a.conj() * b
 #[inline]
-#[target_feature(enable = "avx2", enable = "fma")]
+#[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_unpacklo_pd(a, a); // [b.re, b.re]
     let mut temp2 = _mm_unpackhi_pd(a, a); // [b.im, b.im]

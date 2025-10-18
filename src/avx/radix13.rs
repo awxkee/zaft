@@ -29,8 +29,8 @@
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
-    _m128s_load_f32x2, _m128s_store_f32x2, _mm256_fcmul_ps, _mm_unpackhi_ps64, _mm256_create_pd,
-    _mm256_fcmul_pd, _mm256_load4_f32x2,
+    _m128s_load_f32x2, _m128s_store_f32x2, _mm_unpackhi_ps64, _mm256_create_pd, _mm256_fcmul_pd,
+    _mm256_fcmul_ps, _mm256_load4_f32x2,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
