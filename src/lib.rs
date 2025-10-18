@@ -413,22 +413,6 @@ impl Zaft {
             // }
             T::radix7(n, fft_direction)
         } else if prime_factors.is_power_of_ten {
-            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            {
-                if Zaft::could_do_split_mixed_radix() {
-                    let r = n / 10;
-                    if r == 10 {
-                        let right_fft = T::butterfly10(fft_direction)?;
-                        if let Ok(Some(v)) = T::mixed_radix_butterfly10(right_fft) {
-                            return Ok(v);
-                        }
-                    }
-                    let right_fft = T::radix10(r, fft_direction)?;
-                    if let Ok(Some(v)) = T::mixed_radix_butterfly10(right_fft) {
-                        return Ok(v);
-                    }
-                }
-            }
             T::radix10(n, fft_direction)
         } else if prime_factors.is_power_of_eleven {
             T::radix11(n, fft_direction)
