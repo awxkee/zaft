@@ -32,6 +32,7 @@ mod c2r;
 mod c2r_fcma;
 mod f32x2_2x2;
 mod f32x2_4x4;
+mod f32x2_6x4;
 mod mixed;
 mod r2c;
 mod raders;
@@ -82,6 +83,7 @@ pub(crate) use c2r::C2RNeonTwiddles;
 pub(crate) use c2r_fcma::C2RNeonFcmaTwiddles;
 pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
+pub(crate) use f32x2_6x4::neon_transpose_f32x2_6x4;
 #[cfg(feature = "fcma")]
 pub(crate) use mixed::{
     NeonFcmaMixedRadix2, NeonFcmaMixedRadix2f, NeonFcmaMixedRadix3, NeonFcmaMixedRadix3f,
