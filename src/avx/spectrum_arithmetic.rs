@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _m128s_load_f32x2, _m128s_store_f32x2, _m256_fcmul_ps, _mm_fcmul_pd, _mm_fcmul_pd_conj_a,
+    _m128s_load_f32x2, _m128s_store_f32x2, _mm256_fcmul_ps, _mm_fcmul_pd, _mm_fcmul_pd_conj_a,
     _mm_fcmul_ps, _mm_fcmul_ps_conj_a, _mm256_fcmul_pd, _mm256_fcmul_pd_conj_a,
     _mm256_fcmul_ps_conj_a,
 };
@@ -59,10 +59,10 @@ impl AvxSpectrumArithmetic<f32> {
                 let q2 = _mm256_loadu_ps(twiddle.get_unchecked(8..).as_ptr().cast());
                 let q3 = _mm256_loadu_ps(twiddle.get_unchecked(12..).as_ptr().cast());
 
-                let p0 = _m256_fcmul_ps(s0, q0);
-                let p1 = _m256_fcmul_ps(s1, q1);
-                let p2 = _m256_fcmul_ps(s2, q2);
-                let p3 = _m256_fcmul_ps(s3, q3);
+                let p0 = _mm256_fcmul_ps(s0, q0);
+                let p1 = _mm256_fcmul_ps(s1, q1);
+                let p2 = _mm256_fcmul_ps(s2, q2);
+                let p3 = _mm256_fcmul_ps(s3, q3);
 
                 _mm256_storeu_ps(dst.as_mut_ptr().cast(), p0);
                 _mm256_storeu_ps(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), p1);
@@ -117,10 +117,10 @@ impl AvxSpectrumArithmetic<f32> {
                 let q2 = _mm256_loadu_ps(twiddle.get_unchecked(8..).as_ptr().cast());
                 let q3 = _mm256_loadu_ps(twiddle.get_unchecked(12..).as_ptr().cast());
 
-                let mut p0 = _m256_fcmul_ps(s0, q0);
-                let mut p1 = _m256_fcmul_ps(s1, q1);
-                let mut p2 = _m256_fcmul_ps(s2, q2);
-                let mut p3 = _m256_fcmul_ps(s3, q3);
+                let mut p0 = _mm256_fcmul_ps(s0, q0);
+                let mut p1 = _mm256_fcmul_ps(s1, q1);
+                let mut p2 = _mm256_fcmul_ps(s2, q2);
+                let mut p3 = _mm256_fcmul_ps(s3, q3);
 
                 p0 = _mm256_xor_ps(p0, factors);
                 p1 = _mm256_xor_ps(p1, factors);
@@ -277,9 +277,9 @@ impl AvxSpectrumArithmetic<f64> {
                 _mm256_storeu_pd(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), p3);
             }
 
-            let dst = dst.chunks_exact_mut(4).into_remainder();
-            let a = a.chunks_exact(4).remainder();
-            let b = b.chunks_exact(4).remainder();
+            let dst = dst.chunks_exact_mut(8).into_remainder();
+            let a = a.chunks_exact(8).remainder();
+            let b = b.chunks_exact(8).remainder();
 
             for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
                 let s0 = _mm_loadu_pd(src as *const Complex<f64> as *const f64);
@@ -323,8 +323,8 @@ impl AvxSpectrumArithmetic<f64> {
                 _mm256_storeu_pd(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), p3);
             }
 
-            let dst = dst.chunks_exact_mut(4).into_remainder();
-            let b = b.chunks_exact(4).remainder();
+            let dst = dst.chunks_exact_mut(8).into_remainder();
+            let b = b.chunks_exact(8).remainder();
 
             for (dst, twiddle) in dst.iter_mut().zip(b.iter()) {
                 let s0 = _mm_loadu_pd(dst as *const Complex<f64> as *const f64);
@@ -373,9 +373,9 @@ impl AvxSpectrumArithmetic<f64> {
                 _mm256_storeu_pd(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), p3);
             }
 
-            let dst = dst.chunks_exact_mut(4).into_remainder();
-            let a = a.chunks_exact(4).remainder();
-            let b = b.chunks_exact(4).remainder();
+            let dst = dst.chunks_exact_mut(8).into_remainder();
+            let a = a.chunks_exact(8).remainder();
+            let b = b.chunks_exact(8).remainder();
 
             for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
                 let s0 = _mm_loadu_pd(src as *const Complex<f64> as *const f64);

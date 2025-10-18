@@ -27,7 +27,7 @@
 
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::util::{
-    _m128s_store_f32x2, _m256_fcmul_ps, _mm256_create_pd, _mm256_fcmul_pd, _mm256_permute4x64_ps,
+    _m128s_store_f32x2, _mm256_fcmul_ps, _mm256_create_pd, _mm256_fcmul_pd, _mm256_permute4x64_ps,
     _mm256_unpackhi_ps64, _mm256_unpacklo_ps64, shuffle,
 };
 use crate::traits::FftTrigonometry;
@@ -233,8 +233,8 @@ impl AvxButterfly9<f32> {
 
                 // Radix-9 butterfly
 
-                let g3u4u5 = _m256_fcmul_ps(zu3u4u5, tw1tw2);
-                let g6u7u8 = _m256_fcmul_ps(zu6u7u8, tw2tw4);
+                let g3u4u5 = _mm256_fcmul_ps(zu3u4u5, tw1tw2);
+                let g6u7u8 = _mm256_fcmul_ps(zu6u7u8, tw2tw4);
 
                 const HI_HI: i32 = 0b0011_0001;
                 const LO_HI: i32 = 0b0011_0000;

@@ -151,3 +151,71 @@ where
         self.execution_length
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::good_thomas_small::GoodThomasSmallFft;
+    use crate::mixed_radix::MixedRadix;
+    use crate::{FftDirection, FftExecutor, Zaft};
+    use num_complex::Complex;
+
+    #[test]
+    fn test_mixed_radixd() {
+        let src: [Complex<f64>; 22] = [
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.45, -0.4),
+            Complex::new(8.2, -0.1),
+        ];
+        let good_thomas20 = GoodThomasSmallFft::new(
+            Zaft::strategy(11, FftDirection::Forward).unwrap(),
+            Zaft::strategy(2, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        let mx = MixedRadix::new(
+            Zaft::strategy(11, FftDirection::Forward).unwrap(),
+            Zaft::strategy(2, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        let mut reference_value = src.to_vec();
+        good_thomas20.execute(&mut reference_value).unwrap();
+        let mut test_value = src.to_vec();
+        mx.execute(&mut test_value).unwrap();
+        reference_value
+            .iter()
+            .zip(test_value.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
+    }
+}

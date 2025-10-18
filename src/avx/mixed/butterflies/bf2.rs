@@ -27,7 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::avx::mixed::avx_store::AvxStoreD;
+use crate::avx::mixed::avx_stored::AvxStoreD;
+use crate::avx::mixed::avx_storef::AvxStoreF;
 use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly2d {}
@@ -46,5 +47,24 @@ impl ColumnButterfly2d {
         let y1 = _mm256_sub_pd(v[0].v, v[1].v);
         let y0 = t;
         [AvxStoreD::raw(y0), AvxStoreD::raw(y1)]
+    }
+}
+
+pub(crate) struct ColumnButterfly2f {}
+
+impl ColumnButterfly2f {
+    pub(crate) fn new(_: FftDirection) -> ColumnButterfly2f {
+        Self {}
+    }
+}
+
+impl ColumnButterfly2f {
+    #[target_feature(enable = "avx")]
+    #[inline]
+    pub(crate) unsafe fn exec(&self, v: [AvxStoreF; 2]) -> [AvxStoreF; 2] {
+        let t = _mm256_add_ps(v[0].v, v[1].v);
+        let y1 = _mm256_sub_ps(v[0].v, v[1].v);
+        let y0 = t;
+        [AvxStoreF::raw(y0), AvxStoreF::raw(y1)]
     }
 }

@@ -29,7 +29,7 @@
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
-    _m128s_load_f32x2, _m128s_store_f32x2, _m256_fcmul_ps, _mm_unpackhi_ps64, _mm256_create_pd,
+    _m128s_load_f32x2, _m128s_store_f32x2, _mm256_fcmul_ps, _mm_unpackhi_ps64, _mm256_create_pd,
     _mm256_fcmul_pd, _mm256_load4_f32x2,
 };
 use crate::err::try_vec;
@@ -490,7 +490,7 @@ impl AvxFmaRadix13<f32> {
                                 m_twiddles.get_unchecked(twi + 8..).as_ptr().cast(),
                             );
 
-                            let u1u2u3u4 = _m256_fcmul_ps(
+                            let u1u2u3u4 = _mm256_fcmul_ps(
                                 _mm256_load4_f32x2(
                                     data.get_unchecked(j + thirteenth..),
                                     data.get_unchecked(j + 2 * thirteenth..),
@@ -499,7 +499,7 @@ impl AvxFmaRadix13<f32> {
                                 ),
                                 tw0tw1tw2tw3,
                             );
-                            let u5u6u7u8 = _m256_fcmul_ps(
+                            let u5u6u7u8 = _mm256_fcmul_ps(
                                 _mm256_load4_f32x2(
                                     data.get_unchecked(j + 5 * thirteenth..),
                                     data.get_unchecked(j + 6 * thirteenth..),
@@ -509,7 +509,7 @@ impl AvxFmaRadix13<f32> {
                                 tw4tw5tw6tw7,
                             );
 
-                            let u9u10u11u12 = _m256_fcmul_ps(
+                            let u9u10u11u12 = _mm256_fcmul_ps(
                                 _mm256_load4_f32x2(
                                     data.get_unchecked(j + 9 * thirteenth..),
                                     data.get_unchecked(j + 10 * thirteenth..),

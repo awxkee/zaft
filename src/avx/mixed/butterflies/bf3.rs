@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::avx::mixed::avx_store::AvxStoreD;
+use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
 

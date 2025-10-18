@@ -28,7 +28,7 @@
  */
 use crate::FftDirection;
 use crate::avx::butterflies::{AvxButterfly, AvxFastButterfly3};
-use crate::avx::mixed::avx_store::AvxStoreD;
+use crate::avx::mixed::avx_stored::AvxStoreD;
 
 pub(crate) struct ColumnButterfly6d {
     bf3: AvxFastButterfly3<f64>,

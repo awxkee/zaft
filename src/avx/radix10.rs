@@ -28,7 +28,7 @@
  */
 use crate::avx::butterflies::{AvxButterfly, AvxFastButterfly5d, AvxFastButterfly5f};
 use crate::avx::util::{
-    _m128s_load_f32x2, _m128s_store_f32x2, _m256_fcmul_ps, _mm_fcmul_pd, _mm_fcmul_ps,
+    _m128s_load_f32x2, _m128s_store_f32x2, _mm256_fcmul_ps, _mm_fcmul_pd, _mm_fcmul_ps,
     _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd,
     _mm256_load4_f32x2, _mm256_permute4x64_ps, shuffle,
 };
@@ -485,7 +485,7 @@ impl AvxFmaRadix10f {
                                 m_twiddles.get_unchecked(twi + 17..).as_ptr().cast(),
                             ));
 
-                            let u1u2 = _m256_fcmul_ps(
+                            let u1u2 = _mm256_fcmul_ps(
                                 _mm256_create_ps(
                                     _mm_loadu_ps(data.get_unchecked(j + tenth..).as_ptr().cast()),
                                     _mm_loadu_ps(
@@ -497,7 +497,7 @@ impl AvxFmaRadix10f {
                                     tw0tw1tw2tw3_2,
                                 )),
                             );
-                            let u3u4 = _m256_fcmul_ps(
+                            let u3u4 = _mm256_fcmul_ps(
                                 _mm256_create_ps(
                                     _mm_loadu_ps(
                                         data.get_unchecked(j + 3 * tenth..).as_ptr().cast(),
@@ -511,7 +511,7 @@ impl AvxFmaRadix10f {
                                     tw0tw1tw2tw3_2,
                                 )),
                             );
-                            let u5u6 = _m256_fcmul_ps(
+                            let u5u6 = _mm256_fcmul_ps(
                                 _mm256_create_ps(
                                     _mm_loadu_ps(
                                         data.get_unchecked(j + 5 * tenth..).as_ptr().cast(),
@@ -525,7 +525,7 @@ impl AvxFmaRadix10f {
                                     tw4tw5tw6tw7_2,
                                 )),
                             );
-                            let u7u8 = _m256_fcmul_ps(
+                            let u7u8 = _mm256_fcmul_ps(
                                 _mm256_create_ps(
                                     _mm_loadu_ps(
                                         data.get_unchecked(j + 7 * tenth..).as_ptr().cast(),
@@ -631,7 +631,7 @@ impl AvxFmaRadix10f {
                                 m_twiddles.get_unchecked(twi + 8..).as_ptr().cast(),
                             ));
 
-                            let u1u2u3u4 = _m256_fcmul_ps(
+                            let u1u2u3u4 = _mm256_fcmul_ps(
                                 _mm256_load4_f32x2(
                                     data.get_unchecked(j + tenth..),
                                     data.get_unchecked(j + 2 * tenth..),
@@ -640,7 +640,7 @@ impl AvxFmaRadix10f {
                                 ),
                                 tw0tw1tw2tw3,
                             );
-                            let u5u6u7u8 = _m256_fcmul_ps(
+                            let u5u6u7u8 = _mm256_fcmul_ps(
                                 _mm256_load4_f32x2(
                                     data.get_unchecked(j + 5 * tenth..),
                                     data.get_unchecked(j + 6 * tenth..),

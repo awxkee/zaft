@@ -28,7 +28,7 @@
  */
 use crate::FftDirection;
 use crate::avx::butterflies::AvxFastButterfly3;
-use crate::avx::mixed::avx_store::AvxStoreD;
+use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::util::_mm256_fcmul_pd;
 use crate::util::compute_twiddle;
 use std::arch::x86_64::*;

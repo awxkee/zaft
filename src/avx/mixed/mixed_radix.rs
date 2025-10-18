@@ -26,8 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::mixed::avx_store::AvxStoreD;
-use crate::avx::mixed::butterflies::{ColumnButterfly2d, ColumnButterfly3d, ColumnButterfly4d, ColumnButterfly5d, ColumnButterfly6d, ColumnButterfly7d, ColumnButterfly8d, ColumnButterfly9d, ColumnButterfly10d, ColumnButterfly11d, ColumnButterfly12d, ColumnButterfly13d};
+use crate::avx::mixed::avx_stored::AvxStoreD;
+use crate::avx::mixed::butterflies::{
+    ColumnButterfly2d, ColumnButterfly3d, ColumnButterfly4d, ColumnButterfly5d, ColumnButterfly6d,
+    ColumnButterfly7d, ColumnButterfly8d, ColumnButterfly9d, ColumnButterfly10d,
+    ColumnButterfly11d, ColumnButterfly12d, ColumnButterfly13d,
+};
 use crate::err::try_vec;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
 use crate::util::compute_twiddle;
@@ -802,7 +806,7 @@ mod tests {
             Zaft::strategy(8, FftDirection::Forward).unwrap(),
             Zaft::strategy(2, FftDirection::Forward).unwrap(),
         )
-            .unwrap();
+        .unwrap();
         let mut reference_value = src.to_vec();
         bf8.execute(&mut reference_value).unwrap();
         let mut test_value = src.to_vec();
@@ -906,11 +910,7 @@ mod tests {
         ];
         let neon_mixed_rust =
             AvxMixedRadix10d::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
-        let bf8 = MixedRadix::new(
-            Zaft::strategy(10, FftDirection::Forward).unwrap(),
-            Zaft::strategy(2, FftDirection::Forward).unwrap(),
-        )
-        .unwrap();
+        let bf8 = Zaft::strategy(20, FftDirection::Forward).unwrap();
         let mut reference_value = src.to_vec();
         bf8.execute(&mut reference_value).unwrap();
         let mut test_value = src.to_vec();
@@ -963,11 +963,7 @@ mod tests {
         ];
         let neon_mixed_rust =
             AvxMixedRadix11d::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
-        let bf8 = MixedRadix::new(
-            Zaft::strategy(11, FftDirection::Forward).unwrap(),
-            Zaft::strategy(2, FftDirection::Forward).unwrap(),
-        )
-        .unwrap();
+        let bf8 = Zaft::strategy(22, FftDirection::Forward).unwrap();
         let mut reference_value = src.to_vec();
         bf8.execute(&mut reference_value).unwrap();
         let mut test_value = src.to_vec();

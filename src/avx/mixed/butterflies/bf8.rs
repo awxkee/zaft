@@ -28,7 +28,7 @@
  */
 use crate::FftDirection;
 use crate::avx::butterflies::AvxButterfly;
-use crate::avx::mixed::avx_store::AvxStoreD;
+use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::rotate::AvxRotate;
 use std::arch::x86_64::*;
 
