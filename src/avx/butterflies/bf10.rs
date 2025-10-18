@@ -61,7 +61,90 @@ impl AvxButterfly10d {
                 ));
             }
 
-            for chunk in in_place.chunks_exact_mut(10) {
+            for chunk in in_place.chunks_exact_mut(20) {
+                let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
+                let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = _mm256_loadu_pd(chunk.get_unchecked(6..).as_ptr().cast());
+                let u8u9 = _mm256_loadu_pd(chunk.get_unchecked(8..).as_ptr().cast());
+
+                let u0u1_2 = _mm256_loadu_pd(chunk.get_unchecked(10..).as_ptr().cast());
+                let u2u3_2 = _mm256_loadu_pd(chunk.get_unchecked(12..).as_ptr().cast());
+                let u4u5_2 = _mm256_loadu_pd(chunk.get_unchecked(14..).as_ptr().cast());
+                let u6u7_2 = _mm256_loadu_pd(chunk.get_unchecked(16..).as_ptr().cast());
+                let u8u9_2 = _mm256_loadu_pd(chunk.get_unchecked(18..).as_ptr().cast());
+
+                const HI_HI: i32 = 0b0011_0001;
+                const LO_LO: i32 = 0b0010_0000;
+
+                let mid0 = self.bf5.exec(
+                    _mm256_permute2f128_pd::<LO_LO>(u0u1, u0u1_2),
+                    _mm256_permute2f128_pd::<LO_LO>(u2u3, u2u3_2),
+                    _mm256_permute2f128_pd::<LO_LO>(u4u5, u4u5_2),
+                    _mm256_permute2f128_pd::<LO_LO>(u6u7, u6u7_2),
+                    _mm256_permute2f128_pd::<LO_LO>(u8u9, u8u9_2),
+                );
+                let mid1 = self.bf5.exec(
+                    _mm256_permute2f128_pd::<HI_HI>(u4u5, u4u5_2),
+                    _mm256_permute2f128_pd::<HI_HI>(u6u7, u6u7_2),
+                    _mm256_permute2f128_pd::<HI_HI>(u8u9, u8u9_2),
+                    _mm256_permute2f128_pd::<HI_HI>(u0u1, u0u1_2),
+                    _mm256_permute2f128_pd::<HI_HI>(u2u3, u2u3_2),
+                );
+
+                // Since this is good-thomas algorithm, we don't need twiddle factors
+                let (y0, y1) = AvxButterfly::butterfly2_f64(mid0.0, mid1.0);
+                let (y2, y3) = AvxButterfly::butterfly2_f64(mid0.1, mid1.1);
+                let (y4, y5) = AvxButterfly::butterfly2_f64(mid0.2, mid1.2);
+                let (y6, y7) = AvxButterfly::butterfly2_f64(mid0.3, mid1.3);
+                let (y8, y9) = AvxButterfly::butterfly2_f64(mid0.4, mid1.4);
+
+                _mm256_storeu_pd(
+                    chunk.as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(y0, y3),
+                );
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(y4, y7),
+                );
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(y8, y1),
+                );
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(y2, y5),
+                );
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(8..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(y6, y9),
+                );
+
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(10..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<HI_HI>(y0, y3),
+                );
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(12..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<HI_HI>(y4, y7),
+                );
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(14..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<HI_HI>(y8, y1),
+                );
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(16..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<HI_HI>(y2, y5),
+                );
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(18..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<HI_HI>(y6, y9),
+                );
+            }
+
+            let remainder = in_place.chunks_exact_mut(20).into_remainder();
+
+            for chunk in remainder.chunks_exact_mut(10) {
                 let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());

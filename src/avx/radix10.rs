@@ -464,6 +464,203 @@ impl AvxFmaRadix10f {
                         const LO_LO: i32 = 0b0010_0000;
                         const SH: i32 = shuffle(3, 1, 2, 0);
 
+                        while j + 4 < tenth {
+                            let twi = 9 * j;
+                            let tw0tw1tw2tw3 =
+                                _mm256_loadu_ps(m_twiddles.get_unchecked(twi..).as_ptr().cast());
+                            let tw4tw5tw6tw7 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 4..).as_ptr().cast(),
+                            );
+                            let tw8 = _mm_castsi128_ps(_mm_loadu_si64(
+                                m_twiddles.get_unchecked(twi + 8..).as_ptr().cast(),
+                            ));
+                            let tw0tw1tw2tw3_2 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 9..).as_ptr().cast(),
+                            );
+                            let tw4tw5tw6tw7_2 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 13..).as_ptr().cast(),
+                            );
+                            let tw8_2 = _mm_castsi128_ps(_mm_loadu_si64(
+                                m_twiddles.get_unchecked(twi + 17..).as_ptr().cast(),
+                            ));
+
+                            let u1111 =
+                                _mm256_loadu_ps(data.get_unchecked(j + tenth..).as_ptr().cast());
+                            let u2222 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 2 * tenth..).as_ptr().cast(),
+                            );
+                            let u3333 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 3 * tenth..).as_ptr().cast(),
+                            );
+                            let u4444 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 4 * tenth..).as_ptr().cast(),
+                            );
+                            let u5555 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 5 * tenth..).as_ptr().cast(),
+                            );
+                            let u6666 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 6 * tenth..).as_ptr().cast(),
+                            );
+                            let u7777 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 7 * tenth..).as_ptr().cast(),
+                            );
+                            let u8888 = _mm256_loadu_ps(
+                                data.get_unchecked(j + 8 * tenth..).as_ptr().cast(),
+                            );
+
+                            let u1u2 = _mm256_fcmul_ps(
+                                _mm256_permute2f128_ps::<LO_LO>(u1111, u2222),
+                                _mm256_permute4x64_ps::<SH>(_mm256_permute2f128_ps::<LO_LO>(
+                                    tw0tw1tw2tw3,
+                                    tw0tw1tw2tw3_2,
+                                )),
+                            );
+                            let u3u4 = _mm256_fcmul_ps(
+                                _mm256_permute2f128_ps::<LO_LO>(u3333, u4444),
+                                _mm256_permute4x64_ps::<SH>(_mm256_permute2f128_ps::<HI_HI>(
+                                    tw0tw1tw2tw3,
+                                    tw0tw1tw2tw3_2,
+                                )),
+                            );
+                            let u5u6 = _mm256_fcmul_ps(
+                                _mm256_permute2f128_ps::<LO_LO>(u5555, u6666),
+                                _mm256_permute4x64_ps::<SH>(_mm256_permute2f128_ps::<LO_LO>(
+                                    tw4tw5tw6tw7,
+                                    tw4tw5tw6tw7_2,
+                                )),
+                            );
+                            let u7u8 = _mm256_fcmul_ps(
+                                _mm256_permute2f128_ps::<LO_LO>(u7777, u8888),
+                                _mm256_permute4x64_ps::<SH>(_mm256_permute2f128_ps::<HI_HI>(
+                                    tw4tw5tw6tw7,
+                                    tw4tw5tw6tw7_2,
+                                )),
+                            );
+
+                            let tw0tw1tw2tw3_3 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 18..).as_ptr().cast(),
+                            );
+                            let tw4tw5tw6tw7_3 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 22..).as_ptr().cast(),
+                            );
+                            let tw8_3 = _mm_castsi128_ps(_mm_loadu_si64(
+                                m_twiddles.get_unchecked(twi + 8 + 18..).as_ptr().cast(),
+                            ));
+                            let tw0tw1tw2tw3_4 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 9 + 18..).as_ptr().cast(),
+                            );
+                            let tw4tw5tw6tw7_4 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 13 + 18..).as_ptr().cast(),
+                            );
+                            let tw8_4 = _mm_castsi128_ps(_mm_loadu_si64(
+                                m_twiddles.get_unchecked(twi + 17 + 18..).as_ptr().cast(),
+                            ));
+
+                            let u1u2_2 = _mm256_fcmul_ps(
+                                _mm256_permute2f128_ps::<HI_HI>(u1111, u2222),
+                                _mm256_permute4x64_ps::<SH>(_mm256_permute2f128_ps::<LO_LO>(
+                                    tw0tw1tw2tw3_3,
+                                    tw0tw1tw2tw3_4,
+                                )),
+                            );
+                            let u3u4_2 = _mm256_fcmul_ps(
+                                _mm256_permute2f128_ps::<HI_HI>(u3333, u4444),
+                                _mm256_permute4x64_ps::<SH>(_mm256_permute2f128_ps::<HI_HI>(
+                                    tw0tw1tw2tw3_3,
+                                    tw0tw1tw2tw3_4,
+                                )),
+                            );
+                            let u5u6_2 = _mm256_fcmul_ps(
+                                _mm256_permute2f128_ps::<HI_HI>(u5555, u6666),
+                                _mm256_permute4x64_ps::<SH>(_mm256_permute2f128_ps::<LO_LO>(
+                                    tw4tw5tw6tw7_3,
+                                    tw4tw5tw6tw7_4,
+                                )),
+                            );
+                            let u7u8_2 = _mm256_fcmul_ps(
+                                _mm256_permute2f128_ps::<HI_HI>(u7777, u8888),
+                                _mm256_permute4x64_ps::<SH>(_mm256_permute2f128_ps::<HI_HI>(
+                                    tw4tw5tw6tw7_3,
+                                    tw4tw5tw6tw7_4,
+                                )),
+                            );
+
+                            let u9 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 9 * tenth..).as_ptr().cast(),
+                                ),
+                                _mm256_create_ps(
+                                    _mm_unpacklo_ps64(tw8, tw8_2),
+                                    _mm_unpacklo_ps64(tw8_3, tw8_4),
+                                ),
+                            );
+
+                            let u0000 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
+
+                            let mid0 = self.bf5._m256_exec(
+                                u0000,
+                                _mm256_permute2f128_ps::<HI_HI>(u1u2, u1u2_2),
+                                _mm256_permute2f128_ps::<HI_HI>(u3u4, u3u4_2),
+                                _mm256_permute2f128_ps::<HI_HI>(u5u6, u5u6_2),
+                                _mm256_permute2f128_ps::<HI_HI>(u7u8, u7u8_2),
+                            );
+                            let mid1 = self.bf5._m256_exec(
+                                _mm256_permute2f128_ps::<LO_LO>(u5u6, u5u6_2),
+                                _mm256_permute2f128_ps::<LO_LO>(u7u8, u7u8_2),
+                                u9,
+                                _mm256_permute2f128_ps::<LO_LO>(u1u2, u1u2_2),
+                                _mm256_permute2f128_ps::<LO_LO>(u3u4, u3u4_2),
+                            );
+
+                            // Since this is good-thomas algorithm, we don't need twiddle factors
+                            let (y0, y1) = AvxButterfly::butterfly2_f32(mid0.0, mid1.0);
+                            let (y2, y3) = AvxButterfly::butterfly2_f32(mid0.1, mid1.1);
+                            let (y4, y5) = AvxButterfly::butterfly2_f32(mid0.2, mid1.2);
+                            let (y6, y7) = AvxButterfly::butterfly2_f32(mid0.3, mid1.3);
+                            let (y8, y9) = AvxButterfly::butterfly2_f32(mid0.4, mid1.4);
+
+                            // Store results
+                            _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + tenth..).as_mut_ptr().cast(),
+                                y3,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * tenth..).as_mut_ptr().cast(),
+                                y4,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 3 * tenth..).as_mut_ptr().cast(),
+                                y7,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 4 * tenth..).as_mut_ptr().cast(),
+                                y8,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 5 * tenth..).as_mut_ptr().cast(),
+                                y1,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 6 * tenth..).as_mut_ptr().cast(),
+                                y2,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 7 * tenth..).as_mut_ptr().cast(),
+                                y5,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 8 * tenth..).as_mut_ptr().cast(),
+                                y6,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 9 * tenth..).as_mut_ptr().cast(),
+                                y9,
+                            );
+
+                            j += 4;
+                        }
+
                         while j + 2 < tenth {
                             let u0 = _mm_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
                             let twi = 9 * j;

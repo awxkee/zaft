@@ -503,60 +503,42 @@ impl AvxFmaRadix7<f32> {
                             );
 
                             let u1u2 = _mm256_fcmul_ps(
-                                _mm256_create_ps(
-                                    _mm256_castps256_ps128(a1),
-                                    _mm256_castps256_ps128(a2),
-                                ),
+                                _mm256_permute2f128_ps::<LO_LO>(a1, a2),
                                 _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
                                     _mm256_permute2f128_ps::<LO_HI>(tw0tw1tw2tw3, tw4tw5tw6tw7),
                                 ),
                             );
 
                             let u3u4 = _mm256_fcmul_ps(
-                                _mm256_create_ps(
-                                    _mm256_castps256_ps128(a3),
-                                    _mm256_castps256_ps128(a4),
-                                ),
+                                _mm256_permute2f128_ps::<LO_LO>(a3, a4),
                                 _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
                                     _mm256_permute2f128_ps::<HI_LO>(tw0tw1tw2tw3, tw8tw9tw10tw11),
                                 ),
                             );
 
                             let u5u6 = _mm256_fcmul_ps(
-                                _mm256_create_ps(
-                                    _mm256_castps256_ps128(a5),
-                                    _mm256_castps256_ps128(a6),
-                                ),
+                                _mm256_permute2f128_ps::<LO_LO>(a5, a6),
                                 _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
                                     _mm256_permute2f128_ps::<LO_HI>(tw4tw5tw6tw7, tw8tw9tw10tw11),
                                 ),
                             );
 
                             let u1u2_2 = _mm256_fcmul_ps(
-                                _mm256_create_ps(
-                                    _mm256_extractf128_ps::<1>(a1),
-                                    _mm256_extractf128_ps::<1>(a2),
-                                ),
+                                _mm256_permute2f128_ps::<HI_HI>(a1, a2),
                                 _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
                                     _mm256_permute2f128_ps::<LO_HI>(tw3, tw4),
                                 ),
                             );
 
                             let u3u4_2 = _mm256_fcmul_ps(
-                                _mm256_create_ps(
-                                    _mm256_extractf128_ps::<1>(a3),
-                                    _mm256_extractf128_ps::<1>(a4),
-                                ),
+                                _mm256_permute2f128_ps::<HI_HI>(a3, a4),
                                 _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
                                     _mm256_permute2f128_ps::<HI_LO>(tw3, tw5),
                                 ),
                             );
 
                             let u5u6_2 = _mm256_fcmul_ps(
-                                _mm256_create_ps(
-                                    _mm256_extractf128_ps::<1>(a5),
-                                    _mm256_extractf128_ps::<1>(a6),
-                                ),
+                                _mm256_permute2f128_ps::<HI_HI>(a5, a6),
                                 _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
                                     _mm256_permute2f128_ps::<LO_HI>(tw4, tw5),
                                 ),
