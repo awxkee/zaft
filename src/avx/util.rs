@@ -104,6 +104,18 @@ pub(crate) unsafe fn _mm_unpacklo_ps64(a: __m128, b: __m128) -> __m128 {
 
 #[inline]
 #[target_feature(enable = "sse2")]
+pub(crate) unsafe fn _mm_unpacklohi_ps64(a: __m128, b: __m128) -> __m128 {
+    _mm_shuffle_ps::<{ shuffle(3, 2, 1, 0) }>(a, b)
+}
+
+#[inline]
+#[target_feature(enable = "sse2")]
+pub(crate) unsafe fn _mm_unpackhilo_ps64(a: __m128, b: __m128) -> __m128 {
+    _mm_shuffle_ps::<{ shuffle(1, 0, 3, 2) }>(a, b)
+}
+
+#[inline]
+#[target_feature(enable = "sse2")]
 pub(crate) unsafe fn _mm_unpackhi_ps64(a: __m128, b: __m128) -> __m128 {
     _mm_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(a, b)
 }
