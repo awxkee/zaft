@@ -29,6 +29,7 @@
 mod butterflies;
 mod f32x2_2x2;
 mod f32x2_4x4;
+mod f32x2_8x4;
 mod f64x2_2x2;
 mod f64x2_4x4;
 mod mixed;
@@ -52,6 +53,7 @@ pub(crate) use butterflies::{
 };
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
+pub(crate) use f32x2_8x4::avx2_transpose_f32x2_8x4;
 pub(crate) use f64x2_2x2::avx_transpose_f64x2_2x2;
 pub(crate) use f64x2_4x4::avx_transpose_f64x2_4x4;
 pub(crate) use mixed::{
