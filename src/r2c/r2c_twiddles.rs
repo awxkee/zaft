@@ -48,6 +48,13 @@ impl R2CTwiddlesFactory<f32> for f32 {
     fn make_r2c_twiddles_handler() -> Box<dyn R2CTwiddlesHandler<f32> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::R2CNeonFcmaTwiddles;
+                    return Box::new(R2CNeonFcmaTwiddles {});
+                }
+            }
             use crate::neon::R2CNeonTwiddles;
             Box::new(R2CNeonTwiddles {})
         }
@@ -64,6 +71,13 @@ impl R2CTwiddlesFactory<f64> for f64 {
     fn make_r2c_twiddles_handler() -> Box<dyn R2CTwiddlesHandler<f64> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::R2CNeonFcmaTwiddles;
+                    return Box::new(R2CNeonFcmaTwiddles {});
+                }
+            }
             use crate::neon::R2CNeonTwiddles;
             Box::new(R2CNeonTwiddles {})
         }

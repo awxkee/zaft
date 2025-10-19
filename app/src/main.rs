@@ -44,67 +44,67 @@ fn main() {
         Complex::new(12.6, -3.0),
         Complex::new(14.6, -6.0),
     ];
-    let mut data = vec![Complex::new(0.0019528865, 0.); 920];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 16];
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
     for (i, chunk) in data.iter_mut().enumerate() {
-        *chunk = Complex::new(0.0019528865 + i as f64 * 0.1, 0.);
+        *chunk = Complex::new(0.0019528865 + i as f32 * 0.1, 0.);
     }
 
-    // let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
-    // let mut real_data_clone = real_data.to_vec();
-    // let real_data_ref = real_data.clone();
-    //
-    // println!("real data {:?}", real_data);
-    //
-    // let forward_r2c = Zaft::make_r2c_fft_f64(data.len()).unwrap();
-    // let inverse_r2c = Zaft::make_c2r_fft_f64(data.len()).unwrap();
-    //
-    // let mut complex_data = vec![Complex::<f64>::default(); data.len() / 2 + 1];
-    // forward_r2c.execute(&real_data, &mut complex_data).unwrap();
-    // // println!("r2c {:?}", complex_data);
-    // inverse_r2c.execute(&complex_data, &mut real_data).unwrap();
-    //
-    // real_data = real_data
-    //     .iter()
-    //     .map(|&x| x * (1.0 / real_data.len() as f64))
-    //     .collect();
-    //
-    // println!("c2r {:?}", real_data);
-    //
-    // let r_r2c = RealFftPlanner::new().plan_fft_forward(real_data.len());
-    // let r_c2r = RealFftPlanner::new().plan_fft_inverse(real_data.len());
-    // r_r2c
-    //     .process(&mut real_data_clone, &mut complex_data)
-    //     .unwrap();
-    // r_c2r.process(&mut complex_data, &mut real_data).unwrap();
-    //
-    // real_data = real_data
-    //     .iter()
-    //     .map(|&x| x * (1.0 / real_data.len() as f64))
-    //     .collect();
-    //
-    // real_data
-    //     .iter()
-    //     .zip(real_data_ref)
-    //     .enumerate()
-    //     .for_each(|(idx, (a, b))| {
-    //         assert!((a - b).abs() < 1e-4, "a_re {}, b_re {} at {idx}", a, b);
-    //     });
+    let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
+    let mut real_data_clone = real_data.to_vec();
+    let real_data_ref = real_data.clone();
+
+    println!("real data {:?}", real_data);
+
+    let forward_r2c = Zaft::make_r2c_fft_f32(data.len()).unwrap();
+    let inverse_r2c = Zaft::make_c2r_fft_f32(data.len()).unwrap();
+
+    let mut complex_data = vec![Complex::<f32>::default(); data.len() / 2 + 1];
+    forward_r2c.execute(&real_data, &mut complex_data).unwrap();
+    // println!("r2c {:?}", complex_data);
+    inverse_r2c.execute(&complex_data, &mut real_data).unwrap();
+
+    real_data = real_data
+        .iter()
+        .map(|&x| x * (1.0 / real_data.len() as f32))
+        .collect();
+
+    println!("c2r {:?}", real_data);
+
+    let r_r2c = RealFftPlanner::new().plan_fft_forward(real_data.len());
+    let r_c2r = RealFftPlanner::new().plan_fft_inverse(real_data.len());
+    r_r2c
+        .process(&mut real_data_clone, &mut complex_data)
+        .unwrap();
+    r_c2r.process(&mut complex_data, &mut real_data).unwrap();
+
+    real_data = real_data
+        .iter()
+        .map(|&x| x * (1.0 / real_data.len() as f32))
+        .collect();
+
+    real_data
+        .iter()
+        .zip(real_data_ref)
+        .enumerate()
+        .for_each(|(idx, (a, b))| {
+            assert!((a - b).abs() < 1e-4, "a_re {}, b_re {} at {idx}", a, b);
+        });
 
     let o_data = data.clone();
 
     let mut cvt = data.clone();
 
-    let mut planner = FftPlanner::<f64>::new();
+    let mut planner = FftPlanner::<f32>::new();
     //
     // for i in 1..1500 {
-    //     let mut data = vec![Complex::<f64>::default(); i];
+    //     let mut data = vec![Complex::<f32>::default(); i];
     //     for (k, z) in data.iter_mut().enumerate() {
     //         *z = data0[k % data0.len()];
     //     }
-    //     let forward = Zaft::make_forward_fft_f64(data.len()).unwrap();
+    //     let forward = Zaft::make_forward_fft_f32(data.len()).unwrap();
     //     let new_plan = planner.plan_fft_forward(data.len());
     //     let s0 = Instant::now();
     //     forward.execute(&mut data).unwrap();
@@ -113,16 +113,16 @@ fn main() {
     //     let s1 = Instant::now();
     //     new_plan.process(&mut data);
     //     let elapsed2 = s1.elapsed();
-    //     let diff = elapsed1.as_millis_f64() / elapsed2.as_millis_f64();
+    //     let diff = elapsed1.as_millis_f32() / elapsed2.as_millis_f32();
     //     if diff > 1.6 {
     //         println!("Timescale was {diff} on {i}");
     //     }
     // }
 
-    let forward = Zaft::make_forward_fft_f64(cvt.len()).unwrap();
-    let inverse = Zaft::make_inverse_fft_f64(cvt.len()).unwrap();
+    let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
+    let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
 
-    let mut planner = FftPlanner::<f64>::new();
+    let mut planner = FftPlanner::<f32>::new();
 
     let planned_fft = planner.plan_fft_forward(data.len());
     let planned_fft_inv = planner.plan_fft_inverse(data.len());
@@ -138,11 +138,11 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
     println!("Mine inverse -----");
@@ -153,7 +153,7 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
 
     // for (i, val) in data.iter().enumerate() {
@@ -165,7 +165,7 @@ fn main() {
     planned_fft_inv.process(&mut cvt);
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
     // for (i, val) in cvt.iter().enumerate() {

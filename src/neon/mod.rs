@@ -36,6 +36,8 @@ mod f32x2_6x4;
 mod f64x2_2x2;
 mod mixed;
 mod r2c;
+#[cfg(feature = "fcma")]
+mod r2c_fcma;
 mod raders;
 mod radix10;
 #[cfg(feature = "fcma")]
@@ -104,6 +106,8 @@ pub(crate) use mixed::{
     NeonMixedRadix16f,
 };
 pub(crate) use r2c::R2CNeonTwiddles;
+#[cfg(feature = "fcma")]
+pub(crate) use r2c_fcma::R2CNeonFcmaTwiddles;
 pub(crate) use raders::NeonRadersFft;
 pub(crate) use radix3::NeonRadix3;
 #[cfg(feature = "fcma")]

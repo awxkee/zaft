@@ -30,9 +30,22 @@ use crate::r2c::R2CTwiddlesHandler;
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
-pub(crate) struct C2RNeonFcmaTwiddles {}
+pub(crate) struct R2CNeonFcmaTwiddles {}
 
-impl C2RNeonFcmaTwiddles {
+impl R2CTwiddlesHandler<f64> for R2CNeonFcmaTwiddles {
+    fn handle(
+        &self,
+        twiddles: &[Complex<f64>],
+        left: &mut [Complex<f64>],
+        right: &mut [Complex<f64>],
+    ) {
+        unsafe {
+            self.handle_f64(twiddles, left, right);
+        }
+    }
+}
+
+impl R2CNeonFcmaTwiddles {
     #[target_feature(enable = "fcma")]
     unsafe fn handle_f64(
         &self,
@@ -43,6 +56,8 @@ impl C2RNeonFcmaTwiddles {
         unsafe {
             static ROT_270: [f64; 2] = [0.0, -0.0];
             let rot_270 = vld1q_f64(ROT_270.as_ptr().cast());
+            static ROT_90: [f64; 2] = [-0.0, 0.0];
+            let rot_90 = vld1q_f64(ROT_90.as_ptr().cast());
 
             for ((twiddle, s_out), s_out_rev) in twiddles
                 .iter()
@@ -62,6 +77,12 @@ impl C2RNeonFcmaTwiddles {
                 );
 
                 let sum_diff = vcombine_f64(vget_low_f64(sum), vget_high_f64(diff));
+
+                let rot_270_half_sum = vreinterpretq_f64_u64(veorq_u64(
+                    vreinterpretq_u64_f64(sum_diff),
+                    vreinterpretq_u64_f64(rot_270),
+                ));
+
                 let rot_diff = vcaddq_rot270_f64(vdupq_n_f64(0.), twiddled_diff);
 
                 let output_twiddled = vfmaq_f64(
@@ -69,14 +90,14 @@ impl C2RNeonFcmaTwiddles {
                     vcombine_f64(vget_high_f64(sum), vget_high_f64(sum)),
                     twiddle,
                 );
-                let output_rot270 = vreinterpretq_f64_u64(veorq_u64(
+                let output_rot90 = vreinterpretq_f64_u64(veorq_u64(
                     vreinterpretq_u64_f64(output_twiddled),
-                    vreinterpretq_u64_f64(rot_270),
+                    vreinterpretq_u64_f64(rot_90),
                 ));
 
                 // We finally have all the data we need to write the transformed data back out where we found it.
-                let v_out = vsubq_f64(sum_diff, output_twiddled);
-                let v_out_rev = vcaddq_rot270_f64(output_rot270, vextq_f64::<1>(diff, sum));
+                let v_out = vfmaq_n_f64(output_twiddled, sum_diff, 0.5);
+                let v_out_rev = vfmaq_n_f64(output_rot90, rot_270_half_sum, 0.5);
 
                 vst1q_f64(s_out as *mut Complex<f64> as *mut f64, v_out);
                 vst1q_f64(s_out_rev as *mut Complex<f64> as *mut f64, v_out_rev);
@@ -85,20 +106,20 @@ impl C2RNeonFcmaTwiddles {
     }
 }
 
-impl R2CTwiddlesHandler<f64> for C2RNeonFcmaTwiddles {
+impl R2CTwiddlesHandler<f32> for R2CNeonFcmaTwiddles {
     fn handle(
         &self,
-        twiddles: &[Complex<f64>],
-        left: &mut [Complex<f64>],
-        right: &mut [Complex<f64>],
+        twiddles: &[Complex<f32>],
+        left: &mut [Complex<f32>],
+        right: &mut [Complex<f32>],
     ) {
         unsafe {
-            self.handle_f64(twiddles, left, right);
+            self.handle_f32(twiddles, left, right);
         }
     }
 }
 
-impl C2RNeonFcmaTwiddles {
+impl R2CNeonFcmaTwiddles {
     #[target_feature(enable = "fcma")]
     unsafe fn handle_f32(
         &self,
@@ -109,6 +130,8 @@ impl C2RNeonFcmaTwiddles {
         unsafe {
             static ROT_270: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
             let rot_270 = vld1q_f32(ROT_270.as_ptr().cast());
+            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
+            let rot_90 = vld1q_f32(ROT_90.as_ptr().cast());
 
             static DUP_FIRST_F32: [u8; 16] = [0, 1, 2, 3, 0, 1, 2, 3, 8, 9, 10, 11, 8, 9, 10, 11];
             let dup_first_f32 = vld1q_u8(DUP_FIRST_F32.as_ptr().cast());
@@ -139,6 +162,11 @@ impl C2RNeonFcmaTwiddles {
                 );
                 let sum_diff = vrev64q_f32(diff_sum);
 
+                let rot_270_half_sum = vreinterpretq_f32_u32(veorq_u32(
+                    vreinterpretq_u32_f32(sum_diff),
+                    vreinterpretq_u32_f32(rot_270),
+                ));
+
                 let rot_diff = vcaddq_rot270_f32(vdupq_n_f32(0.), twiddled_diff);
 
                 let sum_im = vtrn2q_f32(sum, sum);
@@ -147,14 +175,14 @@ impl C2RNeonFcmaTwiddles {
                     rot_diff, sum_im, // [im, im]
                     twiddle,
                 );
-                let output_rot270 = vreinterpretq_f32_u32(veorq_u32(
+                let output_rot90 = vreinterpretq_f32_u32(veorq_u32(
                     vreinterpretq_u32_f32(output_twiddled),
-                    vreinterpretq_u32_f32(rot_270),
+                    vreinterpretq_u32_f32(rot_90),
                 ));
 
                 // We finally have all the data we need to write the transformed data back out where we found it.
-                let v_out = vsubq_f32(sum_diff, output_twiddled);
-                let v_out_rev = vcaddq_rot270_f32(output_rot270, diff_sum);
+                let v_out = vfmaq_n_f32(output_twiddled, sum_diff, 0.5);
+                let v_out_rev = vfmaq_n_f32(output_rot90, rot_270_half_sum, 0.5);
 
                 vst1q_f32(s_out.as_mut_ptr().cast(), v_out);
                 vst1q_f32(
@@ -191,6 +219,11 @@ impl C2RNeonFcmaTwiddles {
                     let diff_sum = vext_f32::<1>(diff, sum);
                     let sum_diff = vrev64_f32(diff_sum);
 
+                    let rot_270_half_sum = vreinterpret_f32_u32(veor_u32(
+                        vreinterpret_u32_f32(sum_diff),
+                        vreinterpret_u32_f32(vget_low_f32(rot_270)),
+                    ));
+
                     let rot_diff = vcadd_rot270_f32(vdup_n_f32(0.), twiddled_diff);
 
                     let output_twiddled = vfma_f32(
@@ -198,32 +231,19 @@ impl C2RNeonFcmaTwiddles {
                         vtrn2_f32(sum, sum), // [im, im]
                         twiddle,
                     );
-                    let output_rot270 = vreinterpret_f32_u32(veor_u32(
+                    let output_rot90 = vreinterpret_f32_u32(veor_u32(
                         vreinterpret_u32_f32(output_twiddled),
-                        vreinterpret_u32_f32(vget_low_f32(rot_270)),
+                        vreinterpret_u32_f32(vget_low_f32(rot_90)),
                     ));
 
                     // We finally have all the data we need to write the transformed data back out where we found it.
-                    let v_out = vsub_f32(sum_diff, output_twiddled);
-                    let v_out_rev = vcadd_rot270_f32(output_rot270, diff_sum);
+                    let v_out = vfma_n_f32(output_twiddled, sum_diff, 0.5);
+                    let v_out_rev = vfma_n_f32(output_rot90, rot_270_half_sum, 0.5);
 
                     vst1_f32(s_out as *mut Complex<f32> as *mut f32, v_out);
                     vst1_f32(s_out_rev as *mut Complex<f32> as *mut f32, v_out_rev);
                 }
             }
-        }
-    }
-}
-
-impl R2CTwiddlesHandler<f32> for C2RNeonFcmaTwiddles {
-    fn handle(
-        &self,
-        twiddles: &[Complex<f32>],
-        left: &mut [Complex<f32>],
-        right: &mut [Complex<f32>],
-    ) {
-        unsafe {
-            self.handle_f32(twiddles, left, right);
         }
     }
 }
