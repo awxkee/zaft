@@ -83,8 +83,8 @@ impl TransposeFactory<f32> for f32 {
 
 impl TransposeFactory<f64> for f64 {
     fn transpose_strategy(
-        width: usize,
-        height: usize,
+        _width: usize,
+        _height: usize,
     ) -> Box<dyn TransposeExecutor<f64> + Send + Sync> {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
@@ -92,7 +92,14 @@ impl TransposeFactory<f64> for f64 {
                 return Box::new(AvxDefaultExecutorDouble {});
             }
         }
-        if width > 31 && height > 31 {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            if _width > 2 && _height > 2 {
+                return Box::new(NeonDefaultExecutorDouble {});
+            }
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        if _width > 31 && _height > 31 {
             use crate::transpose_arbitrary::TransposeArbitrary;
             return Box::new(TransposeArbitrary {
                 phantom_data: Default::default(),
@@ -621,6 +628,24 @@ impl TransposeBlock<f32> for TransposeBlockNeon2x2F32x2 {
 }
 
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+struct TransposeBlockNeon2x2F64x2 {}
+
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+impl TransposeBlock<f64> for TransposeBlockNeon2x2F64x2 {
+    #[inline(always)]
+    unsafe fn transpose_block(
+        &self,
+        src: &[Complex<f64>],
+        src_stride: usize,
+        dst: &mut [Complex<f64>],
+        dst_stride: usize,
+    ) {
+        use crate::neon::neon_transpose_f64x2_2x2;
+        neon_transpose_f64x2_2x2(src, src_stride, dst, dst_stride);
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
 struct NeonDefaultExecutorSingle {}
 
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -677,6 +702,48 @@ impl TransposeExecutor<f32> for NeonDefaultExecutorSingle {
         }
 
         transpose_section::<Complex<f32>>(
+            input,
+            input_stride,
+            output,
+            output_stride,
+            width,
+            height,
+            y,
+        );
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+struct NeonDefaultExecutorDouble {}
+
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+impl TransposeExecutor<f64> for NeonDefaultExecutorDouble {
+    fn transpose(
+        &self,
+        input: &[Complex<f64>],
+        output: &mut [Complex<f64>],
+        width: usize,
+        height: usize,
+    ) {
+        let mut y = 0usize;
+
+        let input_stride = width;
+        let output_stride = height;
+
+        unsafe {
+            y = transpose_executor::<f64, 2>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockNeon2x2F64x2 {},
+            );
+        }
+
+        transpose_section::<Complex<f64>>(
             input,
             input_stride,
             output,
