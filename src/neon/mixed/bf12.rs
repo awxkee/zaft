@@ -128,10 +128,7 @@ impl ColumnFcmaButterfly12d {
             match self.direction {
                 FftDirection::Forward => {
                     let (u0, u1, u2, u3) = NeonButterfly::bf4_f64_forward(
-                        store[0].v,
-                        store[3].v,
-                        store[6].v,
-                        store[9].v,
+                        store[0].v, store[3].v, store[6].v, store[9].v,
                     );
                     let (u4, u5, u6, u7) = NeonButterfly::bf4_f64_forward(
                         store[4].v,
@@ -172,10 +169,7 @@ impl ColumnFcmaButterfly12d {
                 }
                 FftDirection::Inverse => {
                     let (u0, u1, u2, u3) = NeonButterfly::bf4_f64_backward(
-                        store[0].v,
-                        store[3].v,
-                        store[6].v,
-                        store[9].v,
+                        store[0].v, store[3].v, store[6].v, store[9].v,
                     );
                     let (u4, u5, u6, u7) = NeonButterfly::bf4_f64_backward(
                         store[4].v,
@@ -394,10 +388,7 @@ impl ColumnFcmaButterfly12f {
             match self.direction {
                 FftDirection::Forward => {
                     let (u0, u1, u2, u3) = NeonButterfly::bf4_forward_f32(
-                        store[0].v,
-                        store[3].v,
-                        store[6].v,
-                        store[9].v,
+                        store[0].v, store[3].v, store[6].v, store[9].v,
                     );
                     let (u4, u5, u6, u7) = NeonButterfly::bf4_forward_f32(
                         store[4].v,
@@ -438,10 +429,7 @@ impl ColumnFcmaButterfly12f {
                 }
                 FftDirection::Inverse => {
                     let (u0, u1, u2, u3) = NeonButterfly::bf4_backward_f32(
-                        store[0].v,
-                        store[3].v,
-                        store[6].v,
-                        store[9].v,
+                        store[0].v, store[3].v, store[6].v, store[9].v,
                     );
                     let (u4, u5, u6, u7) = NeonButterfly::bf4_backward_f32(
                         store[4].v,
@@ -491,10 +479,7 @@ impl ColumnFcmaButterfly12f {
             match self.direction {
                 FftDirection::Forward => {
                     let (u0, u1, u2, u3) = NeonButterfly::bf4h_forward_f32(
-                        store[0].v,
-                        store[3].v,
-                        store[6].v,
-                        store[9].v,
+                        store[0].v, store[3].v, store[6].v, store[9].v,
                     );
                     let (u4, u5, u6, u7) = NeonButterfly::bf4h_forward_f32(
                         store[4].v,
@@ -555,10 +540,7 @@ impl ColumnFcmaButterfly12f {
                 }
                 FftDirection::Inverse => {
                     let (u0, u1, u2, u3) = NeonButterfly::bf4h_backward_f32(
-                        store[0].v,
-                        store[3].v,
-                        store[6].v,
-                        store[9].v,
+                        store[0].v, store[3].v, store[6].v, store[9].v,
                     );
                     let (u4, u5, u6, u7) = NeonButterfly::bf4h_backward_f32(
                         store[4].v,

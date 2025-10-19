@@ -87,9 +87,9 @@ impl AvxButterfly12<f64> {
                 let zu10 = _mm256_castpd256_pd128(u2u3);
                 let zu11 = _mm256_extractf128_pd::<1>(u4u5);
 
-                let (u0, u1, u2, u3) = bf4.exec_short(zu0, zu3, zu6, zu9);
-                let (u4, u5, u6, u7) = bf4.exec_short(zu4, zu7, zu10, zu1);
-                let (u8, u9, u10, u11) = bf4.exec_short(zu8, zu11, zu2, zu5);
+                let (u0, u1, u2, u3) = bf4.exec_short(zu0, zu1, zu2, zu3);
+                let (u4, u5, u6, u7) = bf4.exec_short(zu4, zu5, zu6, zu7);
+                let (u8, u9, u10, u11) = bf4.exec_short(zu8, zu9, zu10, zu11);
 
                 let (v0, v4, v8) = bf3.exec_short(u0, u4, u8); // (v0, v4, v8)
                 let (v9, v1, v5) = bf3.exec_short(u1, u5, u9); // (v9, v1, v5)
@@ -186,9 +186,9 @@ impl AvxButterfly12<f32> {
                     _mm256_castps256_ps128(u4u5u6u7),
                 );
 
-                let (u0, u1, u2, u3) = bf4.exec_short(zu0, zu3, zu6, zu9);
-                let (u4, u5, u6, u7) = bf4.exec_short(zu4, zu7, zu10, zu1);
-                let (u8, u9, u10, u11) = bf4.exec_short(zu8, zu11, zu2, zu5);
+                let (u0, u1, u2, u3) = bf4.exec_short(zu0, zu1, zu2, zu3);
+                let (u4, u5, u6, u7) = bf4.exec_short(zu4, zu5, zu6, zu7);
+                let (u8, u9, u10, u11) = bf4.exec_short(zu8, zu9, zu10, zu11);
 
                 let (v0, v4, v8) = bf3.exec_short(u0, u4, u8); // (v0, v4, v8)
                 let (v9, v1, v5) = bf3.exec_short(u1, u5, u9); // (v9, v1, v5)
