@@ -362,6 +362,17 @@ pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
     _mm_fmsubadd_ps(b, temp1, mul2)
 }
 
+// a * b.conj()
+#[inline]
+#[target_feature(enable = "avx", enable = "fma")]
+pub(crate) unsafe fn _mm_fcmul_ps_conj_b(a: __m128, b: __m128) -> __m128 {
+    let temp1 = _mm_shuffle_ps::<0xA0>(b, b);
+    let temp2 = _mm_shuffle_ps::<0xF5>(b, b);
+    let mul2 = _mm_mul_ps(a, temp2);
+    let mul2 = _mm_shuffle_ps::<0xB1>(mul2, mul2);
+    _mm_fmsubadd_ps(a, temp1, mul2)
+}
+
 // a.conj() * b
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
@@ -385,6 +396,17 @@ pub(crate) unsafe fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
     temp2 = _mm_mul_pd(temp2, b); // [b.im * a.re, b.im * a.im]
     temp2 = _mm_shuffle_pd::<0x01>(temp2, temp2); // [b.im * a.im, b.im * a.im]
     _mm_fmsubadd_pd(temp1, b, temp2)
+}
+
+// a * b.conj()
+#[inline]
+#[target_feature(enable = "avx", enable = "fma")]
+pub(crate) unsafe fn _mm_fcmul_pd_conj_b(a: __m128d, b: __m128d) -> __m128d {
+    let temp1 = _mm_unpacklo_pd(b, b); // [b.re, b.re]
+    let mut temp2 = _mm_unpackhi_pd(b, b); // [b.im, b.im]
+    temp2 = _mm_mul_pd(temp2, a); // [b.im * a.re, b.im * a.im]
+    temp2 = _mm_shuffle_pd::<0x01>(temp2, temp2); // [b.im * a.im, b.im * a.im]
+    _mm_fmsubadd_pd(temp1, a, temp2)
 }
 
 #[cfg(test)]
@@ -456,7 +478,7 @@ mod tests {
     }
 
     #[test]
-    fn complex_a_to_b_conj_avx() {
+    fn complex_a_conj_to_b_avx() {
         let values_a = [Complex::new(7.0f32, 5.0), Complex::new(5.0, -1.15)];
         let values_b = [Complex::new(-5.0f32, 3.0), Complex::new(-1.0, 1.15)];
         let r = values_a
@@ -477,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn complex_a_to_b_conj_sse() {
+    fn complex_a_conj_to_b_sse() {
         let values_a = [Complex::new(7.0f32, 5.0)];
         let values_b = [Complex::new(-5.0f32, 3.0)];
         let r = values_a
@@ -491,6 +513,48 @@ mod tests {
             let product = _mm_fcmul_ps_conj_a(a0, b0);
             let mut vec_b = vec![Complex::<f32>::default(); 2];
             _mm_storeu_ps(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");
+            });
+        }
+    }
+
+    #[test]
+    fn complex_a_to_b_conj_sse() {
+        let values_a = [Complex::new(7.0f32, 5.0)];
+        let values_b = [Complex::new(-5.0f32, 3.0)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a * b.conj())
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = _mm_loadu_ps(values_a.as_ptr().cast());
+            let b0 = _mm_loadu_ps(values_b.as_ptr().cast());
+            let product = _mm_fcmul_ps_conj_b(a0, b0);
+            let mut vec_b = vec![Complex::<f32>::default(); 2];
+            _mm_storeu_ps(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");
+            });
+        }
+    }
+
+    #[test]
+    fn complex_a_to_b_conj_sse_f64() {
+        let values_a = [Complex::new(7.0f64, 5.0)];
+        let values_b = [Complex::new(-5.0f64, 3.0)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a * b.conj())
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = _mm_loadu_pd(values_a.as_ptr().cast());
+            let b0 = _mm_loadu_pd(values_b.as_ptr().cast());
+            let product = _mm_fcmul_pd_conj_b(a0, b0);
+            let mut vec_b = vec![Complex::<f64>::default(); 1];
+            _mm_storeu_pd(vec_b.as_mut_ptr().cast(), product);
             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
                 assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");
             });
