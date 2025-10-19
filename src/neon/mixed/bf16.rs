@@ -630,9 +630,9 @@ impl ColumnFcmaButterfly16f {
                     );
 
                     let mut odds_1 =
-                        NeonButterfly::bf4h_backward_f32(v[1].v, v[5].v, v[9].v, v[13].v);
+                        NeonButterfly::bf4h_forward_f32(v[1].v, v[5].v, v[9].v, v[13].v);
                     let mut odds_2 =
-                        NeonButterfly::bf4h_backward_f32(v[15].v, v[3].v, v[7].v, v[11].v);
+                        NeonButterfly::bf4h_forward_f32(v[15].v, v[3].v, v[7].v, v[11].v);
 
                     odds_1.1 = fcmah_complex_f32(odds_1.1, vget_low_f32(self.twiddle1));
                     odds_2.1 = fcma_mulh_a_to_b_conj_f32(odds_2.1, vget_low_f32(self.twiddle1));

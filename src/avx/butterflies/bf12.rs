@@ -74,22 +74,22 @@ impl AvxButterfly12<f64> {
                 let u8u9 = _mm256_loadu_pd(chunk.get_unchecked(8..).as_ptr().cast());
                 let u10u11 = _mm256_loadu_pd(chunk.get_unchecked(10..).as_ptr().cast());
 
-                let u0 = _mm256_castpd256_pd128(u0u1);
-                let u1 = _mm256_extractf128_pd::<1>(u2u3);
-                let u2 = _mm256_castpd256_pd128(u6u7);
-                let u3 = _mm256_extractf128_pd::<1>(u8u9);
-                let u4 = _mm256_castpd256_pd128(u4u5);
-                let u5 = _mm256_extractf128_pd::<1>(u6u7);
-                let u6 = _mm256_castpd256_pd128(u10u11);
-                let u7 = _mm256_extractf128_pd::<1>(u0u1);
-                let u8 = _mm256_castpd256_pd128(u8u9);
-                let u9 = _mm256_extractf128_pd::<1>(u10u11);
-                let u10 = _mm256_castpd256_pd128(u2u3);
-                let u11 = _mm256_extractf128_pd::<1>(u4u5);
+                let zu0 = _mm256_castpd256_pd128(u0u1);
+                let zu1 = _mm256_extractf128_pd::<1>(u2u3);
+                let zu2 = _mm256_castpd256_pd128(u6u7);
+                let zu3 = _mm256_extractf128_pd::<1>(u8u9);
+                let zu4 = _mm256_castpd256_pd128(u4u5);
+                let zu5 = _mm256_extractf128_pd::<1>(u6u7);
+                let zu6 = _mm256_castpd256_pd128(u10u11);
+                let zu7 = _mm256_extractf128_pd::<1>(u0u1);
+                let zu8 = _mm256_castpd256_pd128(u8u9);
+                let zu9 = _mm256_extractf128_pd::<1>(u10u11);
+                let zu10 = _mm256_castpd256_pd128(u2u3);
+                let zu11 = _mm256_extractf128_pd::<1>(u4u5);
 
-                let (u0, u1, u2, u3) = bf4.exec_short(u0, u3, u6, u9);
-                let (u4, u5, u6, u7) = bf4.exec_short(u4, u7, u10, u1);
-                let (u8, u9, u10, u11) = bf4.exec_short(u8, u11, u2, u5);
+                let (u0, u1, u2, u3) = bf4.exec_short(zu0, zu3, zu6, zu9);
+                let (u4, u5, u6, u7) = bf4.exec_short(zu4, zu7, zu10, zu1);
+                let (u8, u9, u10, u11) = bf4.exec_short(zu8, zu11, zu2, zu5);
 
                 let (v0, v4, v8) = bf3.exec_short(u0, u4, u8); // (v0, v4, v8)
                 let (v9, v1, v5) = bf3.exec_short(u1, u5, u9); // (v9, v1, v5)
@@ -164,31 +164,31 @@ impl AvxButterfly12<f32> {
                 let u6u7 = _mm256_extractf128_ps::<1>(u4u5u6u7);
                 let u10u11 = _mm256_extractf128_ps::<1>(u8u9u10u11);
 
-                let u0 = _mm256_castps256_ps128(u0u1u2u3);
-                let u1 = _mm_unpackhi_ps64(u2u3, u2u3);
-                let u2 = u6u7;
-                let u3 = _mm_unpackhi_ps64(
+                let zu0 = _mm256_castps256_ps128(u0u1u2u3);
+                let zu1 = _mm_unpackhi_ps64(u2u3, u2u3);
+                let zu2 = u6u7;
+                let zu3 = _mm_unpackhi_ps64(
                     _mm256_castps256_ps128(u8u9u10u11),
                     _mm256_castps256_ps128(u8u9u10u11),
                 );
-                let u4 = _mm256_castps256_ps128(u4u5u6u7);
-                let u5 = _mm_unpackhi_ps64(u6u7, u6u7);
-                let u6 = u10u11;
-                let u7 = _mm_unpackhi_ps64(
+                let zu4 = _mm256_castps256_ps128(u4u5u6u7);
+                let zu5 = _mm_unpackhi_ps64(u6u7, u6u7);
+                let zu6 = u10u11;
+                let zu7 = _mm_unpackhi_ps64(
                     _mm256_castps256_ps128(u0u1u2u3),
                     _mm256_castps256_ps128(u0u1u2u3),
                 );
-                let u8 = _mm256_castps256_ps128(u8u9u10u11);
-                let u9 = _mm_unpackhi_ps64(u10u11, u10u11);
-                let u10 = u2u3;
-                let u11 = _mm_unpackhi_ps64(
+                let zu8 = _mm256_castps256_ps128(u8u9u10u11);
+                let zu9 = _mm_unpackhi_ps64(u10u11, u10u11);
+                let zu10 = u2u3;
+                let zu11 = _mm_unpackhi_ps64(
                     _mm256_castps256_ps128(u4u5u6u7),
                     _mm256_castps256_ps128(u4u5u6u7),
                 );
 
-                let (u0, u1, u2, u3) = bf4.exec_short(u0, u3, u6, u9);
-                let (u4, u5, u6, u7) = bf4.exec_short(u4, u7, u10, u1);
-                let (u8, u9, u10, u11) = bf4.exec_short(u8, u11, u2, u5);
+                let (u0, u1, u2, u3) = bf4.exec_short(zu0, zu3, zu6, zu9);
+                let (u4, u5, u6, u7) = bf4.exec_short(zu4, zu7, zu10, zu1);
+                let (u8, u9, u10, u11) = bf4.exec_short(zu8, zu11, zu2, zu5);
 
                 let (v0, v4, v8) = bf3.exec_short(u0, u4, u8); // (v0, v4, v8)
                 let (v9, v1, v5) = bf3.exec_short(u1, u5, u9); // (v9, v1, v5)
