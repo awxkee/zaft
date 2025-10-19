@@ -351,6 +351,22 @@ pub(crate) unsafe fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
     _mm256_fmsubadd_ps(ar, b, _mm256_mul_ps(ai, bswap))
 }
 
+// a * b.conj()
+#[inline]
+#[target_feature(enable = "avx", enable = "fma")]
+pub(crate) unsafe fn _mm256_fcmul_ps_conj_b(a: __m256, b: __m256) -> __m256 {
+    // Extract real and imag parts from a
+    let ar = _mm256_moveldup_ps(b); // duplicate even lanes (re parts)
+    let ai = _mm256_movehdup_ps(b); // duplicate odd lanes (im parts)
+
+    // Swap real/imag of b for cross terms
+    let bswap = _mm256_permute_ps::<0b10110001>(a); // [im, re, im, re, ...]
+
+    // re = ar*br - -ai*bi
+    // im = ar*bi - ai*br
+    _mm256_fmsubadd_ps(ar, a, _mm256_mul_ps(ai, bswap))
+}
+
 // a.conj() * b
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
@@ -385,6 +401,20 @@ pub(crate) unsafe fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
     let b_yy = _mm256_permute_pd::<0b1111>(b); // [c_im, c_im, d_im, d_im]
 
     _mm256_fmsubadd_pd(a_yx, b_yy, _mm256_mul_pd(a, b_xx))
+}
+
+// a * b.conj()
+#[inline]
+#[target_feature(enable = "avx", enable = "fma")]
+pub(crate) unsafe fn _mm256_fcmul_pd_conj_b(a: __m256d, b: __m256d) -> __m256d {
+    // Swap real and imaginary parts of 'a' for FMA
+    let a_yx = _mm256_permute_pd::<0b0101>(b); // [a_im, a_re, b_im, b_re]
+
+    // Duplicate real and imaginary parts of 'b'
+    let b_xx = _mm256_permute_pd::<0b0000>(a); // [c_re, c_re, d_re, d_re]
+    let b_yy = _mm256_permute_pd::<0b1111>(a); // [c_im, c_im, d_im, d_im]
+
+    _mm256_fmsubadd_pd(a_yx, b_yy, _mm256_mul_pd(b, b_xx))
 }
 
 // a.conj() * b
@@ -436,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn complexd_a_to_b_conj_avx() {
+    fn complexd_a_conj_to_b_avx() {
         let values_a = [Complex::new(7.0f64, 5.0), Complex::new(5.0, -1.15)];
         let values_b = [Complex::new(-5.0f64, 3.0), Complex::new(-1.0, 1.15)];
         let r = values_a
@@ -457,7 +487,7 @@ mod tests {
     }
 
     #[test]
-    fn complexd_a_to_b_conj_sse() {
+    fn complexd_a_conj_to_b_sse() {
         let values_a = [Complex::new(7.0f64, 5.0)];
         let values_b = [Complex::new(-5.0f64, 3.0)];
         let r = values_a
@@ -557,6 +587,48 @@ mod tests {
             _mm_storeu_pd(vec_b.as_mut_ptr().cast(), product);
             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
                 assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");
+            });
+        }
+    }
+
+    #[test]
+    fn complexd_a_to_b_conj_avx() {
+        let values_a = [Complex::new(7.0f64, 5.0), Complex::new(5.0, -1.15)];
+        let values_b = [Complex::new(-5.0f64, 3.0), Complex::new(-1.0, 1.15)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a * b.conj())
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = _mm256_loadu_pd(values_a.as_ptr().cast());
+            let b0 = _mm256_loadu_pd(values_b.as_ptr().cast());
+            let product = _mm256_fcmul_pd_conj_b(a0, b0);
+            let mut vec_b = vec![Complex::<f64>::default(); 4];
+            _mm256_storeu_pd(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-10);
+            });
+        }
+    }
+
+    #[test]
+    fn complexf_a_to_b_conj_avx() {
+        let values_a = [Complex::new(7.0f32, 5.0), Complex::new(5.0, -1.15)];
+        let values_b = [Complex::new(-5.0f32, 3.0), Complex::new(-1.0, 1.15)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a * b.conj())
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = _mm256_loadu_ps(values_a.as_ptr().cast());
+            let b0 = _mm256_loadu_ps(values_b.as_ptr().cast());
+            let product = _mm256_fcmul_ps_conj_b(a0, b0);
+            let mut vec_b = vec![Complex::<f32>::default(); 2];
+            _mm256_storeu_ps(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-5);
             });
         }
     }

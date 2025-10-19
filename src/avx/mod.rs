@@ -60,12 +60,12 @@ pub(crate) use f64x2_4x4::avx_transpose_f64x2_4x4;
 pub(crate) use mixed::{
     AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,
     AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d, AvxMixedRadix10d, AvxMixedRadix11d,
-    AvxMixedRadix12d, AvxMixedRadix13d,
+    AvxMixedRadix12d, AvxMixedRadix13d, AvxMixedRadix16d,
 };
 pub(crate) use mixed::{
     AvxMixedRadix2f, AvxMixedRadix3f, AvxMixedRadix4f, AvxMixedRadix5f, AvxMixedRadix6f,
     AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
-    AvxMixedRadix12f, AvxMixedRadix13f,
+    AvxMixedRadix12f, AvxMixedRadix13f, AvxMixedRadix16f,
 };
 pub(crate) use raders::AvxRadersFft;
 pub(crate) use radix3::AvxFmaRadix3;
