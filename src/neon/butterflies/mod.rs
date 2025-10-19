@@ -134,4 +134,5 @@ pub(crate) use bf29::NeonButterfly29;
 #[cfg(feature = "fcma")]
 pub(crate) use bf29_fcma::NeonFcmaButterfly29;
 pub(crate) use fast_bf5::NeonFastButterfly5;
+pub(crate) use fast_bf8::NeonFastButterfly8;
 pub(crate) use shared::NeonButterfly;

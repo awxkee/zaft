@@ -211,6 +211,12 @@ impl Zaft {
             if let Some(q_fft_opt) = q_fft_opt {
                 return Ok(Some(q_fft_opt));
             }
+        } else if min_length == 16 {
+            let q_fft = Zaft::strategy(max_length as usize, direction)?;
+            let q_fft_opt = T::mixed_radix_butterfly16(q_fft)?;
+            if let Some(q_fft_opt) = q_fft_opt {
+                return Ok(Some(q_fft_opt));
+            }
         }
         Ok(None)
     }
@@ -394,23 +400,6 @@ impl Zaft {
         } else if prime_factors.is_power_of_six {
             T::radix6(n, fft_direction)
         } else if prime_factors.is_power_of_seven {
-            // #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            // {
-            //     if Zaft::could_do_split_mixed_radix() {
-            //         let r = n / 7;
-            //         if r == 7 {
-            //             // actually should not happen here, just a stub
-            //             let right_fft = T::butterfly7(fft_direction)?;
-            //             if let Ok(Some(v)) = T::mixed_radix_butterfly7(right_fft) {
-            //                 return Ok(v);
-            //             }
-            //         }
-            //         let right_fft = T::radix7(r, fft_direction)?;
-            //         if let Ok(Some(v)) = T::mixed_radix_butterfly7(right_fft) {
-            //             return Ok(v);
-            //         }
-            //     }
-            // }
             T::radix7(n, fft_direction)
         } else if prime_factors.is_power_of_ten {
             T::radix10(n, fft_direction)

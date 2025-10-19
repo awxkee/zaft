@@ -229,3 +229,53 @@ pub(crate) fn vqtrnq_f32(a: float32x4_t, b: float32x4_t) -> (float32x4_t, float3
         )
     }
 }
+
+#[inline(always)]
+pub(crate) unsafe fn v_fcmulq_conj_b_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+    unsafe {
+        let temp1 = vtrn1q_f32(rhs, rhs);
+        let v_rhs = vnegq_f32(rhs);
+        let temp2 = vtrn2q_f32(v_rhs, vnegq_f32(v_rhs));
+        let temp3 = vmulq_f32(temp2, lhs);
+        let temp4 = vrev64q_f32(temp3);
+        vfmaq_f32(temp4, temp1, lhs)
+    }
+}
+
+#[inline(always)]
+pub(crate) unsafe fn v_fcmul_conj_b_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
+    unsafe {
+        let temp1 = vtrn1_f32(rhs, rhs);
+        let v_rhs = vneg_f32(rhs);
+        let temp2 = vtrn2_f32(v_rhs, vneg_f32(v_rhs));
+        let temp3 = vmul_f32(temp2, lhs);
+        let temp4 = vrev64_f32(temp3);
+        vfma_f32(temp4, temp1, lhs)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use num_complex::{Complex, ComplexFloat};
+
+    #[test]
+    fn complex_a_to_b_conj_neon() {
+        let values_a = [Complex::new(7.0f32, 5.0)];
+        let values_b = [Complex::new(-5.0f32, 3.0)];
+        let r = values_a
+            .iter()
+            .zip(values_b.iter())
+            .map(|(a, b)| a * b.conj())
+            .collect::<Vec<Complex<_>>>();
+        unsafe {
+            let a0 = vld1q_f32(values_a.as_ptr().cast());
+            let b0 = vld1q_f32(values_b.as_ptr().cast());
+            let product = v_fcmulq_conj_b_f32(a0, b0);
+            let mut vec_b = vec![Complex::<f32>::default(); 2];
+            vst1q_f32(vec_b.as_mut_ptr().cast(), product);
+            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+                assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");
+            });
+        }
+    }
+}

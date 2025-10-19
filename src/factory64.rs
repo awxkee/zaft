@@ -1255,6 +1255,30 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    #[allow(unused)]
+    fn mixed_radix_butterfly16(
+        right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
+    ) -> Result<Option<Box<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::NeonFcmaMixedRadix16;
+                    return NeonFcmaMixedRadix16::new(right_fft)
+                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
+                }
+            }
+            use crate::neon::NeonMixedRadix16;
+            NeonMixedRadix16::new(right_fft)
+                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            Ok(None)
+        }
+    }
+
     fn mixed_radix(
         left_fft: Box<dyn FftExecutor<f64> + Send + Sync>,
         right_fft: Box<dyn FftExecutor<f64> + Send + Sync>,

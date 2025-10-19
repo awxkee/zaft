@@ -29,8 +29,9 @@
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::butterflies::fast_bf8::NeonFastButterfly8;
 use crate::neon::util::{
-    conj_f32, conjq_f32, mul_complex_conj_f64, mul_complex_f32, mul_complex_f64, mulh_complex_f32,
-    v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32, vqtrnq_f32,
+    conj_f32, mul_complex_conj_f64, mul_complex_f32, mul_complex_f64, mulh_complex_f32,
+    v_fcmul_conj_b_f32, v_fcmulq_conj_b_f32, v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32,
+    vqtrnq_f32,
 };
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
@@ -272,13 +273,13 @@ impl FftExecutor<f32> for NeonButterfly16<f32> {
                 let mut odds_2 = NeonButterfly::butterfly4_f32(u15, u3, u7, u11, rot_sign);
 
                 odds_1.1 = mul_complex_f32(odds_1.1, tw1);
-                odds_2.1 = mul_complex_f32(odds_2.1, conjq_f32(tw1, conj_factors));
+                odds_2.1 = v_fcmulq_conj_b_f32(odds_2.1, tw1);
 
                 odds_1.2 = mul_complex_f32(odds_1.2, tw2);
-                odds_2.2 = mul_complex_f32(odds_2.2, conjq_f32(tw2, conj_factors));
+                odds_2.2 = v_fcmulq_conj_b_f32(odds_2.2, tw2);
 
                 odds_1.3 = mul_complex_f32(odds_1.3, tw3);
-                odds_2.3 = mul_complex_f32(odds_2.3, conjq_f32(tw3, conj_factors));
+                odds_2.3 = v_fcmulq_conj_b_f32(odds_2.3, tw3);
 
                 // step 4: cross FFTs
                 let (o01, o02) = NeonButterfly::butterfly2_f32(odds_1.0, odds_2.0);
@@ -405,10 +406,7 @@ impl FftExecutor<f32> for NeonButterfly16<f32> {
                 odds_2.2 = vget_high_f32(o1);
 
                 odds_1.3 = mulh_complex_f32(odds_1.3, vget_low_f32(tw3));
-                odds_2.3 = mulh_complex_f32(
-                    odds_2.3,
-                    conj_f32(vget_low_f32(tw3), vget_low_f32(conj_factors)),
-                );
+                odds_2.3 = v_fcmul_conj_b_f32(odds_2.3, vget_low_f32(tw3));
 
                 // step 4: cross FFTs
                 let (o01, o02) = NeonButterfly::butterfly2h_f32(odds_1.0, odds_2.0);

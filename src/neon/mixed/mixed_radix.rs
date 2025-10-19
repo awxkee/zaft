@@ -714,6 +714,7 @@ use crate::neon::mixed::bf10::*;
 use crate::neon::mixed::bf11::*;
 use crate::neon::mixed::bf12::*;
 use crate::neon::mixed::bf13::*;
+use crate::neon::mixed::bf16::*;
 
 define_mixed_radix_neon_d!(NeonMixedRadix2, ColumnButterfly2d, 2);
 define_mixed_radix_neon_d!(NeonMixedRadix3, ColumnButterfly3d, 3);
@@ -727,6 +728,7 @@ define_mixed_radix_neon_d!(NeonMixedRadix10, ColumnButterfly10d, 10);
 define_mixed_radix_neon_d!(NeonMixedRadix11, ColumnButterfly11d, 11);
 define_mixed_radix_neon_d!(NeonMixedRadix12, ColumnButterfly12d, 12);
 define_mixed_radix_neon_d!(NeonMixedRadix13, ColumnButterfly13d, 13);
+define_mixed_radix_neon_d!(NeonMixedRadix16, ColumnButterfly16d, 16);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix2, ColumnButterfly2d, 2);
 #[cfg(feature = "fcma")]
@@ -752,6 +754,8 @@ define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix11, ColumnFcmaButterfly11d, 11
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix12, ColumnFcmaButterfly12d, 12);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix13, ColumnFcmaButterfly13d, 13);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix16, ColumnFcmaButterfly16d, 16);
 define_mixed_radix_neon_f!(NeonMixedRadix2f, ColumnButterfly2f, 2);
 define_mixed_radix_neon_f!(NeonMixedRadix3f, ColumnButterfly3f, 3);
 define_mixed_radix_neon_f!(NeonMixedRadix4f, ColumnButterfly4f, 4);
@@ -764,6 +768,7 @@ define_mixed_radix_neon_f!(NeonMixedRadix10f, ColumnButterfly10f, 10);
 define_mixed_radix_neon_f!(NeonMixedRadix11f, ColumnButterfly11f, 11);
 define_mixed_radix_neon_f!(NeonMixedRadix12f, ColumnButterfly12f, 12);
 define_mixed_radix_neon_f!(NeonMixedRadix13f, ColumnButterfly13f, 13);
+define_mixed_radix_neon_f!(NeonMixedRadix16f, ColumnButterfly16f, 16);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix2f, ColumnButterfly2f, 2);
 #[cfg(feature = "fcma")]
@@ -786,6 +791,8 @@ define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix11f, ColumnFcmaButterfly11f, 1
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix12f, ColumnFcmaButterfly12f, 12);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix13f, ColumnFcmaButterfly13f, 13);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix16f, ColumnFcmaButterfly16f, 16);
 
 // pub(crate) struct NeonMixedRadix<T> {
 //     execution_length: usize,
@@ -1558,6 +1565,136 @@ mod tests {
     }
 
     #[test]
+    fn test_neon_mixed_radix16_f64() {
+        let src: [Complex<f64>; 32] = [
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(3.25, 2.7),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(0.654, 0.324),
+            Complex::new(3.25, 2.7),
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.654, 0.324),
+        ];
+        let neon_mixed_rust =
+            NeonMixedRadix16::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
+        let bf8 = Zaft::strategy(32, FftDirection::Forward).unwrap();
+        let mut reference_value = src.to_vec();
+        bf8.execute(&mut reference_value).unwrap();
+        let mut test_value = src.to_vec();
+        neon_mixed_rust.execute(&mut test_value).unwrap();
+        reference_value
+            .iter()
+            .zip(test_value.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
+    }
+
+    #[test]
+    #[cfg(feature = "fcma")]
+    fn test_neon_mixed_radix16_fcma_f64() {
+        if std::arch::is_aarch64_feature_detected!("fcma") {
+            let src: [Complex<f64>; 32] = [
+                Complex::new(1.3, 1.6),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(-0.45, -0.4),
+                Complex::new(0.45, -0.4),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(-0.45, -0.4),
+                Complex::new(0.45, -0.4),
+                Complex::new(0.45, -0.4),
+                Complex::new(3.25, 2.7),
+                Complex::new(-0.45, -0.4),
+                Complex::new(0.45, -0.4),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(0.654, 0.324),
+                Complex::new(3.25, 2.7),
+                Complex::new(1.3, 1.6),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(-0.45, -0.4),
+                Complex::new(0.45, -0.4),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(-0.45, -0.4),
+                Complex::new(0.654, 0.324),
+            ];
+            let neon_mixed_rust =
+                NeonFcmaMixedRadix16::new(Zaft::strategy(2, FftDirection::Forward).unwrap())
+                    .unwrap();
+            let bf8 = Zaft::strategy(32, FftDirection::Forward).unwrap();
+            let mut reference_value = src.to_vec();
+            bf8.execute(&mut reference_value).unwrap();
+            let mut test_value = src.to_vec();
+            neon_mixed_rust.execute(&mut test_value).unwrap();
+            reference_value
+                .iter()
+                .zip(test_value.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for at {idx}",
+                        a.re,
+                        b.re,
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for at {idx}",
+                        a.im,
+                        b.im,
+                    );
+                });
+        }
+    }
+
+    #[test]
     fn test_neon_mixed_radix_f32() {
         let src: [Complex<f32>; 8] = [
             Complex::new(1.3, 1.6),
@@ -2125,5 +2262,135 @@ mod tests {
                     b.im,
                 );
             });
+    }
+
+    #[test]
+    fn test_neon_mixed_radix16_rem_f32() {
+        let src: [Complex<f32>; 32] = [
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+        ];
+        let neon_mixed_rust =
+            NeonMixedRadix16f::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
+        let bf8 = Zaft::strategy(32, FftDirection::Forward).unwrap();
+        let mut reference_value = src.to_vec();
+        bf8.execute(&mut reference_value).unwrap();
+        let mut test_value = src.to_vec();
+        neon_mixed_rust.execute(&mut test_value).unwrap();
+        reference_value
+            .iter()
+            .zip(test_value.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
+    }
+
+    #[cfg(feature = "fcma")]
+    #[test]
+    fn test_neon_mixed_radix16_fcma_f32() {
+        if std::arch::is_aarch64_feature_detected!("fcma") {
+            let src: [Complex<f32>; 32] = [
+                Complex::new(1.3, 1.6),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(1.3, 1.6),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(3.25, 2.7),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(1.3, 1.6),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(0.9, 0.13),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(1.3, 1.6),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+            ];
+            let neon_mixed_rust =
+                NeonFcmaMixedRadix16f::new(Zaft::strategy(2, FftDirection::Forward).unwrap())
+                    .unwrap();
+            let bf8 = Zaft::strategy(32, FftDirection::Forward).unwrap();
+            let mut reference_value = src.to_vec();
+            bf8.execute(&mut reference_value).unwrap();
+            let mut test_value = src.to_vec();
+            neon_mixed_rust.execute(&mut test_value).unwrap();
+            reference_value
+                .iter()
+                .zip(test_value.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-4,
+                        "a_re {} != b_re {} for at {idx}",
+                        a.re,
+                        b.re,
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-4,
+                        "a_im {} != b_im {} for at {idx}",
+                        a.im,
+                        b.im,
+                    );
+                });
+        }
     }
 }
