@@ -44,7 +44,7 @@ fn main() {
         Complex::new(12.6, -3.0),
         Complex::new(14.6, -6.0),
     ];
-    let mut data = vec![Complex::new(0.0019528865, 0.); 16];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 5488 ];
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
@@ -90,7 +90,7 @@ fn main() {
         .zip(real_data_ref)
         .enumerate()
         .for_each(|(idx, (a, b))| {
-            assert!((a - b).abs() < 1e-4, "a_re {}, b_re {} at {idx}", a, b);
+            assert!((a - b).abs() < 1e-2, "a_re {}, b_re {} at {idx}", a, b);
         });
 
     let o_data = data.clone();

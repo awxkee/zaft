@@ -45,11 +45,11 @@ impl C2RTwiddlesFactory<f32> for f32 {
     fn make_c2r_twiddles_handler() -> Box<dyn R2CTwiddlesHandler<f32> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
-            //     #[cfg(feature = "fcma")]
-            //     if std::arch::is_aarch64_feature_detected!("fcma") {
-            //         use crate::neon::C2RNeonFcmaTwiddles;
-            //         return Box::new(C2RNeonFcmaTwiddles {});
-            //     }
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::C2RNeonFcmaTwiddles;
+                return Box::new(C2RNeonFcmaTwiddles {});
+            }
             use crate::neon::C2RNeonTwiddles;
             Box::new(C2RNeonTwiddles {})
         }

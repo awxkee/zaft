@@ -477,7 +477,7 @@ macro_rules! define_mixed_radix_neon_f {
 
                         // for the remaining rows, apply twiddle factors and then write back to memory
                         for i in 1..ROW_COUNT {
-                            let twiddle = final_twiddle_chunk[i * COMPLEX_PER_VECTOR - 2];
+                            let twiddle = final_twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR];
                             let output =
                                 NeonStoreFh::mul_by_complex(output[i], NeonStoreFh::from_complex(&twiddle));
                             unsafe {
@@ -2101,6 +2101,103 @@ mod tests {
                     b.im,
                 );
             });
+    }
+
+    #[test]
+    fn test_neon_mixed_radix8_rem_f32() {
+        let src: [Complex<f32>; 16] = [
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+        ];
+        let neon_mixed_rust =
+            NeonMixedRadix8f::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
+        let bf8 = Zaft::strategy(16, FftDirection::Forward).unwrap();
+        let mut reference_value = src.to_vec();
+        bf8.execute(&mut reference_value).unwrap();
+        let mut test_value = src.to_vec();
+        neon_mixed_rust.execute(&mut test_value).unwrap();
+        reference_value
+            .iter()
+            .zip(test_value.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-4,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-4,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
+    }
+
+    #[test]
+    #[cfg(feature = "fcma")]
+    fn test_neon_mixed_radix8_fcma_f32() {
+        if std::arch::is_aarch64_feature_detected!("fcma") {
+            let src: [Complex<f32>; 16] = [
+                Complex::new(1.3, 1.6),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(1.3, 1.6),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+                Complex::new(0.9, 0.13),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(3.25, 2.7),
+                Complex::new(0.654, 0.324),
+                Complex::new(1.7, -0.4),
+                Complex::new(8.2, -0.1),
+            ];
+            let neon_mixed_rust =
+                NeonMixedRadix8f::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
+            let bf8 = Zaft::strategy(16, FftDirection::Forward).unwrap();
+            let mut reference_value = src.to_vec();
+            bf8.execute(&mut reference_value).unwrap();
+            let mut test_value = src.to_vec();
+            neon_mixed_rust.execute(&mut test_value).unwrap();
+            reference_value
+                .iter()
+                .zip(test_value.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-4,
+                        "a_re {} != b_re {} for at {idx}",
+                        a.re,
+                        b.re,
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-4,
+                        "a_im {} != b_im {} for at {idx}",
+                        a.im,
+                        b.im,
+                    );
+                });
+        }
     }
 
     #[test]

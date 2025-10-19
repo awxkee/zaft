@@ -81,12 +81,12 @@ impl ColumnButterfly8d {
             let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
             [
                 NeonStoreD::raw(y0),
-                NeonStoreD::raw(y1),
                 NeonStoreD::raw(y2),
-                NeonStoreD::raw(y3),
                 NeonStoreD::raw(y4),
-                NeonStoreD::raw(y5),
                 NeonStoreD::raw(y6),
+                NeonStoreD::raw(y1),
+                NeonStoreD::raw(y3),
+                NeonStoreD::raw(y5),
                 NeonStoreD::raw(y7),
             ]
         }
@@ -133,12 +133,12 @@ impl ColumnFcmaButterfly8d {
                     let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
                     [
                         NeonStoreD::raw(y0),
-                        NeonStoreD::raw(y1),
                         NeonStoreD::raw(y2),
-                        NeonStoreD::raw(y3),
                         NeonStoreD::raw(y4),
-                        NeonStoreD::raw(y5),
                         NeonStoreD::raw(y6),
+                        NeonStoreD::raw(y1),
+                        NeonStoreD::raw(y3),
+                        NeonStoreD::raw(y5),
                         NeonStoreD::raw(y7),
                     ]
                 }
@@ -163,12 +163,12 @@ impl ColumnFcmaButterfly8d {
                     let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
                     [
                         NeonStoreD::raw(y0),
-                        NeonStoreD::raw(y1),
                         NeonStoreD::raw(y2),
-                        NeonStoreD::raw(y3),
                         NeonStoreD::raw(y4),
-                        NeonStoreD::raw(y5),
                         NeonStoreD::raw(y6),
+                        NeonStoreD::raw(y1),
+                        NeonStoreD::raw(y3),
+                        NeonStoreD::raw(y5),
                         NeonStoreD::raw(y7),
                     ]
                 }
@@ -227,12 +227,12 @@ impl ColumnButterfly8f {
 
             [
                 NeonStoreF::raw(zy0),
-                NeonStoreF::raw(zy1),
                 NeonStoreF::raw(zy2),
-                NeonStoreF::raw(zy3),
                 NeonStoreF::raw(zy4),
-                NeonStoreF::raw(zy5),
                 NeonStoreF::raw(zy6),
+                NeonStoreF::raw(zy1),
+                NeonStoreF::raw(zy3),
+                NeonStoreF::raw(zy5),
                 NeonStoreF::raw(zy7),
             ]
         }
@@ -273,12 +273,12 @@ impl ColumnButterfly8f {
 
             [
                 NeonStoreFh::raw(zy0),
-                NeonStoreFh::raw(zy1),
                 NeonStoreFh::raw(zy2),
-                NeonStoreFh::raw(zy3),
                 NeonStoreFh::raw(zy4),
-                NeonStoreFh::raw(zy5),
                 NeonStoreFh::raw(zy6),
+                NeonStoreFh::raw(zy1),
+                NeonStoreFh::raw(zy3),
+                NeonStoreFh::raw(zy5),
                 NeonStoreFh::raw(zy7),
             ]
         }
@@ -327,12 +327,12 @@ impl ColumnFcmaButterfly8f {
 
                     [
                         NeonStoreF::raw(zy0),
-                        NeonStoreF::raw(zy1),
                         NeonStoreF::raw(zy2),
-                        NeonStoreF::raw(zy3),
                         NeonStoreF::raw(zy4),
-                        NeonStoreF::raw(zy5),
                         NeonStoreF::raw(zy6),
+                        NeonStoreF::raw(zy1),
+                        NeonStoreF::raw(zy3),
+                        NeonStoreF::raw(zy5),
                         NeonStoreF::raw(zy7),
                     ]
                 }
@@ -358,12 +358,12 @@ impl ColumnFcmaButterfly8f {
 
                     [
                         NeonStoreF::raw(zy0),
-                        NeonStoreF::raw(zy1),
                         NeonStoreF::raw(zy2),
-                        NeonStoreF::raw(zy3),
                         NeonStoreF::raw(zy4),
-                        NeonStoreF::raw(zy5),
                         NeonStoreF::raw(zy6),
+                        NeonStoreF::raw(zy1),
+                        NeonStoreF::raw(zy3),
+                        NeonStoreF::raw(zy5),
                         NeonStoreF::raw(zy7),
                     ]
                 }
@@ -397,12 +397,12 @@ impl ColumnFcmaButterfly8f {
 
                     [
                         NeonStoreFh::raw(zy0),
-                        NeonStoreFh::raw(zy1),
                         NeonStoreFh::raw(zy2),
-                        NeonStoreFh::raw(zy3),
                         NeonStoreFh::raw(zy4),
-                        NeonStoreFh::raw(zy5),
                         NeonStoreFh::raw(zy6),
+                        NeonStoreFh::raw(zy1),
+                        NeonStoreFh::raw(zy3),
+                        NeonStoreFh::raw(zy5),
                         NeonStoreFh::raw(zy7),
                     ]
                 }
@@ -428,12 +428,12 @@ impl ColumnFcmaButterfly8f {
 
                     [
                         NeonStoreFh::raw(zy0),
-                        NeonStoreFh::raw(zy1),
                         NeonStoreFh::raw(zy2),
-                        NeonStoreFh::raw(zy3),
                         NeonStoreFh::raw(zy4),
-                        NeonStoreFh::raw(zy5),
                         NeonStoreFh::raw(zy6),
+                        NeonStoreFh::raw(zy1),
+                        NeonStoreFh::raw(zy3),
+                        NeonStoreFh::raw(zy5),
                         NeonStoreFh::raw(zy7),
                     ]
                 }
