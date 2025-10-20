@@ -435,24 +435,22 @@ impl AvxFmaRadix6<f32> {
                         while j + 2 < sixth {
                             let u0 = _mm_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
 
-                            let tw0 =
-                                _mm_loadu_ps(m_twiddles.get_unchecked(5 * j..).as_ptr().cast());
-                            let tw1 = _mm_loadu_ps(
+                            let tw0tw02 =
+                                _mm256_loadu_ps(m_twiddles.get_unchecked(5 * j..).as_ptr().cast());
+                            let tw01tw03 = _mm256_loadu_ps(
                                 m_twiddles.get_unchecked(5 * (j + 1)..).as_ptr().cast(),
                             );
-                            let tw2 =
-                                _mm_loadu_ps(m_twiddles.get_unchecked(5 * j + 2..).as_ptr().cast());
-                            let tw3 = _mm_loadu_ps(
-                                m_twiddles.get_unchecked(5 * (j + 1) + 2..).as_ptr().cast(),
-                            );
+
+                            const HI_HI: i32 = 0b0011_0001;
+                            const LO_LO: i32 = 0b0010_0000;
 
                             const SH: i32 = shuffle(3, 1, 2, 0);
 
                             let tw01 = _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(
-                                _mm256_castps_si256(_mm256_create_ps(tw0, tw1)),
+                                _mm256_castps_si256(_mm256_permute2f128_ps::<LO_LO>(tw0tw02, tw01tw03)),
                             ));
                             let tw23 = _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(
-                                _mm256_castps_si256(_mm256_create_ps(tw2, tw3)),
+                                _mm256_castps_si256(_mm256_permute2f128_ps::<HI_HI>(tw0tw02, tw01tw03)),
                             ));
 
                             let u1u2 = _mm256_fcmul_ps(
