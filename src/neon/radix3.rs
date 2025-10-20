@@ -82,7 +82,8 @@ where
         let base_fft = match exponent {
             0 => Zaft::strategy(1, fft_direction)?,
             1 => Zaft::strategy(3, fft_direction)?,
-            _ => Zaft::strategy(9, fft_direction)?,
+            2 => Zaft::strategy(9, fft_direction)?,
+            _ => Zaft::strategy(27, fft_direction)?,
         };
 
         let twiddles = T::make_twiddles_with_base(base_fft.length(), size, fft_direction)?;

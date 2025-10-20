@@ -384,6 +384,8 @@ impl Zaft {
             return T::butterfly19(fft_direction);
         } else if n == 23 {
             return T::butterfly23(fft_direction);
+        } else if n == 27 {
+            return T::butterfly27(fft_direction);
         } else if n == 29 {
             return T::butterfly29(fft_direction);
         }

@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use num_complex::Complex;
 use std::arch::aarch64::*;
 
 #[inline(always)]
@@ -253,6 +254,17 @@ pub(crate) unsafe fn v_fcmul_conj_b_f32(lhs: float32x2_t, rhs: float32x2_t) -> f
         vfma_f32(temp4, temp1, lhs)
     }
 }
+
+#[inline(always)]
+pub(crate) unsafe fn vdup_complex_f64(c: Complex<f64>) -> float64x2_t {
+    unsafe { vcombine_f64(vdup_n_f64(c.re), vdup_n_f64(c.im)) }
+}
+
+#[inline(always)]
+pub(crate) unsafe fn vdup_complex_f32(c: Complex<f32>) -> float32x4_t {
+    unsafe { vld1q_f32([c.re, c.im, c.re, c.im].as_ptr().cast()) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

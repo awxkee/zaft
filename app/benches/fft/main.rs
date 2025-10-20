@@ -169,10 +169,10 @@ fn check_power_group(c: &mut Criterion, n: usize, group: String) {
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.benchmark_group("Fft");
-    bench_rustfft_average(c);
-    bench_zaft_average(c);
-    bench_rustfft_averages(c);
-    bench_zaft_averages(c);
+    // bench_rustfft_average(c);
+    // bench_zaft_average(c);
+    // bench_rustfft_averages(c);
+    // bench_zaft_averages(c);
 
     let mut input_1295 = vec![Complex::<f32>::default(); 1295];
     for z in input_1295.iter_mut() {
@@ -278,7 +278,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // check_power_group(c, 19, "bf-19".to_string());
     // check_power_group(c, 7 * 7 * 7, "power 7".to_string());
 
-    c.bench_function("rustfft prime 1201", |b| {
+    /* c.bench_function("rustfft prime 1201", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_1201.len());
         let mut working = input_1201.to_vec();
         b.iter(|| {
@@ -436,7 +436,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| {
             plan.execute(&mut working).unwrap();
         })
-    });
+    });*/
 
     c.bench_function("rustfft power3", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power3.len());

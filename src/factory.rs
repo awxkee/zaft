@@ -92,6 +92,9 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly23(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly27(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly29(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
@@ -687,6 +690,26 @@ impl AlgorithmFactory<f32> for f32 {
         {
             use crate::butterflies::Butterfly23;
             Ok(Box::new(Butterfly23::new(fft_direction)))
+        }
+    }
+
+    fn butterfly27(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly27f;
+                return Ok(Box::new(NeonFcmaButterfly27f::new(fft_direction)));
+            }
+            use crate::neon::NeonButterfly27f;
+            Ok(Box::new(NeonButterfly27f::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly27;
+            Ok(Box::new(Butterfly27::new(fft_direction)))
         }
     }
 

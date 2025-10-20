@@ -506,6 +506,26 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    fn butterfly27(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly27d;
+                return Ok(Box::new(NeonFcmaButterfly27d::new(fft_direction)));
+            }
+            use crate::neon::NeonButterfly27d;
+            Ok(Box::new(NeonButterfly27d::new(fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            use crate::butterflies::Butterfly27;
+            Ok(Box::new(Butterfly27::new(fft_direction)))
+        }
+    }
+
     fn butterfly29(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {

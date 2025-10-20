@@ -42,6 +42,7 @@ mod bf17;
 mod bf19;
 mod bf2;
 mod bf23;
+mod bf27;
 mod bf29;
 mod bf3;
 mod bf4;
@@ -52,6 +53,7 @@ mod bf8;
 mod bf9;
 mod fast_bf7;
 mod fast_bf8;
+mod fast_bf9;
 pub mod short_butterflies;
 
 pub(crate) use bf1::Butterfly1;
@@ -91,6 +93,8 @@ pub(crate) use bf17::Butterfly17;
 pub(crate) use bf19::Butterfly19;
 #[allow(unused)]
 pub(crate) use bf23::Butterfly23;
+#[allow(unused)]
+pub(crate) use bf27::Butterfly27;
 #[allow(unused)]
 pub(crate) use bf29::Butterfly29;
 

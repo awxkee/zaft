@@ -447,10 +447,14 @@ impl AvxFmaRadix6<f32> {
                             const SH: i32 = shuffle(3, 1, 2, 0);
 
                             let tw01 = _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(
-                                _mm256_castps_si256(_mm256_permute2f128_ps::<LO_LO>(tw0tw02, tw01tw03)),
+                                _mm256_castps_si256(_mm256_permute2f128_ps::<LO_LO>(
+                                    tw0tw02, tw01tw03,
+                                )),
                             ));
                             let tw23 = _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(
-                                _mm256_castps_si256(_mm256_permute2f128_ps::<HI_HI>(tw0tw02, tw01tw03)),
+                                _mm256_castps_si256(_mm256_permute2f128_ps::<HI_HI>(
+                                    tw0tw02, tw01tw03,
+                                )),
                             ));
 
                             let u1u2 = _mm256_fcmul_ps(
