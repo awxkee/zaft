@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::complex_fma::c_mul_fast;
-use crate::neon::util::{conj_f64, conjq_f32, mul_complex_f32, mul_complex_f64};
+use crate::neon::util::{conj_f64, conjq_f32, vfcmulq_f32, vfcmulq_f64};
 use crate::spectrum_arithmetic::SpectrumOps;
 use num_complex::Complex;
 use std::arch::aarch64::*;
@@ -55,10 +55,10 @@ impl SpectrumOps<f32> for NeonSpectrumArithmetic<f32> {
                 let q2 = vld1q_f32(twiddle.get_unchecked(4..).as_ptr().cast());
                 let q3 = vld1q_f32(twiddle.get_unchecked(6..).as_ptr().cast());
 
-                let p0 = mul_complex_f32(s0, q0);
-                let p1 = mul_complex_f32(s1, q1);
-                let p2 = mul_complex_f32(s2, q2);
-                let p3 = mul_complex_f32(s3, q3);
+                let p0 = vfcmulq_f32(s0, q0);
+                let p1 = vfcmulq_f32(s1, q1);
+                let p2 = vfcmulq_f32(s2, q2);
+                let p3 = vfcmulq_f32(s3, q3);
 
                 vst1q_f32(dst.as_mut_ptr().cast(), p0);
                 vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), p1);
@@ -78,7 +78,7 @@ impl SpectrumOps<f32> for NeonSpectrumArithmetic<f32> {
                 let s0 = vld1q_f32(src.as_ptr().cast());
                 let q0 = vld1q_f32(twiddle.as_ptr().cast());
 
-                let p0 = mul_complex_f32(s0, q0);
+                let p0 = vfcmulq_f32(s0, q0);
 
                 vst1q_f32(dst.as_mut_ptr().cast(), p0);
             }
@@ -107,10 +107,10 @@ impl SpectrumOps<f32> for NeonSpectrumArithmetic<f32> {
                 let q2 = vld1q_f32(twiddle.get_unchecked(4..).as_ptr().cast());
                 let q3 = vld1q_f32(twiddle.get_unchecked(6..).as_ptr().cast());
 
-                let mut p0 = mul_complex_f32(s0, q0);
-                let mut p1 = mul_complex_f32(s1, q1);
-                let mut p2 = mul_complex_f32(s2, q2);
-                let mut p3 = mul_complex_f32(s3, q3);
+                let mut p0 = vfcmulq_f32(s0, q0);
+                let mut p1 = vfcmulq_f32(s1, q1);
+                let mut p2 = vfcmulq_f32(s2, q2);
+                let mut p3 = vfcmulq_f32(s3, q3);
 
                 p0 = conjq_f32(p0, conjugate_factors);
                 p1 = conjq_f32(p1, conjugate_factors);
@@ -130,7 +130,7 @@ impl SpectrumOps<f32> for NeonSpectrumArithmetic<f32> {
                 let s0 = vld1q_f32(dst.as_ptr().cast());
                 let q0 = vld1q_f32(twiddle.as_ptr().cast());
 
-                let p0 = conjq_f32(mul_complex_f32(s0, q0), conjugate_factors);
+                let p0 = conjq_f32(vfcmulq_f32(s0, q0), conjugate_factors);
 
                 vst1q_f32(dst.as_mut_ptr().cast(), p0);
             }
@@ -167,10 +167,10 @@ impl SpectrumOps<f32> for NeonSpectrumArithmetic<f32> {
                 let q2 = vld1q_f32(twiddle.get_unchecked(4..).as_ptr().cast());
                 let q3 = vld1q_f32(twiddle.get_unchecked(6..).as_ptr().cast());
 
-                let p0 = mul_complex_f32(s0, q0);
-                let p1 = mul_complex_f32(s1, q1);
-                let p2 = mul_complex_f32(s2, q2);
-                let p3 = mul_complex_f32(s3, q3);
+                let p0 = vfcmulq_f32(s0, q0);
+                let p1 = vfcmulq_f32(s1, q1);
+                let p2 = vfcmulq_f32(s2, q2);
+                let p3 = vfcmulq_f32(s3, q3);
 
                 vst1q_f32(dst.as_mut_ptr().cast(), p0);
                 vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), p1);
@@ -191,7 +191,7 @@ impl SpectrumOps<f32> for NeonSpectrumArithmetic<f32> {
                 s0 = conjq_f32(s0, conjugate_factors);
                 let q0 = vld1q_f32(twiddle.as_ptr().cast());
 
-                let p0 = mul_complex_f32(s0, q0);
+                let p0 = vfcmulq_f32(s0, q0);
 
                 vst1q_f32(dst.as_mut_ptr().cast(), p0);
             }
@@ -225,10 +225,10 @@ impl SpectrumOps<f64> for NeonSpectrumArithmetic<f64> {
                 let q2 = vld1q_f64(twiddle.get_unchecked(2..).as_ptr().cast());
                 let q3 = vld1q_f64(twiddle.get_unchecked(3..).as_ptr().cast());
 
-                let p0 = mul_complex_f64(s0, q0);
-                let p1 = mul_complex_f64(s1, q1);
-                let p2 = mul_complex_f64(s2, q2);
-                let p3 = mul_complex_f64(s3, q3);
+                let p0 = vfcmulq_f64(s0, q0);
+                let p1 = vfcmulq_f64(s1, q1);
+                let p2 = vfcmulq_f64(s2, q2);
+                let p3 = vfcmulq_f64(s3, q3);
 
                 vst1q_f64(dst.as_mut_ptr().cast(), p0);
                 vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), p1);
@@ -244,7 +244,7 @@ impl SpectrumOps<f64> for NeonSpectrumArithmetic<f64> {
                 let s0 = vld1q_f64(src as *const Complex<f64> as *const f64);
                 let q0 = vld1q_f64(twiddle as *const Complex<f64> as *const f64);
 
-                let p0 = mul_complex_f64(s0, q0);
+                let p0 = vfcmulq_f64(s0, q0);
 
                 vst1q_f64(dst as *mut Complex<f64> as *mut f64, p0);
             }
@@ -265,10 +265,10 @@ impl SpectrumOps<f64> for NeonSpectrumArithmetic<f64> {
                 let q2 = vld1q_f64(twiddle.get_unchecked(2..).as_ptr().cast());
                 let q3 = vld1q_f64(twiddle.get_unchecked(3..).as_ptr().cast());
 
-                let mut p0 = mul_complex_f64(s0, q0);
-                let mut p1 = mul_complex_f64(s1, q1);
-                let mut p2 = mul_complex_f64(s2, q2);
-                let mut p3 = mul_complex_f64(s3, q3);
+                let mut p0 = vfcmulq_f64(s0, q0);
+                let mut p1 = vfcmulq_f64(s1, q1);
+                let mut p2 = vfcmulq_f64(s2, q2);
+                let mut p3 = vfcmulq_f64(s3, q3);
 
                 p0 = conj_f64(p0, conjugate_factors);
                 p1 = conj_f64(p1, conjugate_factors);
@@ -288,7 +288,7 @@ impl SpectrumOps<f64> for NeonSpectrumArithmetic<f64> {
                 let s0 = vld1q_f64(dst as *const Complex<f64> as *const f64);
                 let q0 = vld1q_f64(twiddle as *const Complex<f64> as *const f64);
 
-                let p0 = conj_f64(mul_complex_f64(s0, q0), conjugate_factors);
+                let p0 = conj_f64(vfcmulq_f64(s0, q0), conjugate_factors);
 
                 vst1q_f64(dst as *mut Complex<f64> as *mut f64, p0);
             }
@@ -318,10 +318,10 @@ impl SpectrumOps<f64> for NeonSpectrumArithmetic<f64> {
                 let q2 = vld1q_f64(twiddle.get_unchecked(2..).as_ptr().cast());
                 let q3 = vld1q_f64(twiddle.get_unchecked(3..).as_ptr().cast());
 
-                let p0 = mul_complex_f64(s0, q0);
-                let p1 = mul_complex_f64(s1, q1);
-                let p2 = mul_complex_f64(s2, q2);
-                let p3 = mul_complex_f64(s3, q3);
+                let p0 = vfcmulq_f64(s0, q0);
+                let p1 = vfcmulq_f64(s1, q1);
+                let p2 = vfcmulq_f64(s2, q2);
+                let p3 = vfcmulq_f64(s3, q3);
 
                 vst1q_f64(dst.as_mut_ptr().cast(), p0);
                 vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), p1);
@@ -339,7 +339,7 @@ impl SpectrumOps<f64> for NeonSpectrumArithmetic<f64> {
 
                 s0 = conj_f64(s0, conjugate_factors);
 
-                let p0 = mul_complex_f64(s0, q0);
+                let p0 = vfcmulq_f64(s0, q0);
 
                 vst1q_f64(dst as *mut Complex<f64> as *mut f64, p0);
             }

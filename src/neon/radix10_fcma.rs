@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::{NeonButterfly, NeonFastButterfly5};
-use crate::neon::util::{fcma_complex_f32, fcma_complex_f64, fcmah_complex_f32};
+use crate::neon::util::{vfcmul_fcma_f32, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix10::Radix10Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
@@ -141,39 +141,39 @@ impl NeonFcmaRadix10<f64> {
                             let tw8 = vld1q_f64(m_twiddles.get_unchecked(td + 8..).as_ptr().cast());
 
                             let u0 = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
-                            let u1 = fcma_complex_f64(
+                            let u1 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + tenth..).as_ptr().cast()),
                                 tw0,
                             );
-                            let u2 = fcma_complex_f64(
+                            let u2 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
                                 tw1,
                             );
-                            let u3 = fcma_complex_f64(
+                            let u3 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
                                 tw2,
                             );
-                            let u4 = fcma_complex_f64(
+                            let u4 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
                                 tw3,
                             );
-                            let u5 = fcma_complex_f64(
+                            let u5 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
                                 tw4,
                             );
-                            let u6 = fcma_complex_f64(
+                            let u6 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
                                 tw5,
                             );
-                            let u7 = fcma_complex_f64(
+                            let u7 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
                                 tw6,
                             );
-                            let u8 = fcma_complex_f64(
+                            let u8 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
                                 tw7,
                             );
-                            let u9 = fcma_complex_f64(
+                            let u9 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
                                 tw8,
                             );
@@ -316,39 +316,39 @@ impl NeonFcmaRadix10<f32> {
                             let ww7 = vcombine_f32(vget_high_f32(w6w7), vget_low_f32(w16w17));
                             let ww8 = vcombine_f32(vget_low_f32(w8w9), vget_high_f32(w16w17));
 
-                            let u1 = fcma_complex_f32(
+                            let u1 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + tenth..).as_ptr().cast()),
                                 ww0,
                             );
-                            let u2 = fcma_complex_f32(
+                            let u2 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
                                 ww1,
                             );
-                            let u3 = fcma_complex_f32(
+                            let u3 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
                                 ww2,
                             );
-                            let u4 = fcma_complex_f32(
+                            let u4 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
                                 ww3,
                             );
-                            let u5 = fcma_complex_f32(
+                            let u5 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
                                 ww4,
                             );
-                            let u6 = fcma_complex_f32(
+                            let u6 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
                                 ww5,
                             );
-                            let u7 = fcma_complex_f32(
+                            let u7 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
                                 ww6,
                             );
-                            let u8 = fcma_complex_f32(
+                            let u8 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
                                 ww7,
                             );
-                            let u9 = fcma_complex_f32(
+                            let u9 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
                                 ww8,
                             );
@@ -418,35 +418,35 @@ impl NeonFcmaRadix10<f32> {
                                 vld1q_f32(m_twiddles.get_unchecked(ti + 6..).as_ptr().cast());
                             let w8 = vld1_f32(m_twiddles.get_unchecked(ti + 8..).as_ptr().cast());
 
-                            let u1u2 = fcma_complex_f32(
+                            let u1u2 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + tenth..).as_ptr().cast()),
                                     vld1_f32(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
                                 ),
                                 w0w1,
                             );
-                            let u3u4 = fcma_complex_f32(
+                            let u3u4 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
                                     vld1_f32(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
                                 ),
                                 w2w3,
                             );
-                            let u5u6 = fcma_complex_f32(
+                            let u5u6 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
                                     vld1_f32(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
                                 ),
                                 w4w5,
                             );
-                            let u7u8 = fcma_complex_f32(
+                            let u7u8 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
                                     vld1_f32(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
                                 ),
                                 w6w7,
                             );
-                            let u9 = fcmah_complex_f32(
+                            let u9 = vfcmul_fcma_f32(
                                 vld1_f32(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
                                 w8,
                             );

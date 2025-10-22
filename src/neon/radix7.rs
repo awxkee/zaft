@@ -30,7 +30,7 @@ use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::util::{
-    mul_complex_f32, mul_complex_f64, v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32, vqtrnq_f32,
+    v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64, vh_rotate90_f32, vqtrnq_f32,
 };
 use crate::radix7::Radix7Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
@@ -135,27 +135,27 @@ impl FftExecutor<f64> for NeonRadix7<f64> {
                                 vld1q_f64(m_twiddles.get_unchecked(6 * j + 5..).as_ptr().cast());
 
                             let u0 = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
-                            let u1 = mul_complex_f64(
+                            let u1 = vfcmulq_f64(
                                 vld1q_f64(data.get_unchecked(j + seventh..).as_ptr().cast()),
                                 tw0,
                             );
-                            let u2 = mul_complex_f64(
+                            let u2 = vfcmulq_f64(
                                 vld1q_f64(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
                                 tw1,
                             );
-                            let u3 = mul_complex_f64(
+                            let u3 = vfcmulq_f64(
                                 vld1q_f64(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
                                 tw2,
                             );
-                            let u4 = mul_complex_f64(
+                            let u4 = vfcmulq_f64(
                                 vld1q_f64(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
                                 tw3,
                             );
-                            let u5 = mul_complex_f64(
+                            let u5 = vfcmulq_f64(
                                 vld1q_f64(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
                                 tw4,
                             );
-                            let u6 = mul_complex_f64(
+                            let u6 = vfcmulq_f64(
                                 vld1q_f64(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),
                                 tw5,
                             );
@@ -304,27 +304,27 @@ impl FftExecutor<f32> for NeonRadix7<f32> {
                             let (ww2, ww3) = vqtrnq_f32(w2w3, w8w9);
                             let (ww4, ww5) = vqtrnq_f32(w4w5, w10w11);
 
-                            let u1 = mul_complex_f32(
+                            let u1 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + seventh..).as_ptr().cast()),
                                 ww0,
                             );
-                            let u2 = mul_complex_f32(
+                            let u2 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
                                 ww1,
                             );
-                            let u3 = mul_complex_f32(
+                            let u3 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
                                 ww2,
                             );
-                            let u4 = mul_complex_f32(
+                            let u4 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
                                 ww3,
                             );
-                            let u5 = mul_complex_f32(
+                            let u5 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
                                 ww4,
                             );
-                            let u6 = mul_complex_f32(
+                            let u6 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),
                                 ww5,
                             );
@@ -414,21 +414,21 @@ impl FftExecutor<f32> for NeonRadix7<f32> {
                             let w4w5 =
                                 vld1q_f32(m_twiddles.get_unchecked(6 * j + 4..).as_ptr().cast());
 
-                            let u1u2 = mul_complex_f32(
+                            let u1u2 = vfcmulq_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + seventh..).as_ptr().cast()),
                                     vld1_f32(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
                                 ),
                                 w0w1,
                             );
-                            let u3u4 = mul_complex_f32(
+                            let u3u4 = vfcmulq_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
                                     vld1_f32(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
                                 ),
                                 w2w3,
                             );
-                            let u5u6 = mul_complex_f32(
+                            let u5u6 = vfcmulq_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
                                     vld1_f32(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),

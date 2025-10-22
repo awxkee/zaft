@@ -28,7 +28,7 @@
  */
 use crate::neon::butterflies::fast_bf9d::NeonFcmaFastButterfly9d;
 use crate::neon::butterflies::fast_bf9f::NeonFcmaFastButterfly9f;
-use crate::neon::util::{fcma_complex_f32, fcma_complex_f64, vdup_complex_f32, vdup_complex_f64};
+use crate::neon::util::{vdup_complex_f64, vdupq_complex_f32, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -137,22 +137,22 @@ impl NeonFcmaButterfly27d {
                 vst1q_f64(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), z0.1);
                 vst1q_f64(chunk.get_unchecked_mut(18..).as_mut_ptr().cast(), z0.2);
 
-                s1.1 = fcma_complex_f64(s1.1, self.twiddle1);
-                s1.2 = fcma_complex_f64(s1.2, self.twiddle2);
-                s1.3 = fcma_complex_f64(s1.3, self.twiddle3);
-                s1.4 = fcma_complex_f64(s1.4, self.twiddle4);
-                s1.5 = fcma_complex_f64(s1.5, self.twiddle5);
-                s1.6 = fcma_complex_f64(s1.6, self.twiddle6);
-                s1.7 = fcma_complex_f64(s1.7, self.twiddle7);
-                s1.8 = fcma_complex_f64(s1.8, self.twiddle8);
-                s2.1 = fcma_complex_f64(s2.1, self.twiddle2);
-                s2.2 = fcma_complex_f64(s2.2, self.twiddle4);
-                s2.3 = fcma_complex_f64(s2.3, self.twiddle6);
-                s2.4 = fcma_complex_f64(s2.4, self.twiddle8);
-                s2.5 = fcma_complex_f64(s2.5, self.twiddle9);
-                s2.6 = fcma_complex_f64(s2.6, self.twiddle10);
-                s2.7 = fcma_complex_f64(s2.7, self.twiddle11);
-                s2.8 = fcma_complex_f64(s2.8, self.twiddle12);
+                s1.1 = vfcmulq_fcma_f64(s1.1, self.twiddle1);
+                s1.2 = vfcmulq_fcma_f64(s1.2, self.twiddle2);
+                s1.3 = vfcmulq_fcma_f64(s1.3, self.twiddle3);
+                s1.4 = vfcmulq_fcma_f64(s1.4, self.twiddle4);
+                s1.5 = vfcmulq_fcma_f64(s1.5, self.twiddle5);
+                s1.6 = vfcmulq_fcma_f64(s1.6, self.twiddle6);
+                s1.7 = vfcmulq_fcma_f64(s1.7, self.twiddle7);
+                s1.8 = vfcmulq_fcma_f64(s1.8, self.twiddle8);
+                s2.1 = vfcmulq_fcma_f64(s2.1, self.twiddle2);
+                s2.2 = vfcmulq_fcma_f64(s2.2, self.twiddle4);
+                s2.3 = vfcmulq_fcma_f64(s2.3, self.twiddle6);
+                s2.4 = vfcmulq_fcma_f64(s2.4, self.twiddle8);
+                s2.5 = vfcmulq_fcma_f64(s2.5, self.twiddle9);
+                s2.6 = vfcmulq_fcma_f64(s2.6, self.twiddle10);
+                s2.7 = vfcmulq_fcma_f64(s2.7, self.twiddle11);
+                s2.8 = vfcmulq_fcma_f64(s2.8, self.twiddle12);
 
                 let z1 = self.bf9.bf3(s0.1, s1.1, s2.1);
                 vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), z1.0);
@@ -214,18 +214,18 @@ impl NeonFcmaButterfly27f {
         unsafe {
             Self {
                 direction: fft_direction,
-                twiddle1: vdup_complex_f32(compute_twiddle(1, 27, fft_direction)),
-                twiddle2: vdup_complex_f32(compute_twiddle(2, 27, fft_direction)),
-                twiddle3: vdup_complex_f32(compute_twiddle(3, 27, fft_direction)),
-                twiddle4: vdup_complex_f32(compute_twiddle(4, 27, fft_direction)),
-                twiddle5: vdup_complex_f32(compute_twiddle(5, 27, fft_direction)),
-                twiddle6: vdup_complex_f32(compute_twiddle(6, 27, fft_direction)),
-                twiddle7: vdup_complex_f32(compute_twiddle(7, 27, fft_direction)),
-                twiddle8: vdup_complex_f32(compute_twiddle(8, 27, fft_direction)),
-                twiddle9: vdup_complex_f32(compute_twiddle(10, 27, fft_direction)),
-                twiddle10: vdup_complex_f32(compute_twiddle(12, 27, fft_direction)),
-                twiddle11: vdup_complex_f32(compute_twiddle(14, 27, fft_direction)),
-                twiddle12: vdup_complex_f32(compute_twiddle(16, 27, fft_direction)),
+                twiddle1: vdupq_complex_f32(compute_twiddle(1, 27, fft_direction)),
+                twiddle2: vdupq_complex_f32(compute_twiddle(2, 27, fft_direction)),
+                twiddle3: vdupq_complex_f32(compute_twiddle(3, 27, fft_direction)),
+                twiddle4: vdupq_complex_f32(compute_twiddle(4, 27, fft_direction)),
+                twiddle5: vdupq_complex_f32(compute_twiddle(5, 27, fft_direction)),
+                twiddle6: vdupq_complex_f32(compute_twiddle(6, 27, fft_direction)),
+                twiddle7: vdupq_complex_f32(compute_twiddle(7, 27, fft_direction)),
+                twiddle8: vdupq_complex_f32(compute_twiddle(8, 27, fft_direction)),
+                twiddle9: vdupq_complex_f32(compute_twiddle(10, 27, fft_direction)),
+                twiddle10: vdupq_complex_f32(compute_twiddle(12, 27, fft_direction)),
+                twiddle11: vdupq_complex_f32(compute_twiddle(14, 27, fft_direction)),
+                twiddle12: vdupq_complex_f32(compute_twiddle(16, 27, fft_direction)),
                 bf9: NeonFcmaFastButterfly9f::new(fft_direction),
             }
         }
@@ -305,26 +305,26 @@ impl NeonFcmaButterfly27f {
                     u26,
                 );
 
-                let s1_1xs1_2 = fcma_complex_f32(
+                let s1_1xs1_2 = vfcmulq_fcma_f32(
                     vcombine_f32(vget_high_f32(s0s1.1), vget_high_f32(s0s1.2)),
                     tw1,
                 );
-                let s1_3xs1_4 = fcma_complex_f32(
+                let s1_3xs1_4 = vfcmulq_fcma_f32(
                     vcombine_f32(vget_high_f32(s0s1.3), vget_high_f32(s0s1.4)),
                     tw2,
                 );
-                let s1_5xs1_6 = fcma_complex_f32(
+                let s1_5xs1_6 = vfcmulq_fcma_f32(
                     vcombine_f32(vget_high_f32(s0s1.5), vget_high_f32(s0s1.6)),
                     tw3,
                 );
-                let s1_7xs1_8 = fcma_complex_f32(
+                let s1_7xs1_8 = vfcmulq_fcma_f32(
                     vcombine_f32(vget_high_f32(s0s1.7), vget_high_f32(s0s1.8)),
                     tw4,
                 );
-                let s2_1xs2_2 = fcma_complex_f32(vcombine_f32(s2.1, s2.2), tw5);
-                let s2_3xs2_4 = fcma_complex_f32(vcombine_f32(s2.3, s2.4), tw6);
-                let s2_5xs2_6 = fcma_complex_f32(vcombine_f32(s2.5, s2.6), tw7);
-                let s2_7xs2_8 = fcma_complex_f32(vcombine_f32(s2.7, s2.8), tw8);
+                let s2_1xs2_2 = vfcmulq_fcma_f32(vcombine_f32(s2.1, s2.2), tw5);
+                let s2_3xs2_4 = vfcmulq_fcma_f32(vcombine_f32(s2.3, s2.4), tw6);
+                let s2_5xs2_6 = vfcmulq_fcma_f32(vcombine_f32(s2.5, s2.6), tw7);
+                let s2_7xs2_8 = vfcmulq_fcma_f32(vcombine_f32(s2.7, s2.8), tw8);
 
                 let z0 = self
                     .bf9

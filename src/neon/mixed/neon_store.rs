@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::util::{mul_complex_f32, mul_complex_f64, mulh_complex_f32};
+use crate::neon::util::{vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
@@ -83,7 +83,7 @@ impl NeonStoreD {
     pub(crate) fn mul_by_complex(self, other: NeonStoreD) -> Self {
         unsafe {
             NeonStoreD {
-                v: mul_complex_f64(self.v, other.v),
+                v: vfcmulq_f64(self.v, other.v),
             }
         }
     }
@@ -140,7 +140,7 @@ impl NeonStoreF {
     pub(crate) fn mul_by_complex(self, other: NeonStoreF) -> Self {
         unsafe {
             NeonStoreF {
-                v: mul_complex_f32(self.v, other.v),
+                v: vfcmulq_f32(self.v, other.v),
             }
         }
     }
@@ -197,7 +197,7 @@ impl NeonStoreFh {
     pub(crate) fn mul_by_complex(self, other: NeonStoreFh) -> Self {
         unsafe {
             NeonStoreFh {
-                v: mulh_complex_f32(self.v, other.v),
+                v: vfcmul_f32(self.v, other.v),
             }
         }
     }

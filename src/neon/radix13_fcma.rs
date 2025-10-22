@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::util::{fcma_complex_f32, fcma_complex_f64, vqtrnq_f32};
+use crate::neon::util::{vfcmulq_fcma_f32, vfcmulq_fcma_f64, vqtrnq_f32};
 use crate::radix13::Radix13Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
@@ -163,55 +163,55 @@ impl NeonFcmaRadix13<f64> {
                                 vld1q_f64(m_twiddles.get_unchecked(12 * j + 11..).as_ptr().cast());
 
                             let u0 = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
-                            let u1 = fcma_complex_f64(
+                            let u1 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + thirteenth..).as_ptr().cast()),
                                 tw0,
                             );
-                            let u2 = fcma_complex_f64(
+                            let u2 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 2 * thirteenth..).as_ptr().cast()),
                                 tw1,
                             );
-                            let u3 = fcma_complex_f64(
+                            let u3 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 3 * thirteenth..).as_ptr().cast()),
                                 tw2,
                             );
-                            let u4 = fcma_complex_f64(
+                            let u4 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 4 * thirteenth..).as_ptr().cast()),
                                 tw3,
                             );
-                            let u5 = fcma_complex_f64(
+                            let u5 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 5 * thirteenth..).as_ptr().cast()),
                                 tw4,
                             );
-                            let u6 = fcma_complex_f64(
+                            let u6 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 6 * thirteenth..).as_ptr().cast()),
                                 tw5,
                             );
-                            let u7 = fcma_complex_f64(
+                            let u7 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 7 * thirteenth..).as_ptr().cast()),
                                 tw6,
                             );
-                            let u8 = fcma_complex_f64(
+                            let u8 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 8 * thirteenth..).as_ptr().cast()),
                                 tw7,
                             );
-                            let u9 = fcma_complex_f64(
+                            let u9 = vfcmulq_fcma_f64(
                                 vld1q_f64(data.get_unchecked(j + 9 * thirteenth..).as_ptr().cast()),
                                 tw8,
                             );
-                            let u10 = fcma_complex_f64(
+                            let u10 = vfcmulq_fcma_f64(
                                 vld1q_f64(
                                     data.get_unchecked(j + 10 * thirteenth..).as_ptr().cast(),
                                 ),
                                 tw9,
                             );
-                            let u11 = fcma_complex_f64(
+                            let u11 = vfcmulq_fcma_f64(
                                 vld1q_f64(
                                     data.get_unchecked(j + 11 * thirteenth..).as_ptr().cast(),
                                 ),
                                 tw10,
                             );
-                            let u12 = fcma_complex_f64(
+                            let u12 = vfcmulq_fcma_f64(
                                 vld1q_f64(
                                     data.get_unchecked(j + 12 * thirteenth..).as_ptr().cast(),
                                 ),
@@ -487,55 +487,55 @@ impl NeonFcmaRadix13<f32> {
                             let (ww8, ww9) = vqtrnq_f32(w8w9, w20w21);
                             let (ww10, ww11) = vqtrnq_f32(w10w11, w22w23);
 
-                            let u1 = fcma_complex_f32(
+                            let u1 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + thirteenth..).as_ptr().cast()),
                                 ww0,
                             );
-                            let u2 = fcma_complex_f32(
+                            let u2 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * thirteenth..).as_ptr().cast()),
                                 ww1,
                             );
-                            let u3 = fcma_complex_f32(
+                            let u3 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * thirteenth..).as_ptr().cast()),
                                 ww2,
                             );
-                            let u4 = fcma_complex_f32(
+                            let u4 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 4 * thirteenth..).as_ptr().cast()),
                                 ww3,
                             );
-                            let u5 = fcma_complex_f32(
+                            let u5 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 5 * thirteenth..).as_ptr().cast()),
                                 ww4,
                             );
-                            let u6 = fcma_complex_f32(
+                            let u6 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 6 * thirteenth..).as_ptr().cast()),
                                 ww5,
                             );
-                            let u7 = fcma_complex_f32(
+                            let u7 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 7 * thirteenth..).as_ptr().cast()),
                                 ww6,
                             );
-                            let u8 = fcma_complex_f32(
+                            let u8 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 8 * thirteenth..).as_ptr().cast()),
                                 ww7,
                             );
-                            let u9 = fcma_complex_f32(
+                            let u9 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 9 * thirteenth..).as_ptr().cast()),
                                 ww8,
                             );
-                            let u10 = fcma_complex_f32(
+                            let u10 = vfcmulq_fcma_f32(
                                 vld1q_f32(
                                     data.get_unchecked(j + 10 * thirteenth..).as_ptr().cast(),
                                 ),
                                 ww9,
                             );
-                            let u11 = fcma_complex_f32(
+                            let u11 = vfcmulq_fcma_f32(
                                 vld1q_f32(
                                     data.get_unchecked(j + 11 * thirteenth..).as_ptr().cast(),
                                 ),
                                 ww10,
                             );
-                            let u12 = fcma_complex_f32(
+                            let u12 = vfcmulq_fcma_f32(
                                 vld1q_f32(
                                     data.get_unchecked(j + 12 * thirteenth..).as_ptr().cast(),
                                 ),
@@ -740,7 +740,7 @@ impl NeonFcmaRadix13<f32> {
                             let w10w11 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 10..).as_ptr().cast());
 
-                            let u1u2 = fcma_complex_f32(
+                            let u1u2 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + thirteenth..).as_ptr().cast()),
                                     vld1_f32(
@@ -749,7 +749,7 @@ impl NeonFcmaRadix13<f32> {
                                 ),
                                 w0w1,
                             );
-                            let u3u4 = fcma_complex_f32(
+                            let u3u4 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(
                                         data.get_unchecked(j + 3 * thirteenth..).as_ptr().cast(),
@@ -760,7 +760,7 @@ impl NeonFcmaRadix13<f32> {
                                 ),
                                 w2w3,
                             );
-                            let u5u6 = fcma_complex_f32(
+                            let u5u6 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(
                                         data.get_unchecked(j + 5 * thirteenth..).as_ptr().cast(),
@@ -771,7 +771,7 @@ impl NeonFcmaRadix13<f32> {
                                 ),
                                 w4w5,
                             );
-                            let u7u8 = fcma_complex_f32(
+                            let u7u8 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(
                                         data.get_unchecked(j + 7 * thirteenth..).as_ptr().cast(),
@@ -782,7 +782,7 @@ impl NeonFcmaRadix13<f32> {
                                 ),
                                 w6w7,
                             );
-                            let u9u10 = fcma_complex_f32(
+                            let u9u10 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(
                                         data.get_unchecked(j + 9 * thirteenth..).as_ptr().cast(),
@@ -793,7 +793,7 @@ impl NeonFcmaRadix13<f32> {
                                 ),
                                 w8w9,
                             );
-                            let u11u12 = fcma_complex_f32(
+                            let u11u12 = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(
                                         data.get_unchecked(j + 11 * thirteenth..).as_ptr().cast(),

@@ -29,8 +29,8 @@
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::butterflies::fast_bf8::NeonFastButterfly8;
 use crate::neon::util::{
-    fcma_complex_f32, fcma_complex_f64, fcma_mul_a_to_b_conj, fcma_mul_a_to_b_conj_f32,
-    fcma_mulh_a_to_b_conj_f32, fcmah_complex_f32, vqtrnq_f32,
+    vfcmul_b_conj_fcma_f32, vfcmul_fcma_f32, vfcmulq_b_conj_fcma_f32, vfcmulq_conj_b_fcma_f64,
+    vfcmulq_fcma_f32, vfcmulq_fcma_f64, vqtrnq_f32,
 };
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
@@ -123,14 +123,14 @@ impl NeonFcmaButterfly16<f64> {
                 let mut odds_1 = NeonButterfly::bf4_f64_forward(u1, u5, u9, u13);
                 let mut odds_2 = NeonButterfly::bf4_f64_forward(u15, u3, u7, u11);
 
-                odds_1.1 = fcma_complex_f64(odds_1.1, tw1);
-                odds_2.1 = fcma_mul_a_to_b_conj(odds_2.1, tw1);
+                odds_1.1 = vfcmulq_fcma_f64(odds_1.1, tw1);
+                odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, tw1);
 
-                odds_1.2 = fcma_complex_f64(odds_1.2, tw2);
-                odds_2.2 = fcma_mul_a_to_b_conj(odds_2.2, tw2);
+                odds_1.2 = vfcmulq_fcma_f64(odds_1.2, tw2);
+                odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, tw2);
 
-                odds_1.3 = fcma_complex_f64(odds_1.3, tw3);
-                odds_2.3 = fcma_mul_a_to_b_conj(odds_2.3, tw3);
+                odds_1.3 = vfcmulq_fcma_f64(odds_1.3, tw3);
+                odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, tw3);
 
                 // step 4: cross FFTs
                 let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
@@ -262,14 +262,14 @@ impl NeonFcmaButterfly16<f64> {
                 let mut odds_1 = NeonButterfly::bf4_f64_backward(u1, u5, u9, u13);
                 let mut odds_2 = NeonButterfly::bf4_f64_backward(u15, u3, u7, u11);
 
-                odds_1.1 = fcma_complex_f64(odds_1.1, tw1);
-                odds_2.1 = fcma_mul_a_to_b_conj(odds_2.1, tw1);
+                odds_1.1 = vfcmulq_fcma_f64(odds_1.1, tw1);
+                odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, tw1);
 
-                odds_1.2 = fcma_complex_f64(odds_1.2, tw2);
-                odds_2.2 = fcma_mul_a_to_b_conj(odds_2.2, tw2);
+                odds_1.2 = vfcmulq_fcma_f64(odds_1.2, tw2);
+                odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, tw2);
 
-                odds_1.3 = fcma_complex_f64(odds_1.3, tw3);
-                odds_2.3 = fcma_mul_a_to_b_conj(odds_2.3, tw3);
+                odds_1.3 = vfcmulq_fcma_f64(odds_1.3, tw3);
+                odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, tw3);
 
                 // step 4: cross FFTs
                 let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
@@ -432,14 +432,14 @@ impl NeonFcmaButterfly16<f32> {
                 let mut odds_1 = NeonButterfly::bf4_forward_f32(u1, u5, u9, u13);
                 let mut odds_2 = NeonButterfly::bf4_forward_f32(u15, u3, u7, u11);
 
-                odds_1.1 = fcma_complex_f32(odds_1.1, tw1);
-                odds_2.1 = fcma_mul_a_to_b_conj_f32(odds_2.1, tw1);
+                odds_1.1 = vfcmulq_fcma_f32(odds_1.1, tw1);
+                odds_2.1 = vfcmulq_b_conj_fcma_f32(odds_2.1, tw1);
 
-                odds_1.2 = fcma_complex_f32(odds_1.2, tw2);
-                odds_2.2 = fcma_mul_a_to_b_conj_f32(odds_2.2, tw2);
+                odds_1.2 = vfcmulq_fcma_f32(odds_1.2, tw2);
+                odds_2.2 = vfcmulq_b_conj_fcma_f32(odds_2.2, tw2);
 
-                odds_1.3 = fcma_complex_f32(odds_1.3, tw3);
-                odds_2.3 = fcma_mul_a_to_b_conj_f32(odds_2.3, tw3);
+                odds_1.3 = vfcmulq_fcma_f32(odds_1.3, tw3);
+                odds_2.3 = vfcmulq_b_conj_fcma_f32(odds_2.3, tw3);
 
                 // step 4: cross FFTs
                 let (o01, o02) = NeonButterfly::butterfly2_f32(odds_1.0, odds_2.0);
@@ -539,12 +539,12 @@ impl NeonFcmaButterfly16<f32> {
                 let mut odds_1 = NeonButterfly::bf4h_forward_f32(u1, u5, u9, u13);
                 let mut odds_2 = NeonButterfly::bf4h_forward_f32(u15, u3, u7, u11);
 
-                let o1 = fcma_complex_f32(
+                let o1 = vfcmulq_fcma_f32(
                     vcombine_f32(odds_1.1, odds_1.2),
                     vcombine_f32(vget_low_f32(tw1), vget_low_f32(tw2)),
                 );
 
-                let o2 = fcma_mul_a_to_b_conj_f32(
+                let o2 = vfcmulq_b_conj_fcma_f32(
                     vcombine_f32(odds_2.1, odds_2.2),
                     vcombine_f32(vget_low_f32(tw1), vget_low_f32(tw2)),
                 );
@@ -555,8 +555,8 @@ impl NeonFcmaButterfly16<f32> {
                 odds_1.2 = vget_high_f32(o1);
                 odds_2.2 = vget_high_f32(o2);
 
-                odds_1.3 = fcmah_complex_f32(odds_1.3, vget_low_f32(tw3));
-                odds_2.3 = fcma_mulh_a_to_b_conj_f32(odds_2.3, vget_low_f32(tw3));
+                odds_1.3 = vfcmul_fcma_f32(odds_1.3, vget_low_f32(tw3));
+                odds_2.3 = vfcmul_b_conj_fcma_f32(odds_2.3, vget_low_f32(tw3));
 
                 // step 4: cross FFTs
                 let (o01, o02) = NeonButterfly::butterfly2h_f32(odds_1.0, odds_2.0);
@@ -682,14 +682,14 @@ impl NeonFcmaButterfly16<f32> {
                 let mut odds_1 = NeonButterfly::bf4_backward_f32(u1, u5, u9, u13);
                 let mut odds_2 = NeonButterfly::bf4_backward_f32(u15, u3, u7, u11);
 
-                odds_1.1 = fcma_complex_f32(odds_1.1, tw1);
-                odds_2.1 = fcma_mul_a_to_b_conj_f32(odds_2.1, tw1);
+                odds_1.1 = vfcmulq_fcma_f32(odds_1.1, tw1);
+                odds_2.1 = vfcmulq_b_conj_fcma_f32(odds_2.1, tw1);
 
-                odds_1.2 = fcma_complex_f32(odds_1.2, tw2);
-                odds_2.2 = fcma_mul_a_to_b_conj_f32(odds_2.2, tw2);
+                odds_1.2 = vfcmulq_fcma_f32(odds_1.2, tw2);
+                odds_2.2 = vfcmulq_b_conj_fcma_f32(odds_2.2, tw2);
 
-                odds_1.3 = fcma_complex_f32(odds_1.3, tw3);
-                odds_2.3 = fcma_mul_a_to_b_conj_f32(odds_2.3, tw3);
+                odds_1.3 = vfcmulq_fcma_f32(odds_1.3, tw3);
+                odds_2.3 = vfcmulq_b_conj_fcma_f32(odds_2.3, tw3);
 
                 // step 4: cross FFTs
                 let (o01, o02) = NeonButterfly::butterfly2_f32(odds_1.0, odds_2.0);
@@ -789,12 +789,12 @@ impl NeonFcmaButterfly16<f32> {
                 let mut odds_1 = NeonButterfly::bf4h_backward_f32(u1, u5, u9, u13);
                 let mut odds_2 = NeonButterfly::bf4h_backward_f32(u15, u3, u7, u11);
 
-                let o1 = fcma_complex_f32(
+                let o1 = vfcmulq_fcma_f32(
                     vcombine_f32(odds_1.1, odds_1.2),
                     vcombine_f32(vget_low_f32(tw1), vget_low_f32(tw2)),
                 );
 
-                let o2 = fcma_mul_a_to_b_conj_f32(
+                let o2 = vfcmulq_b_conj_fcma_f32(
                     vcombine_f32(odds_2.1, odds_2.2),
                     vcombine_f32(vget_low_f32(tw1), vget_low_f32(tw2)),
                 );
@@ -805,8 +805,8 @@ impl NeonFcmaButterfly16<f32> {
                 odds_1.2 = vget_high_f32(o1);
                 odds_2.2 = vget_high_f32(o2);
 
-                odds_1.3 = fcmah_complex_f32(odds_1.3, vget_low_f32(tw3));
-                odds_2.3 = fcma_mulh_a_to_b_conj_f32(odds_2.3, vget_low_f32(tw3));
+                odds_1.3 = vfcmul_fcma_f32(odds_1.3, vget_low_f32(tw3));
+                odds_2.3 = vfcmul_b_conj_fcma_f32(odds_2.3, vget_low_f32(tw3));
 
                 // step 4: cross FFTs
                 let (o01, o02) = NeonButterfly::butterfly2h_f32(odds_1.0, odds_2.0);

@@ -27,9 +27,9 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::factory::AlgorithmFactory;
-use crate::neon::util::fcma_complex_f32;
-use crate::neon::util::fcma_complex_f64;
-use crate::neon::util::fcmah_complex_f32;
+use crate::neon::util::vfcmul_fcma_f32;
+use crate::neon::util::vfcmulq_fcma_f32;
+use crate::neon::util::vfcmulq_fcma_f64;
 use crate::radix4::Radix4Twiddles;
 use crate::util::bitreversed_transpose;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -57,7 +57,7 @@ impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> NeonFcmaRadix4<T
             3 => T::butterfly8(fft_direction)?,
             _ => {
                 if exponent % 2 == 1 {
-                    T::butterfly8(fft_direction)?
+                    T::butterfly32(fft_direction)?
                 } else {
                     T::butterfly16(fft_direction)?
                 }
@@ -109,11 +109,11 @@ impl NeonFcmaRadix4<f64> {
                         for data in chunk.chunks_exact_mut(len) {
                             for j in 0..quarter {
                                 let a = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
-                                let b = fcma_complex_f64(
+                                let b = vfcmulq_fcma_f64(
                                     vld1q_f64(data.get_unchecked(j + quarter..).as_ptr().cast()),
                                     vld1q_f64(m_twiddles.get_unchecked(3 * j..).as_ptr().cast()),
                                 );
-                                let c = fcma_complex_f64(
+                                let c = vfcmulq_fcma_f64(
                                     vld1q_f64(
                                         data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
                                     ),
@@ -121,7 +121,7 @@ impl NeonFcmaRadix4<f64> {
                                         m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
                                     ),
                                 );
-                                let d = fcma_complex_f64(
+                                let d = vfcmulq_fcma_f64(
                                     vld1q_f64(
                                         data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
                                     ),
@@ -162,11 +162,11 @@ impl NeonFcmaRadix4<f64> {
                         for data in chunk.chunks_exact_mut(len) {
                             for j in 0..quarter {
                                 let a = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
-                                let b = fcma_complex_f64(
+                                let b = vfcmulq_fcma_f64(
                                     vld1q_f64(data.get_unchecked(j + quarter..).as_ptr().cast()),
                                     vld1q_f64(m_twiddles.get_unchecked(3 * j..).as_ptr().cast()),
                                 );
-                                let c = fcma_complex_f64(
+                                let c = vfcmulq_fcma_f64(
                                     vld1q_f64(
                                         data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
                                     ),
@@ -174,7 +174,7 @@ impl NeonFcmaRadix4<f64> {
                                         m_twiddles.get_unchecked(3 * j + 1..).as_ptr().cast(),
                                     ),
                                 );
-                                let d = fcma_complex_f64(
+                                let d = vfcmulq_fcma_f64(
                                     vld1q_f64(
                                         data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
                                     ),
@@ -281,15 +281,15 @@ impl NeonFcmaRadix4<f32> {
                             let tw1 =
                                 vld1q_f32(m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast());
 
-                            let b = fcma_complex_f32(
+                            let b = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + quarter..).as_ptr().cast()),
                                 vcombine_f32(vget_low_f32(tw0), vget_low_f32(tw1)),
                             );
-                            let c = fcma_complex_f32(
+                            let c = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
                                 vcombine_f32(vget_high_f32(tw0), vget_high_f32(tw1)),
                             );
-                            let d = fcma_complex_f32(
+                            let d = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
                                 vcombine_f32(
                                     vld1_f32(m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast()),
@@ -338,14 +338,14 @@ impl NeonFcmaRadix4<f32> {
 
                             let tw = vld1q_f32(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
 
-                            let bc = fcma_complex_f32(
+                            let bc = vfcmulq_fcma_f32(
                                 vcombine_f32(
                                     vld1_f32(data.get_unchecked(j + quarter..).as_ptr().cast()),
                                     vld1_f32(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
                                 ),
                                 tw,
                             );
-                            let d = fcmah_complex_f32(
+                            let d = vfcmul_fcma_f32(
                                 vld1_f32(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
                                 vld1_f32(m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast()),
                             );

@@ -87,10 +87,10 @@ impl ColumnButterfly9d {
                 self.tw3_im,
             );
 
-            u4 = mul_complex_f64(u4, self.tw1);
-            u7 = mul_complex_f64(u7, self.tw2);
-            u5 = mul_complex_f64(u5, self.tw2);
-            u8 = mul_complex_f64(u8, self.tw4);
+            u4 = vfcmulq_f64(u4, self.tw1);
+            u7 = vfcmulq_f64(u7, self.tw2);
+            u5 = vfcmulq_f64(u5, self.tw2);
+            u8 = vfcmulq_f64(u8, self.tw4);
 
             let (y0, y3, y6) = NeonButterfly::butterfly3_f64(u0, u1, u2, self.tw3_re, self.tw3_im);
             let (y1, y4, y7) = NeonButterfly::butterfly3_f64(u3, u4, u5, self.tw3_re, self.tw3_im);
@@ -167,10 +167,10 @@ impl ColumnFcmaButterfly9d {
                 self.tw3_im,
             );
 
-            u4 = fcma_complex_f64(u4, self.tw1);
-            u7 = fcma_complex_f64(u7, self.tw2);
-            u5 = fcma_complex_f64(u5, self.tw2);
-            u8 = fcma_complex_f64(u8, self.tw4);
+            u4 = vfcmulq_fcma_f64(u4, self.tw1);
+            u7 = vfcmulq_fcma_f64(u7, self.tw2);
+            u5 = vfcmulq_fcma_f64(u5, self.tw2);
+            u8 = vfcmulq_fcma_f64(u8, self.tw4);
 
             let (y0, y3, y6) = NeonButterfly::butterfly3_f64(u0, u1, u2, self.tw3_re, self.tw3_im);
             let (y1, y4, y7) = NeonButterfly::butterfly3_f64(u3, u4, u5, self.tw3_re, self.tw3_im);
@@ -244,10 +244,10 @@ impl ColumnButterfly9f {
                 self.tw3_im,
             );
 
-            u4 = mul_complex_f32(u4, self.tw1);
-            u7 = mul_complex_f32(u7, self.tw2);
-            u5 = mul_complex_f32(u5, self.tw2);
-            u8 = mul_complex_f32(u8, self.tw4);
+            u4 = vfcmulq_f32(u4, self.tw1);
+            u7 = vfcmulq_f32(u7, self.tw2);
+            u5 = vfcmulq_f32(u5, self.tw2);
+            u8 = vfcmulq_f32(u8, self.tw4);
 
             let (y0, y3, y6) = NeonButterfly::butterfly3_f32(u0, u1, u2, self.tw3_re, self.tw3_im);
             let (y1, y4, y7) = NeonButterfly::butterfly3_f32(u3, u4, u5, self.tw3_re, self.tw3_im);
@@ -291,11 +291,11 @@ impl ColumnButterfly9f {
                 vget_low_f32(self.tw3_im),
             );
 
-            let hu4u7 = mul_complex_f32(
+            let hu4u7 = vfcmulq_f32(
                 vcombine_f32(u4, u7),
                 vcombine_f32(vget_low_f32(self.tw1), vget_low_f32(self.tw2)),
             );
-            let hu5u8 = mul_complex_f32(
+            let hu5u8 = vfcmulq_f32(
                 vcombine_f32(u5, u8),
                 vcombine_f32(vget_low_f32(self.tw2), vget_low_f32(self.tw4)),
             );
@@ -397,10 +397,10 @@ impl ColumnFcmaButterfly9f {
                 self.tw3_im,
             );
 
-            u4 = fcma_complex_f32(u4, self.tw1);
-            u7 = fcma_complex_f32(u7, self.tw2);
-            u5 = fcma_complex_f32(u5, self.tw2);
-            u8 = fcma_complex_f32(u8, self.tw4);
+            u4 = vfcmulq_fcma_f32(u4, self.tw1);
+            u7 = vfcmulq_fcma_f32(u7, self.tw2);
+            u5 = vfcmulq_fcma_f32(u5, self.tw2);
+            u8 = vfcmulq_fcma_f32(u8, self.tw4);
 
             let (y0, y3, y6) = NeonButterfly::butterfly3_f32(u0, u1, u2, self.tw3_re, self.tw3_im);
             let (y1, y4, y7) = NeonButterfly::butterfly3_f32(u3, u4, u5, self.tw3_re, self.tw3_im);
@@ -445,11 +445,11 @@ impl ColumnFcmaButterfly9f {
                 vget_low_f32(self.tw3_im),
             );
 
-            let hu4u7 = fcma_complex_f32(
+            let hu4u7 = vfcmulq_fcma_f32(
                 vcombine_f32(u4, u7),
                 vcombine_f32(vget_low_f32(self.tw1), vget_low_f32(self.tw2)),
             );
-            let hu5u8 = fcma_complex_f32(
+            let hu5u8 = vfcmulq_fcma_f32(
                 vcombine_f32(u5, u8),
                 vcombine_f32(vget_low_f32(self.tw2), vget_low_f32(self.tw4)),
             );

@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::neon::util::mul_complex_f64;
+use crate::neon::util::vfcmulq_f64;
 use crate::util::compute_twiddle;
 use std::arch::aarch64::*;
 
@@ -112,10 +112,10 @@ impl NeonFastButterfly9d {
             let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
             let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
 
-            u4 = mul_complex_f64(u4, self.twiddle1);
-            u7 = mul_complex_f64(u7, self.twiddle2);
-            u5 = mul_complex_f64(u5, self.twiddle2);
-            u8 = mul_complex_f64(u8, self.twiddle4);
+            u4 = vfcmulq_f64(u4, self.twiddle1);
+            u7 = vfcmulq_f64(u7, self.twiddle2);
+            u5 = vfcmulq_f64(u5, self.twiddle2);
+            u8 = vfcmulq_f64(u8, self.twiddle4);
 
             let (y0, y3, y6) = self.bf3(u0, u1, u2);
             let (y1, y4, y7) = self.bf3(u3, u4, u5);
@@ -209,11 +209,11 @@ impl NeonFcmaFastButterfly9d {
             let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
             let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
 
-            use crate::neon::util::fcma_complex_f64;
-            u4 = fcma_complex_f64(u4, self.twiddle1);
-            u7 = fcma_complex_f64(u7, self.twiddle2);
-            u5 = fcma_complex_f64(u5, self.twiddle2);
-            u8 = fcma_complex_f64(u8, self.twiddle4);
+            use crate::neon::util::vfcmulq_fcma_f64;
+            u4 = vfcmulq_fcma_f64(u4, self.twiddle1);
+            u7 = vfcmulq_fcma_f64(u7, self.twiddle2);
+            u5 = vfcmulq_fcma_f64(u5, self.twiddle2);
+            u8 = vfcmulq_fcma_f64(u8, self.twiddle4);
 
             let (y0, y3, y6) = self.bf3(u0, u1, u2);
             let (y1, y4, y7) = self.bf3(u3, u4, u5);

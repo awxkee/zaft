@@ -372,7 +372,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| {
             plan.execute(&mut working).unwrap();
         })
-    });
+    });*/
 
     c.bench_function("rustfft power2", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power2.len());
@@ -436,7 +436,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| {
             plan.execute(&mut working).unwrap();
         })
-    });*/
+    });
 
     c.bench_function("rustfft power3", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power3.len());

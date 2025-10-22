@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::util::{fcma_complex_f32, fcma_complex_f64};
+use crate::neon::util::{vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -113,10 +113,10 @@ impl NeonFcmaButterfly9<f64> {
                 let (u2, mut u5, mut u8) =
                     NeonButterfly::butterfly3_f64(u2, u5, u8, tw3_re, tw3_im);
 
-                u4 = fcma_complex_f64(u4, tw1);
-                u7 = fcma_complex_f64(u7, tw2);
-                u5 = fcma_complex_f64(u5, tw2);
-                u8 = fcma_complex_f64(u8, tw4);
+                u4 = vfcmulq_fcma_f64(u4, tw1);
+                u7 = vfcmulq_fcma_f64(u7, tw2);
+                u5 = vfcmulq_fcma_f64(u5, tw2);
+                u8 = vfcmulq_fcma_f64(u8, tw4);
 
                 let (y0, y3, y6) = NeonButterfly::butterfly3_f64(u0, u1, u2, tw3_re, tw3_im);
                 let (y1, y4, y7) = NeonButterfly::butterfly3_f64(u3, u4, u5, tw3_re, tw3_im);
@@ -196,10 +196,10 @@ impl NeonFcmaButterfly9<f32> {
                 let (u2, mut u5, mut u8) =
                     NeonButterfly::butterfly3_f32(u2, u5, u8, tw3_re, tw3_im);
 
-                u4 = fcma_complex_f32(u4, tw1);
-                u7 = fcma_complex_f32(u7, tw2);
-                u5 = fcma_complex_f32(u5, tw2);
-                u8 = fcma_complex_f32(u8, tw4);
+                u4 = vfcmulq_fcma_f32(u4, tw1);
+                u7 = vfcmulq_fcma_f32(u7, tw2);
+                u5 = vfcmulq_fcma_f32(u5, tw2);
+                u8 = vfcmulq_fcma_f32(u8, tw4);
 
                 let (y0, y3, y6) = NeonButterfly::butterfly3_f32(u0, u1, u2, tw3_re, tw3_im);
                 let (y1, y4, y7) = NeonButterfly::butterfly3_f32(u3, u4, u5, tw3_re, tw3_im);
@@ -266,11 +266,11 @@ impl NeonFcmaButterfly9<f32> {
                     vget_low_f32(tw3_im),
                 );
 
-                let hu4u7 = fcma_complex_f32(
+                let hu4u7 = vfcmulq_fcma_f32(
                     vcombine_f32(u4, u7),
                     vcombine_f32(vget_low_f32(tw1), vget_low_f32(tw2)),
                 );
-                let hu5u8 = fcma_complex_f32(
+                let hu5u8 = vfcmulq_fcma_f32(
                     vcombine_f32(u5, u8),
                     vcombine_f32(vget_low_f32(tw2), vget_low_f32(tw4)),
                 );
