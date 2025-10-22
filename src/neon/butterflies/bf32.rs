@@ -401,10 +401,6 @@ impl FftExecutor<f32> for NeonButterfly32f {
                     vcombine_f32(vget_high_f32(u28u29), vget_high_f32(u26u27)), //u29,
                     self.bf16.rot,
                 );
-                // let mut odds2 =
-                //     self.bf16
-                //         .bf8
-                //         .exec(u31, u3, u7, u11, u15, u19, u23, u27, self.bf16.rot);
 
                 odds1_2.1 = vfcmulq_f32(odds1_2.1, self.twiddle1);
                 odds1_2.2 = vfcmulq_f32(odds1_2.2, self.twiddle2);
