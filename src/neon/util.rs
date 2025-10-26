@@ -26,7 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::traits::FftTrigonometry;
+use crate::util::compute_twiddle;
+use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
+use num_traits::{AsPrimitive, Float};
+use std::any::TypeId;
 use std::arch::aarch64::*;
 
 #[inline(always)]
@@ -268,6 +273,48 @@ pub(crate) unsafe fn vdupq_complex_f32(c: Complex<f32>) -> float32x4_t {
 #[inline(always)]
 pub(crate) unsafe fn vdup_complex_f32(c: Complex<f32>) -> float32x2_t {
     unsafe { vld1_f32([c.re, c.im].as_ptr().cast()) }
+}
+
+pub(crate) fn create_neon_twiddles<T: FftTrigonometry + 'static + Float + Sized, const N: usize>(
+    base: usize,
+    size: usize,
+    fft_direction: FftDirection,
+) -> Result<Vec<Complex<T>>, ZaftError>
+where
+    f64: AsPrimitive<T>,
+{
+    let mut twiddles = Vec::new();
+    twiddles
+        .try_reserve_exact(size - 1)
+        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+    let mut cross_fft_len = base;
+    while cross_fft_len < size {
+        let num_columns = cross_fft_len;
+        cross_fft_len *= N;
+
+        let mut i = 0usize;
+
+        if TypeId::of::<T>() == TypeId::of::<f32>() {
+            while i + 2 < num_columns {
+                for k in 1..N {
+                    let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle0);
+                    twiddles.push(twiddle1);
+                }
+                i += 2;
+            }
+        }
+
+        for i in i..num_columns {
+            for k in 1..N {
+                let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                twiddles.push(twiddle);
+            }
+        }
+    }
+    Ok(twiddles)
 }
 
 #[cfg(test)]

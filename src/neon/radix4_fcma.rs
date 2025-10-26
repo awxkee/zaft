@@ -27,13 +27,15 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::factory::AlgorithmFactory;
-use crate::neon::util::vfcmul_fcma_f32;
 use crate::neon::util::vfcmulq_fcma_f32;
 use crate::neon::util::vfcmulq_fcma_f64;
+use crate::neon::util::{create_neon_twiddles, vfcmul_fcma_f32};
 use crate::radix4::Radix4Twiddles;
+use crate::traits::FftTrigonometry;
 use crate::util::bitreversed_transpose;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
+use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 
 pub(crate) struct NeonFcmaRadix4<T> {
@@ -44,7 +46,11 @@ pub(crate) struct NeonFcmaRadix4<T> {
     base_fft: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> NeonFcmaRadix4<T> {
+impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + Float + 'static>
+    NeonFcmaRadix4<T>
+where
+    f64: AsPrimitive<T>,
+{
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<NeonFcmaRadix4<T>, ZaftError> {
         assert!(size.is_power_of_two(), "Input length must be a power of 2");
         // assert_eq!(size.trailing_zeros() % 2, 0, "Radix-4 requires power of 4");
@@ -64,7 +70,7 @@ impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> NeonFcmaRadix4<T
             }
         };
 
-        let twiddles = T::make_twiddles(base_fft.length(), size, fft_direction)?;
+        let twiddles = create_neon_twiddles::<T, 4>(base_fft.length(), size, fft_direction)?;
 
         Ok(NeonFcmaRadix4 {
             execution_length: size,
@@ -279,24 +285,21 @@ impl NeonFcmaRadix4<f32> {
 
                             let tw0 = vld1q_f32(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
                             let tw1 =
-                                vld1q_f32(m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast());
+                                vld1q_f32(m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast());
+                            let tw2 =
+                                vld1q_f32(m_twiddles.get_unchecked(3 * j + 4..).as_ptr().cast());
 
                             let b = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                                vcombine_f32(vget_low_f32(tw0), vget_low_f32(tw1)),
+                                tw0,
                             );
                             let c = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
-                                vcombine_f32(vget_high_f32(tw0), vget_high_f32(tw1)),
+                                tw1,
                             );
                             let d = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
-                                vcombine_f32(
-                                    vld1_f32(m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast()),
-                                    vld1_f32(
-                                        m_twiddles.get_unchecked(3 * (j + 1) + 2..).as_ptr().cast(),
-                                    ),
-                                ),
+                                tw2,
                             );
 
                             // radix-4 butterfly

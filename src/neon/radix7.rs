@@ -30,7 +30,7 @@ use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::util::{
-    v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64, vh_rotate90_f32, vqtrnq_f32,
+    create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64, vh_rotate90_f32,
 };
 use crate::radix7::Radix7Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
@@ -78,7 +78,7 @@ where
             "Input length must be a power of 7"
         );
 
-        let twiddles = T::make_twiddles_with_base(7, size, fft_direction)?;
+        let twiddles = create_neon_twiddles::<T, 7>(7, size, fft_direction)?;
 
         Ok(NeonRadix7 {
             execution_length: size,
@@ -288,45 +288,41 @@ impl FftExecutor<f32> for NeonRadix7<f32> {
                         while j + 2 < seventh {
                             let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
 
-                            let w0w1 = vld1q_f32(m_twiddles.get_unchecked(6 * j..).as_ptr().cast());
-                            let w2w3 =
+                            let tw0 = vld1q_f32(m_twiddles.get_unchecked(6 * j..).as_ptr().cast());
+                            let tw1 =
                                 vld1q_f32(m_twiddles.get_unchecked(6 * j + 2..).as_ptr().cast());
-                            let w4w5 =
+                            let tw2 =
                                 vld1q_f32(m_twiddles.get_unchecked(6 * j + 4..).as_ptr().cast());
-                            let w6w7 =
+                            let tw3 =
                                 vld1q_f32(m_twiddles.get_unchecked(6 * j + 6..).as_ptr().cast());
-                            let w8w9 =
+                            let tw4 =
                                 vld1q_f32(m_twiddles.get_unchecked(6 * j + 8..).as_ptr().cast());
-                            let w10w11 =
+                            let tw5 =
                                 vld1q_f32(m_twiddles.get_unchecked(6 * j + 10..).as_ptr().cast());
-
-                            let (ww0, ww1) = vqtrnq_f32(w0w1, w6w7);
-                            let (ww2, ww3) = vqtrnq_f32(w2w3, w8w9);
-                            let (ww4, ww5) = vqtrnq_f32(w4w5, w10w11);
 
                             let u1 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + seventh..).as_ptr().cast()),
-                                ww0,
+                                tw0,
                             );
                             let u2 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
-                                ww1,
+                                tw1,
                             );
                             let u3 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
-                                ww2,
+                                tw2,
                             );
                             let u4 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
-                                ww3,
+                                tw3,
                             );
                             let u5 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
-                                ww4,
+                                tw4,
                             );
                             let u6 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),
-                                ww5,
+                                tw5,
                             );
 
                             // Radix-7 butterfly

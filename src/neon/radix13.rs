@@ -30,7 +30,8 @@ use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::util::{
-    v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64, vh_rotate90_f32, vqtrnq_f32,
+    create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64,
+    vh_rotate90_f32,
 };
 use crate::radix13::Radix13Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
@@ -81,7 +82,7 @@ where
             "Input length must be a power of 13"
         );
 
-        let twiddles = T::make_twiddles_with_base(13, size, fft_direction)?;
+        let twiddles = create_neon_twiddles::<T, 13>(13, size, fft_direction)?;
 
         Ok(NeonRadix13 {
             execution_length: size,
@@ -441,91 +442,83 @@ impl FftExecutor<f32> for NeonRadix13<f32> {
                         while j + 2 < thirteenth {
                             let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
 
-                            let w0w1 =
-                                vld1q_f32(m_twiddles.get_unchecked(12 * j..).as_ptr().cast());
-                            let w2w3 =
+                            let tw0 = vld1q_f32(m_twiddles.get_unchecked(12 * j..).as_ptr().cast());
+                            let tw1 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 2..).as_ptr().cast());
-                            let w4w5 =
+                            let tw2 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 4..).as_ptr().cast());
-                            let w6w7 =
+                            let tw3 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 6..).as_ptr().cast());
-                            let w8w9 =
+                            let tw4 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 8..).as_ptr().cast());
-                            let w10w11 =
+                            let tw5 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 10..).as_ptr().cast());
-                            let w12w13 =
+                            let tw6 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 12..).as_ptr().cast());
-                            let w14w15 =
+                            let tw7 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 14..).as_ptr().cast());
-                            let w16w17 =
+                            let tw8 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 16..).as_ptr().cast());
-                            let w18w19 =
+                            let tw9 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 18..).as_ptr().cast());
-                            let w20w21 =
+                            let tw10 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 20..).as_ptr().cast());
-                            let w22w23 =
+                            let tw11 =
                                 vld1q_f32(m_twiddles.get_unchecked(12 * j + 22..).as_ptr().cast());
-
-                            let (ww0, ww1) = vqtrnq_f32(w0w1, w12w13);
-                            let (ww2, ww3) = vqtrnq_f32(w2w3, w14w15);
-                            let (ww4, ww5) = vqtrnq_f32(w4w5, w16w17);
-                            let (ww6, ww7) = vqtrnq_f32(w6w7, w18w19);
-                            let (ww8, ww9) = vqtrnq_f32(w8w9, w20w21);
-                            let (ww10, ww11) = vqtrnq_f32(w10w11, w22w23);
 
                             let u1 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + thirteenth..).as_ptr().cast()),
-                                ww0,
+                                tw0,
                             );
                             let u2 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * thirteenth..).as_ptr().cast()),
-                                ww1,
+                                tw1,
                             );
                             let u3 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * thirteenth..).as_ptr().cast()),
-                                ww2,
+                                tw2,
                             );
                             let u4 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 4 * thirteenth..).as_ptr().cast()),
-                                ww3,
+                                tw3,
                             );
                             let u5 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 5 * thirteenth..).as_ptr().cast()),
-                                ww4,
+                                tw4,
                             );
                             let u6 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 6 * thirteenth..).as_ptr().cast()),
-                                ww5,
+                                tw5,
                             );
                             let u7 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 7 * thirteenth..).as_ptr().cast()),
-                                ww6,
+                                tw6,
                             );
                             let u8 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 8 * thirteenth..).as_ptr().cast()),
-                                ww7,
+                                tw7,
                             );
                             let u9 = vfcmulq_f32(
                                 vld1q_f32(data.get_unchecked(j + 9 * thirteenth..).as_ptr().cast()),
-                                ww8,
+                                tw8,
                             );
                             let u10 = vfcmulq_f32(
                                 vld1q_f32(
                                     data.get_unchecked(j + 10 * thirteenth..).as_ptr().cast(),
                                 ),
-                                ww9,
+                                tw9,
                             );
                             let u11 = vfcmulq_f32(
                                 vld1q_f32(
                                     data.get_unchecked(j + 11 * thirteenth..).as_ptr().cast(),
                                 ),
-                                ww10,
+                                tw10,
                             );
                             let u12 = vfcmulq_f32(
                                 vld1q_f32(
                                     data.get_unchecked(j + 12 * thirteenth..).as_ptr().cast(),
                                 ),
-                                ww11,
+                                tw11,
                             );
 
                             // Radix-13 butterfly

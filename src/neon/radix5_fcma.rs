@@ -28,7 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
-use crate::neon::util::{vfcmulq_fcma_f32, vfcmulq_fcma_f64};
+use crate::neon::util::{create_neon_twiddles, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix5::Radix5Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
@@ -74,7 +74,7 @@ where
             "Input length must be a power of 5"
         );
 
-        let twiddles = T::make_twiddles_with_base(5, size, fft_direction)?;
+        let twiddles = create_neon_twiddles::<T, 5>(5, size, fft_direction)?;
 
         Ok(NeonFcmaRadix5 {
             execution_length: size,
@@ -246,28 +246,27 @@ impl NeonFcmaRadix5<f32> {
 
                             let tw0 = vld1q_f32(m_twiddles.get_unchecked(4 * j..).as_ptr().cast());
                             let tw1 =
-                                vld1q_f32(m_twiddles.get_unchecked(4 * (j + 1)..).as_ptr().cast());
-                            let tw2 =
                                 vld1q_f32(m_twiddles.get_unchecked(4 * j + 2..).as_ptr().cast());
-                            let tw3 = vld1q_f32(
-                                m_twiddles.get_unchecked(4 * (j + 1) + 2..).as_ptr().cast(),
-                            );
+                            let tw2 =
+                                vld1q_f32(m_twiddles.get_unchecked(4 * j + 4..).as_ptr().cast());
+                            let tw3 =
+                                vld1q_f32(m_twiddles.get_unchecked(4 * j + 6..).as_ptr().cast());
 
                             let u1 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + fifth..).as_ptr().cast()),
-                                vcombine_f32(vget_low_f32(tw0), vget_low_f32(tw1)),
+                                tw0,
                             );
                             let u2 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * fifth..).as_ptr().cast()),
-                                vcombine_f32(vget_high_f32(tw0), vget_high_f32(tw1)),
+                                tw1,
                             );
                             let u3 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * fifth..).as_ptr().cast()),
-                                vcombine_f32(vget_low_f32(tw2), vget_low_f32(tw3)),
+                                tw2,
                             );
                             let u4 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 4 * fifth..).as_ptr().cast()),
-                                vcombine_f32(vget_high_f32(tw2), vget_high_f32(tw3)),
+                                tw3,
                             );
 
                             // Radix-5 butterfly

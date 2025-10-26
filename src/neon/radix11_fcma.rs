@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::util::{vfcmulq_f64, vfcmulq_fcma_f32, vfcmulq_fcma_f64, vqtrnq_f32};
+use crate::neon::util::{create_neon_twiddles, vfcmulq_f64, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix11::Radix11Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
@@ -78,7 +78,7 @@ where
             "Input length must be a power of 11"
         );
 
-        let twiddles = T::make_twiddles_with_base(11, size, fft_direction)?;
+        let twiddles = create_neon_twiddles::<T, 11>(11, size, fft_direction)?;
 
         Ok(NeonFcmaRadix11 {
             execution_length: size,
@@ -396,72 +396,65 @@ impl NeonFcmaRadix11<f32> {
                         while j + 2 < eleventh {
                             let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
 
-                            let w0w1 =
-                                vld1q_f32(m_twiddles.get_unchecked(10 * j..).as_ptr().cast());
-                            let w2w3 =
+                            let tw0 = vld1q_f32(m_twiddles.get_unchecked(10 * j..).as_ptr().cast());
+                            let tw1 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 2..).as_ptr().cast());
-                            let w4w5 =
+                            let tw2 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 4..).as_ptr().cast());
-                            let w6w7 =
+                            let tw3 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 6..).as_ptr().cast());
-                            let w8w9 =
+                            let tw4 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 8..).as_ptr().cast());
-                            let w10w11 =
+                            let tw5 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 10..).as_ptr().cast());
-                            let w12w13 =
+                            let tw6 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 12..).as_ptr().cast());
-                            let w14w15 =
+                            let tw7 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 14..).as_ptr().cast());
-                            let w16w17 =
+                            let tw8 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 16..).as_ptr().cast());
-                            let w18w19 =
+                            let tw9 =
                                 vld1q_f32(m_twiddles.get_unchecked(10 * j + 18..).as_ptr().cast());
-
-                            let (ww0, ww1) = vqtrnq_f32(w0w1, w10w11);
-                            let (ww2, ww3) = vqtrnq_f32(w2w3, w12w13);
-                            let (ww4, ww5) = vqtrnq_f32(w4w5, w14w15);
-                            let (ww6, ww7) = vqtrnq_f32(w6w7, w16w17);
-                            let (ww8, ww9) = vqtrnq_f32(w8w9, w18w19);
 
                             let u1 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + eleventh..).as_ptr().cast()),
-                                ww0,
+                                tw0,
                             );
                             let u2 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 2 * eleventh..).as_ptr().cast()),
-                                ww1,
+                                tw1,
                             );
                             let u3 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 3 * eleventh..).as_ptr().cast()),
-                                ww2,
+                                tw2,
                             );
                             let u4 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 4 * eleventh..).as_ptr().cast()),
-                                ww3,
+                                tw3,
                             );
                             let u5 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 5 * eleventh..).as_ptr().cast()),
-                                ww4,
+                                tw4,
                             );
                             let u6 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 6 * eleventh..).as_ptr().cast()),
-                                ww5,
+                                tw5,
                             );
                             let u7 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 7 * eleventh..).as_ptr().cast()),
-                                ww6,
+                                tw6,
                             );
                             let u8 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 8 * eleventh..).as_ptr().cast()),
-                                ww7,
+                                tw7,
                             );
                             let u9 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 9 * eleventh..).as_ptr().cast()),
-                                ww8,
+                                tw8,
                             );
                             let u10 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + 10 * eleventh..).as_ptr().cast()),
-                                ww9,
+                                tw9,
                             );
 
                             // Radix-11 butterfly
