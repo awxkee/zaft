@@ -84,33 +84,40 @@ impl AvxFastButterfly9f {
 
             let mut u4u7u5u8 =
                 _mm256_create_ps(_mm_unpacklo_ps64(u4, u7), _mm_unpacklo_ps64(u5, u8));
+            let mut u4u7u5u8_hi =
+                _mm256_create_ps(_mm_unpackhi_ps64(u4, u7), _mm_unpackhi_ps64(u5, u8));
 
             u4u7u5u8 = _mm256_fcmul_ps(u4u7u5u8, self.tw1);
+            u4u7u5u8_hi = _mm256_fcmul_ps(u4u7u5u8_hi, self.tw1);
 
-            u4 = _mm256_castps256_ps128(u4u7u5u8);
+            u4 = _mm_unpacklo_ps64(
+                _mm256_castps256_ps128(u4u7u5u8),
+                _mm256_castps256_ps128(u4u7u5u8_hi),
+            );
             u7 = _mm_unpackhi_ps64(
                 _mm256_castps256_ps128(u4u7u5u8),
-                _mm256_castps256_ps128(u4u7u5u8),
+                _mm256_castps256_ps128(u4u7u5u8_hi),
             );
             let u5u8 = _mm256_extractf128_ps::<1>(u4u7u5u8);
-            u5 = u5u8;
-            u8 = _mm_unpackhi_ps64(u5u8, u5u8);
+            let u5u8_hi = _mm256_extractf128_ps::<1>(u4u7u5u8_hi);
+            u5 = _mm_unpacklo_ps64(u5u8, u5u8_hi);
+            u8 = _mm_unpackhi_ps64(u5u8, u5u8_hi);
 
-            let (y0y1, y3y4, y6y7) = self.bf3.exec_m128(
-                _mm_unpacklo_ps64(u0, u3),
-                _mm_unpacklo_ps64(u1, u4),
-                _mm_unpacklo_ps64(u2, u5),
+            let (y0y1, y3y4, y6y7) = self.bf3.exec(
+                _mm256_create_ps(u0, u3),
+                _mm256_create_ps(u1, u4),
+                _mm256_create_ps(u2, u5),
             );
             let (y2, y5, y8) = self.bf3.exec_m128(u6, u7, u8);
             (
-                y0y1,
-                _mm_unpackhi_ps64(y0y1, y0y1),
+                _mm256_castps256_ps128(y0y1),
+                _mm256_extractf128_ps::<1>(y0y1),
                 y2,
-                y3y4,
-                _mm_unpackhi_ps64(y3y4, y3y4),
+                _mm256_castps256_ps128(y3y4),
+                _mm256_extractf128_ps::<1>(y3y4),
                 y5,
-                y6y7,
-                _mm_unpackhi_ps64(y6y7, y6y7),
+                _mm256_castps256_ps128(y6y7),
+                _mm256_extractf128_ps::<1>(y6y7),
                 y8,
             )
         }

@@ -28,8 +28,8 @@
  */
 use crate::avx::butterflies::fast_bf9::AvxFastButterfly9f;
 use crate::avx::util::{
-    _m128s_load_f32x2, _mm_unpackhi_ps64, _mm_unpackhilo_ps64, _mm_unpacklo_ps64, _mm256_create_ps,
-    _mm256_fcmul_ps, _mm256_set4_complex,
+    _m128s_load_f32x2, _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpackhilo_ps64,
+    _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_set4_complex,
 };
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -154,19 +154,48 @@ impl AvxButterfly27f {
                     ),
                 );
 
-                let z0 = self.bf9.bf3.exec_m128(
-                    s0.0,
-                    s1s2.0,
-                    _mm_unpackhi_ps64(s1s2.0, s1s2.0),
-                );
-
                 _mm256_storeu_ps(chunk.as_mut_ptr().cast(), z0z1z2z3.0);
                 _mm256_storeu_ps(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), z0z1z2z3.1);
                 _mm256_storeu_ps(
                     chunk.get_unchecked_mut(18..).as_mut_ptr().cast(),
                     z0z1z2z3.2,
                 );
-                _mm_storeu_ps(chunk.as_mut_ptr().cast(), z0.0);
+
+                let s1s2_3_4_hi = _mm256_extractf128_ps::<1>(s1s2_3_4);
+                let s1s2_5_6_hi = _mm256_extractf128_ps::<1>(s1s2_5_6);
+
+                let z4z5z6z7 = self.bf9.bf3.exec(
+                    _mm256_create_ps(_mm_unpacklo_ps64(s0.4, s0.5), _mm_unpacklo_ps64(s0.6, s0.7)),
+                    _mm256_create_ps(
+                        _mm_unpacklo_ps64(s1s2_3_4_hi, _mm256_castps256_ps128(s1s2_5_6)),
+                        _mm_unpacklo_ps64(s1s2_5_6_hi, _mm256_castps256_ps128(s1s2_7_8)),
+                    ),
+                    _mm256_create_ps(
+                        _mm_unpackhi_ps64(s1s2_3_4_hi, _mm256_castps256_ps128(s1s2_5_6)),
+                        _mm_unpackhi_ps64(s1s2_5_6_hi, _mm256_castps256_ps128(s1s2_7_8)),
+                    ),
+                );
+
+                _mm256_storeu_ps(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), z4z5z6z7.0);
+                _mm256_storeu_ps(
+                    chunk.get_unchecked_mut(13..).as_mut_ptr().cast(),
+                    z4z5z6z7.1,
+                );
+                _mm256_storeu_ps(
+                    chunk.get_unchecked_mut(22..).as_mut_ptr().cast(),
+                    z4z5z6z7.2,
+                );
+
+                let s1s2_7_8_hi = _mm256_extractf128_ps::<1>(s1s2_7_8);
+
+                let z8 = self.bf9.bf3.exec_m128(
+                    s0.8,
+                    _mm_unpacklo_ps64(s1s2_7_8_hi, s1s2_7_8_hi),
+                    _mm_unpackhi_ps64(s1s2_7_8_hi, s1s2_7_8_hi),
+                );
+                _m128s_store_f32x2(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), z8.0);
+                _m128s_store_f32x2(chunk.get_unchecked_mut(17..).as_mut_ptr().cast(), z8.1);
+                _m128s_store_f32x2(chunk.get_unchecked_mut(26..).as_mut_ptr().cast(), z8.2);
 
                 // let z2z3 = self.bf9.bf3.exec(
                 //     _mm256_create_pd(s0.2, s0.3),

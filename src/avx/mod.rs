@@ -50,7 +50,7 @@ pub(crate) use butterflies::{
     AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5, AvxButterfly6, AvxButterfly7,
     AvxButterfly8, AvxButterfly9, AvxButterfly10d, AvxButterfly10f, AvxButterfly11, AvxButterfly12,
     AvxButterfly13, AvxButterfly14, AvxButterfly15d, AvxButterfly15f, AvxButterfly16,
-    AvxButterfly17, AvxButterfly19, AvxButterfly27d,
+    AvxButterfly17, AvxButterfly19, AvxButterfly27d, AvxButterfly27f,
 };
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
