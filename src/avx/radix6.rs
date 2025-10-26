@@ -30,8 +30,6 @@ use crate::avx::butterflies::AvxButterfly;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
-    _mm256_load4_f32x2, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2, _mm256s_deinterleave4_epi64,
-    shuffle,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -43,6 +41,7 @@ use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_six};
 use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
+use std::any::TypeId;
 use std::arch::x86_64::*;
 use std::fmt::Display;
 
@@ -80,7 +79,52 @@ where
             "Input length must be a power of 6"
         );
 
-        let twiddles = T::make_twiddles_with_base(6, size, fft_direction)?;
+        let mut twiddles = Vec::new();
+        twiddles
+            .try_reserve_exact(size - 1)
+            .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+        const N: usize = 6;
+        let mut cross_fft_len = 6;
+        while cross_fft_len < size {
+            let num_columns = cross_fft_len;
+            cross_fft_len *= N;
+
+            let mut i = 0usize;
+
+            if TypeId::of::<T>() == TypeId::of::<f32>() {
+                while i + 4 < num_columns {
+                    for k in 1..N {
+                        let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                        let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                        let twiddle2 = compute_twiddle((i + 2) * k, cross_fft_len, fft_direction);
+                        let twiddle3 = compute_twiddle((i + 3) * k, cross_fft_len, fft_direction);
+                        twiddles.push(twiddle0);
+                        twiddles.push(twiddle1);
+                        twiddles.push(twiddle2);
+                        twiddles.push(twiddle3);
+                    }
+                    i += 4;
+                }
+            }
+
+            while i + 2 < num_columns {
+                for k in 1..N {
+                    let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle0);
+                    twiddles.push(twiddle1);
+                }
+                i += 2;
+            }
+
+            for i in i..num_columns {
+                for k in 1..N {
+                    let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle);
+                }
+            }
+        }
 
         let twiddle = compute_twiddle::<T>(1, 3, fft_direction);
 
@@ -143,45 +187,45 @@ impl AvxFmaRadix6<f64> {
                             let tw0 =
                                 _mm256_loadu_pd(m_twiddles.get_unchecked(5 * j..).as_ptr().cast());
                             let tw1 = _mm256_loadu_pd(
-                                m_twiddles.get_unchecked(5 * (j + 1)..).as_ptr().cast(),
-                            );
-                            let tw2 = _mm256_loadu_pd(
                                 m_twiddles.get_unchecked(5 * j + 2..).as_ptr().cast(),
                             );
+                            let tw2 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(5 * j + 4..).as_ptr().cast(),
+                            );
                             let tw3 = _mm256_loadu_pd(
-                                m_twiddles.get_unchecked(5 * (j + 1) + 2..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(5 * j + 6..).as_ptr().cast(),
+                            );
+                            let tw4 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(5 * j + 8..).as_ptr().cast(),
                             );
 
                             let u1 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(data.get_unchecked(j + sixth..).as_ptr().cast()),
-                                _mm256_unpacklo_pd2(tw0, tw1),
+                                tw0,
                             );
                             let u2 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 2 * sixth..).as_ptr().cast(),
                                 ),
-                                _mm256_unpackhi_pd2(tw0, tw1),
+                                tw1,
                             );
                             let u3 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 3 * sixth..).as_ptr().cast(),
                                 ),
-                                _mm256_unpacklo_pd2(tw2, tw3),
+                                tw2,
                             );
                             let u4 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 4 * sixth..).as_ptr().cast(),
                                 ),
-                                _mm256_unpackhi_pd2(tw2, tw3),
+                                tw3,
                             );
                             let u5 = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 5 * sixth..).as_ptr().cast(),
                                 ),
-                                _mm256_loadu2_m128d(
-                                    m_twiddles.get_unchecked(5 * (j + 1) + 4..).as_ptr().cast(),
-                                    m_twiddles.get_unchecked(5 * j + 4..).as_ptr().cast(),
-                                ),
+                                tw4,
                             );
 
                             let (t0, t2, t4) =
@@ -355,16 +399,19 @@ impl AvxFmaRadix6<f32> {
                         while j + 4 < sixth {
                             let u0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
 
-                            let xw0 =
+                            let tw0 =
                                 _mm256_loadu_ps(m_twiddles.get_unchecked(5 * j..).as_ptr().cast());
-                            let xw1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(5 * j + 5..).as_ptr().cast(),
+                            let tw1 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(5 * j + 4..).as_ptr().cast(),
                             );
-                            let xw2 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(5 * j + 10..).as_ptr().cast(),
+                            let tw2 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(5 * j + 8..).as_ptr().cast(),
                             );
-                            let xw3 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(5 * j + 15..).as_ptr().cast(),
+                            let tw3 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(5 * j + 12..).as_ptr().cast(),
+                            );
+                            let tw4 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(5 * j + 16..).as_ptr().cast(),
                             );
 
                             let rk1 =
@@ -379,9 +426,6 @@ impl AvxFmaRadix6<f32> {
                                 data.get_unchecked(j + 4 * sixth..).as_ptr().cast(),
                             );
 
-                            let (tw0, tw1, tw2, tw3) =
-                                _mm256s_deinterleave4_epi64(xw0, xw1, xw2, xw3);
-
                             let u1 = _mm256_fcmul_ps(rk1, tw0);
                             let u2 = _mm256_fcmul_ps(rk2, tw1);
                             let u3 = _mm256_fcmul_ps(rk3, tw2);
@@ -390,12 +434,7 @@ impl AvxFmaRadix6<f32> {
                                 _mm256_loadu_ps(
                                     data.get_unchecked(j + 5 * sixth..).as_ptr().cast(),
                                 ),
-                                _mm256_load4_f32x2(
-                                    m_twiddles.get_unchecked(5 * j + 4..),
-                                    m_twiddles.get_unchecked(5 * (j + 1) + 4..),
-                                    m_twiddles.get_unchecked(5 * (j + 2) + 4..),
-                                    m_twiddles.get_unchecked(5 * (j + 3) + 4..),
-                                ),
+                                tw4,
                             );
 
                             let (t0, t2, t4) =
@@ -435,27 +474,13 @@ impl AvxFmaRadix6<f32> {
                         while j + 2 < sixth {
                             let u0 = _mm_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
 
-                            let tw0tw02 =
+                            let tw0 =
                                 _mm256_loadu_ps(m_twiddles.get_unchecked(5 * j..).as_ptr().cast());
-                            let tw01tw03 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(5 * (j + 1)..).as_ptr().cast(),
+                            let tw1 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(5 * j + 4..).as_ptr().cast(),
                             );
-
-                            const HI_HI: i32 = 0b0011_0001;
-                            const LO_LO: i32 = 0b0010_0000;
-
-                            const SH: i32 = shuffle(3, 1, 2, 0);
-
-                            let tw01 = _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(
-                                _mm256_castps_si256(_mm256_permute2f128_ps::<LO_LO>(
-                                    tw0tw02, tw01tw03,
-                                )),
-                            ));
-                            let tw23 = _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(
-                                _mm256_castps_si256(_mm256_permute2f128_ps::<HI_HI>(
-                                    tw0tw02, tw01tw03,
-                                )),
-                            ));
+                            let tw2 =
+                                _mm_loadu_ps(m_twiddles.get_unchecked(5 * j + 8..).as_ptr().cast());
 
                             let u1u2 = _mm256_fcmul_ps(
                                 _mm256_create_ps(
@@ -464,7 +489,7 @@ impl AvxFmaRadix6<f32> {
                                         data.get_unchecked(j + 2 * sixth..).as_ptr().cast(),
                                     ),
                                 ),
-                                tw01,
+                                tw0,
                             );
                             let u3u4 = _mm256_fcmul_ps(
                                 _mm256_create_ps(
@@ -475,18 +500,11 @@ impl AvxFmaRadix6<f32> {
                                         data.get_unchecked(j + 4 * sixth..).as_ptr().cast(),
                                     ),
                                 ),
-                                tw23,
+                                tw1,
                             );
                             let u5 = _mm_fcmul_ps(
                                 _mm_loadu_ps(data.get_unchecked(j + 5 * sixth..).as_ptr().cast()),
-                                _mm_unpacklo_ps64(
-                                    _m128s_load_f32x2(
-                                        m_twiddles.get_unchecked(5 * j + 4..).as_ptr().cast(),
-                                    ),
-                                    _m128s_load_f32x2(
-                                        m_twiddles.get_unchecked(5 * (j + 1) + 4..).as_ptr().cast(),
-                                    ),
-                                ),
+                                tw2,
                             );
 
                             let u1 = _mm256_castps256_ps128(u1u2);
