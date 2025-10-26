@@ -28,15 +28,17 @@
  */
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
-    _mm_unpacklo_ps64, _mm128s_deinterleave3_epi64, _mm256_create_pd, _mm256_create_ps,
-    _mm256_fcmul_pd, _mm256_fcmul_ps, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
-    _mm256s_deinterleave3_epi64, shuffle,
+    _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
+    shuffle,
 };
 use crate::factory::AlgorithmFactory;
 use crate::radix4::Radix4Twiddles;
-use crate::util::bitreversed_transpose;
+use crate::traits::FftTrigonometry;
+use crate::util::{bitreversed_transpose, compute_twiddle};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
+use num_traits::{AsPrimitive, Float};
+use std::any::TypeId;
 use std::arch::x86_64::*;
 
 pub(crate) struct AvxFmaRadix4<T> {
@@ -47,7 +49,11 @@ pub(crate) struct AvxFmaRadix4<T> {
     base_fft: Box<dyn FftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> AvxFmaRadix4<T> {
+impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + Float + 'static>
+    AvxFmaRadix4<T>
+where
+    f64: AsPrimitive<T>,
+{
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<AvxFmaRadix4<T>, ZaftError> {
         assert!(size.is_power_of_two(), "Input length must be a power of 2");
 
@@ -66,7 +72,52 @@ impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> AvxFmaRadix4<T> 
             }
         };
 
-        let twiddles = T::make_twiddles(base_fft.length(), size, fft_direction)?;
+        let mut twiddles = Vec::new();
+        twiddles
+            .try_reserve_exact(size - 1)
+            .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+        const N: usize = 4;
+        let mut cross_fft_len = base_fft.length();
+        while cross_fft_len < size {
+            let num_columns = cross_fft_len;
+            cross_fft_len *= N;
+
+            let mut i = 0usize;
+
+            if TypeId::of::<T>() == TypeId::of::<f32>() {
+                while i + 4 < num_columns {
+                    for k in 1..N {
+                        let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                        let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                        let twiddle2 = compute_twiddle((i + 2) * k, cross_fft_len, fft_direction);
+                        let twiddle3 = compute_twiddle((i + 3) * k, cross_fft_len, fft_direction);
+                        twiddles.push(twiddle0);
+                        twiddles.push(twiddle1);
+                        twiddles.push(twiddle2);
+                        twiddles.push(twiddle3);
+                    }
+                    i += 4;
+                }
+            }
+
+            while i + 2 < num_columns {
+                for k in 1..N {
+                    let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle0);
+                    twiddles.push(twiddle1);
+                }
+                i += 2;
+            }
+
+            for i in i..num_columns {
+                for k in 1..N {
+                    let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle);
+                }
+            }
+        }
 
         Ok(AvxFmaRadix4 {
             execution_length: size,
@@ -122,27 +173,27 @@ impl AvxFmaRadix4<f64> {
                             let tw0 =
                                 _mm256_loadu_pd(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
                             let tw1 = _mm256_loadu_pd(
-                                m_twiddles.get_unchecked(3 * (j + 1)..).as_ptr().cast(),
+                                m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
+                            );
+                            let tw2 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(3 * j + 4..).as_ptr().cast(),
                             );
 
                             let b = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(data.get_unchecked(j + quarter..).as_ptr().cast()),
-                                _mm256_unpacklo_pd2(tw0, tw1),
+                                tw0,
                             );
                             let c = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
                                 ),
-                                _mm256_unpackhi_pd2(tw0, tw1),
+                                tw1,
                             );
                             let d = _mm256_fcmul_pd(
                                 _mm256_loadu_pd(
                                     data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
                                 ),
-                                _mm256_loadu2_m128d(
-                                    m_twiddles.get_unchecked(3 * (j + 1) + 2..).as_ptr().cast(),
-                                    m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast(),
-                                ),
+                                tw2,
                             );
 
                             // radix-4 butterfly
@@ -316,11 +367,9 @@ impl AvxFmaRadix4<f32> {
                                 data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
                             );
 
-                            let (xw0, xw1, xw2) = _mm256s_deinterleave3_epi64(tw0, tw1, tw2);
-
-                            let b0 = _mm256_fcmul_ps(rk1, xw0);
-                            let c0 = _mm256_fcmul_ps(rk2, xw1);
-                            let d0 = _mm256_fcmul_ps(rk3, xw2);
+                            let b0 = _mm256_fcmul_ps(rk1, tw0);
+                            let c0 = _mm256_fcmul_ps(rk2, tw1);
+                            let d0 = _mm256_fcmul_ps(rk3, tw2);
 
                             // radix-4 butterfly
                             let q0t0 = _mm256_add_ps(a0, c0);
@@ -372,17 +421,8 @@ impl AvxFmaRadix4<f32> {
                             let rk3 =
                                 _mm_loadu_ps(data.get_unchecked(j + 3 * quarter..).as_ptr().cast());
 
-                            let (xw0, xw1, xw2) = _mm128s_deinterleave3_epi64(
-                                _mm256_castps256_ps128(tw0tw1),
-                                _mm256_extractf128_ps::<1>(tw0tw1),
-                                tw2,
-                            );
-
-                            let b0c0 = _mm256_fcmul_ps(
-                                _mm256_create_ps(rk1, rk2),
-                                _mm256_create_ps(xw0, xw1),
-                            );
-                            let d0 = _mm_fcmul_ps(rk3, xw2);
+                            let b0c0 = _mm256_fcmul_ps(_mm256_create_ps(rk1, rk2), tw0tw1);
+                            let d0 = _mm_fcmul_ps(rk3, tw2);
                             let b0 = _mm256_castps256_ps128(b0c0);
                             let c0 = _mm256_extractf128_ps::<1>(b0c0);
 
