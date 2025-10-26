@@ -216,17 +216,17 @@ impl AvxButterfly15f {
                     _mm_unpackhi_ps64(u6u7, u6u7),
                 );
 
-                let (y0y3, y1y4, y2y5) = self.bf3.exec_short(
+                let (y0y3, y1y4, y2y5) = self.bf3.exec_m128(
                     _mm_unpacklo_ps64(mid0mid1.0, mid0mid1.1),
                     _mm_unpackhi_ps64(mid0mid1.0, mid0mid1.1),
                     _mm_unpacklo_ps64(mid2.0, mid2.1),
                 );
-                let (y6y9, y7y10, y8y11) = self.bf3.exec_short(
+                let (y6y9, y7y10, y8y11) = self.bf3.exec_m128(
                     _mm_unpacklo_ps64(mid0mid1.2, mid0mid1.3),
                     _mm_unpackhi_ps64(mid0mid1.2, mid0mid1.3),
                     _mm_unpacklo_ps64(mid2.2, mid2.3),
                 );
-                let (y12, y13, y14) = self.bf3.exec_short(
+                let (y12, y13, y14) = self.bf3.exec_m128(
                     mid0mid1.4,
                     _mm_unpackhi_ps64(mid0mid1.4, mid0mid1.4),
                     mid2.4,

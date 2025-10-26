@@ -127,7 +127,7 @@ impl AvxFastButterfly3<f64> {
 impl AvxFastButterfly3<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec_short(
+    pub(crate) unsafe fn exec_m128(
         &self,
         u0: __m128,
         u1: __m128,

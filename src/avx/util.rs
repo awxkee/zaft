@@ -37,6 +37,18 @@ pub(crate) unsafe fn _mm256_set_complexd(v: Complex<f64>) -> __m256d {
 
 #[inline]
 #[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm_set_complex(v: Complex<f32>) -> __m128 {
+    _mm_setr_ps(v.re, v.im, v.re, v.im)
+}
+
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm256_set4_complex(v0: Complex<f32>, v1: Complex<f32>, v2: Complex<f32>, v3: Complex<f32>) -> __m256 {
+    _mm256_setr_ps(v0.re, v0.im, v1.re, v1.im, v2.re, v2.im, v3.re, v3.im)
+}
+
+#[inline]
+#[target_feature(enable = "avx")]
 pub(crate) unsafe fn _mm256_set2_complexd(v0: Complex<f64>, v1: Complex<f64>) -> __m256d {
     _mm256_setr_pd(v0.re, v0.im, v1.re, v1.im)
 }
