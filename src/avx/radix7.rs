@@ -31,7 +31,6 @@ use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
     _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps, _mm256_load4_f32x2,
-    _mm256_permute4x64_ps, shuffle,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -81,7 +80,38 @@ where
             "Input length must be a power of 7"
         );
 
-        let twiddles = T::make_twiddles_with_base(7, size, fft_direction)?;
+        let mut twiddles;
+
+        twiddles = Vec::new();
+        twiddles
+            .try_reserve_exact(size - 1)
+            .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+        const N: usize = 7;
+        let mut cross_fft_len = 7;
+        while cross_fft_len < size {
+            let num_columns = cross_fft_len;
+            cross_fft_len *= N;
+
+            let mut i = 0usize;
+
+            while i + 2 < num_columns {
+                for k in 1..N {
+                    let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle0);
+                    twiddles.push(twiddle1);
+                }
+                i += 2;
+            }
+
+            for i in i..num_columns {
+                for k in 1..N {
+                    let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle);
+                }
+            }
+        }
 
         Ok(AvxFmaRadix7 {
             execution_length: size,
@@ -137,9 +167,6 @@ impl AvxFmaRadix7<f64> {
                         while j + 2 < seventh {
                             let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
 
-                            const HI_HI: i32 = 0b0011_0001;
-                            const LO_LO: i32 = 0b0010_0000;
-
                             let twi = 6 * j;
                             let tw0 =
                                 _mm256_loadu_pd(m_twiddles.get_unchecked(twi..).as_ptr().cast());
@@ -169,12 +196,9 @@ impl AvxFmaRadix7<f64> {
                                 data.get_unchecked(j + 3 * seventh..).as_ptr().cast(),
                             );
 
-                            let u1 =
-                                _mm256_fcmul_pd(wu1, _mm256_permute2f128_pd::<LO_LO>(tw0, tw0_2));
-                            let u2 =
-                                _mm256_fcmul_pd(wu2, _mm256_permute2f128_pd::<HI_HI>(tw0, tw0_2));
-                            let u3 =
-                                _mm256_fcmul_pd(wu3, _mm256_permute2f128_pd::<LO_LO>(tw1, tw1_2));
+                            let u1 = _mm256_fcmul_pd(wu1, tw0);
+                            let u2 = _mm256_fcmul_pd(wu2, tw1);
+                            let u3 = _mm256_fcmul_pd(wu3, tw2);
 
                             let wu4 = _mm256_loadu_pd(
                                 data.get_unchecked(j + 4 * seventh..).as_ptr().cast(),
@@ -186,12 +210,9 @@ impl AvxFmaRadix7<f64> {
                                 data.get_unchecked(j + 6 * seventh..).as_ptr().cast(),
                             );
 
-                            let u4 =
-                                _mm256_fcmul_pd(wu4, _mm256_permute2f128_pd::<HI_HI>(tw1, tw1_2));
-                            let u5 =
-                                _mm256_fcmul_pd(wu5, _mm256_permute2f128_pd::<LO_LO>(tw2, tw2_2));
-                            let u6 =
-                                _mm256_fcmul_pd(wu6, _mm256_permute2f128_pd::<HI_HI>(tw2, tw2_2));
+                            let u4 = _mm256_fcmul_pd(wu4, tw0_2);
+                            let u5 = _mm256_fcmul_pd(wu5, tw1_2);
+                            let u6 = _mm256_fcmul_pd(wu6, tw2_2);
 
                             let (x1p6, x1m6) = AvxButterfly::butterfly2_f64(u1, u6);
                             let x1m6 = rotate.rotate_m256d(x1m6);
@@ -495,12 +516,12 @@ impl AvxFmaRadix7<f32> {
                         while j + 4 < seventh {
                             let u0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
                             let twi = 6 * j;
-                            let tw0tw1tw2tw3 =
+                            let tw0 =
                                 _mm256_loadu_ps(m_twiddles.get_unchecked(twi..).as_ptr().cast());
-                            let tw4tw5tw6tw7 = _mm256_loadu_ps(
+                            let tw1 = _mm256_loadu_ps(
                                 m_twiddles.get_unchecked(twi + 4..).as_ptr().cast(),
                             );
-                            let tw8tw9tw10tw11 = _mm256_loadu_ps(
+                            let tw2 = _mm256_loadu_ps(
                                 m_twiddles.get_unchecked(twi + 8..).as_ptr().cast(),
                             );
 
@@ -513,9 +534,6 @@ impl AvxFmaRadix7<f32> {
                             let tw5 = _mm256_loadu_ps(
                                 m_twiddles.get_unchecked(twi + 20..).as_ptr().cast(),
                             );
-
-                            const LO_HI: i32 = 0b0011_0000;
-                            const HI_LO: i32 = 0b0010_0001;
 
                             let a1 =
                                 _mm256_loadu_ps(data.get_unchecked(j + seventh..).as_ptr().cast());
@@ -535,47 +553,23 @@ impl AvxFmaRadix7<f32> {
                                 data.get_unchecked(j + 6 * seventh..).as_ptr().cast(),
                             );
 
-                            let u1u2 = _mm256_fcmul_ps(
-                                _mm256_permute2f128_ps::<LO_LO>(a1, a2),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<LO_HI>(tw0tw1tw2tw3, tw4tw5tw6tw7),
-                                ),
-                            );
+                            let u1u2 =
+                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<LO_LO>(a1, a2), tw0);
 
-                            let u3u4 = _mm256_fcmul_ps(
-                                _mm256_permute2f128_ps::<LO_LO>(a3, a4),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<HI_LO>(tw0tw1tw2tw3, tw8tw9tw10tw11),
-                                ),
-                            );
+                            let u3u4 =
+                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<LO_LO>(a3, a4), tw1);
 
-                            let u5u6 = _mm256_fcmul_ps(
-                                _mm256_permute2f128_ps::<LO_LO>(a5, a6),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<LO_HI>(tw4tw5tw6tw7, tw8tw9tw10tw11),
-                                ),
-                            );
+                            let u5u6 =
+                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<LO_LO>(a5, a6), tw2);
 
-                            let u1u2_2 = _mm256_fcmul_ps(
-                                _mm256_permute2f128_ps::<HI_HI>(a1, a2),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<LO_HI>(tw3, tw4),
-                                ),
-                            );
+                            let u1u2_2 =
+                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<HI_HI>(a1, a2), tw3);
 
-                            let u3u4_2 = _mm256_fcmul_ps(
-                                _mm256_permute2f128_ps::<HI_HI>(a3, a4),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<HI_LO>(tw3, tw5),
-                                ),
-                            );
+                            let u3u4_2 =
+                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<HI_HI>(a3, a4), tw4);
 
-                            let u5u6_2 = _mm256_fcmul_ps(
-                                _mm256_permute2f128_ps::<HI_HI>(a5, a6),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<LO_HI>(tw4, tw5),
-                                ),
-                            );
+                            let u5u6_2 =
+                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<HI_HI>(a5, a6), tw5);
 
                             const HI_HI: i32 = 0b0011_0001;
                             const LO_LO: i32 = 0b0010_0000;
@@ -666,17 +660,14 @@ impl AvxFmaRadix7<f32> {
                         while j + 2 < seventh {
                             let u0 = _mm_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
                             let twi = 6 * j;
-                            let tw0tw1tw2tw3 =
+                            let tw0 =
                                 _mm256_loadu_ps(m_twiddles.get_unchecked(twi..).as_ptr().cast());
-                            let tw4tw5tw6tw7 = _mm256_loadu_ps(
+                            let tw1 = _mm256_loadu_ps(
                                 m_twiddles.get_unchecked(twi + 4..).as_ptr().cast(),
                             );
-                            let tw8tw9tw10tw11 = _mm256_loadu_ps(
+                            let tw2 = _mm256_loadu_ps(
                                 m_twiddles.get_unchecked(twi + 8..).as_ptr().cast(),
                             );
-
-                            const LO_HI: i32 = 0b0011_0000;
-                            const HI_LO: i32 = 0b0010_0001;
 
                             let u1u2 = _mm256_fcmul_ps(
                                 _mm256_create_ps(
@@ -685,9 +676,7 @@ impl AvxFmaRadix7<f32> {
                                         data.get_unchecked(j + 2 * seventh..).as_ptr().cast(),
                                     ),
                                 ),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<LO_HI>(tw0tw1tw2tw3, tw4tw5tw6tw7),
-                                ),
+                                tw0,
                             );
 
                             let u3u4 = _mm256_fcmul_ps(
@@ -699,9 +688,7 @@ impl AvxFmaRadix7<f32> {
                                         data.get_unchecked(j + 4 * seventh..).as_ptr().cast(),
                                     ),
                                 ),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<HI_LO>(tw0tw1tw2tw3, tw8tw9tw10tw11),
-                                ),
+                                tw1,
                             );
 
                             let u5u6 = _mm256_fcmul_ps(
@@ -713,9 +700,7 @@ impl AvxFmaRadix7<f32> {
                                         data.get_unchecked(j + 6 * seventh..).as_ptr().cast(),
                                     ),
                                 ),
-                                _mm256_permute4x64_ps::<{ shuffle(3, 1, 2, 0) }>(
-                                    _mm256_permute2f128_ps::<LO_HI>(tw4tw5tw6tw7, tw8tw9tw10tw11),
-                                ),
+                                tw2,
                             );
 
                             let (x1p6, x1m6) = AvxButterfly::butterfly2_f32_m128(
