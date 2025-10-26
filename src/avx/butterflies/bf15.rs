@@ -101,7 +101,7 @@ impl AvxButterfly15d {
                     _mm256_permute2f128_pd::<HI_HI>(mid0mid1.2, mid0mid1.3),
                     _mm256_create_pd(mid2.2, mid2.3),
                 );
-                let (y12, y13, y14) = self.bf3.exec_short(
+                let (y12, y13, y14) = self.bf3.exec_m128(
                     _mm256_castpd256_pd128(mid0mid1.4),
                     _mm256_extractf128_pd::<1>(mid0mid1.4),
                     mid2.4,

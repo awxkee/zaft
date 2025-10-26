@@ -30,6 +30,18 @@ use num_complex::Complex;
 use std::arch::x86_64::*;
 
 #[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm256_set_complexd(v: Complex<f64>) -> __m256d {
+    _mm256_setr_pd(v.re, v.im, v.re, v.im)
+}
+
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) unsafe fn _mm256_set2_complexd(v0: Complex<f64>, v1: Complex<f64>) -> __m256d {
+    _mm256_setr_pd(v0.re, v0.im, v1.re, v1.im)
+}
+
+#[inline]
 #[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_unpacklo_pd(b, b);

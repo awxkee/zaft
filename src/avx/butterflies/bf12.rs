@@ -91,10 +91,10 @@ impl AvxButterfly12<f64> {
                 let (u4, u5, u6, u7) = bf4.exec_short(zu4, zu5, zu6, zu7);
                 let (u8, u9, u10, u11) = bf4.exec_short(zu8, zu9, zu10, zu11);
 
-                let (v0, v4, v8) = bf3.exec_short(u0, u4, u8); // (v0, v4, v8)
-                let (v9, v1, v5) = bf3.exec_short(u1, u5, u9); // (v9, v1, v5)
-                let (v6, v10, v2) = bf3.exec_short(u2, u6, u10); // (v6, v10, v2)
-                let (v3, v7, v11) = bf3.exec_short(u3, u7, u11); // (v3, v7, v11)
+                let (v0, v4, v8) = bf3.exec_m128(u0, u4, u8); // (v0, v4, v8)
+                let (v9, v1, v5) = bf3.exec_m128(u1, u5, u9); // (v9, v1, v5)
+                let (v6, v10, v2) = bf3.exec_m128(u2, u6, u10); // (v6, v10, v2)
+                let (v3, v7, v11) = bf3.exec_m128(u3, u7, u11); // (v3, v7, v11)
 
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
