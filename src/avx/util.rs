@@ -26,7 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::traits::FftTrigonometry;
+use crate::util::compute_twiddle;
+use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
+use num_traits::{AsPrimitive, Float};
+use std::any::TypeId;
 use std::arch::x86_64::*;
 
 #[inline]
@@ -466,6 +471,102 @@ pub(crate) unsafe fn _mm_fcmul_pd_conj_b(a: __m128d, b: __m128d) -> __m128d {
     temp2 = _mm_mul_pd(temp2, a); // [b.im * a.re, b.im * a.im]
     temp2 = _mm_shuffle_pd::<0x01>(temp2, temp2); // [b.im * a.im, b.im * a.im]
     _mm_fmsubadd_pd(temp1, a, temp2)
+}
+
+pub(crate) fn create_avx4_twiddles<T: FftTrigonometry + 'static + Float + Sized, const N: usize>(
+    base: usize,
+    size: usize,
+    fft_direction: FftDirection,
+) -> Result<Vec<Complex<T>>, ZaftError>
+where
+    f64: AsPrimitive<T>,
+{
+    let mut twiddles = Vec::new();
+    twiddles
+        .try_reserve_exact(size - 1)
+        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+    let mut cross_fft_len = base;
+    while cross_fft_len < size {
+        let num_columns = cross_fft_len;
+        cross_fft_len *= N;
+
+        let mut i = 0usize;
+
+        if TypeId::of::<T>() == TypeId::of::<f32>() {
+            while i + 4 < num_columns {
+                for k in 1..N {
+                    let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                    let twiddle2 = compute_twiddle((i + 2) * k, cross_fft_len, fft_direction);
+                    let twiddle3 = compute_twiddle((i + 3) * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle0);
+                    twiddles.push(twiddle1);
+                    twiddles.push(twiddle2);
+                    twiddles.push(twiddle3);
+                }
+                i += 4;
+            }
+        }
+
+        while i + 2 < num_columns {
+            for k in 1..N {
+                let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                twiddles.push(twiddle0);
+                twiddles.push(twiddle1);
+            }
+            i += 2;
+        }
+
+        for i in i..num_columns {
+            for k in 1..N {
+                let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                twiddles.push(twiddle);
+            }
+        }
+    }
+    Ok(twiddles)
+}
+
+pub(crate) fn create_avx2_twiddles<T: FftTrigonometry + 'static + Float + Sized, const N: usize>(
+    base: usize,
+    size: usize,
+    fft_direction: FftDirection,
+) -> Result<Vec<Complex<T>>, ZaftError>
+where
+    f64: AsPrimitive<T>,
+{
+    let mut twiddles = Vec::new();
+    twiddles
+        .try_reserve_exact(size - 1)
+        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+    let mut cross_fft_len = base;
+    while cross_fft_len < size {
+        let num_columns = cross_fft_len;
+        cross_fft_len *= N;
+
+        let mut i = 0usize;
+
+        while i + 2 < num_columns {
+            for k in 1..N {
+                let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                twiddles.push(twiddle0);
+                twiddles.push(twiddle1);
+            }
+            i += 2;
+        }
+
+        for i in i..num_columns {
+            for k in 1..N {
+                let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                twiddles.push(twiddle);
+            }
+        }
+    }
+    Ok(twiddles)
 }
 
 #[cfg(test)]

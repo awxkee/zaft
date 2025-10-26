@@ -31,6 +31,7 @@ use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
     _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps, _mm256_load4_f32x2,
+    create_avx2_twiddles,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -80,36 +81,7 @@ where
             "Input length must be a power of 7"
         );
 
-        let mut twiddles = Vec::new();
-        twiddles
-            .try_reserve_exact(size - 1)
-            .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
-
-        const N: usize = 7;
-        let mut cross_fft_len = 7;
-        while cross_fft_len < size {
-            let num_columns = cross_fft_len;
-            cross_fft_len *= N;
-
-            let mut i = 0usize;
-
-            while i + 2 < num_columns {
-                for k in 1..N {
-                    let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
-                    let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
-                    twiddles.push(twiddle0);
-                    twiddles.push(twiddle1);
-                }
-                i += 2;
-            }
-
-            for i in i..num_columns {
-                for k in 1..N {
-                    let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
-                    twiddles.push(twiddle);
-                }
-            }
-        }
+        let twiddles = create_avx2_twiddles::<T, 7>(7, size, fft_direction)?;
 
         Ok(AvxFmaRadix7 {
             execution_length: size,

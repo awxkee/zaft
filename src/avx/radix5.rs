@@ -30,7 +30,7 @@ use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
-    shuffle,
+    create_avx4_twiddles, shuffle,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -42,7 +42,6 @@ use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_five};
 use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
-use std::any::TypeId;
 use std::arch::x86_64::*;
 use std::fmt::Display;
 
@@ -84,53 +83,7 @@ where
             "Input length must be a power of 5"
         );
 
-        let mut twiddles = Vec::new();
-        twiddles
-            .try_reserve_exact(size - 1)
-            .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
-
-        const N: usize = 5;
-        let mut cross_fft_len = 5;
-        while cross_fft_len < size {
-            let num_columns = cross_fft_len;
-            cross_fft_len *= N;
-
-            let mut i = 0usize;
-
-            if TypeId::of::<T>() == TypeId::of::<f32>() {
-                while i + 4 < num_columns {
-                    for k in 1..N {
-                        let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
-                        let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
-                        let twiddle2 = compute_twiddle((i + 2) * k, cross_fft_len, fft_direction);
-                        let twiddle3 = compute_twiddle((i + 3) * k, cross_fft_len, fft_direction);
-                        twiddles.push(twiddle0);
-                        twiddles.push(twiddle1);
-                        twiddles.push(twiddle2);
-                        twiddles.push(twiddle3);
-                    }
-                    i += 4;
-                }
-            }
-
-            while i + 2 < num_columns {
-                for k in 1..N {
-                    let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
-                    let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
-                    twiddles.push(twiddle0);
-                    twiddles.push(twiddle1);
-                }
-                i += 2;
-            }
-
-            for i in i..num_columns {
-                for k in 1..N {
-                    let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
-                    twiddles.push(twiddle);
-                }
-            }
-        }
-
+        let twiddles = create_avx4_twiddles::<T, 5>(5, size, fft_direction)?;
         let tw1 = compute_twiddle(1, 5, fft_direction);
         let tw2 = compute_twiddle(2, 5, fft_direction);
 
