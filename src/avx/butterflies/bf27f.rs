@@ -196,46 +196,6 @@ impl AvxButterfly27f {
                 _m128s_store_f32x2(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), z8.0);
                 _m128s_store_f32x2(chunk.get_unchecked_mut(17..).as_mut_ptr().cast(), z8.1);
                 _m128s_store_f32x2(chunk.get_unchecked_mut(26..).as_mut_ptr().cast(), z8.2);
-
-                // let z2z3 = self.bf9.bf3.exec(
-                //     _mm256_create_pd(s0.2, s0.3),
-                //     _mm256_permute2f128_pd::<LO_LO>(s1s2.2, s1s2.3),
-                //     _mm256_permute2f128_pd::<HI_HI>(s1s2.2, s1s2.3),
-                // );
-                //
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), z2z3.0);
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(11..).as_mut_ptr().cast(), z2z3.1);
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(20..).as_mut_ptr().cast(), z2z3.2);
-                //
-                // let z4z5 = self.bf9.bf3.exec(
-                //     _mm256_create_pd(s0.4, s0.5),
-                //     _mm256_permute2f128_pd::<LO_LO>(s1s2.4, s1s2.5),
-                //     _mm256_permute2f128_pd::<HI_HI>(s1s2.4, s1s2.5),
-                // );
-                //
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), z4z5.0);
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(13..).as_mut_ptr().cast(), z4z5.1);
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(22..).as_mut_ptr().cast(), z4z5.2);
-                //
-                // let z6z7 = self.bf9.bf3.exec(
-                //     _mm256_create_pd(s0.6, s0.7),
-                //     _mm256_permute2f128_pd::<LO_LO>(s1s2.6, s1s2.7),
-                //     _mm256_permute2f128_pd::<HI_HI>(s1s2.6, s1s2.7),
-                // );
-                //
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), z6z7.0);
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(15..).as_mut_ptr().cast(), z6z7.1);
-                // _mm256_storeu_pd(chunk.get_unchecked_mut(24..).as_mut_ptr().cast(), z6z7.2);
-                //
-                // let z8 = self.bf9.bf3.exec_m128(
-                //     s0.8,
-                //     _mm256_castpd256_pd128(s1s2.8),
-                //     _mm256_extractf128_pd::<1>(s1s2.8),
-                // );
-                //
-                // _mm_storeu_pd(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), z8.0);
-                // _mm_storeu_pd(chunk.get_unchecked_mut(17..).as_mut_ptr().cast(), z8.1);
-                // _mm_storeu_pd(chunk.get_unchecked_mut(26..).as_mut_ptr().cast(), z8.2);
             }
         }
         Ok(())
