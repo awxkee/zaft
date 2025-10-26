@@ -28,8 +28,7 @@
  */
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
-    _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_fcmul_ps, _mm256_unpackhi_pd2, _mm256_unpacklo_pd2,
-    _mm256s_deinterleave2_epi64, shuffle,
+    _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_fcmul_ps, shuffle,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -41,6 +40,7 @@ use crate::util::{bitreversed_transpose, compute_logarithm, compute_twiddle};
 use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
+use std::any::TypeId;
 use std::arch::x86_64::*;
 use std::fmt::Display;
 
@@ -90,7 +90,54 @@ where
             _ => Zaft::strategy(27, fft_direction)?,
         };
 
-        let twiddles = T::make_twiddles_with_base(base_fft.length(), size, fft_direction)?;
+        let mut twiddles = Vec::new();
+        twiddles
+            .try_reserve_exact(size - 1)
+            .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+
+        const N: usize = 3;
+        let mut cross_fft_len = base_fft.length();
+        while cross_fft_len < size {
+            let num_columns = cross_fft_len;
+            cross_fft_len *= N;
+
+            let mut i = 0usize;
+
+            if TypeId::of::<T>() == TypeId::of::<f32>() {
+                while i + 4 < num_columns {
+                    for k in 1..N {
+                        let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                        let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                        let twiddle2 = compute_twiddle((i + 2) * k, cross_fft_len, fft_direction);
+                        let twiddle3 = compute_twiddle((i + 3) * k, cross_fft_len, fft_direction);
+                        twiddles.push(twiddle0);
+                        twiddles.push(twiddle1);
+                        twiddles.push(twiddle2);
+                        twiddles.push(twiddle3);
+                    }
+                    i += 4;
+                }
+            }
+
+            if TypeId::of::<T>() == TypeId::of::<f64>() {
+                while i + 2 < num_columns {
+                    for k in 1..N {
+                        let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                        let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                        twiddles.push(twiddle0);
+                        twiddles.push(twiddle1);
+                    }
+                    i += 2;
+                }
+            }
+
+            for i in i..num_columns {
+                for k in 1..N {
+                    let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                    twiddles.push(twiddle);
+                }
+            }
+        }
 
         let twiddle = compute_twiddle::<T>(1, 3, fft_direction);
 
@@ -163,8 +210,8 @@ impl AvxFmaRadix3<f64> {
                                 data.get_unchecked(j + 2 * third..).as_ptr().cast(),
                             );
 
-                            let u1 = _mm256_fcmul_pd(rk1, _mm256_unpacklo_pd2(tw0, tw1));
-                            let u2 = _mm256_fcmul_pd(rk2, _mm256_unpackhi_pd2(tw0, tw1));
+                            let u1 = _mm256_fcmul_pd(rk1, tw0);
+                            let u2 = _mm256_fcmul_pd(rk2, tw1);
 
                             // Radix-3 butterfly
                             let xp = _mm256_add_pd(u1, u2);
@@ -299,10 +346,8 @@ impl AvxFmaRadix3<f32> {
                                 data.get_unchecked(j + 2 * third..).as_ptr().cast(),
                             );
 
-                            let (xw0, xw1) = _mm256s_deinterleave2_epi64(tw0, tw1);
-
-                            let u1 = _mm256_fcmul_ps(rk1, xw0);
-                            let u2 = _mm256_fcmul_ps(rk2, xw1);
+                            let u1 = _mm256_fcmul_ps(rk1, tw0);
+                            let u2 = _mm256_fcmul_ps(rk2, tw1);
 
                             // Radix-3 butterfly
                             let xp_0 = _mm256_add_ps(u1, u2);
