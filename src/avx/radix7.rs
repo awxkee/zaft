@@ -108,6 +108,13 @@ impl AvxFmaRadix7<f64> {
         unsafe {
             let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
 
+            let tw1r = _mm256_set1_pd(self.twiddle1.re);
+            let tw2r = _mm256_set1_pd(self.twiddle2.re);
+            let tw3r = _mm256_set1_pd(self.twiddle3.re);
+            let tw1i = _mm256_set1_pd(self.twiddle1.im);
+            let tw2i = _mm256_set1_pd(self.twiddle2.im);
+            let tw3i = _mm256_set1_pd(self.twiddle3.im);
+
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
@@ -198,43 +205,28 @@ impl AvxFmaRadix7<f64> {
                             let x3m4 = rotate.rotate_m256d(x3m4);
                             let y00 = _mm256_add_pd(y00, x3p4);
 
-                            let m0106a =
-                                _mm256_fmadd_pd(x1p6, _mm256_set1_pd(self.twiddle1.re), u0);
-                            let m0106a =
-                                _mm256_fmadd_pd(x2p5, _mm256_set1_pd(self.twiddle2.re), m0106a);
-                            let m0106a =
-                                _mm256_fmadd_pd(x3p4, _mm256_set1_pd(self.twiddle3.re), m0106a);
-                            let m0106b = _mm256_mul_pd(x1m6, _mm256_set1_pd(self.twiddle1.im));
-                            let m0106b =
-                                _mm256_fmadd_pd(x2m5, _mm256_set1_pd(self.twiddle2.im), m0106b);
-                            let m0106b =
-                                _mm256_fmadd_pd(x3m4, _mm256_set1_pd(self.twiddle3.im), m0106b);
+                            let m0106a = _mm256_fmadd_pd(x1p6, tw1r, u0);
+                            let m0106a = _mm256_fmadd_pd(x2p5, tw2r, m0106a);
+                            let m0106a = _mm256_fmadd_pd(x3p4, tw3r, m0106a);
+                            let m0106b = _mm256_mul_pd(x1m6, tw1i);
+                            let m0106b = _mm256_fmadd_pd(x2m5, tw2i, m0106b);
+                            let m0106b = _mm256_fmadd_pd(x3m4, tw3i, m0106b);
                             let (y01, y06) = AvxButterfly::butterfly2_f64(m0106a, m0106b);
 
-                            let m0205a =
-                                _mm256_fmadd_pd(x1p6, _mm256_set1_pd(self.twiddle2.re), u0);
-                            let m0205a =
-                                _mm256_fmadd_pd(x2p5, _mm256_set1_pd(self.twiddle3.re), m0205a);
-                            let m0205a =
-                                _mm256_fmadd_pd(x3p4, _mm256_set1_pd(self.twiddle1.re), m0205a);
-                            let m0205b = _mm256_mul_pd(x1m6, _mm256_set1_pd(self.twiddle2.im));
-                            let m0205b =
-                                _mm256_fnmadd_pd(x2m5, _mm256_set1_pd(self.twiddle3.im), m0205b);
-                            let m0205b =
-                                _mm256_fnmadd_pd(x3m4, _mm256_set1_pd(self.twiddle1.im), m0205b);
+                            let m0205a = _mm256_fmadd_pd(x1p6, tw2r, u0);
+                            let m0205a = _mm256_fmadd_pd(x2p5, tw3r, m0205a);
+                            let m0205a = _mm256_fmadd_pd(x3p4, tw1r, m0205a);
+                            let m0205b = _mm256_mul_pd(x1m6, tw2i);
+                            let m0205b = _mm256_fnmadd_pd(x2m5, tw3i, m0205b);
+                            let m0205b = _mm256_fnmadd_pd(x3m4, tw1i, m0205b);
                             let (y02, y05) = AvxButterfly::butterfly2_f64(m0205a, m0205b);
 
-                            let m0304a =
-                                _mm256_fmadd_pd(x1p6, _mm256_set1_pd(self.twiddle3.re), u0);
-                            let m0304a =
-                                _mm256_fmadd_pd(x2p5, _mm256_set1_pd(self.twiddle1.re), m0304a);
-                            let m0304a =
-                                _mm256_fmadd_pd(x3p4, _mm256_set1_pd(self.twiddle2.re), m0304a);
-                            let m0304b = _mm256_mul_pd(x1m6, _mm256_set1_pd(self.twiddle3.im));
-                            let m0304b =
-                                _mm256_fnmadd_pd(x2m5, _mm256_set1_pd(self.twiddle1.im), m0304b);
-                            let m0304b =
-                                _mm256_fmadd_pd(x3m4, _mm256_set1_pd(self.twiddle2.im), m0304b);
+                            let m0304a = _mm256_fmadd_pd(x1p6, tw3r, u0);
+                            let m0304a = _mm256_fmadd_pd(x2p5, tw1r, m0304a);
+                            let m0304a = _mm256_fmadd_pd(x3p4, tw2r, m0304a);
+                            let m0304b = _mm256_mul_pd(x1m6, tw3i);
+                            let m0304b = _mm256_fnmadd_pd(x2m5, tw1i, m0304b);
+                            let m0304b = _mm256_fmadd_pd(x3m4, tw2i, m0304b);
                             let (y03, y04) = AvxButterfly::butterfly2_f64(m0304a, m0304b);
 
                             // // Store results
@@ -277,6 +269,44 @@ impl AvxFmaRadix7<f64> {
                             j += 2;
                         }
 
+                        let tw1tw2r = _mm256_setr_pd(
+                            self.twiddle1.re,
+                            self.twiddle1.re,
+                            self.twiddle2.re,
+                            self.twiddle2.re,
+                        );
+                        let tw2tw3r = _mm256_setr_pd(
+                            self.twiddle2.re,
+                            self.twiddle2.re,
+                            self.twiddle3.re,
+                            self.twiddle3.re,
+                        );
+                        let tw3tw1r = _mm256_setr_pd(
+                            self.twiddle3.re,
+                            self.twiddle3.re,
+                            self.twiddle1.re,
+                            self.twiddle1.re,
+                        );
+
+                        let tw1tw2i = _mm256_setr_pd(
+                            self.twiddle1.im,
+                            self.twiddle1.im,
+                            self.twiddle2.im,
+                            self.twiddle2.im,
+                        );
+                        let tw2tw3i = _mm256_setr_pd(
+                            self.twiddle2.im,
+                            self.twiddle2.im,
+                            -self.twiddle3.im,
+                            -self.twiddle3.im,
+                        );
+                        let tw3tw1i = _mm256_setr_pd(
+                            self.twiddle3.im,
+                            self.twiddle3.im,
+                            -self.twiddle1.im,
+                            -self.twiddle1.im,
+                        );
+
                         for j in j..seventh {
                             let u0 = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
 
@@ -290,50 +320,42 @@ impl AvxFmaRadix7<f64> {
                                 m_twiddles.get_unchecked(twi + 4..).as_ptr().cast(),
                             );
 
-                            let u1u2 = _mm256_fcmul_pd(
-                                _mm256_create_pd(
-                                    _mm_loadu_pd(data.get_unchecked(j + seventh..).as_ptr().cast()),
-                                    _mm_loadu_pd(
-                                        data.get_unchecked(j + 2 * seventh..).as_ptr().cast(),
-                                    ),
-                                ),
-                                tw0,
+                            let wu1u2 = _mm256_create_pd(
+                                _mm_loadu_pd(data.get_unchecked(j + seventh..).as_ptr().cast()),
+                                _mm_loadu_pd(data.get_unchecked(j + 2 * seventh..).as_ptr().cast()),
                             );
-                            let u3u4 = _mm256_fcmul_pd(
-                                _mm256_create_pd(
-                                    _mm_loadu_pd(
-                                        data.get_unchecked(j + 3 * seventh..).as_ptr().cast(),
-                                    ),
-                                    _mm_loadu_pd(
-                                        data.get_unchecked(j + 4 * seventh..).as_ptr().cast(),
-                                    ),
-                                ),
-                                tw1,
+                            let wu3u4 = _mm256_create_pd(
+                                _mm_loadu_pd(data.get_unchecked(j + 3 * seventh..).as_ptr().cast()),
+                                _mm_loadu_pd(data.get_unchecked(j + 4 * seventh..).as_ptr().cast()),
                             );
-                            let u5u6 = _mm256_fcmul_pd(
-                                _mm256_create_pd(
-                                    _mm_loadu_pd(
-                                        data.get_unchecked(j + 5 * seventh..).as_ptr().cast(),
-                                    ),
-                                    _mm_loadu_pd(
-                                        data.get_unchecked(j + 6 * seventh..).as_ptr().cast(),
-                                    ),
-                                ),
-                                tw2,
+                            let wu5u6 = _mm256_create_pd(
+                                _mm_loadu_pd(data.get_unchecked(j + 5 * seventh..).as_ptr().cast()),
+                                _mm_loadu_pd(data.get_unchecked(j + 6 * seventh..).as_ptr().cast()),
                             );
 
-                            let (x1p6, x1m6) = AvxButterfly::butterfly2_f64_m128(
-                                _mm256_castpd256_pd128(u1u2),
-                                _mm256_extractf128_pd::<1>(u5u6),
+                            let u1u2 = _mm256_fcmul_pd(wu1u2, tw0);
+                            let u3u4 = _mm256_fcmul_pd(wu3u4, tw1);
+                            let u5u6 = _mm256_fcmul_pd(wu5u6, tw2);
+
+                            const HI_HI: i32 = 0b0011_0001;
+                            const LO_LO: i32 = 0b0010_0000;
+                            const HI_LO: i32 = 0b0010_0001;
+
+                            let (x1p6x2p5, x1m6x2m5) = AvxButterfly::butterfly2_f64(
+                                u1u2,
+                                _mm256_permute2f128_pd::<HI_LO>(u5u6, u5u6),
                             );
-                            let x1m6 = rotate.rotate_m128d(x1m6);
-                            let y00 = _mm_add_pd(u0, x1p6);
-                            let (x2p5, x2m5) = AvxButterfly::butterfly2_f64_m128(
-                                _mm256_extractf128_pd::<1>(u1u2),
-                                _mm256_castpd256_pd128(u5u6),
+                            let x1m6x2m5 = rotate.rotate_m256d(x1m6x2m5);
+
+                            let x1p6 = _mm256_castpd256_pd128(x1p6x2p5);
+                            let x2p5 = _mm256_extractf128_pd::<1>(x1p6x2p5);
+                            let x1m6 = _mm256_castpd256_pd128(x1m6x2m5);
+                            let x2m5 = _mm256_extractf128_pd::<1>(x1m6x2m5);
+
+                            let y00 = _mm_add_pd(
+                                _mm_add_pd(u0, _mm256_castpd256_pd128(x1p6x2p5)),
+                                _mm256_extractf128_pd::<1>(x1p6x2p5),
                             );
-                            let x2m5 = rotate.rotate_m128d(x2m5);
-                            let y00 = _mm_add_pd(y00, x2p5);
                             let (x3p4, x3m4) = AvxButterfly::butterfly2_f64_m128(
                                 _mm256_castpd256_pd128(u3u4),
                                 _mm256_extractf128_pd::<1>(u3u4),
@@ -341,41 +363,47 @@ impl AvxFmaRadix7<f64> {
                             let x3m4 = rotate.rotate_m128d(x3m4);
                             let y00 = _mm_add_pd(y00, x3p4);
 
-                            let m0106a = _mm_fmadd_pd(x1p6, _mm_set1_pd(self.twiddle1.re), u0);
-                            let m0106a = _mm_fmadd_pd(x2p5, _mm_set1_pd(self.twiddle2.re), m0106a);
-                            let m0106a = _mm_fmadd_pd(x3p4, _mm_set1_pd(self.twiddle3.re), m0106a);
-                            let m0106b = _mm_mul_pd(x1m6, _mm_set1_pd(self.twiddle1.im));
-                            let m0106b = _mm_fmadd_pd(x2m5, _mm_set1_pd(self.twiddle2.im), m0106b);
-                            let m0106b = _mm_fmadd_pd(x3m4, _mm_set1_pd(self.twiddle3.im), m0106b);
-                            let (y01, y06) = AvxButterfly::butterfly2_f64_m128(m0106a, m0106b);
+                            let x1p6d = _mm256_permute2f128_pd::<LO_LO>(x1p6x2p5, x1p6x2p5);
+                            let x2p5d = _mm256_permute2f128_pd::<HI_HI>(x1p6x2p5, x1p6x2p5);
+                            let x3p4d = _mm256_create_pd(x3p4, x3p4);
 
-                            let m0205a = _mm_fmadd_pd(x1p6, _mm_set1_pd(self.twiddle2.re), u0);
-                            let m0205a = _mm_fmadd_pd(x2p5, _mm_set1_pd(self.twiddle3.re), m0205a);
-                            let m0205a = _mm_fmadd_pd(x3p4, _mm_set1_pd(self.twiddle1.re), m0205a);
-                            let m0205b = _mm_mul_pd(x1m6, _mm_set1_pd(self.twiddle2.im));
-                            let m0205b = _mm_fnmadd_pd(x2m5, _mm_set1_pd(self.twiddle3.im), m0205b);
-                            let m0205b = _mm_fnmadd_pd(x3m4, _mm_set1_pd(self.twiddle1.im), m0205b);
-                            let (y02, y05) = AvxButterfly::butterfly2_f64_m128(m0205a, m0205b);
+                            let x1m6d = _mm256_permute2f128_pd::<LO_LO>(x1m6x2m5, x1m6x2m5);
+                            let x2m5d = _mm256_permute2f128_pd::<HI_HI>(x1m6x2m5, x1m6x2m5);
+                            let x3m4d = _mm256_create_pd(x3m4, x3m4);
 
-                            let m0304a = _mm_fmadd_pd(x1p6, _mm_set1_pd(self.twiddle3.re), u0);
-                            let m0304a = _mm_fmadd_pd(x2p5, _mm_set1_pd(self.twiddle1.re), m0304a);
-                            let m0304a = _mm_fmadd_pd(x3p4, _mm_set1_pd(self.twiddle2.re), m0304a);
-                            let m0304b = _mm_mul_pd(x1m6, _mm_set1_pd(self.twiddle3.im));
-                            let m0304b = _mm_fnmadd_pd(x2m5, _mm_set1_pd(self.twiddle1.im), m0304b);
-                            let m0304b = _mm_fmadd_pd(x3m4, _mm_set1_pd(self.twiddle2.im), m0304b);
+                            let m0106am0205a =
+                                _mm256_fmadd_pd(x1p6d, tw1tw2r, _mm256_create_pd(u0, u0));
+                            let m0106am0205a = _mm256_fmadd_pd(x2p5d, tw2tw3r, m0106am0205a);
+                            let m0106am0205a = _mm256_fmadd_pd(x3p4d, tw3tw1r, m0106am0205a);
+                            let m0106bm0205b = _mm256_mul_pd(x1m6d, tw1tw2i);
+                            let m0106bm0205b = _mm256_fmadd_pd(x2m5d, tw2tw3i, m0106bm0205b);
+                            let m0106bm0205b = _mm256_fmadd_pd(x3m4d, tw3tw1i, m0106bm0205b);
+                            let (y01y02, y06y05) =
+                                AvxButterfly::butterfly2_f64(m0106am0205a, m0106bm0205b);
+
+                            let m0304a = _mm_fmadd_pd(x1p6, _mm256_castpd256_pd128(tw3tw1r), u0);
+                            let m0304a =
+                                _mm_fmadd_pd(x2p5, _mm256_castpd256_pd128(tw1tw2r), m0304a);
+                            let m0304a =
+                                _mm_fmadd_pd(x3p4, _mm256_castpd256_pd128(tw2tw3r), m0304a);
+                            let m0304b = _mm_mul_pd(x1m6, _mm256_castpd256_pd128(tw3tw1i));
+                            let m0304b =
+                                _mm_fnmadd_pd(x2m5, _mm256_castpd256_pd128(tw1tw2i), m0304b);
+                            let m0304b =
+                                _mm_fmadd_pd(x3m4, _mm256_castpd256_pd128(tw2tw3i), m0304b);
                             let (y03, y04) = AvxButterfly::butterfly2_f64_m128(m0304a, m0304b);
 
                             // // Store results
                             _mm_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y00);
                             _mm_storeu_pd(
                                 data.get_unchecked_mut(j + seventh..).as_mut_ptr().cast(),
-                                y01,
+                                _mm256_castpd256_pd128(y01y02),
                             );
                             _mm_storeu_pd(
                                 data.get_unchecked_mut(j + 2 * seventh..)
                                     .as_mut_ptr()
                                     .cast(),
-                                y02,
+                                _mm256_extractf128_pd::<1>(y01y02),
                             );
                             _mm_storeu_pd(
                                 data.get_unchecked_mut(j + 3 * seventh..)
@@ -393,13 +421,13 @@ impl AvxFmaRadix7<f64> {
                                 data.get_unchecked_mut(j + 5 * seventh..)
                                     .as_mut_ptr()
                                     .cast(),
-                                y05,
+                                _mm256_extractf128_pd::<1>(y06y05),
                             );
                             _mm_storeu_pd(
                                 data.get_unchecked_mut(j + 6 * seventh..)
                                     .as_mut_ptr()
                                     .cast(),
-                                y06,
+                                _mm256_castpd256_pd128(y06y05),
                             );
                         }
                     }
@@ -439,6 +467,13 @@ impl AvxFmaRadix7<f32> {
 
         unsafe {
             let rotate = AvxRotate::<f32>::new(FftDirection::Inverse);
+
+            let tw1r = _mm256_set1_ps(self.twiddle1.re);
+            let tw2r = _mm256_set1_ps(self.twiddle2.re);
+            let tw3r = _mm256_set1_ps(self.twiddle3.re);
+            let tw1i = _mm256_set1_ps(self.twiddle1.im);
+            let tw2i = _mm256_set1_ps(self.twiddle2.im);
+            let tw3i = _mm256_set1_ps(self.twiddle3.im);
 
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
@@ -566,43 +601,28 @@ impl AvxFmaRadix7<f32> {
                             let x3m4 = rotate.rotate_m256(x3m4);
                             let y00 = _mm256_add_ps(y00, x3p4);
 
-                            let m0106a =
-                                _mm256_fmadd_ps(x1p6, _mm256_set1_ps(self.twiddle1.re), u0);
-                            let m0106a =
-                                _mm256_fmadd_ps(x2p5, _mm256_set1_ps(self.twiddle2.re), m0106a);
-                            let m0106a =
-                                _mm256_fmadd_ps(x3p4, _mm256_set1_ps(self.twiddle3.re), m0106a);
-                            let m0106b = _mm256_mul_ps(x1m6, _mm256_set1_ps(self.twiddle1.im));
-                            let m0106b =
-                                _mm256_fmadd_ps(x2m5, _mm256_set1_ps(self.twiddle2.im), m0106b);
-                            let m0106b =
-                                _mm256_fmadd_ps(x3m4, _mm256_set1_ps(self.twiddle3.im), m0106b);
+                            let m0106a = _mm256_fmadd_ps(x1p6, tw1r, u0);
+                            let m0106a = _mm256_fmadd_ps(x2p5, tw2r, m0106a);
+                            let m0106a = _mm256_fmadd_ps(x3p4, tw3r, m0106a);
+                            let m0106b = _mm256_mul_ps(x1m6, tw1i);
+                            let m0106b = _mm256_fmadd_ps(x2m5, tw2i, m0106b);
+                            let m0106b = _mm256_fmadd_ps(x3m4, tw3i, m0106b);
                             let (y01, y06) = AvxButterfly::butterfly2_f32(m0106a, m0106b);
 
-                            let m0205a =
-                                _mm256_fmadd_ps(x1p6, _mm256_set1_ps(self.twiddle2.re), u0);
-                            let m0205a =
-                                _mm256_fmadd_ps(x2p5, _mm256_set1_ps(self.twiddle3.re), m0205a);
-                            let m0205a =
-                                _mm256_fmadd_ps(x3p4, _mm256_set1_ps(self.twiddle1.re), m0205a);
-                            let m0205b = _mm256_mul_ps(x1m6, _mm256_set1_ps(self.twiddle2.im));
-                            let m0205b =
-                                _mm256_fnmadd_ps(x2m5, _mm256_set1_ps(self.twiddle3.im), m0205b);
-                            let m0205b =
-                                _mm256_fnmadd_ps(x3m4, _mm256_set1_ps(self.twiddle1.im), m0205b);
+                            let m0205a = _mm256_fmadd_ps(x1p6, tw2r, u0);
+                            let m0205a = _mm256_fmadd_ps(x2p5, tw3r, m0205a);
+                            let m0205a = _mm256_fmadd_ps(x3p4, tw1r, m0205a);
+                            let m0205b = _mm256_mul_ps(x1m6, tw2i);
+                            let m0205b = _mm256_fnmadd_ps(x2m5, tw3i, m0205b);
+                            let m0205b = _mm256_fnmadd_ps(x3m4, tw1i, m0205b);
                             let (y02, y05) = AvxButterfly::butterfly2_f32(m0205a, m0205b);
 
-                            let m0304a =
-                                _mm256_fmadd_ps(x1p6, _mm256_set1_ps(self.twiddle3.re), u0);
-                            let m0304a =
-                                _mm256_fmadd_ps(x2p5, _mm256_set1_ps(self.twiddle1.re), m0304a);
-                            let m0304a =
-                                _mm256_fmadd_ps(x3p4, _mm256_set1_ps(self.twiddle2.re), m0304a);
-                            let m0304b = _mm256_mul_ps(x1m6, _mm256_set1_ps(self.twiddle3.im));
-                            let m0304b =
-                                _mm256_fnmadd_ps(x2m5, _mm256_set1_ps(self.twiddle1.im), m0304b);
-                            let m0304b =
-                                _mm256_fmadd_ps(x3m4, _mm256_set1_ps(self.twiddle2.im), m0304b);
+                            let m0304a = _mm256_fmadd_ps(x1p6, tw3r, u0);
+                            let m0304a = _mm256_fmadd_ps(x2p5, tw1r, m0304a);
+                            let m0304a = _mm256_fmadd_ps(x3p4, tw2r, m0304a);
+                            let m0304b = _mm256_mul_ps(x1m6, tw3i);
+                            let m0304b = _mm256_fnmadd_ps(x2m5, tw1i, m0304b);
+                            let m0304b = _mm256_fmadd_ps(x3m4, tw2i, m0304b);
                             let (y03, y04) = AvxButterfly::butterfly2_f32(m0304a, m0304b);
 
                             // Store results
@@ -719,28 +739,28 @@ impl AvxFmaRadix7<f32> {
                             let x3m4 = rotate.rotate_m128(x3m4);
                             let y00 = _mm_add_ps(y00, x3p4);
 
-                            let m0106a = _mm_fmadd_ps(x1p6, _mm_set1_ps(self.twiddle1.re), u0);
-                            let m0106a = _mm_fmadd_ps(x2p5, _mm_set1_ps(self.twiddle2.re), m0106a);
-                            let m0106a = _mm_fmadd_ps(x3p4, _mm_set1_ps(self.twiddle3.re), m0106a);
-                            let m0106b = _mm_mul_ps(x1m6, _mm_set1_ps(self.twiddle1.im));
-                            let m0106b = _mm_fmadd_ps(x2m5, _mm_set1_ps(self.twiddle2.im), m0106b);
-                            let m0106b = _mm_fmadd_ps(x3m4, _mm_set1_ps(self.twiddle3.im), m0106b);
+                            let m0106a = _mm_fmadd_ps(x1p6, _mm256_castps256_ps128(tw1r), u0);
+                            let m0106a = _mm_fmadd_ps(x2p5, _mm256_castps256_ps128(tw2r), m0106a);
+                            let m0106a = _mm_fmadd_ps(x3p4, _mm256_castps256_ps128(tw3r), m0106a);
+                            let m0106b = _mm_mul_ps(x1m6, _mm256_castps256_ps128(tw1i));
+                            let m0106b = _mm_fmadd_ps(x2m5, _mm256_castps256_ps128(tw2i), m0106b);
+                            let m0106b = _mm_fmadd_ps(x3m4, _mm256_castps256_ps128(tw3i), m0106b);
                             let (y01, y06) = AvxButterfly::butterfly2_f32_m128(m0106a, m0106b);
 
-                            let m0205a = _mm_fmadd_ps(x1p6, _mm_set1_ps(self.twiddle2.re), u0);
-                            let m0205a = _mm_fmadd_ps(x2p5, _mm_set1_ps(self.twiddle3.re), m0205a);
-                            let m0205a = _mm_fmadd_ps(x3p4, _mm_set1_ps(self.twiddle1.re), m0205a);
-                            let m0205b = _mm_mul_ps(x1m6, _mm_set1_ps(self.twiddle2.im));
-                            let m0205b = _mm_fnmadd_ps(x2m5, _mm_set1_ps(self.twiddle3.im), m0205b);
-                            let m0205b = _mm_fnmadd_ps(x3m4, _mm_set1_ps(self.twiddle1.im), m0205b);
+                            let m0205a = _mm_fmadd_ps(x1p6, _mm256_castps256_ps128(tw2r), u0);
+                            let m0205a = _mm_fmadd_ps(x2p5, _mm256_castps256_ps128(tw3r), m0205a);
+                            let m0205a = _mm_fmadd_ps(x3p4, _mm256_castps256_ps128(tw1r), m0205a);
+                            let m0205b = _mm_mul_ps(x1m6, _mm256_castps256_ps128(tw2i));
+                            let m0205b = _mm_fnmadd_ps(x2m5, _mm256_castps256_ps128(tw3i), m0205b);
+                            let m0205b = _mm_fnmadd_ps(x3m4, _mm256_castps256_ps128(tw1i), m0205b);
                             let (y02, y05) = AvxButterfly::butterfly2_f32_m128(m0205a, m0205b);
 
-                            let m0304a = _mm_fmadd_ps(x1p6, _mm_set1_ps(self.twiddle3.re), u0);
-                            let m0304a = _mm_fmadd_ps(x2p5, _mm_set1_ps(self.twiddle1.re), m0304a);
-                            let m0304a = _mm_fmadd_ps(x3p4, _mm_set1_ps(self.twiddle2.re), m0304a);
-                            let m0304b = _mm_mul_ps(x1m6, _mm_set1_ps(self.twiddle3.im));
-                            let m0304b = _mm_fnmadd_ps(x2m5, _mm_set1_ps(self.twiddle1.im), m0304b);
-                            let m0304b = _mm_fmadd_ps(x3m4, _mm_set1_ps(self.twiddle2.im), m0304b);
+                            let m0304a = _mm_fmadd_ps(x1p6, _mm256_castps256_ps128(tw3r), u0);
+                            let m0304a = _mm_fmadd_ps(x2p5, _mm256_castps256_ps128(tw1r), m0304a);
+                            let m0304a = _mm_fmadd_ps(x3p4, _mm256_castps256_ps128(tw2r), m0304a);
+                            let m0304b = _mm_mul_ps(x1m6, _mm256_castps256_ps128(tw3i));
+                            let m0304b = _mm_fnmadd_ps(x2m5, _mm256_castps256_ps128(tw1i), m0304b);
+                            let m0304b = _mm_fmadd_ps(x3m4, _mm256_castps256_ps128(tw2i), m0304b);
                             let (y03, y04) = AvxButterfly::butterfly2_f32_m128(m0304a, m0304b);
 
                             // Store results
@@ -828,28 +848,28 @@ impl AvxFmaRadix7<f32> {
                             let x3m4 = rotate.rotate_m128(x3m4);
                             let y00 = _mm_add_ps(y00, x3p4);
 
-                            let m0106a = _mm_fmadd_ps(x1p6, _mm_set1_ps(self.twiddle1.re), u0);
-                            let m0106a = _mm_fmadd_ps(x2p5, _mm_set1_ps(self.twiddle2.re), m0106a);
-                            let m0106a = _mm_fmadd_ps(x3p4, _mm_set1_ps(self.twiddle3.re), m0106a);
-                            let m0106b = _mm_mul_ps(x1m6, _mm_set1_ps(self.twiddle1.im));
-                            let m0106b = _mm_fmadd_ps(x2m5, _mm_set1_ps(self.twiddle2.im), m0106b);
-                            let m0106b = _mm_fmadd_ps(x3m4, _mm_set1_ps(self.twiddle3.im), m0106b);
+                            let m0106a = _mm_fmadd_ps(x1p6, _mm256_castps256_ps128(tw1r), u0);
+                            let m0106a = _mm_fmadd_ps(x2p5, _mm256_castps256_ps128(tw2r), m0106a);
+                            let m0106a = _mm_fmadd_ps(x3p4, _mm256_castps256_ps128(tw3r), m0106a);
+                            let m0106b = _mm_mul_ps(x1m6, _mm256_castps256_ps128(tw1i));
+                            let m0106b = _mm_fmadd_ps(x2m5, _mm256_castps256_ps128(tw2i), m0106b);
+                            let m0106b = _mm_fmadd_ps(x3m4, _mm256_castps256_ps128(tw3i), m0106b);
                             let (y01, y06) = AvxButterfly::butterfly2_f32_m128(m0106a, m0106b);
 
-                            let m0205a = _mm_fmadd_ps(x1p6, _mm_set1_ps(self.twiddle2.re), u0);
-                            let m0205a = _mm_fmadd_ps(x2p5, _mm_set1_ps(self.twiddle3.re), m0205a);
-                            let m0205a = _mm_fmadd_ps(x3p4, _mm_set1_ps(self.twiddle1.re), m0205a);
-                            let m0205b = _mm_mul_ps(x1m6, _mm_set1_ps(self.twiddle2.im));
-                            let m0205b = _mm_fnmadd_ps(x2m5, _mm_set1_ps(self.twiddle3.im), m0205b);
-                            let m0205b = _mm_fnmadd_ps(x3m4, _mm_set1_ps(self.twiddle1.im), m0205b);
+                            let m0205a = _mm_fmadd_ps(x1p6, _mm256_castps256_ps128(tw2r), u0);
+                            let m0205a = _mm_fmadd_ps(x2p5, _mm256_castps256_ps128(tw3r), m0205a);
+                            let m0205a = _mm_fmadd_ps(x3p4, _mm256_castps256_ps128(tw1r), m0205a);
+                            let m0205b = _mm_mul_ps(x1m6, _mm256_castps256_ps128(tw2i));
+                            let m0205b = _mm_fnmadd_ps(x2m5, _mm256_castps256_ps128(tw3i), m0205b);
+                            let m0205b = _mm_fnmadd_ps(x3m4, _mm256_castps256_ps128(tw1i), m0205b);
                             let (y02, y05) = AvxButterfly::butterfly2_f32_m128(m0205a, m0205b);
 
-                            let m0304a = _mm_fmadd_ps(x1p6, _mm_set1_ps(self.twiddle3.re), u0);
-                            let m0304a = _mm_fmadd_ps(x2p5, _mm_set1_ps(self.twiddle1.re), m0304a);
-                            let m0304a = _mm_fmadd_ps(x3p4, _mm_set1_ps(self.twiddle2.re), m0304a);
-                            let m0304b = _mm_mul_ps(x1m6, _mm_set1_ps(self.twiddle3.im));
-                            let m0304b = _mm_fnmadd_ps(x2m5, _mm_set1_ps(self.twiddle1.im), m0304b);
-                            let m0304b = _mm_fmadd_ps(x3m4, _mm_set1_ps(self.twiddle2.im), m0304b);
+                            let m0304a = _mm_fmadd_ps(x1p6, _mm256_castps256_ps128(tw3r), u0);
+                            let m0304a = _mm_fmadd_ps(x2p5, _mm256_castps256_ps128(tw1r), m0304a);
+                            let m0304a = _mm_fmadd_ps(x3p4, _mm256_castps256_ps128(tw2r), m0304a);
+                            let m0304b = _mm_mul_ps(x1m6, _mm256_castps256_ps128(tw3i));
+                            let m0304b = _mm_fnmadd_ps(x2m5, _mm256_castps256_ps128(tw1i), m0304b);
+                            let m0304b = _mm_fmadd_ps(x3m4, _mm256_castps256_ps128(tw2i), m0304b);
                             let (y03, y04) = AvxButterfly::butterfly2_f32_m128(m0304a, m0304b);
 
                             // Store results
@@ -920,8 +940,9 @@ impl FftExecutor<f32> for AvxFmaRadix7<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::radix7::Radix7;
+    use crate::dft::Dft;
     use rand::Rng;
+
     #[test]
     fn test_avx_radix7() {
         for i in 1..4 {
@@ -933,7 +954,7 @@ mod tests {
                     im: rand::rng().random(),
                 };
             }
-            let radix7_reference = Radix7::new(size, FftDirection::Forward).unwrap();
+            let radix7_reference = Dft::new(size, FftDirection::Forward).unwrap();
 
             let src = input.to_vec();
             let mut z_ref = input.to_vec();
@@ -1003,7 +1024,7 @@ mod tests {
                 };
             }
 
-            let radix7_reference = Radix7::new(size, FftDirection::Forward).unwrap();
+            let radix7_reference = Dft::new(size, FftDirection::Forward).unwrap();
 
             let src = input.to_vec();
             let mut z_ref = input.to_vec();
