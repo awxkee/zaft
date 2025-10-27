@@ -33,12 +33,12 @@ use crate::factory::AlgorithmFactory;
 use crate::good_thomas::GoodThomasFft;
 use crate::good_thomas_small::GoodThomasSmallFft;
 use crate::mixed_radix::MixedRadix;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 
 impl AlgorithmFactory<f64> for f64 {
     fn butterfly1(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
         Ok(Box::new(Butterfly1 {
             phantom_data: Default::default(),
             direction: fft_direction,
@@ -47,7 +47,7 @@ impl AlgorithmFactory<f64> for f64 {
 
     fn butterfly2(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             use crate::neon::NeonButterfly2;

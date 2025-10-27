@@ -93,6 +93,19 @@ pub trait FftExecutor<T> {
     fn length(&self) -> usize;
 }
 
+pub(crate) trait FftExecutorOutOfPlace<T> {
+    #[allow(unused)]
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError>;
+}
+
+pub(crate) trait CompositeFftExecutor<T>: FftExecutor<T> + FftExecutorOutOfPlace<T> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync>;
+}
+
 pub struct Zaft {}
 
 impl Zaft {
@@ -347,9 +360,9 @@ impl Zaft {
             return Err(ZaftError::ZeroSizedFft);
         }
         if n == 1 {
-            return T::butterfly1(fft_direction);
+            return T::butterfly1(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 2 {
-            return T::butterfly2(fft_direction);
+            return T::butterfly2(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 3 {
             return T::butterfly3(fft_direction);
         } else if n == 4 {

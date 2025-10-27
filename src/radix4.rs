@@ -81,8 +81,8 @@ impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> Radix4<T> {
 
         let exponent = size.trailing_zeros();
         let base_fft = match exponent {
-            0 => T::butterfly1(fft_direction)?,
-            1 => T::butterfly2(fft_direction)?,
+            0 => T::butterfly1(fft_direction).map(|x| x.into_fft_executor())?,
+            1 => T::butterfly2(fft_direction).map(|x| x.into_fft_executor())?,
             2 => T::butterfly4(fft_direction)?,
             3 => T::butterfly8(fft_direction)?,
             _ => {

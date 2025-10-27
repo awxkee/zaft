@@ -32,15 +32,15 @@ use crate::dft::Dft;
 use crate::good_thomas::GoodThomasFft;
 use crate::good_thomas_small::GoodThomasSmallFft;
 use crate::mixed_radix::MixedRadix;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 
 pub(crate) trait AlgorithmFactory<T> {
     fn butterfly1(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly2(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly3(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
@@ -229,7 +229,7 @@ pub(crate) trait AlgorithmFactory<T> {
 impl AlgorithmFactory<f32> for f32 {
     fn butterfly1(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
         Ok(Box::new(Butterfly1 {
             phantom_data: Default::default(),
             direction: fft_direction,
@@ -238,7 +238,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly2(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             use crate::neon::NeonButterfly2;

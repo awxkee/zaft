@@ -27,7 +27,7 @@
 
 use crate::avx::util::{_mm_unpackhi_ps64, _mm_unpacklo_ps64, shuffle};
 use crate::traits::FftTrigonometry;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::x86_64::*;
@@ -98,6 +98,70 @@ impl AvxButterfly2<f64> {
         }
         Ok(())
     }
+
+    #[allow(unused)]
+    #[target_feature(enable = "avx2")]
+    unsafe fn execute_out_of_place_f64(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 2 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 2 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        for (dst, src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+            unsafe {
+                let a = _mm256_loadu_pd(src.as_ptr().cast());
+                let b = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
+
+                let u0 = _mm256_permute2f128_pd::<0x20>(a, b);
+                let u1 = _mm256_permute2f128_pd::<0x31>(a, b);
+
+                let y0 = _mm256_add_pd(u0, u1);
+                let y1 = _mm256_sub_pd(u0, u1);
+
+                let zy0 = _mm256_permute2f128_pd::<0x20>(y0, y1);
+                let zy1 = _mm256_permute2f128_pd::<0x31>(y0, y1);
+
+                _mm256_storeu_pd(dst.as_mut_ptr().cast(), zy0);
+                _mm256_storeu_pd(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), zy1);
+            }
+        }
+
+        let rem_src = src.chunks_exact(4).remainder();
+        let rem_dst = dst.chunks_exact_mut(4).into_remainder();
+
+        for (dst, src) in rem_dst.chunks_exact_mut(2).zip(rem_src.chunks_exact(2)) {
+            unsafe {
+                let uz0 = _mm256_loadu_pd(src.as_ptr().cast());
+
+                let u0 = _mm256_castpd256_pd128(uz0);
+                let u1 = _mm256_extractf128_pd::<1>(uz0);
+
+                let y0 = _mm_add_pd(u0, u1);
+                let y1 = _mm_sub_pd(u0, u1);
+
+                let y0y1 = _mm256_insertf128_pd::<1>(_mm256_castpd128_pd256(y0), y1);
+
+                _mm256_storeu_pd(dst.as_mut_ptr().cast(), y0y1);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl FftExecutorOutOfPlace<f64> for AvxButterfly2<f64> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_out_of_place_f64(src, dst) }
+    }
 }
 
 impl AvxButterfly2<f32> {
@@ -152,6 +216,74 @@ impl AvxButterfly2<f32> {
 
         Ok(())
     }
+
+    #[allow(unused)]
+    #[target_feature(enable = "avx2")]
+    unsafe fn execute_out_of_place_f32(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 2 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 2 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        for (dst, src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+            unsafe {
+                let a = _mm256_loadu_ps(src.as_ptr().cast());
+
+                const SH: i32 = shuffle(3, 1, 2, 0);
+                let ab =
+                    _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(_mm256_castps_si256(a)));
+                let u0 = _mm256_castps256_ps128(ab);
+                let u1 = _mm256_extractf128_ps::<1>(ab);
+
+                let y0 = _mm_add_ps(u0, u1);
+                let y1 = _mm_sub_ps(u0, u1);
+
+                let y0y1 = _mm256_insertf128_ps::<1>(_mm256_castps128_ps256(y0), y1);
+
+                let vy0y1 =
+                    _mm256_castsi256_ps(_mm256_permute4x64_epi64::<SH>(_mm256_castps_si256(y0y1)));
+
+                _mm256_storeu_ps(dst.as_mut_ptr().cast(), vy0y1);
+            }
+        }
+
+        let rem_src = src.chunks_exact(4).remainder();
+        let rem_dst = dst.chunks_exact_mut(4).into_remainder();
+
+        for (dst, src) in rem_dst.chunks_exact_mut(2).zip(rem_src.chunks_exact(2)) {
+            unsafe {
+                let uz0 = _mm_loadu_ps(src.as_ptr().cast());
+
+                let u0 = _mm_unpacklo_ps64(uz0, uz0);
+                let u1 = _mm_unpackhi_ps64(uz0, uz0);
+
+                let y0 = _mm_add_ps(u0, u1);
+                let y1 = _mm_sub_ps(u0, u1);
+
+                let y0y1 = _mm_unpacklo_ps64(y0, y1);
+
+                _mm_storeu_ps(dst.as_mut_ptr().cast(), y0y1);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl FftExecutorOutOfPlace<f32> for AvxButterfly2<f32> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_out_of_place_f32(src, dst) }
+    }
 }
 
 impl FftExecutor<f64> for AvxButterfly2<f64> {
@@ -179,6 +311,18 @@ impl FftExecutor<f32> for AvxButterfly2<f32> {
 
     fn length(&self) -> usize {
         2
+    }
+}
+
+impl CompositeFftExecutor<f32> for AvxButterfly2<f32> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+        self
+    }
+}
+
+impl CompositeFftExecutor<f64> for AvxButterfly2<f64> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+        self
     }
 }
 
