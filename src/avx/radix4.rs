@@ -505,9 +505,9 @@ mod tests {
     use rand::Rng;
 
     #[test]
-    fn test_neon_radix4() {
-        for i in 1..5 {
-            let size = 4usize.pow(i);
+    fn test_avx_radix4() {
+        for i in 1..7 {
+            let size = 2usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
                 *z = Complex {
@@ -547,9 +547,9 @@ mod tests {
     }
 
     #[test]
-    fn test_neon_radix4_f64() {
-        for i in 1..5 {
-            let size = 4usize.pow(i);
+    fn test_avx_radix4_f64() {
+        for i in 1..7 {
+            let size = 2usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
             for z in input.iter_mut() {
                 *z = Complex {
