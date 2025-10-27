@@ -390,7 +390,7 @@ impl Zaft {
         } else if n == 15 {
             return T::butterfly15(fft_direction);
         } else if n == 16 {
-            return T::butterfly16(fft_direction);
+            return T::butterfly16(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 17 {
             return T::butterfly17(fft_direction);
         } else if n == 19 {
@@ -402,7 +402,7 @@ impl Zaft {
         } else if n == 29 {
             return T::butterfly29(fft_direction);
         } else if n == 32 {
-            return T::butterfly32(fft_direction);
+            return T::butterfly32(fft_direction).map(|x| x.into_fft_executor());
         }
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {

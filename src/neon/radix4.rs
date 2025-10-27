@@ -31,7 +31,7 @@ use crate::neon::util::{create_neon_twiddles, vfcmul_f32, vfcmulq_f32, vfcmulq_f
 use crate::radix4::Radix4Twiddles;
 use crate::traits::FftTrigonometry;
 use crate::util::bitreversed_transpose;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
@@ -41,7 +41,7 @@ pub(crate) struct NeonRadix4<T> {
     execution_length: usize,
     direction: FftDirection,
     base_len: usize,
-    base_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + 'static + Float>
@@ -55,8 +55,8 @@ where
 
         let exponent = size.trailing_zeros();
         let base_fft = match exponent {
-            0 => T::butterfly1(fft_direction).map(|x| x.into_fft_executor())?,
-            1 => T::butterfly2(fft_direction).map(|x| x.into_fft_executor())?,
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly2(fft_direction)?,
             2 => T::butterfly4(fft_direction)?,
             3 => T::butterfly8(fft_direction)?,
             _ => {
@@ -99,11 +99,10 @@ impl FftExecutor<f64> for NeonRadix4<f64> {
         let mut scratch = vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            scratch.copy_from_slice(chunk);
             // bit reversal first
-            bitreversed_transpose::<Complex<f64>, 4>(self.base_len, &scratch, chunk);
+            bitreversed_transpose::<Complex<f64>, 4>(self.base_len, chunk, &mut scratch);
 
-            self.base_fft.execute(chunk)?;
+            self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
             let mut len = self.base_len;
 
@@ -202,11 +201,10 @@ impl FftExecutor<f32> for NeonRadix4<f32> {
         let mut scratch = vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            scratch.copy_from_slice(chunk);
             // bit reversal first
-            bitreversed_transpose::<Complex<f32>, 4>(self.base_len, &scratch, chunk);
+            bitreversed_transpose::<Complex<f32>, 4>(self.base_len, chunk, &mut scratch);
 
-            self.base_fft.execute(chunk)?;
+            self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
             let mut len = self.base_len;
 
