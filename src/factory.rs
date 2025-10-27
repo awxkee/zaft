@@ -55,7 +55,7 @@ pub(crate) trait AlgorithmFactory<T> {
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly7(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly8(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
@@ -354,7 +354,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly7(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]

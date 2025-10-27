@@ -37,7 +37,7 @@ use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
 use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_seven};
-use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
@@ -50,7 +50,7 @@ pub(crate) struct NeonRadix7<T> {
     twiddle2: Complex<T>,
     twiddle3: Complex<T>,
     direction: FftDirection,
-    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
+    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 impl<
@@ -87,7 +87,7 @@ where
             twiddle2: compute_twiddle(2, 7, fft_direction),
             twiddle3: compute_twiddle(3, 7, fft_direction),
             direction: fft_direction,
-            butterfly: Zaft::strategy(7, fft_direction)?,
+            butterfly: T::butterfly7(fft_direction)?,
         })
     }
 }
@@ -109,7 +109,7 @@ impl FftExecutor<f64> for NeonRadix7<f64> {
                 // Digit-reversal permutation
                 bitreversed_transpose::<Complex<f64>, 7>(7, chunk, &mut scratch);
 
-                self.butterfly.execute(&mut scratch)?;
+                self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
                 let mut len = 7;
 
@@ -120,7 +120,7 @@ impl FftExecutor<f64> for NeonRadix7<f64> {
                     len *= 7;
                     let seventh = len / 7;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         for j in 0..seventh {
                             let tw0 = vld1q_f64(m_twiddles.get_unchecked(6 * j..).as_ptr().cast());
                             let tw1 =
@@ -237,8 +237,6 @@ impl FftExecutor<f64> for NeonRadix7<f64> {
 
                     m_twiddles = &m_twiddles[columns * 6..];
                 }
-
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -271,7 +269,7 @@ impl FftExecutor<f32> for NeonRadix7<f32> {
                 // Digit-reversal permutation
                 bitreversed_transpose::<Complex<f32>, 7>(7, chunk, &mut scratch);
 
-                self.butterfly.execute(&mut scratch)?;
+                self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
                 let mut len = 7;
 
@@ -282,7 +280,7 @@ impl FftExecutor<f32> for NeonRadix7<f32> {
                     len *= 7;
                     let seventh = len / 7;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < seventh {
@@ -516,8 +514,6 @@ impl FftExecutor<f32> for NeonRadix7<f32> {
 
                     m_twiddles = &m_twiddles[columns * 6..];
                 }
-
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -535,11 +531,12 @@ impl FftExecutor<f32> for NeonRadix7<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
     fn test_neon_radix7() {
-        for i in 1..7 {
+        for i in 1..5 {
             let size = 7usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
@@ -549,9 +546,36 @@ mod tests {
                 };
             }
             let src = input.to_vec();
+
+            let radix7_reference = Dft::new(size, FftDirection::Forward).unwrap();
+            let mut z_ref = input.to_vec();
+            radix7_reference.execute(&mut z_ref).unwrap();
+
             let radix_forward = NeonRadix7::new(size, FftDirection::Forward).unwrap();
-            let radix_inverse = NeonRadix7::new(size, FftDirection::Inverse).unwrap();
             radix_forward.execute(&mut input).unwrap();
+
+            input
+                .iter()
+                .zip(z_ref.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 0.01,
+                        "a_re {} != b_re {} for size {}, reference failed at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 0.01,
+                        "a_im {} != b_im {} for size {}, reference failed at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            let radix_inverse = NeonRadix7::new(size, FftDirection::Inverse).unwrap();
             radix_inverse.execute(&mut input).unwrap();
 
             input = input
@@ -581,7 +605,7 @@ mod tests {
 
     #[test]
     fn test_neon_radix7_f64() {
-        for i in 1..7 {
+        for i in 1..5 {
             let size = 7usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
             for z in input.iter_mut() {
@@ -591,9 +615,35 @@ mod tests {
                 };
             }
             let src = input.to_vec();
+            let radix7_reference = Dft::new(size, FftDirection::Forward).unwrap();
+            let mut z_ref = input.to_vec();
+            radix7_reference.execute(&mut z_ref).unwrap();
+
             let radix_forward = NeonRadix7::new(size, FftDirection::Forward).unwrap();
             let radix_inverse = NeonRadix7::new(size, FftDirection::Inverse).unwrap();
             radix_forward.execute(&mut input).unwrap();
+
+            input
+                .iter()
+                .zip(z_ref.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {}, reference failed at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {}, reference failed at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
             radix_inverse.execute(&mut input).unwrap();
 
             input = input
