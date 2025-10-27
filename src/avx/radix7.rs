@@ -31,7 +31,7 @@ use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
     _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps, _mm256_load4_f32x2,
-    create_avx2_twiddles,
+    create_avx4_twiddles,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -81,7 +81,7 @@ where
             "Input length must be a power of 7"
         );
 
-        let twiddles = create_avx2_twiddles::<T, 7>(7, size, fft_direction)?;
+        let twiddles = create_avx4_twiddles::<T, 7>(7, size, fft_direction)?;
 
         Ok(AvxFmaRadix7 {
             execution_length: size,
@@ -523,43 +523,20 @@ impl AvxFmaRadix7<f32> {
                                 data.get_unchecked(j + 6 * seventh..).as_ptr().cast(),
                             );
 
-                            let u1u2 =
-                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<LO_LO>(a1, a2), tw0);
+                            let u1 = _mm256_fcmul_ps(a1, tw0);
+                            let u2 = _mm256_fcmul_ps(a2, tw1);
+                            let u3 = _mm256_fcmul_ps(a3, tw2);
+                            let u4 = _mm256_fcmul_ps(a4, tw3);
+                            let u5 = _mm256_fcmul_ps(a5, tw4);
+                            let u6 = _mm256_fcmul_ps(a6, tw5);
 
-                            let u3u4 =
-                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<LO_LO>(a3, a4), tw1);
-
-                            let u5u6 =
-                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<LO_LO>(a5, a6), tw2);
-
-                            let u1u2_2 =
-                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<HI_HI>(a1, a2), tw3);
-
-                            let u3u4_2 =
-                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<HI_HI>(a3, a4), tw4);
-
-                            let u5u6_2 =
-                                _mm256_fcmul_ps(_mm256_permute2f128_ps::<HI_HI>(a5, a6), tw5);
-
-                            const HI_HI: i32 = 0b0011_0001;
-                            const LO_LO: i32 = 0b0010_0000;
-
-                            let (x1p6, x1m6) = AvxButterfly::butterfly2_f32(
-                                _mm256_permute2f128_ps::<LO_LO>(u1u2, u1u2_2),
-                                _mm256_permute2f128_ps::<HI_HI>(u5u6, u5u6_2),
-                            );
+                            let (x1p6, x1m6) = AvxButterfly::butterfly2_f32(u1, u6);
                             let x1m6 = rotate.rotate_m256(x1m6);
                             let y00 = _mm256_add_ps(u0, x1p6);
-                            let (x2p5, x2m5) = AvxButterfly::butterfly2_f32(
-                                _mm256_permute2f128_ps::<HI_HI>(u1u2, u1u2_2),
-                                _mm256_permute2f128_ps::<LO_LO>(u5u6, u5u6_2),
-                            );
+                            let (x2p5, x2m5) = AvxButterfly::butterfly2_f32(u2, u5);
                             let x2m5 = rotate.rotate_m256(x2m5);
                             let y00 = _mm256_add_ps(y00, x2p5);
-                            let (x3p4, x3m4) = AvxButterfly::butterfly2_f32(
-                                _mm256_permute2f128_ps::<LO_LO>(u3u4, u3u4_2),
-                                _mm256_permute2f128_ps::<HI_HI>(u3u4, u3u4_2),
-                            );
+                            let (x3p4, x3m4) = AvxButterfly::butterfly2_f32(u3, u4);
                             let x3m4 = rotate.rotate_m256(x3m4);
                             let y00 = _mm256_add_ps(y00, x3p4);
 
