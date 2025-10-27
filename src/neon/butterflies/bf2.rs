@@ -189,7 +189,7 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly2<f32> {
             }
         }
 
-        let rem_src = rem_src.chunks_exact(2).remainder();
+        let rem_src = rem_src.chunks_exact(4).remainder();
         let rem_dst = rem_dst.chunks_exact_mut(4).into_remainder();
 
         for (dst, src) in rem_dst.chunks_exact_mut(2).zip(rem_src.chunks_exact(2)) {
