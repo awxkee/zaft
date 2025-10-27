@@ -28,12 +28,11 @@
  */
 use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly5};
 use crate::complex_fma::c_mul_fast;
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::traits::FftTrigonometry;
-use crate::util::{
-    digit_reverse_indices, is_power_of_ten, permute_inplace, radixn_floating_twiddles,
-    radixn_floating_twiddles_from_base,
-};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::util::{bitreversed_transpose, is_power_of_ten, radixn_floating_twiddles_from_base};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -41,20 +40,13 @@ use std::ops::{Add, Mul, Neg, Sub};
 #[allow(dead_code)]
 pub(crate) struct Radix10<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     bf5: FastButterfly5<T>,
     direction: FftDirection,
+    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 pub(crate) trait Radix10Twiddles {
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<Self>>, ZaftError>
-    where
-        Self: Sized;
-
     #[allow(unused)]
     fn make_twiddles_with_base(
         base: usize,
@@ -66,13 +58,6 @@ pub(crate) trait Radix10Twiddles {
 }
 
 impl Radix10Twiddles for f64 {
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<f64>>, ZaftError> {
-        radixn_floating_twiddles::<f64, 10>(size, fft_direction)
-    }
-
     fn make_twiddles_with_base(
         base: usize,
         size: usize,
@@ -86,13 +71,6 @@ impl Radix10Twiddles for f64 {
 }
 
 impl Radix10Twiddles for f32 {
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<f32>>, ZaftError> {
-        radixn_floating_twiddles::<f32, 10>(size, fft_direction)
-    }
-
     fn make_twiddles_with_base(
         base: usize,
         size: usize,
@@ -106,7 +84,16 @@ impl Radix10Twiddles for f32 {
 }
 
 #[allow(dead_code)]
-impl<T: Default + Clone + Radix10Twiddles + 'static + Copy + FftTrigonometry + Float> Radix10<T>
+impl<
+    T: Default
+        + Clone
+        + Radix10Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + AlgorithmFactory<T>,
+> Radix10<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -116,15 +103,14 @@ where
             "Input length must be a power of 10"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 10)?;
+        let twiddles = T::make_twiddles_with_base(10, size, fft_direction)?;
 
         Ok(Radix10 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             bf5: FastButterfly5::new(fft_direction),
             direction: fft_direction,
+            butterfly: T::butterfly10(fft_direction)?,
         })
     }
 }
@@ -154,16 +140,22 @@ where
 
         let bf2 = FastButterfly2::new(self.direction);
 
+        let mut scratch = try_vec![Complex::<T>::default(); self.execution_length];
+
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            bitreversed_transpose::<Complex<T>, 10>(10, chunk, &mut scratch);
+
+            self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
             let mut len = 10;
 
             unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 10;
                     let tenth = len / 10;
 
                     for data in chunk.chunks_exact_mut(len) {
@@ -235,8 +227,7 @@ where
                         }
                     }
 
-                    m_twiddles = &m_twiddles[tenth * 9..];
-                    len *= 10;
+                    m_twiddles = &m_twiddles[columns * 9..];
                 }
             }
         }

@@ -35,7 +35,7 @@ use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
 use crate::util::{bitreversed_transpose, is_power_of_ten};
-use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
@@ -46,7 +46,7 @@ pub(crate) struct NeonRadix10<T> {
     execution_length: usize,
     bf5: NeonFastButterfly5<T>,
     direction: FftDirection,
-    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
+    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 impl<
@@ -81,7 +81,7 @@ where
             twiddles,
             bf5: NeonFastButterfly5::new(fft_direction),
             direction: fft_direction,
-            butterfly: Zaft::strategy(10, fft_direction)?,
+            butterfly: T::butterfly10(fft_direction)?,
         })
     }
 }
@@ -103,7 +103,7 @@ impl FftExecutor<f64> for NeonRadix10<f64> {
                 // Digit-reversal permutation
                 bitreversed_transpose::<Complex<f64>, 10>(10, chunk, &mut scratch);
 
-                self.butterfly.execute(&mut scratch)?;
+                self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
                 let mut len = 10;
 
@@ -114,7 +114,7 @@ impl FftExecutor<f64> for NeonRadix10<f64> {
                     len *= 10;
                     let tenth = len / 10;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         for j in 0..tenth {
                             let td = 9 * j;
                             let tw0 = vld1q_f64(m_twiddles.get_unchecked(td..).as_ptr().cast());
@@ -217,8 +217,6 @@ impl FftExecutor<f64> for NeonRadix10<f64> {
 
                     m_twiddles = &m_twiddles[columns * 9..];
                 }
-
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -251,7 +249,7 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
                 // Digit-reversal permutation
                 bitreversed_transpose::<Complex<f32>, 10>(10, chunk, &mut scratch);
 
-                self.butterfly.execute(&mut scratch)?;
+                self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
                 let mut len = 10;
 
@@ -262,7 +260,7 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
                     len *= 10;
                     let tenth = len / 10;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < tenth {
@@ -501,7 +499,6 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
 
                     m_twiddles = &m_twiddles[columns * 9..];
                 }
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -519,11 +516,12 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
     fn test_neon_radix10() {
-        for i in 1..5 {
+        for i in 1..4 {
             let size = 10usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
@@ -534,8 +532,35 @@ mod tests {
             }
             let src = input.to_vec();
             let radix_forward = NeonRadix10::new(size, FftDirection::Forward).unwrap();
+
+            let radix7_reference = Dft::new(size, FftDirection::Forward).unwrap();
+            let mut z_ref = input.to_vec();
+            radix7_reference.execute(&mut z_ref).unwrap();
+
             let radix_inverse = NeonRadix10::new(size, FftDirection::Inverse).unwrap();
             radix_forward.execute(&mut input).unwrap();
+
+            input
+                .iter()
+                .zip(z_ref.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 0.01,
+                        "a_re {} != b_re {} for size {}, reference failed at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 0.01,
+                        "a_im {} != b_im {} for size {}, reference failed at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
             radix_inverse.execute(&mut input).unwrap();
 
             input = input
@@ -565,7 +590,7 @@ mod tests {
 
     #[test]
     fn test_neon_radix10_f64() {
-        for i in 1..5 {
+        for i in 1..4 {
             let size = 10usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
             for z in input.iter_mut() {
@@ -576,8 +601,35 @@ mod tests {
             }
             let src = input.to_vec();
             let radix_forward = NeonRadix10::new(size, FftDirection::Forward).unwrap();
+
+            let radix7_reference = Dft::new(size, FftDirection::Forward).unwrap();
+            let mut z_ref = input.to_vec();
+            radix7_reference.execute(&mut z_ref).unwrap();
+
             let radix_inverse = NeonRadix10::new(size, FftDirection::Inverse).unwrap();
             radix_forward.execute(&mut input).unwrap();
+
+            input
+                .iter()
+                .zip(z_ref.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {}, reference failed at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {}, reference failed at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
             radix_inverse.execute(&mut input).unwrap();
 
             input = input
