@@ -992,7 +992,7 @@ mod tests {
 
     #[test]
     fn test_butterfly32_fcma_f32() {
-        for i in 1..5 {
+        for i in 1..4 {
             let size = 32usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {

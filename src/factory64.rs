@@ -272,7 +272,7 @@ impl AlgorithmFactory<f64> for f64 {
 
     fn butterfly11(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]

@@ -29,7 +29,7 @@
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -404,9 +404,371 @@ where
     }
 }
 
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Float
+        + Default
+        + FftTrigonometry,
+> FftExecutorOutOfPlace<T> for Butterfly11<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        for (dst, src) in dst.chunks_exact_mut(11).zip(src.chunks_exact(11)) {
+            let u0 = src[0];
+            let u1 = src[1];
+            let u2 = src[2];
+            let u3 = src[3];
+
+            let u4 = src[4];
+            let u5 = src[5];
+            let u6 = src[6];
+            let u7 = src[7];
+
+            let u8 = src[8];
+            let u9 = src[9];
+            let u10 = src[10];
+
+            let x110p = u1 + u10;
+            let x110n = u1 - u10;
+            let x29p = u2 + u9;
+            let x29n = u2 - u9;
+            let x38p = u3 + u8;
+            let x38n = u3 - u8;
+            let x47p = u4 + u7;
+            let x47n = u4 - u7;
+            let x56p = u5 + u6;
+            let x56n = u5 - u6;
+
+            let y0 = u0 + x110p + x29p + x38p + x47p + x56p;
+            dst[0] = y0;
+            let b110re_a = fmla(
+                self.twiddle1.re,
+                x110p.re,
+                fmla(
+                    self.twiddle2.re,
+                    x29p.re,
+                    fmla(self.twiddle3.re, x38p.re, u0.re)
+                        + fmla(self.twiddle4.re, x47p.re, self.twiddle5.re * x56p.re),
+                ),
+            );
+            let b110re_b = fmla(
+                self.twiddle1.im,
+                x110n.im,
+                fmla(
+                    self.twiddle2.im,
+                    x29n.im,
+                    fmla(
+                        self.twiddle3.im,
+                        x38n.im,
+                        self.twiddle4.im * x47n.im + self.twiddle5.im * x56n.im,
+                    ),
+                ),
+            );
+            let b29re_a = fmla(
+                self.twiddle2.re,
+                x110p.re,
+                fmla(
+                    self.twiddle4.re,
+                    x29p.re,
+                    fmla(self.twiddle5.re, x38p.re, u0.re)
+                        + fmla(self.twiddle3.re, x47p.re, self.twiddle1.re * x56p.re),
+                ),
+            );
+            let b29re_b = fmla(
+                self.twiddle2.im,
+                x110n.im,
+                fmla(
+                    self.twiddle4.im,
+                    x29n.im,
+                    fmla(
+                        -self.twiddle5.im,
+                        x38n.im,
+                        fmla(-self.twiddle3.im, x47n.im, -self.twiddle1.im * x56n.im),
+                    ),
+                ),
+            );
+            let b38re_a = fmla(
+                self.twiddle3.re,
+                x110p.re,
+                fmla(
+                    self.twiddle5.re,
+                    x29p.re,
+                    fmla(self.twiddle2.re, x38p.re, u0.re)
+                        + fmla(self.twiddle1.re, x47p.re, self.twiddle4.re * x56p.re),
+                ),
+            );
+            let b38re_b = fmla(
+                self.twiddle3.im,
+                x110n.im,
+                fmla(
+                    -self.twiddle5.im,
+                    x29n.im,
+                    fmla(
+                        -self.twiddle2.im,
+                        x38n.im,
+                        self.twiddle1.im * x47n.im + self.twiddle4.im * x56n.im,
+                    ),
+                ),
+            );
+            let b47re_a = fmla(
+                self.twiddle4.re,
+                x110p.re,
+                fmla(self.twiddle3.re, x29p.re, u0.re)
+                    + fmla(
+                        self.twiddle5.re,
+                        x47p.re,
+                        fmla(self.twiddle2.re, x56p.re, self.twiddle1.re * x38p.re),
+                    ),
+            );
+            let b47re_b = fmla(
+                self.twiddle4.im,
+                x110n.im,
+                fmla(
+                    -self.twiddle3.im,
+                    x29n.im,
+                    fmla(self.twiddle1.im, x38n.im, self.twiddle5.im * x47n.im)
+                        + -self.twiddle2.im * x56n.im,
+                ),
+            );
+            let b56re_a = fmla(
+                self.twiddle5.re,
+                x110p.re,
+                fmla(
+                    self.twiddle1.re,
+                    x29p.re,
+                    fmla(self.twiddle4.re, x38p.re, u0.re)
+                        + fmla(self.twiddle2.re, x47p.re, self.twiddle3.re * x56p.re),
+                ),
+            );
+            let b56re_b = fmla(
+                self.twiddle5.im,
+                x110n.im,
+                fmla(
+                    -self.twiddle1.im,
+                    x29n.im,
+                    fmla(
+                        self.twiddle4.im,
+                        x38n.im,
+                        fmla(-self.twiddle2.im, x47n.im, self.twiddle3.im * x56n.im),
+                    ),
+                ),
+            );
+
+            let b110im_a = fmla(
+                self.twiddle1.re,
+                x110p.im,
+                fmla(
+                    self.twiddle2.re,
+                    x29p.im,
+                    fmla(self.twiddle3.re, x38p.im, u0.im)
+                        + fmla(self.twiddle4.re, x47p.im, self.twiddle5.re * x56p.im),
+                ),
+            );
+            let b110im_b = fmla(
+                self.twiddle1.im,
+                x110n.re,
+                fmla(
+                    self.twiddle2.im,
+                    x29n.re,
+                    fmla(
+                        self.twiddle3.im,
+                        x38n.re,
+                        fmla(self.twiddle4.im, x47n.re, self.twiddle5.im * x56n.re),
+                    ),
+                ),
+            );
+            let b29im_a = fmla(
+                self.twiddle2.re,
+                x110p.im,
+                fmla(
+                    self.twiddle4.re,
+                    x29p.im,
+                    fmla(self.twiddle5.re, x38p.im, u0.im)
+                        + fmla(self.twiddle3.re, x47p.im, self.twiddle1.re * x56p.im),
+                ),
+            );
+            let b29im_b = fmla(
+                self.twiddle2.im,
+                x110n.re,
+                fmla(
+                    self.twiddle4.im,
+                    x29n.re,
+                    fmla(
+                        -self.twiddle5.im,
+                        x38n.re,
+                        -self.twiddle3.im * x47n.re + -self.twiddle1.im * x56n.re,
+                    ),
+                ),
+            );
+            let b38im_a = fmla(
+                self.twiddle3.re,
+                x110p.im,
+                fmla(
+                    self.twiddle5.re,
+                    x29p.im,
+                    fmla(self.twiddle2.re, x38p.im, u0.im)
+                        + fmla(self.twiddle1.re, x47p.im, self.twiddle4.re * x56p.im),
+                ),
+            );
+            let b38im_b = fmla(
+                self.twiddle3.im,
+                x110n.re,
+                fmla(
+                    -self.twiddle5.im,
+                    x29n.re,
+                    fmla(
+                        -self.twiddle2.im,
+                        x38n.re,
+                        self.twiddle1.im * x47n.re + self.twiddle4.im * x56n.re,
+                    ),
+                ),
+            );
+            let b47im_a = fmla(
+                self.twiddle4.re,
+                x110p.im,
+                fmla(
+                    self.twiddle3.re,
+                    x29p.im,
+                    fmla(self.twiddle1.re, x38p.im, u0.im)
+                        + fmla(self.twiddle5.re, x47p.im, self.twiddle2.re * x56p.im),
+                ),
+            );
+            let b47im_b = fmla(
+                self.twiddle4.im,
+                x110n.re,
+                fmla(
+                    -self.twiddle3.im,
+                    x29n.re,
+                    self.twiddle1.im * x38n.re
+                        + self.twiddle5.im * x47n.re
+                        + -self.twiddle2.im * x56n.re,
+                ),
+            );
+            let b56im_a = fmla(
+                self.twiddle5.re,
+                x110p.im,
+                fmla(
+                    self.twiddle1.re,
+                    x29p.im,
+                    fmla(self.twiddle4.re, x38p.im, u0.im)
+                        + fmla(self.twiddle2.re, x47p.im, self.twiddle3.re * x56p.im),
+                ),
+            );
+            let b56im_b = fmla(
+                self.twiddle5.im,
+                x110n.re,
+                fmla(
+                    -self.twiddle1.im,
+                    x29n.re,
+                    fmla(
+                        self.twiddle4.im,
+                        x38n.re,
+                        fmla(-self.twiddle2.im, x47n.re, self.twiddle3.im * x56n.re),
+                    ),
+                ),
+            );
+
+            let y1 = Complex {
+                re: b110re_a - b110re_b,
+                im: b110im_a + b110im_b,
+            };
+            let y2 = Complex {
+                re: b29re_a - b29re_b,
+                im: b29im_a + b29im_b,
+            };
+            let y3 = Complex {
+                re: b38re_a - b38re_b,
+                im: b38im_a + b38im_b,
+            };
+            let y4 = Complex {
+                re: b47re_a - b47re_b,
+                im: b47im_a + b47im_b,
+            };
+            let y5 = Complex {
+                re: b56re_a - b56re_b,
+                im: b56im_a + b56im_b,
+            };
+            let y6 = Complex {
+                re: b56re_a + b56re_b,
+                im: b56im_a - b56im_b,
+            };
+            let y7 = Complex {
+                re: b47re_a + b47re_b,
+                im: b47im_a - b47im_b,
+            };
+            let y8 = Complex {
+                re: b38re_a + b38re_b,
+                im: b38im_a - b38im_b,
+            };
+            let y9 = Complex {
+                re: b29re_a + b29re_b,
+                im: b29im_a - b29im_b,
+            };
+            let y10 = Complex {
+                re: b110re_a + b110re_b,
+                im: b110im_a - b110im_b,
+            };
+            dst[1] = y1;
+            dst[2] = y2;
+            dst[3] = y3;
+            dst[4] = y4;
+            dst[5] = y5;
+            dst[6] = y6;
+            dst[7] = y7;
+            dst[8] = y8;
+            dst[9] = y9;
+            dst[10] = y10;
+        }
+        Ok(())
+    }
+}
+
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Float
+        + Default
+        + FftTrigonometry
+        + Send
+        + Sync,
+> CompositeFftExecutor<T> for Butterfly11<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -438,6 +800,76 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly11_out_of_place_f64() {
+        for i in 1..4 {
+            let size = 11usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = Butterfly11::new(FftDirection::Forward);
+            let radix_inverse = Butterfly11::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(11, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 11f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,
