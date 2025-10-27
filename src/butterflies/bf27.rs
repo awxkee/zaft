@@ -31,7 +31,7 @@ use crate::butterflies::fast_bf9::FastButterfly9;
 use crate::complex_fma::c_mul_fast;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -214,6 +214,159 @@ where
     }
 }
 
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Float
+        + Default
+        + FftTrigonometry,
+> FftExecutorOutOfPlace<T> for Butterfly27<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        for (dst, src) in dst.chunks_exact_mut(27).zip(src.chunks_exact(27)) {
+            let u0 = src[0];
+            let u1 = src[1];
+            let u2 = src[2];
+            let u3 = src[3];
+
+            let u4 = src[4];
+            let u5 = src[5];
+            let u6 = src[6];
+            let u7 = src[7];
+
+            let u8 = src[8];
+            let u9 = src[9];
+            let u10 = src[10];
+            let u11 = src[11];
+            let u12 = src[12];
+
+            let u13 = src[13];
+            let u14 = src[14];
+            let u15 = src[15];
+            let u16 = src[16];
+
+            let u17 = src[17];
+            let u18 = src[18];
+
+            let u19 = src[19];
+            let u20 = src[20];
+
+            let u21 = src[21];
+            let u22 = src[22];
+
+            let u23 = src[23];
+            let u24 = src[24];
+
+            let u25 = src[25];
+            let u26 = src[26];
+
+            let s0 = self.bf9.exec(u0, u3, u6, u9, u12, u15, u18, u21, u24);
+            let mut s1 = self.bf9.exec(u1, u4, u7, u10, u13, u16, u19, u22, u25);
+            let mut s2 = self.bf9.exec(u2, u5, u8, u11, u14, u17, u20, u23, u26);
+
+            s1.1 = c_mul_fast(s1.1, self.twiddle1);
+            s1.2 = c_mul_fast(s1.2, self.twiddle2);
+            s1.3 = c_mul_fast(s1.3, self.twiddle3);
+            s1.4 = c_mul_fast(s1.4, self.twiddle4);
+            s1.5 = c_mul_fast(s1.5, self.twiddle5);
+            s1.6 = c_mul_fast(s1.6, self.twiddle6);
+            s1.7 = c_mul_fast(s1.7, self.twiddle7);
+            s1.8 = c_mul_fast(s1.8, self.twiddle8);
+            s2.1 = c_mul_fast(s2.1, self.twiddle2);
+            s2.2 = c_mul_fast(s2.2, self.twiddle4);
+            s2.3 = c_mul_fast(s2.3, self.twiddle6);
+            s2.4 = c_mul_fast(s2.4, self.twiddle8);
+            s2.5 = c_mul_fast(s2.5, self.twiddle9);
+            s2.6 = c_mul_fast(s2.6, self.twiddle10);
+            s2.7 = c_mul_fast(s2.7, self.twiddle11);
+            s2.8 = c_mul_fast(s2.8, self.twiddle12);
+
+            let z0 = self.bf9.bf3.butterfly3(s0.0, s1.0, s2.0);
+            let z1 = self.bf9.bf3.butterfly3(s0.1, s1.1, s2.1);
+            let z2 = self.bf9.bf3.butterfly3(s0.2, s1.2, s2.2);
+            let z3 = self.bf9.bf3.butterfly3(s0.3, s1.3, s2.3);
+            let z4 = self.bf9.bf3.butterfly3(s0.4, s1.4, s2.4);
+            let z5 = self.bf9.bf3.butterfly3(s0.5, s1.5, s2.5);
+            let z6 = self.bf9.bf3.butterfly3(s0.6, s1.6, s2.6);
+            let z7 = self.bf9.bf3.butterfly3(s0.7, s1.7, s2.7);
+            let z8 = self.bf9.bf3.butterfly3(s0.8, s1.8, s2.8);
+
+            dst[0] = z0.0;
+            dst[1] = z1.0;
+            dst[2] = z2.0;
+            dst[3] = z3.0;
+            dst[4] = z4.0;
+            dst[5] = z5.0;
+            dst[6] = z6.0;
+            dst[7] = z7.0;
+            dst[8] = z8.0;
+
+            dst[9] = z0.1;
+            dst[10] = z1.1;
+            dst[11] = z2.1;
+            dst[12] = z3.1;
+            dst[13] = z4.1;
+            dst[14] = z5.1;
+            dst[15] = z6.1;
+            dst[16] = z7.1;
+            dst[17] = z8.1;
+
+            dst[18] = z0.2;
+            dst[19] = z1.2;
+            dst[20] = z2.2;
+            dst[21] = z3.2;
+            dst[22] = z4.2;
+            dst[23] = z5.2;
+            dst[24] = z6.2;
+            dst[25] = z7.2;
+            dst[26] = z8.2;
+        }
+        Ok(())
+    }
+}
+
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Float
+        + Default
+        + FftTrigonometry
+        + Send
+        + Sync,
+> CompositeFftExecutor<T> for Butterfly27<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,6 +429,76 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly27_out_of_place_f64() {
+        for i in 1..4 {
+            let size = 27usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = Butterfly27::new(FftDirection::Forward);
+            let radix_inverse = Butterfly27::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(27, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 27f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

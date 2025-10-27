@@ -29,7 +29,7 @@
 use crate::neon::butterflies::shared::NeonButterfly;
 use crate::neon::util::vqtrnq_f32;
 use crate::traits::FftTrigonometry;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
@@ -121,6 +121,58 @@ impl NeonFcmaButterfly8<f64> {
     }
 
     #[target_feature(enable = "fcma")]
+    unsafe fn execute_out_of_place_forward(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 8 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 8 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            for (dst, src) in dst.chunks_exact_mut(8).zip(src.chunks_exact(8)) {
+                let u0 = vld1q_f64(src.as_ptr().cast());
+                let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
+                let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
+                let u3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());
+                let u4 = vld1q_f64(src.get_unchecked(4..).as_ptr().cast());
+                let u5 = vld1q_f64(src.get_unchecked(5..).as_ptr().cast());
+                let u6 = vld1q_f64(src.get_unchecked(6..).as_ptr().cast());
+                let u7 = vld1q_f64(src.get_unchecked(7..).as_ptr().cast());
+
+                let (u0, u2, u4, u6) = NeonButterfly::bf4_f64_forward(u0, u2, u4, u6);
+                let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_f64_forward(u1, u3, u5, u7);
+
+                u3 = vmulq_n_f64(vcaddq_rot270_f64(u3, u3), self.root2);
+                u5 = vcaddq_rot270_f64(vdupq_n_f64(0.), u5);
+                u7 = vmulq_n_f64(
+                    vsubq_f64(vcaddq_rot270_f64(vdupq_n_f64(0.), u7), u7),
+                    self.root2,
+                );
+
+                let (y0, y1) = NeonButterfly::butterfly2_f64(u0, u1);
+                let (y2, y3) = NeonButterfly::butterfly2_f64(u2, u3);
+                let (y4, y5) = NeonButterfly::butterfly2_f64(u4, u5);
+                let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
+
+                vst1q_f64(dst.as_mut_ptr().cast(), y0);
+                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y2);
+                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y4);
+                vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y6);
+                vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y1);
+                vst1q_f64(dst.get_unchecked_mut(5..).as_mut_ptr().cast(), y3);
+                vst1q_f64(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), y5);
+                vst1q_f64(dst.get_unchecked_mut(7..).as_mut_ptr().cast(), y7);
+            }
+        }
+        Ok(())
+    }
+
+    #[target_feature(enable = "fcma")]
     unsafe fn execute_backwards(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if in_place.len() % 8 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
@@ -166,6 +218,79 @@ impl NeonFcmaButterfly8<f64> {
             }
         }
         Ok(())
+    }
+
+    #[target_feature(enable = "fcma")]
+    unsafe fn execute_out_of_place_backwards(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 8 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 8 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            for (dst, src) in dst.chunks_exact_mut(8).zip(src.chunks_exact(8)) {
+                let u0 = vld1q_f64(src.as_ptr().cast());
+                let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
+                let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
+                let u3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());
+                let u4 = vld1q_f64(src.get_unchecked(4..).as_ptr().cast());
+                let u5 = vld1q_f64(src.get_unchecked(5..).as_ptr().cast());
+                let u6 = vld1q_f64(src.get_unchecked(6..).as_ptr().cast());
+                let u7 = vld1q_f64(src.get_unchecked(7..).as_ptr().cast());
+
+                let (u0, u2, u4, u6) = NeonButterfly::bf4_f64_backward(u0, u2, u4, u6);
+                let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_f64_backward(u1, u3, u5, u7);
+
+                u3 = vmulq_n_f64(vcaddq_rot90_f64(u3, u3), self.root2);
+                u5 = vcaddq_rot90_f64(vdupq_n_f64(0.), u5);
+                u7 = vmulq_n_f64(
+                    vsubq_f64(vcaddq_rot90_f64(vdupq_n_f64(0.), u7), u7),
+                    self.root2,
+                );
+
+                let (y0, y1) = NeonButterfly::butterfly2_f64(u0, u1);
+                let (y2, y3) = NeonButterfly::butterfly2_f64(u2, u3);
+                let (y4, y5) = NeonButterfly::butterfly2_f64(u4, u5);
+                let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
+
+                vst1q_f64(dst.as_mut_ptr().cast(), y0);
+                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y2);
+                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y4);
+                vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y6);
+                vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y1);
+                vst1q_f64(dst.get_unchecked_mut(5..).as_mut_ptr().cast(), y3);
+                vst1q_f64(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), y5);
+                vst1q_f64(dst.get_unchecked_mut(7..).as_mut_ptr().cast(), y7);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl FftExecutorOutOfPlace<f64> for NeonFcmaButterfly8<f64> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe {
+            match self.direction {
+                FftDirection::Forward => self.execute_out_of_place_forward(src, dst),
+                FftDirection::Inverse => self.execute_out_of_place_backwards(src, dst),
+            }
+        }
+    }
+}
+
+impl CompositeFftExecutor<f64> for NeonFcmaButterfly8<f64> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+        self
     }
 }
 
@@ -292,6 +417,112 @@ impl NeonFcmaButterfly8<f32> {
     }
 
     #[target_feature(enable = "fcma")]
+    unsafe fn execute_out_of_place_forward(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 8 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 8 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            for (dst, src) in dst.chunks_exact_mut(16).zip(src.chunks_exact(16)) {
+                let u0u1 = vld1q_f32(src.as_ptr().cast());
+                let u2u3 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
+                let u8u9 = vld1q_f32(src.get_unchecked(8..).as_ptr().cast());
+                let u10u11 = vld1q_f32(src.get_unchecked(10..).as_ptr().cast());
+                let u12u13 = vld1q_f32(src.get_unchecked(12..).as_ptr().cast());
+                let u14u15 = vld1q_f32(src.get_unchecked(14..).as_ptr().cast());
+
+                let (u0, u1) = vqtrnq_f32(u0u1, u8u9);
+                let (u2, u3) = vqtrnq_f32(u2u3, u10u11);
+                let (u4, u5) = vqtrnq_f32(u4u5, u12u13);
+                let (u6, u7) = vqtrnq_f32(u6u7, u14u15);
+
+                let (u0, u2, u4, u6) = NeonButterfly::bf4_forward_f32(u0, u2, u4, u6);
+                let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_forward_f32(u1, u3, u5, u7);
+
+                u3 = vmulq_n_f32(vcaddq_rot270_f32(u3, u3), self.root2);
+                u5 = vcaddq_rot270_f32(vdupq_n_f32(0.), u5);
+                u7 = vmulq_n_f32(
+                    vsubq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), u7), u7),
+                    self.root2,
+                );
+
+                let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
+                let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
+                let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
+                let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
+
+                let (y0, y1) = vqtrnq_f32(zy0, zy2);
+                let (y2, y3) = vqtrnq_f32(zy4, zy6);
+                let (y4, y5) = vqtrnq_f32(zy1, zy3);
+                let (y6, y7) = vqtrnq_f32(zy5, zy7);
+
+                vst1q_f32(dst.as_mut_ptr().cast(), y0);
+                vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+                vst1q_f32(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
+                vst1q_f32(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), y6);
+                vst1q_f32(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), y1);
+                vst1q_f32(dst.get_unchecked_mut(10..).as_mut_ptr().cast(), y3);
+                vst1q_f32(dst.get_unchecked_mut(12..).as_mut_ptr().cast(), y5);
+                vst1q_f32(dst.get_unchecked_mut(14..).as_mut_ptr().cast(), y7);
+            }
+
+            let rem_src = src.chunks_exact(16).remainder();
+            let rem_dst = dst.chunks_exact_mut(16).into_remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(8).zip(rem_src.chunks_exact(8)) {
+                let u0u1 = vld1q_f32(src.as_ptr().cast());
+                let u2u3 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
+
+                let (u0, u1) = (vget_low_f32(u0u1), vget_high_f32(u0u1));
+                let (u2, u3) = (vget_low_f32(u2u3), vget_high_f32(u2u3));
+                let (u4, u5) = (vget_low_f32(u4u5), vget_high_f32(u4u5));
+                let (u6, u7) = (vget_low_f32(u6u7), vget_high_f32(u6u7));
+
+                let (u0, u2, u4, u6) = NeonButterfly::bf4h_forward_f32(u0, u2, u4, u6);
+                let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4h_forward_f32(u1, u3, u5, u7);
+
+                u3 = vmul_n_f32(vcadd_rot270_f32(u3, u3), self.root2);
+                u5 = vcadd_rot270_f32(vdup_n_f32(0.), u5);
+                u7 = vmul_n_f32(
+                    vsub_f32(vcadd_rot270_f32(vdup_n_f32(0.), u7), u7),
+                    self.root2,
+                );
+
+                let (y0, y1) = NeonButterfly::butterfly2h_f32(u0, u1);
+                let (y2, y3) = NeonButterfly::butterfly2h_f32(u2, u3);
+                let (y4, y5) = NeonButterfly::butterfly2h_f32(u4, u5);
+                let (y6, y7) = NeonButterfly::butterfly2h_f32(u6, u7);
+
+                vst1q_f32(dst.as_mut_ptr().cast(), vcombine_f32(y0, y2));
+                vst1q_f32(
+                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    vcombine_f32(y4, y6),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    vcombine_f32(y1, y3),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    vcombine_f32(y5, y7),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[target_feature(enable = "fcma")]
     unsafe fn execute_backward(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % 8 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
@@ -391,12 +622,140 @@ impl NeonFcmaButterfly8<f32> {
         }
         Ok(())
     }
+
+    #[target_feature(enable = "fcma")]
+    unsafe fn execute_out_of_place_backward(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 8 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 8 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            for (dst, src) in dst.chunks_exact_mut(16).zip(src.chunks_exact(16)) {
+                let u0u1 = vld1q_f32(src.as_ptr().cast());
+                let u2u3 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
+                let u8u9 = vld1q_f32(src.get_unchecked(8..).as_ptr().cast());
+                let u10u11 = vld1q_f32(src.get_unchecked(10..).as_ptr().cast());
+                let u12u13 = vld1q_f32(src.get_unchecked(12..).as_ptr().cast());
+                let u14u15 = vld1q_f32(src.get_unchecked(14..).as_ptr().cast());
+
+                let (u0, u1) = vqtrnq_f32(u0u1, u8u9);
+                let (u2, u3) = vqtrnq_f32(u2u3, u10u11);
+                let (u4, u5) = vqtrnq_f32(u4u5, u12u13);
+                let (u6, u7) = vqtrnq_f32(u6u7, u14u15);
+
+                let (u0, u2, u4, u6) = NeonButterfly::bf4_backward_f32(u0, u2, u4, u6);
+                let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_backward_f32(u1, u3, u5, u7);
+
+                u3 = vmulq_n_f32(vcaddq_rot90_f32(u3, u3), self.root2);
+                u5 = vcaddq_rot90_f32(vdupq_n_f32(0.), u5);
+                u7 = vmulq_n_f32(
+                    vsubq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), u7), u7),
+                    self.root2,
+                );
+
+                let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
+                let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
+                let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
+                let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
+
+                let (y0, y1) = vqtrnq_f32(zy0, zy2);
+                let (y2, y3) = vqtrnq_f32(zy4, zy6);
+                let (y4, y5) = vqtrnq_f32(zy1, zy3);
+                let (y6, y7) = vqtrnq_f32(zy5, zy7);
+
+                vst1q_f32(dst.as_mut_ptr().cast(), y0);
+                vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+                vst1q_f32(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
+                vst1q_f32(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), y6);
+                vst1q_f32(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), y1);
+                vst1q_f32(dst.get_unchecked_mut(10..).as_mut_ptr().cast(), y3);
+                vst1q_f32(dst.get_unchecked_mut(12..).as_mut_ptr().cast(), y5);
+                vst1q_f32(dst.get_unchecked_mut(14..).as_mut_ptr().cast(), y7);
+            }
+
+            let rem_src = src.chunks_exact(16).remainder();
+            let rem_dst = dst.chunks_exact_mut(16).into_remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(8).zip(rem_src.chunks_exact(8)) {
+                let u0u1 = vld1q_f32(src.as_ptr().cast());
+                let u2u3 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
+
+                let (u0, u1) = (vget_low_f32(u0u1), vget_high_f32(u0u1));
+                let (u2, u3) = (vget_low_f32(u2u3), vget_high_f32(u2u3));
+                let (u4, u5) = (vget_low_f32(u4u5), vget_high_f32(u4u5));
+                let (u6, u7) = (vget_low_f32(u6u7), vget_high_f32(u6u7));
+
+                let (u0, u2, u4, u6) = NeonButterfly::bf4h_backward_f32(u0, u2, u4, u6);
+                let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4h_backward_f32(u1, u3, u5, u7);
+
+                u3 = vmul_n_f32(vcadd_rot90_f32(u3, u3), self.root2);
+                u5 = vcadd_rot90_f32(vdup_n_f32(0.), u5);
+                u7 = vmul_n_f32(
+                    vsub_f32(vcadd_rot90_f32(vdup_n_f32(0.), u7), u7),
+                    self.root2,
+                );
+
+                let (y0, y1) = NeonButterfly::butterfly2h_f32(u0, u1);
+                let (y2, y3) = NeonButterfly::butterfly2h_f32(u2, u3);
+                let (y4, y5) = NeonButterfly::butterfly2h_f32(u4, u5);
+                let (y6, y7) = NeonButterfly::butterfly2h_f32(u6, u7);
+
+                vst1q_f32(dst.as_mut_ptr().cast(), vcombine_f32(y0, y2));
+                vst1q_f32(
+                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    vcombine_f32(y4, y6),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    vcombine_f32(y1, y3),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    vcombine_f32(y5, y7),
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+impl FftExecutorOutOfPlace<f32> for NeonFcmaButterfly8<f32> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe {
+            match self.direction {
+                FftDirection::Forward => self.execute_out_of_place_forward(src, dst),
+                FftDirection::Inverse => self.execute_out_of_place_backward(src, dst),
+            }
+        }
+    }
+}
+
+impl CompositeFftExecutor<f32> for NeonFcmaButterfly8<f32> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+        self
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::Butterfly8;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -508,6 +867,146 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly8_out_of_place_f64() {
+        for i in 1..4 {
+            let size = 8usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = NeonFcmaButterfly8::new(FftDirection::Forward);
+            let radix_inverse = NeonFcmaButterfly8::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(8, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 8f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly8_out_of_place_f32() {
+        for i in 1..4 {
+            let size = 8usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f32>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = NeonFcmaButterfly8::new(FftDirection::Forward);
+            let radix_inverse = NeonFcmaButterfly8::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(8, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-4,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-4,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 8f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

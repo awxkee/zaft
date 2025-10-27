@@ -30,7 +30,7 @@ use crate::neon::butterflies::NeonButterfly;
 use crate::neon::util::{vfcmulq_f32, vfcmulq_f64};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
@@ -130,6 +130,73 @@ impl FftExecutor<f64> for NeonButterfly9<f64> {
     }
 }
 
+impl FftExecutorOutOfPlace<f64> for NeonButterfly9<f64> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 9 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 9 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            let tw3_re = vdupq_n_f64(self.twiddle3_re);
+            let tw3_im = vld1q_f64(self.twiddle3_im.as_ptr().cast());
+            let tw1 = vld1q_f64(self.twiddle1.as_ptr().cast());
+            let tw2 = vld1q_f64(self.twiddle2.as_ptr().cast());
+            let tw4 = vld1q_f64(self.twiddle4.as_ptr().cast());
+
+            for (dst, src) in dst.chunks_exact_mut(9).zip(src.chunks_exact(9)) {
+                let u0 = vld1q_f64(src.as_ptr().cast());
+                let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
+                let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
+                let u3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());
+                let u4 = vld1q_f64(src.get_unchecked(4..).as_ptr().cast());
+                let u5 = vld1q_f64(src.get_unchecked(5..).as_ptr().cast());
+                let u6 = vld1q_f64(src.get_unchecked(6..).as_ptr().cast());
+                let u7 = vld1q_f64(src.get_unchecked(7..).as_ptr().cast());
+                let u8 = vld1q_f64(src.get_unchecked(8..).as_ptr().cast());
+
+                let (u0, u3, u6) = NeonButterfly::butterfly3_f64(u0, u3, u6, tw3_re, tw3_im);
+                let (u1, mut u4, mut u7) =
+                    NeonButterfly::butterfly3_f64(u1, u4, u7, tw3_re, tw3_im);
+                let (u2, mut u5, mut u8) =
+                    NeonButterfly::butterfly3_f64(u2, u5, u8, tw3_re, tw3_im);
+
+                u4 = vfcmulq_f64(u4, tw1);
+                u7 = vfcmulq_f64(u7, tw2);
+                u5 = vfcmulq_f64(u5, tw2);
+                u8 = vfcmulq_f64(u8, tw4);
+
+                let (y0, y3, y6) = NeonButterfly::butterfly3_f64(u0, u1, u2, tw3_re, tw3_im);
+                let (y1, y4, y7) = NeonButterfly::butterfly3_f64(u3, u4, u5, tw3_re, tw3_im);
+                let (y2, y5, y8) = NeonButterfly::butterfly3_f64(u6, u7, u8, tw3_re, tw3_im);
+
+                vst1q_f64(dst.as_mut_ptr().cast(), y0);
+                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
+                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+                vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y3);
+                vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
+                vst1q_f64(dst.get_unchecked_mut(5..).as_mut_ptr().cast(), y5);
+                vst1q_f64(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), y6);
+                vst1q_f64(dst.get_unchecked_mut(7..).as_mut_ptr().cast(), y7);
+                vst1q_f64(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), y8);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl CompositeFftExecutor<f64> for NeonButterfly9<f64> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+        self
+    }
+}
+
 impl FftExecutor<f32> for NeonButterfly9<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % 9 != 0 {
@@ -147,7 +214,7 @@ impl FftExecutor<f32> for NeonButterfly9<f32> {
             let tw4 = vld1q_f32(self.twiddle4.as_ptr().cast());
 
             for chunk in in_place.chunks_exact_mut(18) {
-                let u0u1 = vld1q_f32(chunk.as_mut_ptr().cast());
+                let u0u1 = vld1q_f32(chunk.as_ptr().cast());
                 let u2u3 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
                 let u6u7 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
@@ -206,7 +273,7 @@ impl FftExecutor<f32> for NeonButterfly9<f32> {
             let rem = in_place.chunks_exact_mut(18).into_remainder();
 
             for chunk in rem.chunks_exact_mut(9) {
-                let u0u1 = vld1q_f32(chunk.as_mut_ptr().cast());
+                let u0u1 = vld1q_f32(chunk.as_ptr().cast());
                 let u2u3 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
                 let u6u7 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
@@ -307,10 +374,190 @@ impl FftExecutor<f32> for NeonButterfly9<f32> {
     }
 }
 
+impl FftExecutorOutOfPlace<f32> for NeonButterfly9<f32> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 9 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 9 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            let tw3_re = vdupq_n_f32(self.twiddle3_re);
+            let tw3_im = vld1q_f32(self.twiddle3_im.as_ptr().cast());
+            let tw1 = vld1q_f32(self.twiddle1.as_ptr().cast());
+            let tw2 = vld1q_f32(self.twiddle2.as_ptr().cast());
+            let tw4 = vld1q_f32(self.twiddle4.as_ptr().cast());
+
+            for (dst, src) in dst.chunks_exact_mut(18).zip(src.chunks_exact(18)) {
+                let u0u1 = vld1q_f32(src.as_ptr().cast());
+                let u2u3 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
+                let u8u9 = vld1q_f32(src.get_unchecked(8..).as_ptr().cast());
+                let u10u11 = vld1q_f32(src.get_unchecked(10..).as_ptr().cast());
+                let u12u13 = vld1q_f32(src.get_unchecked(12..).as_ptr().cast());
+                let u14u15 = vld1q_f32(src.get_unchecked(14..).as_ptr().cast());
+                let u16u17 = vld1q_f32(src.get_unchecked(16..).as_ptr().cast());
+
+                let u0 = vcombine_f32(vget_low_f32(u0u1), vget_high_f32(u8u9));
+                let u1 = vcombine_f32(vget_high_f32(u0u1), vget_low_f32(u10u11));
+                let u2 = vcombine_f32(vget_low_f32(u2u3), vget_high_f32(u10u11));
+                let u3 = vcombine_f32(vget_high_f32(u2u3), vget_low_f32(u12u13));
+                let u4 = vcombine_f32(vget_low_f32(u4u5), vget_high_f32(u12u13));
+                let u5 = vcombine_f32(vget_high_f32(u4u5), vget_low_f32(u14u15));
+                let u6 = vcombine_f32(vget_low_f32(u6u7), vget_high_f32(u14u15));
+                let u7 = vcombine_f32(vget_high_f32(u6u7), vget_low_f32(u16u17));
+                let u8 = vcombine_f32(vget_low_f32(u8u9), vget_high_f32(u16u17));
+
+                let (u0, u3, u6) = NeonButterfly::butterfly3_f32(u0, u3, u6, tw3_re, tw3_im);
+                let (u1, mut u4, mut u7) =
+                    NeonButterfly::butterfly3_f32(u1, u4, u7, tw3_re, tw3_im);
+                let (u2, mut u5, mut u8) =
+                    NeonButterfly::butterfly3_f32(u2, u5, u8, tw3_re, tw3_im);
+
+                u4 = vfcmulq_f32(u4, tw1);
+                u7 = vfcmulq_f32(u7, tw2);
+                u5 = vfcmulq_f32(u5, tw2);
+                u8 = vfcmulq_f32(u8, tw4);
+
+                let (y0, y3, y6) = NeonButterfly::butterfly3_f32(u0, u1, u2, tw3_re, tw3_im);
+                let (y1, y4, y7) = NeonButterfly::butterfly3_f32(u3, u4, u5, tw3_re, tw3_im);
+                let (y2, y5, y8) = NeonButterfly::butterfly3_f32(u6, u7, u8, tw3_re, tw3_im);
+
+                let qy0 = vcombine_f32(vget_low_f32(y0), vget_low_f32(y1));
+                let qy1 = vcombine_f32(vget_low_f32(y2), vget_low_f32(y3));
+                let qy2 = vcombine_f32(vget_low_f32(y4), vget_low_f32(y5));
+                let qy3 = vcombine_f32(vget_low_f32(y6), vget_low_f32(y7));
+                let qy4 = vcombine_f32(vget_low_f32(y8), vget_high_f32(y0));
+                let qy5 = vcombine_f32(vget_high_f32(y1), vget_high_f32(y2));
+                let qy6 = vcombine_f32(vget_high_f32(y3), vget_high_f32(y4));
+                let qy7 = vcombine_f32(vget_high_f32(y5), vget_high_f32(y6));
+                let qy8 = vcombine_f32(vget_high_f32(y7), vget_high_f32(y8));
+
+                vst1q_f32(dst.as_mut_ptr().cast(), qy0);
+                vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), qy1);
+                vst1q_f32(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), qy2);
+                vst1q_f32(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), qy3);
+                vst1q_f32(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), qy4);
+                vst1q_f32(dst.get_unchecked_mut(10..).as_mut_ptr().cast(), qy5);
+                vst1q_f32(dst.get_unchecked_mut(12..).as_mut_ptr().cast(), qy6);
+                vst1q_f32(dst.get_unchecked_mut(14..).as_mut_ptr().cast(), qy7);
+                vst1q_f32(dst.get_unchecked_mut(16..).as_mut_ptr().cast(), qy8);
+            }
+
+            let rem_src = src.chunks_exact(18).remainder();
+            let rem_dst = dst.chunks_exact_mut(18).into_remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(9).zip(rem_src.chunks_exact(9)) {
+                let u0u1 = vld1q_f32(src.as_ptr().cast());
+                let u2u3 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
+                let u8 = vld1_f32(src.get_unchecked(8..).as_ptr().cast());
+
+                let u0 = vget_low_f32(u0u1);
+                let u1 = vget_high_f32(u0u1);
+                let u2 = vget_low_f32(u2u3);
+                let u3 = vget_high_f32(u2u3);
+                let u4 = vget_low_f32(u4u5);
+                let u5 = vget_high_f32(u4u5);
+                let u6 = vget_low_f32(u6u7);
+                let u7 = vget_high_f32(u6u7);
+
+                let (u0, u3, u6) = NeonButterfly::butterfly3h_f32(
+                    u0,
+                    u3,
+                    u6,
+                    vget_low_f32(tw3_re),
+                    vget_low_f32(tw3_im),
+                );
+                let (u1, mut u4, mut u7) = NeonButterfly::butterfly3h_f32(
+                    u1,
+                    u4,
+                    u7,
+                    vget_low_f32(tw3_re),
+                    vget_low_f32(tw3_im),
+                );
+                let (u2, mut u5, mut u8) = NeonButterfly::butterfly3h_f32(
+                    u2,
+                    u5,
+                    u8,
+                    vget_low_f32(tw3_re),
+                    vget_low_f32(tw3_im),
+                );
+
+                let hu4u7 = vfcmulq_f32(
+                    vcombine_f32(u4, u7),
+                    vcombine_f32(vget_low_f32(tw1), vget_low_f32(tw2)),
+                );
+                let hu5u8 = vfcmulq_f32(
+                    vcombine_f32(u5, u8),
+                    vcombine_f32(vget_low_f32(tw2), vget_low_f32(tw4)),
+                );
+                u4 = vget_low_f32(hu4u7);
+                u7 = vget_high_f32(hu4u7);
+                u5 = vget_low_f32(hu5u8);
+                u8 = vget_high_f32(hu5u8);
+
+                let (y0, y3, y6) = NeonButterfly::butterfly3h_f32(
+                    u0,
+                    u1,
+                    u2,
+                    vget_low_f32(tw3_re),
+                    vget_low_f32(tw3_im),
+                );
+                let (y1, y4, y7) = NeonButterfly::butterfly3h_f32(
+                    u3,
+                    u4,
+                    u5,
+                    vget_low_f32(tw3_re),
+                    vget_low_f32(tw3_im),
+                );
+                let (y2, y5, y8) = NeonButterfly::butterfly3h_f32(
+                    u6,
+                    u7,
+                    u8,
+                    vget_low_f32(tw3_re),
+                    vget_low_f32(tw3_im),
+                );
+
+                vst1q_f32(dst.as_mut_ptr().cast(), vcombine_f32(y0, y1));
+                vst1q_f32(
+                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    vcombine_f32(y2, y3),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    vcombine_f32(y4, y5),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    vcombine_f32(y6, y7),
+                );
+                vst1_f32(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), y8);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl CompositeFftExecutor<f32> for NeonButterfly9<f32> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::Butterfly9;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -458,6 +705,146 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly9_out_of_place_f64() {
+        for i in 1..4 {
+            let size = 9usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = NeonButterfly9::new(FftDirection::Forward);
+            let radix_inverse = NeonButterfly9::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(9, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 9f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly9_out_of_place_f32() {
+        for i in 1..4 {
+            let size = 9usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f32>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = NeonButterfly9::new(FftDirection::Forward);
+            let radix_inverse = NeonButterfly9::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(9, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-4,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-4,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 9f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

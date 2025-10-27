@@ -37,7 +37,7 @@ use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
 use crate::util::{bitreversed_transpose, compute_logarithm, compute_twiddle};
-use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::any::TypeId;
@@ -50,7 +50,7 @@ pub(crate) struct AvxFmaRadix3<T> {
     twiddle_re: T,
     twiddle_im: [T; 8],
     direction: FftDirection,
-    base_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 
@@ -84,10 +84,10 @@ where
         });
 
         let base_fft = match exponent {
-            0 => Zaft::strategy(1, fft_direction)?,
-            1 => Zaft::strategy(3, fft_direction)?,
-            2 => Zaft::strategy(9, fft_direction)?,
-            _ => Zaft::strategy(27, fft_direction)?,
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly3(fft_direction)?,
+            2 => T::butterfly9(fft_direction)?,
+            _ => T::butterfly27(fft_direction)?,
         };
 
         let mut twiddles = Vec::new();
@@ -181,7 +181,7 @@ impl AvxFmaRadix3<f64> {
                 // Digit-reversal permutation
                 bitreversed_transpose::<Complex<f64>, 3>(self.base_len, chunk, &mut scratch);
 
-                self.base_fft.execute(&mut scratch)?;
+                self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
                 let mut len = self.base_len;
 
@@ -192,7 +192,7 @@ impl AvxFmaRadix3<f64> {
                     len *= 3;
                     let third = len / 3;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 2 < third {
@@ -277,7 +277,6 @@ impl AvxFmaRadix3<f64> {
 
                     m_twiddles = &m_twiddles[columns * 2..];
                 }
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -317,7 +316,7 @@ impl AvxFmaRadix3<f32> {
                 // Digit-reversal permutation
                 bitreversed_transpose::<Complex<f32>, 3>(self.base_len, chunk, &mut scratch);
 
-                self.base_fft.execute(&mut scratch)?;
+                self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
                 let mut len = self.base_len;
 
@@ -328,7 +327,7 @@ impl AvxFmaRadix3<f32> {
                     len *= 3;
                     let third = len / 3;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
                         while j + 4 < third {
@@ -426,7 +425,6 @@ impl AvxFmaRadix3<f32> {
 
                     m_twiddles = &m_twiddles[columns * 2..];
                 }
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())

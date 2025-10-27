@@ -374,9 +374,9 @@ impl Zaft {
         } else if n == 7 {
             return T::butterfly7(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 8 {
-            return T::butterfly8(fft_direction);
+            return T::butterfly8(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 9 {
-            return T::butterfly9(fft_direction);
+            return T::butterfly9(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 10 {
             return T::butterfly10(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 11 {
@@ -398,7 +398,7 @@ impl Zaft {
         } else if n == 23 {
             return T::butterfly23(fft_direction);
         } else if n == 27 {
-            return T::butterfly27(fft_direction);
+            return T::butterfly27(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 29 {
             return T::butterfly29(fft_direction);
         } else if n == 32 {
