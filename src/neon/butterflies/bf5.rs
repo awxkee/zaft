@@ -29,7 +29,7 @@
 use crate::neon::util::{v_rotate90_f32, v_rotate90_f64};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
@@ -201,6 +201,153 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
     }
 }
 
+impl FftExecutorOutOfPlace<f32> for NeonButterfly5<f32> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 5 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+        unsafe {
+            let tw1_re = vdupq_n_f32(self.twiddle1.re);
+            let tw1_im = vdupq_n_f32(self.twiddle1.im);
+            let tw2_re = vdupq_n_f32(self.twiddle2.re);
+            let tw2_im = vdupq_n_f32(self.twiddle2.im);
+            let rot_sign = vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr());
+
+            for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
+                let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
+                let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let uz2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let uz3 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
+                let uz4 = vld1q_f32(src.get_unchecked(8..).as_ptr().cast());
+
+                // Combine into u0..u4
+                let u0 = vcombine_f32(vget_low_f32(uz0), vget_high_f32(uz2));
+                let u1 = vcombine_f32(vget_high_f32(uz0), vget_low_f32(uz3));
+                let u2 = vcombine_f32(vget_low_f32(uz1), vget_high_f32(uz3));
+                let u3 = vcombine_f32(vget_high_f32(uz1), vget_low_f32(uz4));
+                let u4 = vcombine_f32(vget_low_f32(uz2), vget_high_f32(uz4));
+
+                // Radix-5 butterfly
+
+                let x14p = vaddq_f32(u1, u4);
+                let x14n = vsubq_f32(u1, u4);
+                let x23p = vaddq_f32(u2, u3);
+                let x23n = vsubq_f32(u2, u3);
+                let y0 = vaddq_f32(vaddq_f32(u0, x14p), x23p);
+
+                let temp_b1_1 = vmulq_f32(tw1_im, x14n);
+                let temp_b2_1 = vmulq_f32(tw2_im, x14n);
+
+                let temp_a1 = vfmaq_f32(vfmaq_f32(u0, tw1_re, x14p), tw2_re, x23p);
+                let temp_a2 = vfmaq_f32(vfmaq_f32(u0, tw2_re, x14p), tw1_re, x23p);
+
+                let temp_b1 = vfmaq_f32(temp_b1_1, tw2_im, x23n);
+                let temp_b2 = vfmsq_f32(temp_b2_1, tw1_im, x23n);
+
+                let temp_b1_rot = v_rotate90_f32(temp_b1, rot_sign);
+                let temp_b2_rot = v_rotate90_f32(temp_b2, rot_sign);
+
+                let y1 = vaddq_f32(temp_a1, temp_b1_rot);
+                let y2 = vaddq_f32(temp_a2, temp_b2_rot);
+                let y3 = vsubq_f32(temp_a2, temp_b2_rot);
+                let y4 = vsubq_f32(temp_a1, temp_b1_rot);
+
+                vst1q_f32(
+                    dst.get_unchecked_mut(0..).as_mut_ptr().cast(),
+                    vcombine_f32(vget_low_f32(y0), vget_low_f32(y1)),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    vcombine_f32(vget_low_f32(y2), vget_low_f32(y3)),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    vcombine_f32(vget_low_f32(y4), vget_high_f32(y0)),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    vcombine_f32(vget_high_f32(y1), vget_high_f32(y2)),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(8..).as_mut_ptr().cast(),
+                    vcombine_f32(vget_high_f32(y3), vget_high_f32(y4)),
+                );
+            }
+
+            let rem_dst = dst.chunks_exact_mut(10).into_remainder();
+            let rem_src = src.chunks_exact(10).remainder();
+
+            let tw1_tw2_im = vcombine_f32(vget_low_f32(tw1_im), vget_low_f32(tw2_im));
+            let tw2_ntw1_im = vcombine_f32(vget_low_f32(tw2_im), vdup_n_f32(-self.twiddle1.im));
+            let a1_a2 = vcombine_f32(vget_low_f32(tw1_re), vget_low_f32(tw2_re));
+            let a1_a2_2 = vcombine_f32(vget_low_f32(tw2_re), vget_low_f32(tw1_re));
+
+            for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
+                let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
+                let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+
+                let u0 = vget_low_f32(uz0);
+                let u1 = vget_high_f32(uz0);
+                let u2 = vget_low_f32(uz1);
+                let u3 = vget_high_f32(uz1);
+                let u4 = vld1_f32(src.get_unchecked(4..).as_ptr().cast());
+
+                // Radix-5 butterfly
+
+                let x14px23p = vaddq_f32(vcombine_f32(u1, u2), vcombine_f32(u4, u3));
+                let x14nx23n = vsubq_f32(vcombine_f32(u1, u2), vcombine_f32(u4, u3));
+                let y0 = vadd_f32(
+                    vadd_f32(u0, vget_low_f32(x14px23p)),
+                    vget_high_f32(x14px23p),
+                );
+
+                let temp_b1_1_b2_1 = vmulq_f32(
+                    tw1_tw2_im,
+                    vcombine_f32(vget_low_f32(x14nx23n), vget_low_f32(x14nx23n)),
+                );
+
+                let wx23p = vcombine_f32(vget_high_f32(x14px23p), vget_high_f32(x14px23p));
+                let wx23n = vcombine_f32(vget_high_f32(x14nx23n), vget_high_f32(x14nx23n));
+
+                let temp_a1_a2 = vfmaq_f32(
+                    vfmaq_f32(
+                        vcombine_f32(u0, u0),
+                        a1_a2,
+                        vcombine_f32(vget_low_f32(x14px23p), vget_low_f32(x14px23p)),
+                    ),
+                    a1_a2_2,
+                    wx23p,
+                );
+
+                let temp_b1_b2 = vfmaq_f32(temp_b1_1_b2_1, tw2_ntw1_im, wx23n);
+
+                let temp_b1_b2_rot = v_rotate90_f32(temp_b1_b2, rot_sign);
+
+                let y1y2 = vaddq_f32(temp_a1_a2, temp_b1_b2_rot);
+                let y4y3 = vsubq_f32(temp_a1_a2, temp_b1_b2_rot);
+
+                vst1_f32(dst.as_mut_ptr().cast(), y0);
+                vst1q_f32(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1y2);
+                vst1q_f32(
+                    dst.get_unchecked_mut(3..).as_mut_ptr().cast(),
+                    vcombine_f32(vget_high_f32(y4y3), vget_low_f32(y4y3)),
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+impl CompositeFftExecutor<f32> for NeonButterfly5<f32> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+        self
+    }
+}
+
 impl FftExecutor<f64> for NeonButterfly5<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if in_place.len() % 5 != 0 {
@@ -269,10 +416,80 @@ impl FftExecutor<f64> for NeonButterfly5<f64> {
     }
 }
 
+impl FftExecutorOutOfPlace<f64> for NeonButterfly5<f64> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 5 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 5 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        let tw1_re = unsafe { vdupq_n_f64(self.twiddle1.re) };
+        let tw1_im = unsafe { vdupq_n_f64(self.twiddle1.im) };
+        let tw2_re = unsafe { vdupq_n_f64(self.twiddle2.re) };
+        let tw2_im = unsafe { vdupq_n_f64(self.twiddle2.im) };
+        let rot_sign = unsafe { vld1q_f64([-0.0, 0.0].as_ptr()) };
+
+        for (dst, src) in dst.chunks_exact_mut(5).zip(src.chunks_exact(5)) {
+            unsafe {
+                let u0 = vld1q_f64(src.get_unchecked(0..).as_ptr().cast());
+                let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
+                let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
+                let u3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());
+                let u4 = vld1q_f64(src.get_unchecked(4..).as_ptr().cast());
+
+                // Radix-5 butterfly
+
+                let x14p = vaddq_f64(u1, u4);
+                let x14n = vsubq_f64(u1, u4);
+                let x23p = vaddq_f64(u2, u3);
+                let x23n = vsubq_f64(u2, u3);
+                let y0 = vaddq_f64(vaddq_f64(u0, x14p), x23p);
+
+                let temp_b1_1 = vmulq_f64(tw1_im, x14n);
+                let temp_b2_1 = vmulq_f64(tw2_im, x14n);
+
+                let temp_a1 = vfmaq_f64(vfmaq_f64(u0, tw1_re, x14p), tw2_re, x23p);
+                let temp_a2 = vfmaq_f64(vfmaq_f64(u0, tw2_re, x14p), tw1_re, x23p);
+
+                let temp_b1 = vfmaq_f64(temp_b1_1, tw2_im, x23n);
+                let temp_b2 = vfmsq_f64(temp_b2_1, tw1_im, x23n);
+
+                let temp_b1_rot = v_rotate90_f64(temp_b1, rot_sign);
+                let temp_b2_rot = v_rotate90_f64(temp_b2, rot_sign);
+
+                let y1 = vaddq_f64(temp_a1, temp_b1_rot);
+                let y2 = vaddq_f64(temp_a2, temp_b2_rot);
+                let y3 = vsubq_f64(temp_a2, temp_b2_rot);
+                let y4 = vsubq_f64(temp_a1, temp_b1_rot);
+
+                vst1q_f64(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
+                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
+                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+                vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y3);
+                vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl CompositeFftExecutor<f64> for NeonButterfly5<f64> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::Butterfly5;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -384,6 +601,146 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly5_out_of_place_f64() {
+        for i in 1..6 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = NeonButterfly5::new(FftDirection::Forward);
+            let radix_inverse = NeonButterfly5::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(5, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 5f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly5_out_of_place_f32() {
+        for i in 1..6 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f32>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = NeonButterfly5::new(FftDirection::Forward);
+            let radix_inverse = NeonButterfly5::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(5, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-4,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-4,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 5f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

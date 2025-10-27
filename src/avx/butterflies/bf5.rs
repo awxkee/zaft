@@ -32,7 +32,7 @@ use crate::avx::util::{
 };
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::x86_64::*;
@@ -227,6 +227,178 @@ impl AvxButterfly5<f32> {
         }
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn execute_out_of_place_f32(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 5 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 5 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            let tw1_re = _mm256_set1_ps(self.twiddle1.re);
+            let tw1_im = _mm256_set1_ps(self.twiddle1.im);
+            let tw2_re = _mm256_set1_ps(self.twiddle2.re);
+            let tw2_im = _mm256_set1_ps(self.twiddle2.im);
+            static ROT_90: [f32; 8] = [-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0];
+            let rot_sign = _mm256_loadu_ps(ROT_90.as_ptr());
+
+            for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
+                let u0u1u2u3 = _mm256_loadu_ps(src.get_unchecked(0..).as_ptr().cast());
+                let u4u5u6u7 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
+                let u8u9 = _mm_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
+
+                let lo = _mm256_castps256_ps128(u0u1u2u3); // (u0,u1)
+                let hi = _mm256_extractf128_ps::<1>(u0u1u2u3); // (u2, u3)
+
+                let hi2 = _mm256_castps256_ps128(u4u5u6u7); // (u4,u5)
+                let hi3 = _mm256_extractf128_ps::<1>(u4u5u6u7); // (u6, u7)
+
+                let u0 = _mm_shuffle_ps::<{ shuffle(3, 2, 1, 0) }>(lo, hi2); // (u0,u5)
+                let u1 = _mm_shuffle_ps::<{ shuffle(1, 0, 3, 2) }>(lo, hi3); // (u1,u6)
+                let u2 = _mm_shuffle_ps::<{ shuffle(3, 2, 1, 0) }>(hi, hi3); // (u2,u7)
+                let u3 = _mm_shuffle_ps::<{ shuffle(1, 0, 3, 2) }>(hi, u8u9); // (u3,u8)
+                let u4 = _mm_shuffle_ps::<{ shuffle(3, 2, 1, 0) }>(hi2, u8u9); // (u4,u9)
+
+                // Radix-5 butterfly
+
+                let x14p = _mm_add_ps(u1, u4);
+                let x14n = _mm_sub_ps(u1, u4);
+                let x23p = _mm_add_ps(u2, u3);
+                let x23n = _mm_sub_ps(u2, u3);
+                let y0 = _mm_add_ps(_mm_add_ps(u0, x14p), x23p);
+
+                let temp_b1_1 = _mm_mul_ps(_mm256_castps256_ps128(tw1_im), x14n);
+                let temp_b2_1 = _mm_mul_ps(_mm256_castps256_ps128(tw2_im), x14n);
+
+                let temp_a1 = _mm_fmadd_ps(
+                    _mm256_castps256_ps128(tw2_re),
+                    x23p,
+                    _mm_fmadd_ps(_mm256_castps256_ps128(tw1_re), x14p, u0),
+                );
+                let temp_a2 = _mm_fmadd_ps(
+                    _mm256_castps256_ps128(tw1_re),
+                    x23p,
+                    _mm_fmadd_ps(_mm256_castps256_ps128(tw2_re), x14p, u0),
+                );
+
+                let temp_b1 = _mm_fmadd_ps(_mm256_castps256_ps128(tw2_im), x23n, temp_b1_1);
+                let temp_b2 = _mm_fnmadd_ps(_mm256_castps256_ps128(tw1_im), x23n, temp_b2_1);
+
+                const SH: i32 = shuffle(2, 3, 0, 1);
+                let temp_b1_rot = _mm_xor_ps(
+                    _mm_shuffle_ps::<SH>(temp_b1, temp_b1),
+                    _mm256_castps256_ps128(rot_sign),
+                );
+                let temp_b2_rot = _mm_xor_ps(
+                    _mm_shuffle_ps::<SH>(temp_b2, temp_b2),
+                    _mm256_castps256_ps128(rot_sign),
+                );
+
+                let y1 = _mm_add_ps(temp_a1, temp_b1_rot);
+                let y2 = _mm_add_ps(temp_a2, temp_b2_rot);
+                let y3 = _mm_sub_ps(temp_a2, temp_b2_rot);
+                let y4 = _mm_sub_ps(temp_a1, temp_b1_rot);
+
+                let zu0 = _mm_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(y0, y1); // (u0,u5)
+                let zu1 = _mm_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(y2, y3); // (u1,u6)
+                let zu2 = _mm_shuffle_ps::<{ shuffle(3, 2, 1, 0) }>(y4, y0); // (u2,u7)
+                let zu3 = _mm_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(y1, y2); // (u3,u8)
+                let zu4 = _mm_unpackhi_ps64(y3, y4); // (u4,u9)
+
+                let zu0u1 = _mm256_create_ps(zu0, zu1);
+                let zu2u3 = _mm256_create_ps(zu2, zu3);
+
+                _mm256_storeu_ps(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), zu0u1);
+                _mm256_storeu_ps(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), zu2u3);
+                _mm_storeu_ps(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), zu4);
+            }
+
+            let rem_dst = dst.chunks_exact_mut(10).into_remainder();
+            let rem_src = src.chunks_exact(10).remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
+                let u0u1u2u3 = _mm256_loadu_ps(src.get_unchecked(0..).as_ptr().cast());
+
+                let u0u1 = _mm256_castps256_ps128(u0u1u2u3);
+                let u2u3 = _mm256_extractf128_ps::<1>(u0u1u2u3);
+                let u0 = u0u1;
+                let u1 = _mm_unpackhi_ps64(u0u1, u0u1);
+                let u2 = u2u3;
+                let u3 = _mm_unpackhi_ps64(u2u3, u2u3);
+                let u4 = _m128s_load_f32x2(src.get_unchecked(4..).as_ptr().cast());
+
+                // Radix-5 butterfly
+
+                let x14p = _mm_add_ps(u1, u4);
+                let x14n = _mm_sub_ps(u1, u4);
+                let x23p = _mm_add_ps(u2, u3);
+                let x23n = _mm_sub_ps(u2, u3);
+                let y0 = _mm_add_ps(_mm_add_ps(u0, x14p), x23p);
+
+                let temp_b1_1 = _mm_mul_ps(_mm256_castps256_ps128(tw1_im), x14n);
+                let temp_b2_1 = _mm_mul_ps(_mm256_castps256_ps128(tw2_im), x14n);
+
+                let temp_a1 = _mm_fmadd_ps(
+                    _mm256_castps256_ps128(tw2_re),
+                    x23p,
+                    _mm_fmadd_ps(_mm256_castps256_ps128(tw1_re), x14p, u0),
+                );
+                let temp_a2 = _mm_fmadd_ps(
+                    _mm256_castps256_ps128(tw1_re),
+                    x23p,
+                    _mm_fmadd_ps(_mm256_castps256_ps128(tw2_re), x14p, u0),
+                );
+
+                let temp_b1 = _mm_fmadd_ps(_mm256_castps256_ps128(tw2_im), x23n, temp_b1_1);
+                let temp_b2 = _mm_fnmadd_ps(_mm256_castps256_ps128(tw1_im), x23n, temp_b2_1);
+
+                const SH: i32 = shuffle(2, 3, 0, 1);
+                let temp_b1_rot = _mm_xor_ps(
+                    _mm_shuffle_ps::<SH>(temp_b1, temp_b1),
+                    _mm256_castps256_ps128(rot_sign),
+                );
+                let temp_b2_rot = _mm_xor_ps(
+                    _mm_shuffle_ps::<SH>(temp_b2, temp_b2),
+                    _mm256_castps256_ps128(rot_sign),
+                );
+
+                let y1 = _mm_add_ps(temp_a1, temp_b1_rot);
+                let y2 = _mm_add_ps(temp_a2, temp_b2_rot);
+                let y3 = _mm_sub_ps(temp_a2, temp_b2_rot);
+                let y4 = _mm_sub_ps(temp_a1, temp_b1_rot);
+
+                let y0y1y2y3 =
+                    _mm256_create_ps(_mm_unpacklo_ps64(y0, y1), _mm_unpacklo_ps64(y2, y3));
+
+                _mm256_storeu_ps(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), y0y1y2y3);
+                _m128s_store_f32x2(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl FftExecutorOutOfPlace<f32> for AvxButterfly5<f32> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_out_of_place_f32(src, dst) }
+    }
+}
+
+impl CompositeFftExecutor<f32> for AvxButterfly5<f32> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+        self
+    }
 }
 
 impl FftExecutor<f32> for AvxButterfly5<f32> {
@@ -386,6 +558,169 @@ impl AvxButterfly5<f64> {
         }
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn execute_out_of_place_f64(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 5 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 5 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            let tw1_re = _mm256_set1_pd(self.twiddle1.re);
+            let tw1_im = _mm256_set1_pd(self.twiddle1.im);
+            let tw2_re = _mm256_set1_pd(self.twiddle2.re);
+            let tw2_im = _mm256_set1_pd(self.twiddle2.im);
+            let rot_sign = _mm256_loadu_pd([-0.0f64, 0.0, -0.0, 0.0].as_ptr());
+
+            for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
+                let u0u1 = _mm256_loadu_pd(src.get_unchecked(0..).as_ptr().cast());
+                let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = _mm256_loadu_pd(src.get_unchecked(6..).as_ptr().cast());
+                let u8u10 = _mm256_loadu_pd(src.get_unchecked(8..).as_ptr().cast());
+
+                const LO_HI: i32 = 0b0011_0000;
+                const HI_LO: i32 = 0b0010_0001;
+                const HI_HI: i32 = 0b0011_0001;
+                const LO_LO: i32 = 0b0010_0000;
+
+                let u0 = _mm256_permute2f128_pd::<LO_HI>(u0u1, u4u5);
+                let u1 = _mm256_permute2f128_pd::<HI_LO>(u0u1, u6u7);
+                let u2 = _mm256_permute2f128_pd::<LO_HI>(u2u3, u6u7);
+                let u3 = _mm256_permute2f128_pd::<HI_LO>(u2u3, u8u10);
+                let u4 = _mm256_permute2f128_pd::<LO_HI>(u4u5, u8u10);
+
+                // Radix-5 butterfly
+
+                let x14p = _mm256_add_pd(u1, u4);
+                let x14n = _mm256_sub_pd(u1, u4);
+                let x23p = _mm256_add_pd(u2, u3);
+                let x23n = _mm256_sub_pd(u2, u3);
+                let y0 = _mm256_add_pd(_mm256_add_pd(u0, x14p), x23p);
+
+                let temp_b1_1 = _mm256_mul_pd(tw1_im, x14n);
+                let temp_b2_1 = _mm256_mul_pd(tw2_im, x14n);
+
+                let temp_a1 = _mm256_fmadd_pd(tw2_re, x23p, _mm256_fmadd_pd(tw1_re, x14p, u0));
+                let temp_a2 = _mm256_fmadd_pd(tw1_re, x23p, _mm256_fmadd_pd(tw2_re, x14p, u0));
+
+                let temp_b1 = _mm256_fmadd_pd(tw2_im, x23n, temp_b1_1);
+                let temp_b2 = _mm256_fnmadd_pd(tw1_im, x23n, temp_b2_1);
+
+                let temp_b1_rot = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b1), rot_sign);
+                let temp_b2_rot = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b2), rot_sign);
+
+                let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
+                let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);
+                let y3 = _mm256_sub_pd(temp_a2, temp_b2_rot);
+                let y4 = _mm256_sub_pd(temp_a1, temp_b1_rot);
+
+                let u0u1 = _mm256_permute2f128_pd::<LO_LO>(y0, y1);
+                let u2u3 = _mm256_permute2f128_pd::<LO_LO>(y2, y3);
+                let u4u5 = _mm256_permute2f128_pd::<LO_HI>(y4, y0);
+                let u6u7 = _mm256_permute2f128_pd::<HI_HI>(y1, y2);
+                let u8u9 = _mm256_permute2f128_pd::<HI_HI>(y3, y4);
+
+                _mm256_storeu_pd(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), u0u1);
+                _mm256_storeu_pd(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), u2u3);
+                _mm256_storeu_pd(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), u4u5);
+                _mm256_storeu_pd(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), u6u7);
+                _mm256_storeu_pd(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), u8u9);
+            }
+
+            let rem_dst = dst.chunks_exact_mut(10).into_remainder();
+            let rem_src = src.chunks_exact(10).remainder();
+
+            let tw1tw2_im = _mm256_loadu_pd(self.tw1tw2_im.as_ptr().cast());
+            let tw2ntw1_im = _mm256_loadu_pd(self.tw2ntw1_im.as_ptr().cast());
+            let tw1tw2_re = _mm256_loadu_pd(self.tw1tw2_re.as_ptr().cast());
+            let tw2tw1_re = _mm256_loadu_pd(self.tw2tw1_re.as_ptr().cast());
+            let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
+
+            for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
+                let u0u1 = _mm256_loadu_pd(src.get_unchecked(0..).as_ptr().cast());
+                let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
+
+                let u4 = _mm_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
+
+                const LO_HI: i32 = 0b0011_0000;
+                const HI_LO: i32 = 0b0010_0001;
+                const HI_HI: i32 = 0b0011_0001;
+                const LO_LO: i32 = 0b0010_0000;
+
+                let u1u2 = _mm256_permute2f128_pd::<HI_LO>(u0u1, u2u3);
+                let u4u3 = _mm256_permute2f128_pd::<LO_HI>(_mm256_castpd128_pd256(u4), u2u3);
+
+                // Radix-5 butterfly
+                let u0u0 = _mm256_permute2f128_pd::<LO_LO>(u0u1, u0u1);
+
+                let x14px23p = _mm256_add_pd(u1u2, u4u3);
+                let x14nx23n = _mm256_sub_pd(u1u2, u4u3);
+                let y0 = _mm_add_pd(
+                    _mm_add_pd(
+                        _mm256_castpd256_pd128(u0u1),
+                        _mm256_castpd256_pd128(x14px23p),
+                    ),
+                    _mm256_extractf128_pd::<1>(x14px23p),
+                );
+
+                let temp_b1_1_b2_1 = _mm256_mul_pd(
+                    tw1tw2_im,
+                    _mm256_permute2f128_pd::<LO_LO>(x14nx23n, x14nx23n),
+                );
+
+                let wx23p = _mm256_permute2f128_pd::<HI_HI>(x14px23p, x14px23p);
+                let wx23n = _mm256_permute2f128_pd::<HI_HI>(x14nx23n, x14nx23n);
+
+                let temp_a1_a2 = _mm256_fmadd_pd(
+                    tw2tw1_re,
+                    wx23p,
+                    _mm256_fmadd_pd(
+                        _mm256_permute2f128_pd::<LO_LO>(x14px23p, x14px23p),
+                        tw1tw2_re,
+                        u0u0,
+                    ),
+                );
+
+                let temp_b1_b2 = _mm256_fmadd_pd(tw2ntw1_im, wx23n, temp_b1_1_b2_1);
+
+                let temp_b1_b2_rot = rotate.rotate_m256d(temp_b1_b2);
+
+                let y1y2 = _mm256_add_pd(temp_a1_a2, temp_b1_b2_rot);
+                let y4y3 = _mm256_sub_pd(temp_a1_a2, temp_b1_b2_rot);
+
+                let y3y4 = _mm256_permute2f128_pd::<HI_LO>(y4y3, y4y3);
+
+                _mm_storeu_pd(dst.as_mut_ptr().cast(), y0);
+                _mm256_storeu_pd(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1y2);
+                _mm256_storeu_pd(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y3y4);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl FftExecutorOutOfPlace<f64> for AvxButterfly5<f64> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_out_of_place_f64(src, dst) }
+    }
+}
+
+impl CompositeFftExecutor<f64> for AvxButterfly5<f64> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+        self
+    }
 }
 
 impl FftExecutor<f64> for AvxButterfly5<f64> {
@@ -407,6 +742,7 @@ impl FftExecutor<f64> for AvxButterfly5<f64> {
 mod tests {
     use super::*;
     use crate::butterflies::Butterfly5;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -502,6 +838,146 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly5_fcma_out_of_place_f64() {
+        for i in 1..6 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = AvxButterfly5::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly5::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(5, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 5f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly5_fcma_out_of_place_f32() {
+        for i in 1..6 {
+            let size = 5usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f32>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = AvxButterfly5::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly5::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(5, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-5,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-5,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 5f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

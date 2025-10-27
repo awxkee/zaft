@@ -67,7 +67,7 @@ impl AlgorithmFactory<f64> for f64 {
 
     fn butterfly3(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
         {
@@ -88,7 +88,7 @@ impl AlgorithmFactory<f64> for f64 {
 
     fn butterfly4(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -115,7 +115,7 @@ impl AlgorithmFactory<f64> for f64 {
 
     fn butterfly5(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -578,7 +578,7 @@ impl AlgorithmFactory<f64> for f64 {
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         if n == 3 {
-            return Self::butterfly3(fft_direction);
+            return Self::butterfly3(fft_direction).map(|x| x.into_fft_executor());
         }
         // Use Radix-3 if divisible by 3
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -616,7 +616,7 @@ impl AlgorithmFactory<f64> for f64 {
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         if n == 4 {
-            return Self::butterfly4(fft_direction);
+            return Self::butterfly4(fft_direction).map(|x| x.into_fft_executor());
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
@@ -653,7 +653,7 @@ impl AlgorithmFactory<f64> for f64 {
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         if n == 5 {
-            return Self::butterfly5(fft_direction);
+            return Self::butterfly5(fft_direction).map(|x| x.into_fft_executor());
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {

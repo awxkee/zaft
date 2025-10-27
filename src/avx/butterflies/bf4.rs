@@ -30,7 +30,7 @@ use crate::avx::util::{
     shuffle,
 };
 use crate::traits::FftTrigonometry;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::x86_64::*;
@@ -147,6 +147,101 @@ impl AvxButterfly4<f32> {
         }
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn execute_out_of_place_f32(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        unsafe {
+            let v_i_multiplier = _mm256_loadu_ps(self.multiplier.as_ptr());
+
+            for (dst, src) in dst.chunks_exact_mut(16).zip(src.chunks_exact(16)) {
+                let aaaa0 = _mm256_loadu_ps(src.get_unchecked(0..).as_ptr().cast());
+                let bbbb0 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
+                let cccc0 = _mm256_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
+                let dddd0 = _mm256_loadu_ps(src.get_unchecked(12..).as_ptr().cast());
+
+                let (a, b, c, d) = _mm256s_deinterleave4_epi64(aaaa0, bbbb0, cccc0, dddd0);
+
+                let t0 = _mm256_add_ps(a, c);
+                let t1 = _mm256_sub_ps(a, c);
+                let t2 = _mm256_add_ps(b, d);
+                let mut t3 = _mm256_sub_ps(b, d);
+                const SH: i32 = shuffle(2, 3, 0, 1);
+                t3 = _mm256_xor_ps(_mm256_permute_ps::<SH>(t3), v_i_multiplier);
+
+                let xy0 = _mm256_add_ps(t0, t2);
+                let xy1 = _mm256_add_ps(t1, t3);
+                let xy2 = _mm256_sub_ps(t0, t2);
+                let xy3 = _mm256_sub_ps(t1, t3);
+
+                let (y0, y1, y2, y3) = _mm256s_interleave4_epi64(xy0, xy1, xy2, xy3);
+
+                _mm256_storeu_ps(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
+                _mm256_storeu_ps(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y1);
+                _mm256_storeu_ps(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), y2);
+                _mm256_storeu_ps(dst.get_unchecked_mut(12..).as_mut_ptr().cast(), y3);
+            }
+
+            let rem_dst = dst.chunks_exact_mut(16).into_remainder();
+            let rem_src = src.chunks_exact(16).remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(4).zip(rem_src.chunks_exact(4)) {
+                let aaaa0 = _mm256_loadu_ps(src.get_unchecked(0..).as_ptr().cast());
+
+                let a = _mm256_castps256_ps128(aaaa0);
+                let b =
+                    _mm_unpackhi_ps64(_mm256_castps256_ps128(aaaa0), _mm256_castps256_ps128(aaaa0));
+
+                let aa0 = _mm256_extractf128_ps::<1>(aaaa0);
+
+                let c = aa0;
+                let d = _mm_unpackhi_ps64(aa0, aa0);
+
+                let t0 = _mm_add_ps(a, c);
+                let t1 = _mm_sub_ps(a, c);
+                let t2 = _mm_add_ps(b, d);
+                let mut t3 = _mm_sub_ps(b, d);
+                const SH: i32 = shuffle(2, 3, 0, 1);
+                t3 = _mm_xor_ps(
+                    _mm_shuffle_ps::<SH>(t3, t3),
+                    _mm256_castps256_ps128(v_i_multiplier),
+                );
+
+                let yy0 = _mm_unpacklo_ps64(_mm_add_ps(t0, t2), _mm_add_ps(t1, t3));
+                let yy1 = _mm_unpacklo_ps64(_mm_sub_ps(t0, t2), _mm_sub_ps(t1, t3));
+                let yyyy = _mm256_insertf128_ps::<1>(_mm256_castps128_ps256(yy0), yy1);
+
+                _mm256_storeu_ps(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), yyyy);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl FftExecutorOutOfPlace<f32> for AvxButterfly4<f32> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_out_of_place_f32(src, dst) }
+    }
+}
+
+impl CompositeFftExecutor<f32> for AvxButterfly4<f32> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+        self
+    }
 }
 
 impl AvxButterfly4<f64> {
@@ -192,6 +287,69 @@ impl AvxButterfly4<f64> {
         }
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    unsafe fn execute_out_of_place_f64(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 4 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        let v_i_multiplier = unsafe { _mm_loadu_pd(self.multiplier.as_ptr()) };
+
+        for (dst, src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+            unsafe {
+                let aa0 = _mm256_loadu_pd(src.get_unchecked(0..).as_ptr().cast());
+                let bb0 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
+
+                let a = _mm256_castpd256_pd128(aa0);
+                let b = _mm256_extractf128_pd::<1>(aa0);
+                let c = _mm256_castpd256_pd128(bb0);
+                let d = _mm256_extractf128_pd::<1>(bb0);
+
+                let t0 = _mm_add_pd(a, c);
+                let t1 = _mm_sub_pd(a, c);
+                let t2 = _mm_add_pd(b, d);
+                let mut t3 = _mm_sub_pd(b, d);
+                t3 = _mm_xor_pd(_mm_shuffle_pd::<0b01>(t3, t3), v_i_multiplier);
+
+                let yy0 = _mm256_insertf128_pd::<1>(
+                    _mm256_castpd128_pd256(_mm_add_pd(t0, t2)),
+                    _mm_add_pd(t1, t3),
+                );
+                let yy1 = _mm256_insertf128_pd::<1>(
+                    _mm256_castpd128_pd256(_mm_sub_pd(t0, t2)),
+                    _mm_sub_pd(t1, t3),
+                );
+
+                _mm256_storeu_pd(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), yy0);
+                _mm256_storeu_pd(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), yy1);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl FftExecutorOutOfPlace<f64> for AvxButterfly4<f64> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_out_of_place_f64(src, dst) }
+    }
+}
+
+impl CompositeFftExecutor<f64> for AvxButterfly4<f64> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+        self
+    }
 }
 
 impl FftExecutor<f32> for AvxButterfly4<f32> {
@@ -225,6 +383,7 @@ impl FftExecutor<f64> for AvxButterfly4<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -294,6 +453,146 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly4_out_of_place_f64() {
+        for i in 1..6 {
+            let size = 4usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = AvxButterfly4::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly4::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(4, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 4f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly4_out_of_place_f32() {
+        for i in 1..6 {
+            let size = 4usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f32>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = AvxButterfly4::new(FftDirection::Forward);
+            let radix_inverse = AvxButterfly4::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(4, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-5,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-5,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 4f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

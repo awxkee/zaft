@@ -29,7 +29,7 @@
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::marker::PhantomData;
@@ -118,9 +118,87 @@ where
     }
 }
 
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>,
+> FftExecutorOutOfPlace<T> for Butterfly3<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 3 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 3 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        for (dst, src) in dst.chunks_exact_mut(3).zip(src.chunks_exact(3)) {
+            let u0 = src[0];
+            let u1 = src[1];
+            let u2 = src[2];
+
+            let xp = u1 + u2;
+            let xn = u1 - u2;
+            let sum = u0 + xp;
+
+            let w_1 = Complex {
+                re: fmla(self.twiddle.re, xp.re, u0.re),
+                im: fmla(self.twiddle.re, xp.im, u0.im),
+            };
+
+            let y0 = sum;
+            let y1 = Complex {
+                re: fmla(-self.twiddle.im, xn.im, w_1.re),
+                im: fmla(self.twiddle.im, xn.re, w_1.im),
+            };
+            let y2 = Complex {
+                re: fmla(self.twiddle.im, xn.im, w_1.re),
+                im: fmla(-self.twiddle.im, xn.re, w_1.im),
+            };
+
+            dst[0] = y0;
+            dst[1] = y1;
+            dst[2] = y2;
+        }
+        Ok(())
+    }
+}
+
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Send
+        + Sync,
+> CompositeFftExecutor<T> for Butterfly3<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -152,6 +230,76 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly3_out_of_place_f64() {
+        for i in 1..6 {
+            let size = 3usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = Butterfly3::new(FftDirection::Forward);
+            let radix_inverse = Butterfly3::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(3, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 3f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

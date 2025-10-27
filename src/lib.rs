@@ -364,11 +364,11 @@ impl Zaft {
         } else if n == 2 {
             return T::butterfly2(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 3 {
-            return T::butterfly3(fft_direction);
+            return T::butterfly3(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 4 {
-            return T::butterfly4(fft_direction);
+            return T::butterfly4(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 5 {
-            return T::butterfly5(fft_direction);
+            return T::butterfly5(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 6 {
             return T::butterfly6(fft_direction);
         } else if n == 7 {
