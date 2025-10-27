@@ -169,10 +169,10 @@ fn check_power_group(c: &mut Criterion, n: usize, group: String) {
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     c.benchmark_group("Fft");
-    // bench_rustfft_average(c);
-    // bench_zaft_average(c);
-    // bench_rustfft_averages(c);
-    // bench_zaft_averages(c);
+    bench_rustfft_average(c);
+    bench_zaft_average(c);
+    bench_rustfft_averages(c);
+    bench_zaft_averages(c);
 
     let mut input_1295 = vec![Complex::<f32>::default(); 1295];
     for z in input_1295.iter_mut() {
