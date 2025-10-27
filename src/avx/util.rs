@@ -529,46 +529,6 @@ where
     Ok(twiddles)
 }
 
-pub(crate) fn create_avx2_twiddles<T: FftTrigonometry + 'static + Float + Sized, const N: usize>(
-    base: usize,
-    size: usize,
-    fft_direction: FftDirection,
-) -> Result<Vec<Complex<T>>, ZaftError>
-where
-    f64: AsPrimitive<T>,
-{
-    let mut twiddles = Vec::new();
-    twiddles
-        .try_reserve_exact(size - 1)
-        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
-
-    let mut cross_fft_len = base;
-    while cross_fft_len < size {
-        let num_columns = cross_fft_len;
-        cross_fft_len *= N;
-
-        let mut i = 0usize;
-
-        while i + 2 < num_columns {
-            for k in 1..N {
-                let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
-                let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
-                twiddles.push(twiddle0);
-                twiddles.push(twiddle1);
-            }
-            i += 2;
-        }
-
-        for i in i..num_columns {
-            for k in 1..N {
-                let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
-                twiddles.push(twiddle);
-            }
-        }
-    }
-    Ok(twiddles)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
