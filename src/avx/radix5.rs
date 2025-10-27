@@ -663,7 +663,7 @@ impl AvxFmaRadix5<f32> {
                             );
                             _m128s_store_f32x2(
                                 data.get_unchecked_mut(j + 3 * fifth..).as_mut_ptr().cast(),
-                                y3,S
+                                y3,
                             );
                             _m128s_store_f32x2(
                                 data.get_unchecked_mut(j + 4 * fifth..).as_mut_ptr().cast(),
