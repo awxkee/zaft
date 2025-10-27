@@ -32,7 +32,7 @@ use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly4};
 use crate::complex_fma::{c_mul_fast, c_mul_fast_conj};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -176,9 +176,140 @@ where
     }
 }
 
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Float
+        + Default
+        + FftTrigonometry,
+> FftExecutorOutOfPlace<T> for Butterfly16<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        let bf2 = FastButterfly2::new(self.direction);
+
+        for (dst, src) in dst.chunks_exact_mut(16).zip(src.chunks_exact(16)) {
+            let u0 = src[0];
+            let u1 = src[1];
+            let u2 = src[2];
+            let u3 = src[3];
+
+            let u4 = src[4];
+            let u5 = src[5];
+            let u6 = src[6];
+            let u7 = src[7];
+
+            let u8 = src[8];
+            let u9 = src[9];
+            let u10 = src[10];
+            let u11 = src[11];
+            let u12 = src[12];
+
+            let u13 = src[13];
+            let u14 = src[14];
+            let u15 = src[15];
+
+            let evens = self.bf8.exec(u0, u2, u4, u6, u8, u10, u12, u14);
+
+            let mut odds_1 = self.bf4.butterfly4(u1, u5, u9, u13);
+            let mut odds_2 = self.bf4.butterfly4(u15, u3, u7, u11);
+
+            odds_1.1 = c_mul_fast(odds_1.1, self.twiddle1);
+            odds_2.1 = c_mul_fast_conj(odds_2.1, self.twiddle1);
+
+            odds_1.2 = c_mul_fast(odds_1.2, self.twiddle2);
+            odds_2.2 = c_mul_fast_conj(odds_2.2, self.twiddle2);
+
+            odds_1.3 = c_mul_fast(odds_1.3, self.twiddle3);
+            odds_2.3 = c_mul_fast_conj(odds_2.3, self.twiddle3);
+
+            // step 4: cross FFTs
+            let (o01, o02) = bf2.butterfly2(odds_1.0, odds_2.0);
+            odds_1.0 = o01;
+            odds_2.0 = o02;
+
+            let (o03, o04) = bf2.butterfly2(odds_1.1, odds_2.1);
+            odds_1.1 = o03;
+            odds_2.1 = o04;
+            let (o05, o06) = bf2.butterfly2(odds_1.2, odds_2.2);
+            odds_1.2 = o05;
+            odds_2.2 = o06;
+            let (o07, o08) = bf2.butterfly2(odds_1.3, odds_2.3);
+            odds_1.3 = o07;
+            odds_2.3 = o08;
+
+            // apply the butterfly 4 twiddle factor, which is just a rotation
+            odds_2.0 = rotate_90(odds_2.0, self.direction);
+            odds_2.1 = rotate_90(odds_2.1, self.direction);
+            odds_2.2 = rotate_90(odds_2.2, self.direction);
+            odds_2.3 = rotate_90(odds_2.3, self.direction);
+
+            dst[0] = evens.0 + odds_1.0;
+            dst[1] = evens.1 + odds_1.1;
+            dst[2] = evens.2 + odds_1.2;
+            dst[3] = evens.3 + odds_1.3;
+            dst[4] = evens.4 + odds_2.0;
+            dst[5] = evens.5 + odds_2.1;
+            dst[6] = evens.6 + odds_2.2;
+            dst[7] = evens.7 + odds_2.3;
+            dst[8] = evens.0 - odds_1.0;
+            dst[9] = evens.1 - odds_1.1;
+            dst[10] = evens.2 - odds_1.2;
+            dst[11] = evens.3 - odds_1.3;
+            dst[12] = evens.4 - odds_2.0;
+            dst[13] = evens.5 - odds_2.1;
+            dst[14] = evens.6 - odds_2.2;
+            dst[15] = evens.7 - odds_2.3;
+        }
+        Ok(())
+    }
+}
+
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Float
+        + Default
+        + FftTrigonometry
+        + Send
+        + Sync,
+> CompositeFftExecutor<T> for Butterfly16<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -210,6 +341,76 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly16_out_of_place_f64() {
+        for i in 1..4 {
+            let size = 16usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = Butterfly16::new(FftDirection::Forward);
+            let radix_inverse = Butterfly16::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(16, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 16f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,
