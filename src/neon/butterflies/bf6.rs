@@ -31,7 +31,7 @@ use crate::neon::util::{pack_complex_hi, pack_complex_lo};
 use crate::radix6::Radix6Twiddles;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
@@ -163,6 +163,114 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
     }
 }
 
+impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 6 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 6 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        let twiddle_re = unsafe { vdupq_n_f32(self.twiddle_re) };
+        let twiddle_w_2 = unsafe { vld1q_f32(self.twiddle_im.as_ptr().cast()) };
+
+        for (dst, src) in dst.chunks_exact_mut(12).zip(src.chunks_exact(12)) {
+            unsafe {
+                let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
+                let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let uz2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+                let uz3 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
+                let uz4 = vld1q_f32(src.get_unchecked(8..).as_ptr().cast());
+                let uz10 = vld1q_f32(src.get_unchecked(10..).as_ptr().cast());
+
+                let (u0, u1) = (pack_complex_lo(uz0, uz3), pack_complex_hi(uz0, uz3));
+                let (u2, u3) = (pack_complex_lo(uz1, uz4), pack_complex_hi(uz1, uz4));
+                let (u4, u5) = (pack_complex_lo(uz2, uz10), pack_complex_hi(uz2, uz10));
+
+                let (t0, t2, t4) =
+                    NeonButterfly::butterfly3_f32(u0, u2, u4, twiddle_re, twiddle_w_2);
+                let (t1, t3, t5) =
+                    NeonButterfly::butterfly3_f32(u3, u5, u1, twiddle_re, twiddle_w_2);
+                let (y0, y3) = NeonButterfly::butterfly2_f32(t0, t1);
+                let (y4, y1) = NeonButterfly::butterfly2_f32(t2, t3);
+                let (y2, y5) = NeonButterfly::butterfly2_f32(t4, t5);
+
+                let row0 = pack_complex_lo(y0, y1);
+                let row1 = pack_complex_lo(y2, y3);
+                let row2 = pack_complex_lo(y4, y5);
+                let row3 = pack_complex_hi(y0, y1);
+                let row4 = pack_complex_hi(y2, y3);
+                let row5 = pack_complex_hi(y4, y5);
+
+                vst1q_f32(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), row0);
+                vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), row1);
+                vst1q_f32(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), row2);
+                vst1q_f32(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), row3);
+                vst1q_f32(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), row4);
+                vst1q_f32(dst.get_unchecked_mut(10..).as_mut_ptr().cast(), row5);
+            }
+        }
+
+        let rem_src = src.chunks_exact(12).remainder();
+        let rem_dst = dst.chunks_exact_mut(12).into_remainder();
+
+        for (dst, src) in rem_dst.chunks_exact_mut(6).zip(rem_src.chunks_exact(6)) {
+            unsafe {
+                let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
+                let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
+                let uz2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
+
+                let (u0, u1) = (vget_low_f32(uz0), vget_high_f32(uz0));
+                let (u2, u3) = (vget_low_f32(uz1), vget_high_f32(uz1));
+                let (u4, u5) = (vget_low_f32(uz2), vget_high_f32(uz2));
+
+                let (t0, t2, t4) = NeonButterfly::butterfly3h_f32(
+                    u0,
+                    u2,
+                    u4,
+                    vget_low_f32(twiddle_re),
+                    vget_low_f32(twiddle_w_2),
+                );
+                let (t1, t3, t5) = NeonButterfly::butterfly3h_f32(
+                    u3,
+                    u5,
+                    u1,
+                    vget_low_f32(twiddle_re),
+                    vget_low_f32(twiddle_w_2),
+                );
+                let (y0, y3) = NeonButterfly::butterfly2h_f32(t0, t1);
+                let (y4, y1) = NeonButterfly::butterfly2h_f32(t2, t3);
+                let (y2, y5) = NeonButterfly::butterfly2h_f32(t4, t5);
+
+                vst1q_f32(
+                    dst.get_unchecked_mut(0..).as_mut_ptr().cast(),
+                    vcombine_f32(y0, y1),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    vcombine_f32(y2, y3),
+                );
+                vst1q_f32(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    vcombine_f32(y4, y5),
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+impl CompositeFftExecutor<f32> for NeonButterfly6<f32> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+        self
+    }
+}
+
 impl FftExecutor<f64> for NeonButterfly6<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if in_place.len() % 6 != 0 {
@@ -213,10 +321,62 @@ impl FftExecutor<f64> for NeonButterfly6<f64> {
     }
 }
 
+impl FftExecutorOutOfPlace<f64> for NeonButterfly6<f64> {
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % 6 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % 6 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        let twiddle_re = unsafe { vdupq_n_f64(self.twiddle_re) };
+        let twiddle_w_2 = unsafe { vld1q_f64(self.twiddle_im.as_ptr().cast()) };
+
+        for (dst, src) in dst.chunks_exact_mut(6).zip(src.chunks_exact(6)) {
+            unsafe {
+                let u0 = vld1q_f64(src.get_unchecked(0..).as_ptr().cast());
+                let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
+                let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
+                let u3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());
+                let u4 = vld1q_f64(src.get_unchecked(4..).as_ptr().cast());
+                let u5 = vld1q_f64(src.get_unchecked(5..).as_ptr().cast());
+
+                let (t0, t2, t4) =
+                    NeonButterfly::butterfly3_f64(u0, u2, u4, twiddle_re, twiddle_w_2);
+                let (t1, t3, t5) =
+                    NeonButterfly::butterfly3_f64(u3, u5, u1, twiddle_re, twiddle_w_2);
+                let (y0, y3) = NeonButterfly::butterfly2_f64(t0, t1);
+                let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);
+                let (y2, y5) = NeonButterfly::butterfly2_f64(t4, t5);
+
+                vst1q_f64(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
+                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
+                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
+                vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y3);
+                vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
+                vst1q_f64(dst.get_unchecked_mut(5..).as_mut_ptr().cast(), y5);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl CompositeFftExecutor<f64> for NeonButterfly6<f64> {
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::butterflies::Butterfly6;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -328,6 +488,146 @@ mod test {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly6_out_of_place_f64() {
+        for i in 1..5 {
+            let size = 6usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = NeonButterfly6::new(FftDirection::Forward);
+            let radix_inverse = NeonButterfly6::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(6, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 6f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly6_out_of_place_f32() {
+        for i in 1..5 {
+            let size = 6usize.pow(i);
+            let mut input = vec![Complex::<f32>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f32>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = NeonButterfly6::new(FftDirection::Forward);
+            let radix_inverse = NeonButterfly6::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(6, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-4,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-4,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 6f32)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-5,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-5,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,

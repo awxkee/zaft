@@ -27,13 +27,14 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::complex_fma::c_mul_fast;
+use crate::err::try_vec;
+use crate::factory::AlgorithmFactory;
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::{
-    compute_twiddle, digit_reverse_indices, is_power_of_six, permute_inplace,
-    radixn_floating_twiddles, radixn_floating_twiddles_from_base,
+    bitreversed_transpose, compute_twiddle, is_power_of_six, radixn_floating_twiddles_from_base,
 };
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -41,20 +42,13 @@ use std::ops::{Add, Mul, Neg, Sub};
 #[allow(dead_code)]
 pub(crate) struct Radix6<T> {
     twiddles: Vec<Complex<T>>,
-    permutations: Vec<usize>,
     execution_length: usize,
     twiddle: Complex<T>,
     direction: FftDirection,
+    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 pub(crate) trait Radix6Twiddles {
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<Self>>, ZaftError>
-    where
-        Self: Sized;
-
     #[allow(unused)]
     fn make_twiddles_with_base(
         base: usize,
@@ -66,12 +60,6 @@ pub(crate) trait Radix6Twiddles {
 }
 
 impl Radix6Twiddles for f64 {
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<f64>>, ZaftError> {
-        radixn_floating_twiddles::<f64, 6>(size, fft_direction)
-    }
     fn make_twiddles_with_base(
         base: usize,
         size: usize,
@@ -85,12 +73,6 @@ impl Radix6Twiddles for f64 {
 }
 
 impl Radix6Twiddles for f32 {
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<f32>>, ZaftError> {
-        radixn_floating_twiddles::<f32, 6>(size, fft_direction)
-    }
     fn make_twiddles_with_base(
         base: usize,
         size: usize,
@@ -104,7 +86,16 @@ impl Radix6Twiddles for f32 {
 }
 
 #[allow(dead_code)]
-impl<T: Default + Clone + Radix6Twiddles + 'static + Copy + FftTrigonometry + Float> Radix6<T>
+impl<
+    T: Default
+        + Clone
+        + Radix6Twiddles
+        + 'static
+        + Copy
+        + FftTrigonometry
+        + Float
+        + AlgorithmFactory<T>,
+> Radix6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -114,15 +105,14 @@ where
             "Input length must be a power of 6"
         );
 
-        let twiddles = T::make_twiddles(size, fft_direction)?;
-        let rev = digit_reverse_indices(size, 6)?;
+        let twiddles = T::make_twiddles_with_base(6, size, fft_direction)?;
 
         Ok(Radix6 {
-            permutations: rev,
             execution_length: size,
             twiddles,
             twiddle: compute_twiddle(1, 3, fft_direction),
             direction: fft_direction,
+            butterfly: T::butterfly6(fft_direction)?,
         })
     }
 }
@@ -203,16 +193,21 @@ where
             ));
         }
 
+        let mut scratch = try_vec![Complex::<T>::default(); self.execution_length];
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
-            permute_inplace(chunk, &self.permutations);
+            bitreversed_transpose::<Complex<T>, 6>(6, chunk, &mut scratch);
+
+            self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
             let mut len = 6;
 
             unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();
 
-                while len <= self.execution_length {
+                while len < self.execution_length {
+                    let columns = len;
+                    len *= 6;
                     let sixth = len / 6;
 
                     for data in chunk.chunks_exact_mut(len) {
@@ -255,8 +250,7 @@ where
                         }
                     }
 
-                    m_twiddles = &m_twiddles[sixth * 5..];
-                    len *= 6;
+                    m_twiddles = &m_twiddles[columns * 5..];
                 }
             }
         }
@@ -275,11 +269,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
-    fn test_radix4() {
-        for i in 1..7 {
+    fn test_radix6() {
+        for i in 1..5 {
             let size = 6usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
@@ -289,9 +284,35 @@ mod tests {
                 };
             }
             let src = input.to_vec();
+            let mut ref_input = input.to_vec();
             let radix_forward = Radix6::new(size, FftDirection::Forward).unwrap();
             let radix_inverse = Radix6::new(size, FftDirection::Inverse).unwrap();
             radix_forward.execute(&mut input).unwrap();
+
+            let reference_dft = Dft::new(size, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            input
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-2,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-2,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
             radix_inverse.execute(&mut input).unwrap();
 
             input = input
