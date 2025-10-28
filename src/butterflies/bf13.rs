@@ -728,16 +728,18 @@ where
 
 impl<
     T: Copy
-    + Mul<T, Output = T>
-    + Add<T, Output = T>
-    + Sub<T, Output = T>
-    + Num
-    + 'static
-    + Neg<Output = T>
-    + MulAdd<T, Output = T>
-    + Float
-    + Default
-    + FftTrigonometry + Send + Sync,
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Float
+        + Default
+        + FftTrigonometry
+        + Send
+        + Sync,
 > CompositeFftExecutor<T> for Butterfly13<T>
 where
     f64: AsPrimitive<T>,
