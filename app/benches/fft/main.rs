@@ -276,7 +276,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // check_power_group(c, 13 * 13 * 13, "power 13".to_string());
     // check_power_group(c, 3125, "power 5".to_string());
     // check_power_group(c, 19, "bf-19".to_string());
-    // check_power_group(c, 7 * 7 * 7 * 7, "power 7".to_string());
+    check_power_group(c, 7 * 7 * 7 * 7, "power 7".to_string());
 
     /* c.bench_function("rustfft prime 1201", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_1201.len());
