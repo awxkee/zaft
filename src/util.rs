@@ -31,7 +31,7 @@ use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 
-/// Digit-reversal permutation in base `radix`
+// Digit-reversal permutation in base `radix`
 // pub(crate) fn digit_reverse_indices(n: usize, radix: usize) -> Result<Vec<usize>, ZaftError> {
 //     assert!(radix >= 2, "radix must be at least 2");
 //
