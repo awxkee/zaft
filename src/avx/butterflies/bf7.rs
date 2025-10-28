@@ -28,9 +28,9 @@
 use crate::avx::butterflies::AvxButterfly;
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
-    _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpackhilo_ps64, _mm_unpacklo_ps64,
-    _mm256_create_pd, _mm256_create_ps, _mm256_permute4x64_ps, _mm256_unpackhi_ps64,
-    _mm256_unpacklo_ps64, shuffle,
+    _m128s_store_f32x2, _m128s_storeh_f32x2, _mm_unpackhi_ps64, _mm_unpackhilo_ps64,
+    _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_permute4x64_ps,
+    _mm256_unpackhi_ps64, _mm256_unpacklo_ps64, shuffle,
 };
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
@@ -656,9 +656,9 @@ impl AvxButterfly7<f32> {
                     chunk.get_unchecked_mut(11..).as_mut_ptr().cast(),
                     _mm256_castps256_ps128(y04y05_hi),
                 );
-                _m128s_store_f32x2(
+                _m128s_storeh_f32x2(
                     chunk.get_unchecked_mut(13..).as_mut_ptr().cast(),
-                    _mm_unpackhi_ps64(_mm256_castps256_ps128(y06), _mm256_castps256_ps128(y06)),
+                    _mm256_castps256_ps128(y06),
                 );
 
                 let y06hi = _mm256_extractf128_ps::<1>(y06);
@@ -681,10 +681,7 @@ impl AvxButterfly7<f32> {
                     chunk.get_unchecked_mut(25..).as_mut_ptr().cast(),
                     _mm256_extractf32x4_ps::<1>(y04y05_hi),
                 );
-                _m128s_store_f32x2(
-                    chunk.get_unchecked_mut(27..).as_mut_ptr().cast(),
-                    _mm_unpackhi_ps64(y06hi, y06hi),
-                );
+                _m128s_storeh_f32x2(chunk.get_unchecked_mut(27..).as_mut_ptr().cast(), y06hi);
             }
 
             let tw1tw2tw3r = _mm256_setr_ps(
@@ -989,9 +986,9 @@ impl AvxButterfly7<f32> {
                     dst.get_unchecked_mut(11..).as_mut_ptr().cast(),
                     _mm256_castps256_ps128(y04y05_hi),
                 );
-                _m128s_store_f32x2(
+                _m128s_storeh_f32x2(
                     dst.get_unchecked_mut(13..).as_mut_ptr().cast(),
-                    _mm_unpackhi_ps64(_mm256_castps256_ps128(y06), _mm256_castps256_ps128(y06)),
+                    _mm256_castps256_ps128(y06),
                 );
 
                 let y06hi = _mm256_extractf128_ps::<1>(y06);
@@ -1014,10 +1011,7 @@ impl AvxButterfly7<f32> {
                     dst.get_unchecked_mut(25..).as_mut_ptr().cast(),
                     _mm256_extractf32x4_ps::<1>(y04y05_hi),
                 );
-                _m128s_store_f32x2(
-                    dst.get_unchecked_mut(27..).as_mut_ptr().cast(),
-                    _mm_unpackhi_ps64(y06hi, y06hi),
-                );
+                _m128s_storeh_f32x2(dst.get_unchecked_mut(27..).as_mut_ptr().cast(), y06hi);
             }
 
             let tw1tw2tw3r = _mm256_setr_ps(

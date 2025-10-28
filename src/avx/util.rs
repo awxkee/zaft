@@ -110,6 +110,12 @@ pub(crate) unsafe fn _m128s_store_f32x2(a: *mut Complex<f32>, b: __m128) {
 }
 
 #[inline]
+#[target_feature(enable = "sse4.2")]
+pub(crate) unsafe fn _m128s_storeh_f32x2(a: *mut Complex<f32>, b: __m128) {
+    unsafe { _mm_storeh_pd(a.cast(), _mm_castps_pd(b)) }
+}
+
+#[inline]
 #[target_feature(enable = "avx", enable = "fma")]
 pub(crate) unsafe fn _mm256_fcmul_ps(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
