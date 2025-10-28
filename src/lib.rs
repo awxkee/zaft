@@ -78,7 +78,8 @@ use crate::prime_factors::{
     PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
 };
 use crate::r2c::{
-    C2RFftEvenInterceptor, C2RFftOddInterceptor, R2CFftEvenInterceptor, R2CFftOddInterceptor,
+    C2RFftEvenInterceptor, C2RFftOddInterceptor, OneSizedRealFft, R2CFftEvenInterceptor,
+    R2CFftOddInterceptor,
 };
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
@@ -452,6 +453,11 @@ impl Zaft {
     pub fn make_r2c_fft_f32(
         n: usize,
     ) -> Result<Box<dyn R2CFftExecutor<f32> + Send + Sync>, ZaftError> {
+        if n == 1 {
+            return Ok(Box::new(OneSizedRealFft {
+                phantom_data: Default::default(),
+            }));
+        }
         if n.is_multiple_of(2) {
             R2CFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Forward)?)
                 .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f32> + Send + Sync>)
@@ -464,6 +470,11 @@ impl Zaft {
     pub fn make_c2r_fft_f32(
         n: usize,
     ) -> Result<Box<dyn C2RFftExecutor<f32> + Send + Sync>, ZaftError> {
+        if n == 1 {
+            return Ok(Box::new(OneSizedRealFft {
+                phantom_data: Default::default(),
+            }));
+        }
         if n.is_multiple_of(2) {
             C2RFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Inverse)?)
                 .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f32> + Send + Sync>)
@@ -488,6 +499,11 @@ impl Zaft {
     pub fn make_c2r_fft_f64(
         n: usize,
     ) -> Result<Box<dyn C2RFftExecutor<f64> + Send + Sync>, ZaftError> {
+        if n == 1 {
+            return Ok(Box::new(OneSizedRealFft {
+                phantom_data: Default::default(),
+            }));
+        }
         if n.is_multiple_of(2) {
             C2RFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Inverse)?)
                 .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f64> + Send + Sync>)
@@ -500,6 +516,11 @@ impl Zaft {
     pub fn make_r2c_fft_f64(
         n: usize,
     ) -> Result<Box<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
+        if n == 1 {
+            return Ok(Box::new(OneSizedRealFft {
+                phantom_data: Default::default(),
+            }));
+        }
         if n.is_multiple_of(2) {
             R2CFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Forward)?)
                 .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f64> + Send + Sync>)
