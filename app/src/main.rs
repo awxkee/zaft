@@ -44,7 +44,7 @@ fn main() {
         Complex::new(12.6, -3.0),
         Complex::new(14.6, -6.0),
     ];
-    let mut data = vec![Complex::new(0.0019528865, 0.); 7 * 7 * 7 * 7];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 1920];
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
