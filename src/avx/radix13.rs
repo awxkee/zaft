@@ -30,7 +30,7 @@ use crate::avx::butterflies::AvxButterfly;
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_unpackhi_ps64, _mm256_create_pd, _mm256_fcmul_pd,
-    _mm256_fcmul_ps, _mm256_load4_f32x2,
+    _mm256_fcmul_ps, _mm256_load4_f32x2, create_avx4_1_twiddles,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -83,7 +83,7 @@ where
             "Input length must be a power of 13"
         );
 
-        let twiddles = T::make_twiddles_with_base(13, size, fft_direction)?;
+        let twiddles = create_avx4_1_twiddles::<T, 13>(13, size, fft_direction)?;
 
         Ok(AvxFmaRadix13 {
             execution_length: size,
@@ -130,7 +130,373 @@ impl AvxFmaRadix13<f64> {
                     let thirteenth = len / 13;
 
                     for data in chunk.chunks_exact_mut(len) {
-                        let j = 0usize;
+                        let mut j = 0usize;
+
+                        while j + 2 < thirteenth {
+                            let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+
+                            let twi = 12 * j;
+                            let tw0 =
+                                _mm256_loadu_pd(m_twiddles.get_unchecked(twi..).as_ptr().cast());
+                            let tw1 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 2..).as_ptr().cast(),
+                            );
+                            let tw2 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 4..).as_ptr().cast(),
+                            );
+                            let tw3 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 6..).as_ptr().cast(),
+                            );
+                            let tw4 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 8..).as_ptr().cast(),
+                            );
+                            let tw5 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 10..).as_ptr().cast(),
+                            );
+
+                            let u1 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + thirteenth..).as_ptr().cast(),
+                                ),
+                                tw0,
+                            );
+                            let u2 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 2 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw1,
+                            );
+                            let u3 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 3 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw2,
+                            );
+                            let u4 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 4 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw3,
+                            );
+                            let u5 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 5 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw4,
+                            );
+                            let u6 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 6 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw5,
+                            );
+
+                            let tw7 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 12..).as_ptr().cast(),
+                            );
+                            let tw8 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 14..).as_ptr().cast(),
+                            );
+                            let tw9 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 16..).as_ptr().cast(),
+                            );
+                            let tw10 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 18..).as_ptr().cast(),
+                            );
+                            let tw11 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 20..).as_ptr().cast(),
+                            );
+                            let tw12 = _mm256_loadu_pd(
+                                m_twiddles.get_unchecked(twi + 22..).as_ptr().cast(),
+                            );
+
+                            let u7 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 7 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw7,
+                            );
+
+                            let u8 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 8 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw8,
+                            );
+
+                            let u9 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 9 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw9,
+                            );
+
+                            let u10 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 10 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw10,
+                            );
+
+                            let u11 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 11 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw11,
+                            );
+
+                            let u12 = _mm256_fcmul_pd(
+                                _mm256_loadu_pd(
+                                    data.get_unchecked(j + 12 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw12,
+                            );
+
+                            let y00 = u0;
+                            let (x1p12, x1m12) = AvxButterfly::butterfly2_f64(u1, u12); // u1, u12
+                            let x1m12 = rotate.rotate_m256d(x1m12);
+                            let y00 = _mm256_add_pd(y00, x1p12);
+                            let (x2p11, x2m11) = AvxButterfly::butterfly2_f64(u2, u11); // u2, u11
+                            let x2m11 = rotate.rotate_m256d(x2m11);
+                            let y00 = _mm256_add_pd(y00, x2p11);
+                            let (x3p10, x3m10) = AvxButterfly::butterfly2_f64(u3, u10); // u3, u10
+                            let x3m10 = rotate.rotate_m256d(x3m10);
+                            let y00 = _mm256_add_pd(y00, x3p10);
+                            let (x4p9, x4m9) = AvxButterfly::butterfly2_f64(u4, u9); // u4, u9
+                            let x4m9 = rotate.rotate_m256d(x4m9);
+                            let y00 = _mm256_add_pd(y00, x4p9);
+                            let (x5p8, x5m8) = AvxButterfly::butterfly2_f64(u5, u8); // u5, u8
+                            let x5m8 = rotate.rotate_m256d(x5m8);
+                            let y00 = _mm256_add_pd(y00, x5p8);
+                            let (x6p7, x6m7) = AvxButterfly::butterfly2_f64(u6, u7); // u6, u7
+                            let x6m7 = rotate.rotate_m256d(x6m7);
+                            let y00 = _mm256_add_pd(y00, x6p7);
+
+                            let m0112a =
+                                _mm256_fmadd_pd(x1p12, _mm256_set1_pd(self.twiddle1.re), u0);
+                            let m0112a =
+                                _mm256_fmadd_pd(_mm256_set1_pd(self.twiddle2.re), x2p11, m0112a);
+                            let m0112a =
+                                _mm256_fmadd_pd(_mm256_set1_pd(self.twiddle3.re), x3p10, m0112a);
+                            let m0112a =
+                                _mm256_fmadd_pd(x4p9, _mm256_set1_pd(self.twiddle4.re), m0112a);
+                            let m0112a =
+                                _mm256_fmadd_pd(x5p8, _mm256_set1_pd(self.twiddle5.re), m0112a);
+                            let m0112a =
+                                _mm256_fmadd_pd(x6p7, _mm256_set1_pd(self.twiddle6.re), m0112a);
+                            let m0112b = _mm256_mul_pd(x1m12, _mm256_set1_pd(self.twiddle1.im));
+                            let m0112b =
+                                _mm256_fmadd_pd(x2m11, _mm256_set1_pd(self.twiddle2.im), m0112b);
+                            let m0112b =
+                                _mm256_fmadd_pd(x3m10, _mm256_set1_pd(self.twiddle3.im), m0112b);
+                            let m0112b =
+                                _mm256_fmadd_pd(x4m9, _mm256_set1_pd(self.twiddle4.im), m0112b);
+                            let m0112b =
+                                _mm256_fmadd_pd(x5m8, _mm256_set1_pd(self.twiddle5.im), m0112b);
+                            let m0112b =
+                                _mm256_fmadd_pd(x6m7, _mm256_set1_pd(self.twiddle6.im), m0112b);
+                            let (y01, y12) = AvxButterfly::butterfly2_f64(m0112a, m0112b);
+
+                            let m0211a =
+                                _mm256_fmadd_pd(x1p12, _mm256_set1_pd(self.twiddle2.re), u0);
+                            let m0211a =
+                                _mm256_fmadd_pd(x2p11, _mm256_set1_pd(self.twiddle4.re), m0211a);
+                            let m0211a =
+                                _mm256_fmadd_pd(x3p10, _mm256_set1_pd(self.twiddle6.re), m0211a);
+                            let m0211a =
+                                _mm256_fmadd_pd(x4p9, _mm256_set1_pd(self.twiddle5.re), m0211a);
+                            let m0211a =
+                                _mm256_fmadd_pd(x5p8, _mm256_set1_pd(self.twiddle3.re), m0211a);
+                            let m0211a =
+                                _mm256_fmadd_pd(x6p7, _mm256_set1_pd(self.twiddle1.re), m0211a);
+                            let m0211b = _mm256_mul_pd(x1m12, _mm256_set1_pd(self.twiddle2.im));
+                            let m0211b =
+                                _mm256_fmadd_pd(x2m11, _mm256_set1_pd(self.twiddle4.im), m0211b);
+                            let m0211b =
+                                _mm256_fmadd_pd(x3m10, _mm256_set1_pd(self.twiddle6.im), m0211b);
+                            let m0211b =
+                                _mm256_fnmadd_pd(x4m9, _mm256_set1_pd(self.twiddle5.im), m0211b);
+                            let m0211b =
+                                _mm256_fnmadd_pd(x5m8, _mm256_set1_pd(self.twiddle3.im), m0211b);
+                            let m0211b =
+                                _mm256_fnmadd_pd(x6m7, _mm256_set1_pd(self.twiddle1.im), m0211b);
+                            let (y02, y11) = AvxButterfly::butterfly2_f64(m0211a, m0211b);
+
+                            let m0310a =
+                                _mm256_fmadd_pd(x1p12, _mm256_set1_pd(self.twiddle3.re), u0);
+                            let m0310a =
+                                _mm256_fmadd_pd(x2p11, _mm256_set1_pd(self.twiddle6.re), m0310a);
+                            let m0310a =
+                                _mm256_fmadd_pd(x3p10, _mm256_set1_pd(self.twiddle4.re), m0310a);
+                            let m0310a =
+                                _mm256_fmadd_pd(x4p9, _mm256_set1_pd(self.twiddle1.re), m0310a);
+                            let m0310a =
+                                _mm256_fmadd_pd(x5p8, _mm256_set1_pd(self.twiddle2.re), m0310a);
+                            let m0310a =
+                                _mm256_fmadd_pd(x6p7, _mm256_set1_pd(self.twiddle5.re), m0310a);
+                            let m0310b = _mm256_mul_pd(x1m12, _mm256_set1_pd(self.twiddle3.im));
+                            let m0310b =
+                                _mm256_fmadd_pd(x2m11, _mm256_set1_pd(self.twiddle6.im), m0310b);
+                            let m0310b =
+                                _mm256_fnmadd_pd(x3m10, _mm256_set1_pd(self.twiddle4.im), m0310b);
+                            let m0310b =
+                                _mm256_fnmadd_pd(x4m9, _mm256_set1_pd(self.twiddle1.im), m0310b);
+                            let m0310b =
+                                _mm256_fmadd_pd(x5m8, _mm256_set1_pd(self.twiddle2.im), m0310b);
+                            let m0310b =
+                                _mm256_fmadd_pd(x6m7, _mm256_set1_pd(self.twiddle5.im), m0310b);
+                            let (y03, y10) = AvxButterfly::butterfly2_f64(m0310a, m0310b);
+
+                            let m0409a =
+                                _mm256_fmadd_pd(x1p12, _mm256_set1_pd(self.twiddle4.re), u0);
+                            let m0409a =
+                                _mm256_fmadd_pd(x2p11, _mm256_set1_pd(self.twiddle5.re), m0409a);
+                            let m0409a =
+                                _mm256_fmadd_pd(x3p10, _mm256_set1_pd(self.twiddle1.re), m0409a);
+                            let m0409a =
+                                _mm256_fmadd_pd(x4p9, _mm256_set1_pd(self.twiddle3.re), m0409a);
+                            let m0409a =
+                                _mm256_fmadd_pd(x5p8, _mm256_set1_pd(self.twiddle6.re), m0409a);
+                            let m0409a =
+                                _mm256_fmadd_pd(x6p7, _mm256_set1_pd(self.twiddle2.re), m0409a);
+                            let m0409b = _mm256_mul_pd(x1m12, _mm256_set1_pd(self.twiddle4.im));
+                            let m0409b =
+                                _mm256_fnmadd_pd(x2m11, _mm256_set1_pd(self.twiddle5.im), m0409b);
+                            let m0409b =
+                                _mm256_fnmadd_pd(x3m10, _mm256_set1_pd(self.twiddle1.im), m0409b);
+                            let m0409b =
+                                _mm256_fmadd_pd(x4m9, _mm256_set1_pd(self.twiddle3.im), m0409b);
+                            let m0409b =
+                                _mm256_fnmadd_pd(x5m8, _mm256_set1_pd(self.twiddle6.im), m0409b);
+                            let m0409b =
+                                _mm256_fnmadd_pd(x6m7, _mm256_set1_pd(self.twiddle2.im), m0409b);
+                            let (y04, y09) = AvxButterfly::butterfly2_f64(m0409a, m0409b);
+
+                            let m0508a =
+                                _mm256_fmadd_pd(x1p12, _mm256_set1_pd(self.twiddle5.re), u0);
+                            let m0508a =
+                                _mm256_fmadd_pd(x2p11, _mm256_set1_pd(self.twiddle3.re), m0508a);
+                            let m0508a =
+                                _mm256_fmadd_pd(x3p10, _mm256_set1_pd(self.twiddle2.re), m0508a);
+                            let m0508a =
+                                _mm256_fmadd_pd(x4p9, _mm256_set1_pd(self.twiddle6.re), m0508a);
+                            let m0508a =
+                                _mm256_fmadd_pd(x5p8, _mm256_set1_pd(self.twiddle1.re), m0508a);
+                            let m0508a =
+                                _mm256_fmadd_pd(x6p7, _mm256_set1_pd(self.twiddle4.re), m0508a);
+                            let m0508b = _mm256_mul_pd(x1m12, _mm256_set1_pd(self.twiddle5.im));
+                            let m0508b =
+                                _mm256_fnmadd_pd(x2m11, _mm256_set1_pd(self.twiddle3.im), m0508b);
+                            let m0508b =
+                                _mm256_fmadd_pd(x3m10, _mm256_set1_pd(self.twiddle2.im), m0508b);
+                            let m0508b =
+                                _mm256_fnmadd_pd(x4m9, _mm256_set1_pd(self.twiddle6.im), m0508b);
+                            let m0508b =
+                                _mm256_fnmadd_pd(x5m8, _mm256_set1_pd(self.twiddle1.im), m0508b);
+                            let m0508b =
+                                _mm256_fmadd_pd(x6m7, _mm256_set1_pd(self.twiddle4.im), m0508b);
+                            let (y05, y08) = AvxButterfly::butterfly2_f64(m0508a, m0508b);
+
+                            let m0607a =
+                                _mm256_fmadd_pd(x1p12, _mm256_set1_pd(self.twiddle6.re), u0);
+                            let m0607a =
+                                _mm256_fmadd_pd(x2p11, _mm256_set1_pd(self.twiddle1.re), m0607a);
+                            let m0607a =
+                                _mm256_fmadd_pd(x3p10, _mm256_set1_pd(self.twiddle5.re), m0607a);
+                            let m0607a =
+                                _mm256_fmadd_pd(x4p9, _mm256_set1_pd(self.twiddle2.re), m0607a);
+                            let m0607a =
+                                _mm256_fmadd_pd(x5p8, _mm256_set1_pd(self.twiddle4.re), m0607a);
+                            let m0607a =
+                                _mm256_fmadd_pd(x6p7, _mm256_set1_pd(self.twiddle3.re), m0607a);
+                            let m0607b = _mm256_mul_pd(x1m12, _mm256_set1_pd(self.twiddle6.im));
+                            let m0607b =
+                                _mm256_fnmadd_pd(x2m11, _mm256_set1_pd(self.twiddle1.im), m0607b);
+                            let m0607b =
+                                _mm256_fmadd_pd(x3m10, _mm256_set1_pd(self.twiddle5.im), m0607b);
+                            let m0607b =
+                                _mm256_fnmadd_pd(x4m9, _mm256_set1_pd(self.twiddle2.im), m0607b);
+                            let m0607b =
+                                _mm256_fmadd_pd(x5m8, _mm256_set1_pd(self.twiddle4.im), m0607b);
+                            let m0607b =
+                                _mm256_fnmadd_pd(x6m7, _mm256_set1_pd(self.twiddle3.im), m0607b);
+                            let (y06, y07) = AvxButterfly::butterfly2_f64(m0607a, m0607b);
+
+                            // // Store results
+                            _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y00);
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + thirteenth..).as_mut_ptr().cast(),
+                                y01,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 2 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y02,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 3 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y03,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 4 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y04,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 5 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y05,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 6 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y06,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 7 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y07,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 8 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y08,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 9 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y09,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 10 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y10,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 11 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y11,
+                            );
+                            _mm256_storeu_pd(
+                                data.get_unchecked_mut(j + 12 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y12,
+                            );
+
+                            j += 2;
+                        }
 
                         for j in j..thirteenth {
                             let u0 = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
@@ -475,7 +841,373 @@ impl AvxFmaRadix13<f32> {
                     let thirteenth = len / 13;
 
                     for data in chunk.chunks_exact_mut(len) {
-                        let j = 0usize;
+                        let mut j = 0usize;
+
+                        while j + 4 < thirteenth {
+                            let u0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
+
+                            let twi = 12 * j;
+                            let tw0 =
+                                _mm256_loadu_ps(m_twiddles.get_unchecked(twi..).as_ptr().cast());
+                            let tw1 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 4..).as_ptr().cast(),
+                            );
+                            let tw2 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 8..).as_ptr().cast(),
+                            );
+                            let tw3 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 12..).as_ptr().cast(),
+                            );
+                            let tw4 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 16..).as_ptr().cast(),
+                            );
+                            let tw5 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 20..).as_ptr().cast(),
+                            );
+
+                            let u1 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + thirteenth..).as_ptr().cast(),
+                                ),
+                                tw0,
+                            );
+                            let u2 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 2 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw1,
+                            );
+                            let u3 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 3 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw2,
+                            );
+                            let u4 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 4 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw3,
+                            );
+                            let u5 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 5 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw4,
+                            );
+                            let u6 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 6 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw5,
+                            );
+
+                            let tw7 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 24..).as_ptr().cast(),
+                            );
+                            let tw8 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 28..).as_ptr().cast(),
+                            );
+                            let tw9 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 32..).as_ptr().cast(),
+                            );
+                            let tw10 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 36..).as_ptr().cast(),
+                            );
+                            let tw11 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 40..).as_ptr().cast(),
+                            );
+                            let tw12 = _mm256_loadu_ps(
+                                m_twiddles.get_unchecked(twi + 44..).as_ptr().cast(),
+                            );
+
+                            let u7 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 7 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw7,
+                            );
+
+                            let u8 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 8 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw8,
+                            );
+
+                            let u9 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 9 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw9,
+                            );
+
+                            let u10 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 10 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw10,
+                            );
+
+                            let u11 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 11 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw11,
+                            );
+
+                            let u12 = _mm256_fcmul_ps(
+                                _mm256_loadu_ps(
+                                    data.get_unchecked(j + 12 * thirteenth..).as_ptr().cast(),
+                                ),
+                                tw12,
+                            );
+
+                            let y00 = u0;
+                            let (x1p12, x1m12) = AvxButterfly::butterfly2_f32(u1, u12); // u1, u12
+                            let x1m12 = rotate.rotate_m256(x1m12);
+                            let y00 = _mm256_add_ps(y00, x1p12);
+                            let (x2p11, x2m11) = AvxButterfly::butterfly2_f32(u2, u11); // u2, u11
+                            let x2m11 = rotate.rotate_m256(x2m11);
+                            let y00 = _mm256_add_ps(y00, x2p11);
+                            let (x3p10, x3m10) = AvxButterfly::butterfly2_f32(u3, u10); // u3, u10
+                            let x3m10 = rotate.rotate_m256(x3m10);
+                            let y00 = _mm256_add_ps(y00, x3p10);
+                            let (x4p9, x4m9) = AvxButterfly::butterfly2_f32(u4, u9); // u4, u9
+                            let x4m9 = rotate.rotate_m256(x4m9);
+                            let y00 = _mm256_add_ps(y00, x4p9);
+                            let (x5p8, x5m8) = AvxButterfly::butterfly2_f32(u5, u8); // u5, u8
+                            let x5m8 = rotate.rotate_m256(x5m8);
+                            let y00 = _mm256_add_ps(y00, x5p8);
+                            let (x6p7, x6m7) = AvxButterfly::butterfly2_f32(u6, u7); // u6, u7
+                            let x6m7 = rotate.rotate_m256(x6m7);
+                            let y00 = _mm256_add_ps(y00, x6p7);
+
+                            let m0112a =
+                                _mm256_fmadd_ps(x1p12, _mm256_set1_ps(self.twiddle1.re), u0);
+                            let m0112a =
+                                _mm256_fmadd_ps(_mm256_set1_ps(self.twiddle2.re), x2p11, m0112a);
+                            let m0112a =
+                                _mm256_fmadd_ps(_mm256_set1_ps(self.twiddle3.re), x3p10, m0112a);
+                            let m0112a =
+                                _mm256_fmadd_ps(x4p9, _mm256_set1_ps(self.twiddle4.re), m0112a);
+                            let m0112a =
+                                _mm256_fmadd_ps(x5p8, _mm256_set1_ps(self.twiddle5.re), m0112a);
+                            let m0112a =
+                                _mm256_fmadd_ps(x6p7, _mm256_set1_ps(self.twiddle6.re), m0112a);
+                            let m0112b = _mm256_mul_ps(x1m12, _mm256_set1_ps(self.twiddle1.im));
+                            let m0112b =
+                                _mm256_fmadd_ps(x2m11, _mm256_set1_ps(self.twiddle2.im), m0112b);
+                            let m0112b =
+                                _mm256_fmadd_ps(x3m10, _mm256_set1_ps(self.twiddle3.im), m0112b);
+                            let m0112b =
+                                _mm256_fmadd_ps(x4m9, _mm256_set1_ps(self.twiddle4.im), m0112b);
+                            let m0112b =
+                                _mm256_fmadd_ps(x5m8, _mm256_set1_ps(self.twiddle5.im), m0112b);
+                            let m0112b =
+                                _mm256_fmadd_ps(x6m7, _mm256_set1_ps(self.twiddle6.im), m0112b);
+                            let (y01, y12) = AvxButterfly::butterfly2_f32(m0112a, m0112b);
+
+                            let m0211a =
+                                _mm256_fmadd_ps(x1p12, _mm256_set1_ps(self.twiddle2.re), u0);
+                            let m0211a =
+                                _mm256_fmadd_ps(x2p11, _mm256_set1_ps(self.twiddle4.re), m0211a);
+                            let m0211a =
+                                _mm256_fmadd_ps(x3p10, _mm256_set1_ps(self.twiddle6.re), m0211a);
+                            let m0211a =
+                                _mm256_fmadd_ps(x4p9, _mm256_set1_ps(self.twiddle5.re), m0211a);
+                            let m0211a =
+                                _mm256_fmadd_ps(x5p8, _mm256_set1_ps(self.twiddle3.re), m0211a);
+                            let m0211a =
+                                _mm256_fmadd_ps(x6p7, _mm256_set1_ps(self.twiddle1.re), m0211a);
+                            let m0211b = _mm256_mul_ps(x1m12, _mm256_set1_ps(self.twiddle2.im));
+                            let m0211b =
+                                _mm256_fmadd_ps(x2m11, _mm256_set1_ps(self.twiddle4.im), m0211b);
+                            let m0211b =
+                                _mm256_fmadd_ps(x3m10, _mm256_set1_ps(self.twiddle6.im), m0211b);
+                            let m0211b =
+                                _mm256_fnmadd_ps(x4m9, _mm256_set1_ps(self.twiddle5.im), m0211b);
+                            let m0211b =
+                                _mm256_fnmadd_ps(x5m8, _mm256_set1_ps(self.twiddle3.im), m0211b);
+                            let m0211b =
+                                _mm256_fnmadd_ps(x6m7, _mm256_set1_ps(self.twiddle1.im), m0211b);
+                            let (y02, y11) = AvxButterfly::butterfly2_f32(m0211a, m0211b);
+
+                            let m0310a =
+                                _mm256_fmadd_ps(x1p12, _mm256_set1_ps(self.twiddle3.re), u0);
+                            let m0310a =
+                                _mm256_fmadd_ps(x2p11, _mm256_set1_ps(self.twiddle6.re), m0310a);
+                            let m0310a =
+                                _mm256_fmadd_ps(x3p10, _mm256_set1_ps(self.twiddle4.re), m0310a);
+                            let m0310a =
+                                _mm256_fmadd_ps(x4p9, _mm256_set1_ps(self.twiddle1.re), m0310a);
+                            let m0310a =
+                                _mm256_fmadd_ps(x5p8, _mm256_set1_ps(self.twiddle2.re), m0310a);
+                            let m0310a =
+                                _mm256_fmadd_ps(x6p7, _mm256_set1_ps(self.twiddle5.re), m0310a);
+                            let m0310b = _mm256_mul_ps(x1m12, _mm256_set1_ps(self.twiddle3.im));
+                            let m0310b =
+                                _mm256_fmadd_ps(x2m11, _mm256_set1_ps(self.twiddle6.im), m0310b);
+                            let m0310b =
+                                _mm256_fnmadd_ps(x3m10, _mm256_set1_ps(self.twiddle4.im), m0310b);
+                            let m0310b =
+                                _mm256_fnmadd_ps(x4m9, _mm256_set1_ps(self.twiddle1.im), m0310b);
+                            let m0310b =
+                                _mm256_fmadd_ps(x5m8, _mm256_set1_ps(self.twiddle2.im), m0310b);
+                            let m0310b =
+                                _mm256_fmadd_ps(x6m7, _mm256_set1_ps(self.twiddle5.im), m0310b);
+                            let (y03, y10) = AvxButterfly::butterfly2_f32(m0310a, m0310b);
+
+                            let m0409a =
+                                _mm256_fmadd_ps(x1p12, _mm256_set1_ps(self.twiddle4.re), u0);
+                            let m0409a =
+                                _mm256_fmadd_ps(x2p11, _mm256_set1_ps(self.twiddle5.re), m0409a);
+                            let m0409a =
+                                _mm256_fmadd_ps(x3p10, _mm256_set1_ps(self.twiddle1.re), m0409a);
+                            let m0409a =
+                                _mm256_fmadd_ps(x4p9, _mm256_set1_ps(self.twiddle3.re), m0409a);
+                            let m0409a =
+                                _mm256_fmadd_ps(x5p8, _mm256_set1_ps(self.twiddle6.re), m0409a);
+                            let m0409a =
+                                _mm256_fmadd_ps(x6p7, _mm256_set1_ps(self.twiddle2.re), m0409a);
+                            let m0409b = _mm256_mul_ps(x1m12, _mm256_set1_ps(self.twiddle4.im));
+                            let m0409b =
+                                _mm256_fnmadd_ps(x2m11, _mm256_set1_ps(self.twiddle5.im), m0409b);
+                            let m0409b =
+                                _mm256_fnmadd_ps(x3m10, _mm256_set1_ps(self.twiddle1.im), m0409b);
+                            let m0409b =
+                                _mm256_fmadd_ps(x4m9, _mm256_set1_ps(self.twiddle3.im), m0409b);
+                            let m0409b =
+                                _mm256_fnmadd_ps(x5m8, _mm256_set1_ps(self.twiddle6.im), m0409b);
+                            let m0409b =
+                                _mm256_fnmadd_ps(x6m7, _mm256_set1_ps(self.twiddle2.im), m0409b);
+                            let (y04, y09) = AvxButterfly::butterfly2_f32(m0409a, m0409b);
+
+                            let m0508a =
+                                _mm256_fmadd_ps(x1p12, _mm256_set1_ps(self.twiddle5.re), u0);
+                            let m0508a =
+                                _mm256_fmadd_ps(x2p11, _mm256_set1_ps(self.twiddle3.re), m0508a);
+                            let m0508a =
+                                _mm256_fmadd_ps(x3p10, _mm256_set1_ps(self.twiddle2.re), m0508a);
+                            let m0508a =
+                                _mm256_fmadd_ps(x4p9, _mm256_set1_ps(self.twiddle6.re), m0508a);
+                            let m0508a =
+                                _mm256_fmadd_ps(x5p8, _mm256_set1_ps(self.twiddle1.re), m0508a);
+                            let m0508a =
+                                _mm256_fmadd_ps(x6p7, _mm256_set1_ps(self.twiddle4.re), m0508a);
+                            let m0508b = _mm256_mul_ps(x1m12, _mm256_set1_ps(self.twiddle5.im));
+                            let m0508b =
+                                _mm256_fnmadd_ps(x2m11, _mm256_set1_ps(self.twiddle3.im), m0508b);
+                            let m0508b =
+                                _mm256_fmadd_ps(x3m10, _mm256_set1_ps(self.twiddle2.im), m0508b);
+                            let m0508b =
+                                _mm256_fnmadd_ps(x4m9, _mm256_set1_ps(self.twiddle6.im), m0508b);
+                            let m0508b =
+                                _mm256_fnmadd_ps(x5m8, _mm256_set1_ps(self.twiddle1.im), m0508b);
+                            let m0508b =
+                                _mm256_fmadd_ps(x6m7, _mm256_set1_ps(self.twiddle4.im), m0508b);
+                            let (y05, y08) = AvxButterfly::butterfly2_f32(m0508a, m0508b);
+
+                            let m0607a =
+                                _mm256_fmadd_ps(x1p12, _mm256_set1_ps(self.twiddle6.re), u0);
+                            let m0607a =
+                                _mm256_fmadd_ps(x2p11, _mm256_set1_ps(self.twiddle1.re), m0607a);
+                            let m0607a =
+                                _mm256_fmadd_ps(x3p10, _mm256_set1_ps(self.twiddle5.re), m0607a);
+                            let m0607a =
+                                _mm256_fmadd_ps(x4p9, _mm256_set1_ps(self.twiddle2.re), m0607a);
+                            let m0607a =
+                                _mm256_fmadd_ps(x5p8, _mm256_set1_ps(self.twiddle4.re), m0607a);
+                            let m0607a =
+                                _mm256_fmadd_ps(x6p7, _mm256_set1_ps(self.twiddle3.re), m0607a);
+                            let m0607b = _mm256_mul_ps(x1m12, _mm256_set1_ps(self.twiddle6.im));
+                            let m0607b =
+                                _mm256_fnmadd_ps(x2m11, _mm256_set1_ps(self.twiddle1.im), m0607b);
+                            let m0607b =
+                                _mm256_fmadd_ps(x3m10, _mm256_set1_ps(self.twiddle5.im), m0607b);
+                            let m0607b =
+                                _mm256_fnmadd_ps(x4m9, _mm256_set1_ps(self.twiddle2.im), m0607b);
+                            let m0607b =
+                                _mm256_fmadd_ps(x5m8, _mm256_set1_ps(self.twiddle4.im), m0607b);
+                            let m0607b =
+                                _mm256_fnmadd_ps(x6m7, _mm256_set1_ps(self.twiddle3.im), m0607b);
+                            let (y06, y07) = AvxButterfly::butterfly2_f32(m0607a, m0607b);
+
+                            // // Store results
+                            _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y00);
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + thirteenth..).as_mut_ptr().cast(),
+                                y01,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y02,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 3 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y03,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 4 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y04,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 5 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y05,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 6 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y06,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 7 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y07,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 8 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y08,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 9 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y09,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 10 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y10,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 11 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y11,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 12 * thirteenth..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y12,
+                            );
+
+                            j += 4;
+                        }
 
                         for j in j..thirteenth {
                             let u0 = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
