@@ -999,7 +999,7 @@ impl AvxButterfly7<f32> {
                 );
                 _mm_storeu_ps(
                     dst.get_unchecked_mut(18..).as_mut_ptr().cast(),
-                    _mm256_extractf32x4_ps::<1>(y04y05_lo),
+                    _mm256_extractf128_ps::<1>(y04y05_lo),
                 );
                 _m128s_store_f32x2(dst.get_unchecked_mut(20..).as_mut_ptr().cast(), y06hi);
 
