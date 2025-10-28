@@ -29,7 +29,7 @@
 use crate::avx::butterflies::fast_bf9::AvxFastButterfly9f;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpackhilo_ps64,
-    _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_set4_complex,
+    _mm_unpacklo_ps64, _mm_unpacklohi_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_set4_complex,
 };
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
@@ -90,8 +90,7 @@ impl AvxButterfly27f {
                 let u12u13u14u15 = _mm256_loadu_ps(chunk.get_unchecked(12..).as_ptr().cast());
                 let u16u17u18u19 = _mm256_loadu_ps(chunk.get_unchecked(16..).as_ptr().cast());
                 let u20u21u22u23 = _mm256_loadu_ps(chunk.get_unchecked(20..).as_ptr().cast());
-                let u24u25 = _mm_loadu_ps(chunk.get_unchecked(24..).as_ptr().cast());
-                let u26 = _m128s_load_f32x2(chunk.get_unchecked(26..).as_ptr().cast());
+                let u23u24u25u26 = _mm256_loadu_ps(chunk.get_unchecked(23..).as_ptr().cast());
 
                 let u0u1 = _mm256_castps256_ps128(u0u1u2u3);
                 let u2u3 = _mm256_extractf128_ps::<1>(u0u1u2u3);
@@ -116,11 +115,15 @@ impl AvxButterfly27f {
                     _mm_unpackhi_ps64(u14u15, u14u15),
                     u18u19,
                     _mm_unpackhi_ps64(u20u21, u20u21),
-                    u24u25,
+                    _mm_unpackhi_ps64(
+                        _mm256_castps256_ps128(u23u24u25u26),
+                        _mm256_castps256_ps128(u23u24u25u26),
+                    ),
                 );
 
                 // let mut s1 = self.bf9.exec(u1, u4, u7, u10, u13, u16, u19, u22, u25);
                 // let mut s2 = self.bf9.exec(u2, u5, u8, u11, u14, u17, u20, u23, u26);
+                let u25u26 = _mm256_extractf128_ps::<1>(u23u24u25u26);
                 let s1s2 = self.bf9.exec(
                     _mm_unpackhilo_ps64(u0u1, u2u3),
                     u4u5,
@@ -130,7 +133,7 @@ impl AvxButterfly27f {
                     u16u17,
                     _mm_unpackhilo_ps64(u18u19, u20u21),
                     u22u23,
-                    _mm_unpackhilo_ps64(u24u25, u26),
+                    _mm_unpacklohi_ps64(u25u26, u25u26),
                 );
 
                 let s1s2_1_2 = _mm256_fcmul_ps(_mm256_create_ps(s1s2.1, s1s2.2), self.tw1tw2tw2tw4); // s1.1 s2.1 s1.2 s2.2
