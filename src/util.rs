@@ -32,36 +32,36 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 
 /// Digit-reversal permutation in base `radix`
-pub(crate) fn digit_reverse_indices(n: usize, radix: usize) -> Result<Vec<usize>, ZaftError> {
-    assert!(radix >= 2, "radix must be at least 2");
-
-    let mut indices = Vec::new();
-    indices
-        .try_reserve_exact(n)
-        .map_err(|_| ZaftError::OutOfMemory(n))?;
-
-    for i in 0..n {
-        let mut x = i;
-        let mut rev = 0;
-
-        // Count number of digits needed
-        let mut tmp = n;
-        let mut digits = 0;
-        while tmp > 1 {
-            tmp /= radix;
-            digits += 1;
-        }
-
-        for _ in 0..digits {
-            rev = rev * radix + (x % radix);
-            x /= radix;
-        }
-
-        indices.push(rev);
-    }
-
-    Ok(indices)
-}
+// pub(crate) fn digit_reverse_indices(n: usize, radix: usize) -> Result<Vec<usize>, ZaftError> {
+//     assert!(radix >= 2, "radix must be at least 2");
+//
+//     let mut indices = Vec::new();
+//     indices
+//         .try_reserve_exact(n)
+//         .map_err(|_| ZaftError::OutOfMemory(n))?;
+//
+//     for i in 0..n {
+//         let mut x = i;
+//         let mut rev = 0;
+//
+//         // Count number of digits needed
+//         let mut tmp = n;
+//         let mut digits = 0;
+//         while tmp > 1 {
+//             tmp /= radix;
+//             digits += 1;
+//         }
+//
+//         for _ in 0..digits {
+//             rev = rev * radix + (x % radix);
+//             x /= radix;
+//         }
+//
+//         indices.push(rev);
+//     }
+//
+//     Ok(indices)
+// }
 
 /// Helper function to check if a number is a power of 3.
 pub(crate) fn is_power_of_three(n: u64) -> bool {
@@ -111,18 +111,18 @@ pub(crate) fn is_power_of_five(n: u64) -> bool {
     n == 1
 }
 
-pub(crate) fn permute_inplace<T: Copy + Clone>(table: &mut [T], lut: &[usize]) {
-    for (i, &j) in lut.iter().enumerate() {
-        if i < j {
-            unsafe {
-                let z0 = *table.get_unchecked_mut(i);
-                let t0 = *table.get_unchecked_mut(j);
-                *table.get_unchecked_mut(i) = t0;
-                *table.get_unchecked_mut(j) = z0;
-            }
-        }
-    }
-}
+// pub(crate) fn permute_inplace<T: Copy + Clone>(table: &mut [T], lut: &[usize]) {
+//     for (i, &j) in lut.iter().enumerate() {
+//         if i < j {
+//             unsafe {
+//                 let z0 = *table.get_unchecked_mut(i);
+//                 let t0 = *table.get_unchecked_mut(j);
+//                 *table.get_unchecked_mut(i) = t0;
+//                 *table.get_unchecked_mut(j) = z0;
+//             }
+//         }
+//     }
+// }
 
 pub(crate) fn is_power_of_six(n: u64) -> bool {
     let mut n = n;
@@ -179,38 +179,38 @@ pub(crate) fn is_power_of_thirteen(n: u64) -> bool {
     n == 1
 }
 
-pub(crate) fn radixn_floating_twiddles<
-    T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,
-    const N: usize,
->(
-    size: usize,
-    fft_direction: FftDirection,
-) -> Result<Vec<Complex<T>>, ZaftError>
-where
-    usize: AsPrimitive<T>,
-    f64: AsPrimitive<T>,
-{
-    let mut len = N;
-    let mut twiddles = Vec::new(); // total twiddles = N-1 for radix-7
-    twiddles
-        .try_reserve_exact(size - 1)
-        .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
-
-    while len <= size {
-        let columns = len / N;
-
-        for k in 0..columns {
-            for i in 1..N {
-                let w = compute_twiddle::<T>(k * i, len, fft_direction);
-                twiddles.push(w);
-            }
-        }
-
-        len *= N;
-    }
-
-    Ok(twiddles)
-}
+// pub(crate) fn radixn_floating_twiddles<
+//     T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,
+//     const N: usize,
+// >(
+//     size: usize,
+//     fft_direction: FftDirection,
+// ) -> Result<Vec<Complex<T>>, ZaftError>
+// where
+//     usize: AsPrimitive<T>,
+//     f64: AsPrimitive<T>,
+// {
+//     let mut len = N;
+//     let mut twiddles = Vec::new(); // total twiddles = N-1 for radix-7
+//     twiddles
+//         .try_reserve_exact(size - 1)
+//         .map_err(|_| ZaftError::OutOfMemory(size - 1))?;
+//
+//     while len <= size {
+//         let columns = len / N;
+//
+//         for k in 0..columns {
+//             for i in 1..N {
+//                 let w = compute_twiddle::<T>(k * i, len, fft_direction);
+//                 twiddles.push(w);
+//             }
+//         }
+//
+//         len *= N;
+//     }
+//
+//     Ok(twiddles)
+// }
 
 pub(crate) fn radixn_floating_twiddles_from_base<
     T: Default + Float + FftTrigonometry + 'static + MulAdd<T, Output = T>,

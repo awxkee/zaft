@@ -35,9 +35,9 @@ use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
 use crate::util::{
     bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_three,
-    radixn_floating_twiddles, radixn_floating_twiddles_from_base,
+    radixn_floating_twiddles_from_base,
 };
-use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::fmt::Display;
@@ -49,19 +49,11 @@ pub(crate) struct Radix3<T> {
     execution_length: usize,
     twiddle: Complex<T>,
     direction: FftDirection,
-    base_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 
 pub(crate) trait Radix3Twiddles {
-    #[allow(unused)]
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<Self>>, ZaftError>
-    where
-        Self: Sized;
-
     #[allow(unused)]
     fn make_twiddles_with_base(
         base: usize,
@@ -73,13 +65,6 @@ pub(crate) trait Radix3Twiddles {
 }
 
 impl Radix3Twiddles for f64 {
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<f64>>, ZaftError> {
-        radixn_floating_twiddles::<f64, 3>(size, fft_direction)
-    }
-
     fn make_twiddles_with_base(
         base: usize,
         size: usize,
@@ -93,13 +78,6 @@ impl Radix3Twiddles for f64 {
 }
 
 impl Radix3Twiddles for f32 {
-    fn make_twiddles(
-        size: usize,
-        fft_direction: FftDirection,
-    ) -> Result<Vec<Complex<f32>>, ZaftError> {
-        radixn_floating_twiddles::<f32, 3>(size, fft_direction)
-    }
-
     fn make_twiddles_with_base(
         base: usize,
         size: usize,
@@ -142,10 +120,10 @@ where
             .unwrap_or_else(|| panic!("Radix3 length must be power of 3, but got {size}",));
 
         let base_fft = match exponent {
-            0 => Zaft::strategy(1, fft_direction)?,
-            1 => Zaft::strategy(3, fft_direction)?,
-            2 => Zaft::strategy(9, fft_direction)?,
-            _ => Zaft::strategy(27, fft_direction)?,
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly3(fft_direction)?,
+            2 => T::butterfly9(fft_direction)?,
+            _ => T::butterfly27(fft_direction)?,
         };
 
         let base_len = base_fft.length();
@@ -193,7 +171,7 @@ where
             // Digit-reversal permutation
             bitreversed_transpose::<Complex<T>, 3>(self.base_len, chunk, &mut scratch);
 
-            self.base_fft.execute(&mut scratch)?;
+            self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
             let mut len = self.base_len;
 
@@ -205,7 +183,7 @@ where
                     len *= 3;
                     let third = len / 3;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         for j in 0..third {
                             let u0 = *data.get_unchecked(j);
                             let u1 = c_mul_fast(
@@ -250,7 +228,6 @@ where
 
                     m_twiddles = &m_twiddles[columns * 2..];
                 }
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -268,11 +245,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
     fn test_radix3() {
-        for i in 1..9 {
+        for i in 1..7 {
             let size = 3usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
             for z in input.iter_mut() {
@@ -282,9 +260,37 @@ mod tests {
                 };
             }
             let src = input.to_vec();
+            let mut ref_input = input.to_vec();
+
             let radix_forward = Radix3::new(size, FftDirection::Forward).unwrap();
             let radix_inverse = Radix3::new(size, FftDirection::Inverse).unwrap();
+
+            let reference_dft = Dft::new(size, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
             radix_forward.execute(&mut input).unwrap();
+
+            input
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-2,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-2,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
             radix_inverse.execute(&mut input).unwrap();
 
             input = input

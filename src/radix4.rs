@@ -30,7 +30,7 @@ use crate::butterflies::rotate_90;
 use crate::complex_fma::c_mul_fast;
 use crate::factory::AlgorithmFactory;
 use crate::util::{bitreversed_transpose, radixn_floating_twiddles_from_base};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -41,7 +41,7 @@ pub(crate) struct Radix4<T> {
     execution_length: usize,
     direction: FftDirection,
     base_len: usize,
-    base_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 pub(crate) trait Radix4Twiddles {
@@ -81,8 +81,8 @@ impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> Radix4<T> {
 
         let exponent = size.trailing_zeros();
         let base_fft = match exponent {
-            0 => T::butterfly1(fft_direction).map(|x| x.into_fft_executor())?,
-            1 => T::butterfly2(fft_direction).map(|x| x.into_fft_executor())?,
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly2(fft_direction)?,
             2 => T::butterfly4(fft_direction)?,
             3 => T::butterfly8(fft_direction)?,
             _ => {
@@ -130,11 +130,10 @@ where
         let mut scratch = vec![Complex::zero(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            scratch.copy_from_slice(chunk);
             // bit reversal first
-            bitreversed_transpose::<Complex<T>, 4>(self.base_len, &scratch, chunk);
+            bitreversed_transpose::<Complex<T>, 4>(self.base_len, chunk, &mut scratch);
 
-            self.base_fft.execute(chunk)?;
+            self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
             let mut len = self.base_len;
 
@@ -194,6 +193,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -208,9 +208,36 @@ mod tests {
                 };
             }
             let src = input.to_vec();
+            let mut ref_input = input.to_vec();
             let radix_forward = Radix4::new(size, FftDirection::Forward).unwrap();
+
+            let reference_dft = Dft::new(size, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
             let radix_inverse = Radix4::new(size, FftDirection::Inverse).unwrap();
             radix_forward.execute(&mut input).unwrap();
+
+            input
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-2,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-2,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
             radix_inverse.execute(&mut input).unwrap();
 
             input = input
