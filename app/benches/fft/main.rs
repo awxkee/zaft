@@ -271,7 +271,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     }
 
     // check_power_group(c, 1920, "Full HD".to_string());
-    // check_power_group(c, 1000, "power 10".to_string());
+    check_power_group(c, 1000, "power 10".to_string());
     check_power_group(c, 11 * 11 * 11, "power 11".to_string());
     check_power_group(c, 13 * 13 * 13, "power 13".to_string());
     // check_power_group(c, 3125, "power 5".to_string());
