@@ -39,7 +39,7 @@ use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
 use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_thirteen};
-use crate::{FftDirection, FftExecutor, Zaft, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::x86_64::*;
@@ -55,7 +55,7 @@ pub(crate) struct AvxFmaRadix13<T> {
     twiddle5: Complex<T>,
     twiddle6: Complex<T>,
     direction: FftDirection,
-    butterfly: Box<dyn FftExecutor<T> + Send + Sync>,
+    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 impl<
@@ -95,7 +95,7 @@ where
             twiddle5: compute_twiddle(5, 13, fft_direction),
             twiddle6: compute_twiddle(6, 13, fft_direction),
             direction: fft_direction,
-            butterfly: Zaft::strategy(13, fft_direction)?,
+            butterfly: T::butterfly13(fft_direction)?,
         })
     }
 }
@@ -118,7 +118,7 @@ impl AvxFmaRadix13<f64> {
                 // Digit-reversal permutation
                 bitreversed_transpose::<Complex<f64>, 13>(13, chunk, &mut scratch);
 
-                self.butterfly.execute(&mut scratch)?;
+                self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
                 let mut len = 13;
 
@@ -129,7 +129,7 @@ impl AvxFmaRadix13<f64> {
                     len *= 13;
                     let thirteenth = len / 13;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         let j = 0usize;
 
                         for j in j..thirteenth {
@@ -425,7 +425,6 @@ impl AvxFmaRadix13<f64> {
 
                     m_twiddles = &m_twiddles[columns * 12..];
                 }
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())
@@ -464,7 +463,7 @@ impl AvxFmaRadix13<f32> {
                 // Digit-reversal permutation
                 bitreversed_transpose::<Complex<f32>, 13>(13, chunk, &mut scratch);
 
-                self.butterfly.execute(&mut scratch)?;
+                self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
                 let mut len = 13;
 
@@ -475,7 +474,7 @@ impl AvxFmaRadix13<f32> {
                     len *= 13;
                     let thirteenth = len / 13;
 
-                    for data in scratch.chunks_exact_mut(len) {
+                    for data in chunk.chunks_exact_mut(len) {
                         let j = 0usize;
 
                         for j in j..thirteenth {
@@ -733,7 +732,6 @@ impl AvxFmaRadix13<f32> {
 
                     m_twiddles = &m_twiddles[columns * 12..];
                 }
-                chunk.copy_from_slice(&scratch);
             }
         }
         Ok(())

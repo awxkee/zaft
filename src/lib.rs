@@ -384,7 +384,7 @@ impl Zaft {
         } else if n == 12 {
             return T::butterfly12(fft_direction);
         } else if n == 13 {
-            return T::butterfly13(fft_direction);
+            return T::butterfly13(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 14 {
             return T::butterfly14(fft_direction);
         } else if n == 15 {

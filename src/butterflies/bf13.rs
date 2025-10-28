@@ -29,7 +29,7 @@
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
@@ -397,9 +397,360 @@ where
     }
 }
 
+impl<
+    T: Copy
+        + Mul<T, Output = T>
+        + Add<T, Output = T>
+        + Sub<T, Output = T>
+        + Num
+        + 'static
+        + Neg<Output = T>
+        + MulAdd<T, Output = T>
+        + Float
+        + Default
+        + FftTrigonometry,
+> FftExecutorOutOfPlace<T> for Butterfly13<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        if src.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        }
+        if dst.len() % self.length() != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        }
+
+        for (dst, src) in dst.chunks_exact_mut(13).zip(src.chunks_exact(13)) {
+            let u0 = src[0];
+            let u1 = src[1];
+            let u2 = src[2];
+            let u3 = src[3];
+
+            let u4 = src[4];
+            let u5 = src[5];
+            let u6 = src[6];
+            let u7 = src[7];
+
+            let u8 = src[8];
+            let u9 = src[9];
+            let u10 = src[10];
+            let u11 = src[11];
+            let u12 = src[12];
+
+            let x112p = u1 + u12;
+            let x112n = u1 - u12;
+            let x211p = u2 + u11;
+            let x211n = u2 - u11;
+            let x310p = u3 + u10;
+            let x310n = u3 - u10;
+            let x49p = u4 + u9;
+            let x49n = u4 - u9;
+            let x58p = u5 + u8;
+            let x58n = u5 - u8;
+            let x67p = u6 + u7;
+            let x67n = u6 - u7;
+            let y0 = u0 + x112p + x211p + x310p + x49p + x58p + x67p;
+            dst[0] = y0;
+            let b112re_a = fmla(self.twiddle1.re, x112p.re, u0.re)
+                + fmla(self.twiddle2.re, x211p.re, self.twiddle3.re * x310p.re)
+                + fmla(self.twiddle4.re, x49p.re, self.twiddle5.re * x58p.re)
+                + self.twiddle6.re * x67p.re;
+            let b112re_b = fmla(
+                self.twiddle1.im,
+                x112n.im,
+                fmla(
+                    self.twiddle2.im,
+                    x211n.im,
+                    fmla(self.twiddle3.im, x310n.im, self.twiddle4.im * x49n.im)
+                        + fmla(self.twiddle5.im, x58n.im, self.twiddle6.im * x67n.im),
+                ),
+            );
+            let b211re_a = fmla(
+                self.twiddle2.re,
+                x112p.re,
+                fmla(self.twiddle4.re, x211p.re, u0.re)
+                    + fmla(self.twiddle6.re, x310p.re, self.twiddle5.re * x49p.re)
+                    + fmla(self.twiddle3.re, x58p.re, self.twiddle1.re * x67p.re),
+            );
+            let b211re_b = fmla(
+                self.twiddle2.im,
+                x112n.im,
+                fmla(
+                    self.twiddle6.im,
+                    x310n.im,
+                    fmla(-self.twiddle5.im, x49n.im, self.twiddle4.im * x211n.im),
+                ) + fmla(-self.twiddle3.im, x58n.im, -self.twiddle1.im * x67n.im),
+            );
+            let b310re_a = fmla(self.twiddle3.re, x112p.re, u0.re)
+                + fmla(
+                    self.twiddle4.re,
+                    x310p.re,
+                    fmla(self.twiddle1.re, x49p.re, self.twiddle6.re * x211p.re),
+                )
+                + fmla(self.twiddle2.re, x58p.re, self.twiddle5.re * x67p.re);
+            let b310re_b = fmla(
+                self.twiddle3.im,
+                x112n.im,
+                fmla(
+                    self.twiddle6.im,
+                    x211n.im,
+                    fmla(-self.twiddle4.im, x310n.im, -self.twiddle1.im * x49n.im)
+                        + fmla(self.twiddle2.im, x58n.im, self.twiddle5.im * x67n.im),
+                ),
+            );
+            let b49re_a = fmla(
+                self.twiddle4.re,
+                x112p.re,
+                fmla(self.twiddle5.re, x211p.re, u0.re)
+                    + fmla(self.twiddle1.re, x310p.re, self.twiddle3.re * x49p.re)
+                    + fmla(self.twiddle6.re, x58p.re, self.twiddle2.re * x67p.re),
+            );
+            let b49re_b = fmla(
+                self.twiddle4.im,
+                x112n.im,
+                fmla(-self.twiddle5.im, x211n.im, -self.twiddle1.im * x310n.im)
+                    + fmla(self.twiddle3.im, x49n.im, -self.twiddle6.im * x58n.im)
+                    + -self.twiddle2.im * x67n.im,
+            );
+            let b58re_a = fmla(self.twiddle5.re, x112p.re, u0.re)
+                + fmla(self.twiddle3.re, x211p.re, self.twiddle2.re * x310p.re)
+                + fmla(self.twiddle6.re, x49p.re, self.twiddle1.re * x58p.re)
+                + self.twiddle4.re * x67p.re;
+            let b58re_b = fmla(
+                self.twiddle5.im,
+                x112n.im,
+                fmla(
+                    -self.twiddle3.im,
+                    x211n.im,
+                    self.twiddle2.im * x310n.im
+                        + fmla(
+                            -self.twiddle6.im,
+                            x49n.im,
+                            fmla(-self.twiddle1.im, x58n.im, self.twiddle4.im * x67n.im),
+                        ),
+                ),
+            );
+            let b67re_a = fmla(
+                self.twiddle6.re,
+                x112p.re,
+                u0.re
+                    + fmla(self.twiddle1.re, x211p.re, self.twiddle5.re * x310p.re)
+                    + self.twiddle2.re * x49p.re
+                    + fmla(self.twiddle4.re, x58p.re, self.twiddle3.re * x67p.re),
+            );
+            let b67re_b = fmla(
+                self.twiddle6.im,
+                x112n.im,
+                fmla(
+                    -self.twiddle1.im,
+                    x211n.im,
+                    self.twiddle5.im * x310n.im
+                        + fmla(
+                            -self.twiddle2.im,
+                            x49n.im,
+                            fmla(self.twiddle4.im, x58n.im, -self.twiddle3.im * x67n.im),
+                        ),
+                ),
+            );
+
+            let b112im_a = fmla(self.twiddle1.re, x112p.im, u0.im)
+                + fmla(self.twiddle2.re, x211p.im, self.twiddle3.re * x310p.im)
+                + fmla(
+                    self.twiddle4.re,
+                    x49p.im,
+                    fmla(self.twiddle5.re, x58p.im, self.twiddle6.re * x67p.im),
+                );
+            let b112im_b = fmla(
+                self.twiddle1.im,
+                x112n.re,
+                fmla(
+                    self.twiddle2.im,
+                    x211n.re,
+                    fmla(self.twiddle3.im, x310n.re, self.twiddle4.im * x49n.re)
+                        + fmla(self.twiddle5.im, x58n.re, self.twiddle6.im * x67n.re),
+                ),
+            );
+            let b211im_a = fmla(
+                self.twiddle2.re,
+                x112p.im,
+                fmla(self.twiddle4.re, x211p.im, u0.im)
+                    + fmla(self.twiddle6.re, x310p.im, self.twiddle5.re * x49p.im)
+                    + fmla(self.twiddle3.re, x58p.im, self.twiddle1.re * x67p.im),
+            );
+            let b211im_b = fmla(
+                self.twiddle2.im,
+                x112n.re,
+                fmla(self.twiddle4.im, x211n.re, self.twiddle6.im * x310n.re)
+                    + fmla(
+                        -self.twiddle5.im,
+                        x49n.re,
+                        fmla(-self.twiddle3.im, x58n.re, -self.twiddle1.im * x67n.re),
+                    ),
+            );
+            let b310im_a = fmla(
+                self.twiddle3.re,
+                x112p.im,
+                fmla(
+                    self.twiddle6.re,
+                    x211p.im,
+                    fmla(
+                        self.twiddle4.re,
+                        x310p.im,
+                        fmla(self.twiddle1.re, x49p.im, u0.im),
+                    ) + fmla(self.twiddle2.re, x58p.im, self.twiddle5.re * x67p.im),
+                ),
+            );
+            let b310im_b = fmla(
+                self.twiddle3.im,
+                x112n.re,
+                fmla(self.twiddle6.im, x211n.re, -self.twiddle4.im * x310n.re)
+                    + fmla(-self.twiddle1.im, x49n.re, self.twiddle2.im * x58n.re)
+                    + self.twiddle5.im * x67n.re,
+            );
+            let b49im_a = fmla(
+                self.twiddle4.re,
+                x112p.im,
+                fmla(self.twiddle5.re, x211p.im, self.twiddle1.re * x310p.im)
+                    + fmla(self.twiddle3.re, x49p.im, u0.im)
+                    + fmla(self.twiddle6.re, x58p.im, self.twiddle2.re * x67p.im),
+            );
+            let b49im_b = fmla(
+                self.twiddle4.im,
+                x112n.re,
+                fmla(-self.twiddle5.im, x211n.re, -self.twiddle1.im * x310n.re)
+                    + self.twiddle3.im * x49n.re
+                    + fmla(-self.twiddle6.im, x58n.re, -self.twiddle2.im * x67n.re),
+            );
+            let b58im_a = fmla(
+                self.twiddle5.re,
+                x112p.im,
+                u0.im
+                    + fmla(self.twiddle3.re, x211p.im, self.twiddle2.re * x310p.im)
+                    + self.twiddle6.re * x49p.im
+                    + fmla(self.twiddle1.re, x58p.im, self.twiddle4.re * x67p.im),
+            );
+            let b58im_b = fmla(
+                self.twiddle5.im,
+                x112n.re,
+                fmla(
+                    -self.twiddle3.im,
+                    x211n.re,
+                    fmla(self.twiddle2.im, x310n.re, -self.twiddle6.im * x49n.re)
+                        + fmla(-self.twiddle1.im, x58n.re, self.twiddle4.im * x67n.re),
+                ),
+            );
+            let b67im_a = fmla(
+                self.twiddle6.re,
+                x112p.im,
+                u0.im
+                    + fmla(
+                        self.twiddle2.re,
+                        x49p.im,
+                        fmla(self.twiddle1.re, x211p.im, self.twiddle5.re * x310p.im),
+                    )
+                    + fmla(self.twiddle4.re, x58p.im, self.twiddle3.re * x67p.im),
+            );
+            let b67im_b = fmla(
+                self.twiddle6.im,
+                x112n.re,
+                fmla(
+                    -self.twiddle1.im,
+                    x211n.re,
+                    fmla(
+                        self.twiddle5.im,
+                        x310n.re,
+                        fmla(
+                            -self.twiddle2.im,
+                            x49n.re,
+                            self.twiddle4.im * x58n.re + -self.twiddle3.im * x67n.re,
+                        ),
+                    ),
+                ),
+            );
+
+            dst[1] = Complex {
+                re: b112re_a - b112re_b,
+                im: b112im_a + b112im_b,
+            };
+            dst[2] = Complex {
+                re: b211re_a - b211re_b,
+                im: b211im_a + b211im_b,
+            };
+            dst[3] = Complex {
+                re: b310re_a - b310re_b,
+                im: b310im_a + b310im_b,
+            };
+            dst[4] = Complex {
+                re: b49re_a - b49re_b,
+                im: b49im_a + b49im_b,
+            };
+            dst[5] = Complex {
+                re: b58re_a - b58re_b,
+                im: b58im_a + b58im_b,
+            };
+            dst[6] = Complex {
+                re: b67re_a - b67re_b,
+                im: b67im_a + b67im_b,
+            };
+            dst[7] = Complex {
+                re: b67re_a + b67re_b,
+                im: b67im_a - b67im_b,
+            };
+            dst[8] = Complex {
+                re: b58re_a + b58re_b,
+                im: b58im_a - b58im_b,
+            };
+            dst[9] = Complex {
+                re: b49re_a + b49re_b,
+                im: b49im_a - b49im_b,
+            };
+            dst[10] = Complex {
+                re: b310re_a + b310re_b,
+                im: b310im_a - b310im_b,
+            };
+            dst[11] = Complex {
+                re: b211re_a + b211re_b,
+                im: b211im_a - b211im_b,
+            };
+            dst[12] = Complex {
+                re: b112re_a + b112re_b,
+                im: b112im_a - b112im_b,
+            };
+        }
+        Ok(())
+    }
+}
+
+impl<
+    T: Copy
+    + Mul<T, Output = T>
+    + Add<T, Output = T>
+    + Sub<T, Output = T>
+    + Num
+    + 'static
+    + Neg<Output = T>
+    + MulAdd<T, Output = T>
+    + Float
+    + Default
+    + FftTrigonometry + Send + Sync,
+> CompositeFftExecutor<T> for Butterfly13<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync> {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dft::Dft;
     use rand::Rng;
 
     #[test]
@@ -431,6 +782,76 @@ mod tests {
                 );
                 assert!(
                     (a.im - b.im).abs() < 1e-5,
+                    "a_im {} != b_im {} for size {}",
+                    a.im,
+                    b.im,
+                    size
+                );
+            });
+        }
+    }
+
+    #[test]
+    fn test_butterfly13_out_of_place_f64() {
+        for i in 1..4 {
+            let size = 13usize.pow(i);
+            let mut input = vec![Complex::<f64>::default(); size];
+            for z in input.iter_mut() {
+                *z = Complex {
+                    re: rand::rng().random(),
+                    im: rand::rng().random(),
+                };
+            }
+            let src = input.to_vec();
+            let mut out_of_place = vec![Complex::<f64>::default(); size];
+            let mut ref_input = input.to_vec();
+            let radix_forward = Butterfly13::new(FftDirection::Forward);
+            let radix_inverse = Butterfly13::new(FftDirection::Inverse);
+
+            let reference_dft = Dft::new(13, FftDirection::Forward).unwrap();
+            reference_dft.execute(&mut ref_input).unwrap();
+
+            radix_forward
+                .execute_out_of_place(&input, &mut out_of_place)
+                .unwrap();
+
+            out_of_place
+                .iter()
+                .zip(ref_input.iter())
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-9,
+                        "a_re {} != b_re {} for size {} at {idx}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-9,
+                        "a_im {} != b_im {} for size {} at {idx}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+
+            radix_inverse
+                .execute_out_of_place(&out_of_place, &mut input)
+                .unwrap();
+
+            input = input.iter().map(|&x| x * (1.0 / 13f64)).collect();
+
+            input.iter().zip(src.iter()).for_each(|(a, b)| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for size {}",
+                    a.re,
+                    b.re,
+                    size
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
                     "a_im {} != b_im {} for size {}",
                     a.im,
                     b.im,
