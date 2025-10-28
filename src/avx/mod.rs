@@ -33,6 +33,7 @@ mod f32x2_8x4;
 mod f64x2_2x2;
 mod f64x2_4x4;
 mod mixed;
+mod r2c;
 mod raders;
 mod radix10;
 mod radix11;
@@ -67,6 +68,7 @@ pub(crate) use mixed::{
     AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
     AvxMixedRadix12f, AvxMixedRadix13f, AvxMixedRadix16f,
 };
+pub(crate) use r2c::R2CAvxTwiddles;
 pub(crate) use raders::AvxRadersFft;
 pub(crate) use radix3::AvxFmaRadix3;
 pub(crate) use radix4::AvxFmaRadix4;

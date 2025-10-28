@@ -58,6 +58,15 @@ impl R2CTwiddlesFactory<f32> for f32 {
             use crate::neon::R2CNeonTwiddles;
             Box::new(R2CNeonTwiddles {})
         }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
+            {
+                use crate::avx::R2CAvxTwiddles;
+                return Box::new(R2CAvxTwiddles {});
+            }
+        }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             Box::new(R2CHandler {
@@ -80,6 +89,15 @@ impl R2CTwiddlesFactory<f64> for f64 {
             }
             use crate::neon::R2CNeonTwiddles;
             Box::new(R2CNeonTwiddles {})
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
+            {
+                use crate::avx::R2CAvxTwiddles;
+                return Box::new(R2CAvxTwiddles {});
+            }
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
