@@ -278,12 +278,7 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
     }
 
     for x in 0..strided_width {
-        let mut i = 0;
-        let x_fwd = [(); D].map(|_| {
-            let value = D * x + i;
-            i += 1;
-            value
-        }); // If we had access to rustc 1.63, we could use std::array::from_fn instead
+        let x_fwd: [usize; D] = std::array::from_fn(|i| D * x + i);
         let x_rev = x_fwd.map(|x| reverse_bits::<D>(x, rev_digits));
 
         // Assert that the the bit reversed indices will not exceed the length of the output.
@@ -293,7 +288,76 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
         for r in x_rev {
             assert!(r < width);
         }
-        for y in 0..height {
+
+        let mut y = 0usize;
+
+        while y + 6 < height {
+            let y1 = y + 1;
+            let y2 = y + 2;
+            let y3 = y + 3;
+            let y4 = y + 4;
+            let y5 = y + 5;
+            for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
+                let input_index0 = *fwd + y * width;
+                let output_index0 = y + *rev * height;
+
+                let input_index1 = *fwd + y1 * width;
+                let output_index1 = y1 + *rev * height;
+
+                let input_index2 = *fwd + y2 * width;
+                let output_index2 = y2 + *rev * height;
+
+                let input_index3 = *fwd + y3 * width;
+                let output_index3 = y3 + *rev * height;
+
+                let input_index4 = *fwd + y4 * width;
+                let output_index4 = y4 + *rev * height;
+
+                let input_index5 = *fwd + y5 * width;
+                let output_index5 = y5 + *rev * height;
+
+                unsafe {
+                    *output.get_unchecked_mut(output_index0) = *input.get_unchecked(input_index0);
+                    *output.get_unchecked_mut(output_index1) = *input.get_unchecked(input_index1);
+                    *output.get_unchecked_mut(output_index2) = *input.get_unchecked(input_index2);
+                    *output.get_unchecked_mut(output_index3) = *input.get_unchecked(input_index3);
+                    *output.get_unchecked_mut(output_index4) = *input.get_unchecked(input_index4);
+                    *output.get_unchecked_mut(output_index5) = *input.get_unchecked(input_index5);
+                }
+            }
+
+            y += 6;
+        }
+
+        while y + 4 < height {
+            let y1 = y + 1;
+            let y2 = y + 2;
+            let y3 = y + 3;
+            for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
+                let input_index0 = *fwd + y * width;
+                let output_index0 = y + *rev * height;
+
+                let input_index1 = *fwd + y1 * width;
+                let output_index1 = y1 + *rev * height;
+
+                let input_index2 = *fwd + y2 * width;
+                let output_index2 = y2 + *rev * height;
+
+                let input_index3 = *fwd + y3 * width;
+                let output_index3 = y3 + *rev * height;
+
+                unsafe {
+                    *output.get_unchecked_mut(output_index0) = *input.get_unchecked(input_index0);
+                    *output.get_unchecked_mut(output_index1) = *input.get_unchecked(input_index1);
+                    *output.get_unchecked_mut(output_index2) = *input.get_unchecked(input_index2);
+                    *output.get_unchecked_mut(output_index3) = *input.get_unchecked(input_index3);
+                }
+            }
+
+            y += 4;
+        }
+
+        for y in y..height {
             for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
                 let input_index = *fwd + y * width;
                 let output_index = y + *rev * height;
@@ -310,6 +374,7 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
 // Repeatedly divide `value` by divisor `D`, `iters` times, and apply the remainders to a new value
 // When D is a power of 2, this is exactly equal (implementation and assembly)-wise to a bit reversal
 // When D is not a power of 2, think of this function as a logical equivalent to a bit reversal
+#[inline]
 fn reverse_bits<const D: usize>(value: usize, rev_digits: u32) -> usize {
     assert!(D > 1);
 

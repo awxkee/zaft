@@ -89,7 +89,7 @@ impl AvxButterfly27d {
 
         unsafe {
             for chunk in in_place.chunks_exact_mut(27) {
-                let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
+                let u0u1 = _mm256_loadu_pd(chunk.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
                 let u6u7 = _mm256_loadu_pd(chunk.get_unchecked(6..).as_ptr().cast());
@@ -211,7 +211,7 @@ impl AvxButterfly27d {
 
         unsafe {
             for (dst, src) in dst.chunks_exact_mut(27).zip(src.chunks_exact(27)) {
-                let u0u1 = _mm256_loadu_pd(src.get_unchecked(0..).as_ptr().cast());
+                let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
                 let u6u7 = _mm256_loadu_pd(src.get_unchecked(6..).as_ptr().cast());

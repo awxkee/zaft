@@ -499,6 +499,12 @@ impl AlgorithmFactory<f64> for f64 {
             use crate::neon::NeonButterfly23;
             Ok(Box::new(NeonButterfly23::new(fft_direction)))
         }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
+        {
+            use crate::avx::AvxButterfly23;
+            return Ok(Box::new(AvxButterfly23::new(fft_direction)));
+        }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             use crate::butterflies::Butterfly23;
