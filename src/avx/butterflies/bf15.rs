@@ -185,7 +185,7 @@ impl AvxButterfly15f {
             }
 
             for chunk in in_place.chunks_exact_mut(15) {
-                let u0u1u2u3 = _mm256_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
+                let u0u1u2u3 = _mm256_loadu_ps(chunk.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());
                 let u8u9u10u11 = _mm256_loadu_ps(chunk.get_unchecked(8..).as_ptr().cast());
                 let u11u12u13u14 = _mm256_loadu_ps(chunk.get_unchecked(11..).as_ptr().cast());
@@ -246,7 +246,7 @@ impl AvxButterfly15f {
                 );
                 let y003 = _mm_unpacklohi_ps64(y6y9, y7y10);
 
-                _mm256_storeu_ps(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0000);
+                _mm256_storeu_ps(chunk.as_mut_ptr().cast(), y0000);
                 _mm256_storeu_ps(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y0001);
                 _mm256_storeu_ps(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y0002);
                 _mm_storeu_ps(chunk.get_unchecked_mut(12..).as_mut_ptr().cast(), y003);
