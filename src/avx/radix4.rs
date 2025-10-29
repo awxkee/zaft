@@ -64,7 +64,7 @@ where
             3 => T::butterfly8(fft_direction)?,
             _ => {
                 if exponent % 2 == 1 {
-                    T::butterfly8(fft_direction)?
+                    T::butterfly32(fft_direction)?
                 } else {
                     T::butterfly16(fft_direction)?
                 }

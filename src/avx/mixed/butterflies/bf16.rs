@@ -38,8 +38,8 @@ use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly16d {
-    rotate: AvxRotate<f64>,
-    bf8: AvxFastButterfly8<f64>,
+    pub(crate) rotate: AvxRotate<f64>,
+    pub(crate) bf8: AvxFastButterfly8<f64>,
     twiddle1: __m256d,
     twiddle2: __m256d,
     twiddle3: __m256d,
@@ -135,8 +135,8 @@ impl ColumnButterfly16d {
 }
 
 pub(crate) struct ColumnButterfly16f {
-    rotate: AvxRotate<f32>,
-    bf8: AvxFastButterfly8<f32>,
+    pub(crate) rotate: AvxRotate<f32>,
+    pub(crate) bf8: AvxFastButterfly8<f32>,
     twiddle1: __m256,
     twiddle2: __m256,
     twiddle3: __m256,
