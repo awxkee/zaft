@@ -66,7 +66,7 @@ impl R2CAvxTwiddles {
 
                 let twiddled_diff = _mm_mul_pd(_mm_unpacklo_pd(diff, diff), twiddle);
 
-                let sum_diff = _mm_shuffle_pd::<0b01>(sum, diff);
+                let sum_diff = _mm_shuffle_pd::<0b10>(sum, diff);
 
                 let rot_270_half_sum =
                     _mm_xor_pd(sum_diff, _mm256_castpd256_pd128(rotate.rot_flag));
@@ -136,8 +136,8 @@ impl R2CAvxTwiddles {
                 let perm_lo = _mm_unpacklo_ps64(diff, sum);
                 let perm_hi = _mm_unpackhi_ps64(diff, sum);
                 let diff_sw = _mm_unpacklo_ps64(
-                    _mm_shuffle_ps::<{ shuffle(2, 0, 3, 1) }>(perm_lo, perm_lo),
-                    _mm_shuffle_ps::<{ shuffle(2, 0, 3, 1) }>(perm_hi, perm_hi),
+                    _mm_shuffle_ps::<{ shuffle(2, 0, 2, 1) }>(perm_lo, perm_lo),
+                    _mm_shuffle_ps::<{ shuffle(2, 0, 2, 1) }>(perm_hi, perm_hi),
                 );
                 let sum_diff = _mm_shuffle_ps::<{ shuffle(2, 3, 0, 1) }>(diff_sw, diff_sw);
 
@@ -189,9 +189,8 @@ impl R2CAvxTwiddles {
                     let diff_re_re = _mm_shuffle_ps::<{ shuffle(2, 2, 0, 0) }>(diff, diff);
                     let twiddled_diff = _mm_mul_ps(diff_re_re, twiddle);
 
-                    let perm = _mm_unpacklo_ps64(diff, sum);
-                    let diff_sw = _mm_shuffle_ps::<{ shuffle(2, 0, 3, 1) }>(perm, perm);
-                    let sum_diff = _mm_shuffle_ps::<{ shuffle(2, 3, 0, 1) }>(diff_sw, diff_sw);
+                    let diff_sum = _mm_unpacklo_ps64(diff, sum);
+                    let sum_diff = _mm_shuffle_ps::<{ shuffle(2, 0, 1, 2) }>(diff_sum, diff_sum);
 
                     let rot_270_half_sum = _mm_xor_ps(
                         sum_diff,

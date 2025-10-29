@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_r2c_and_c2r() {
-        for i in 1..48 {
+        for i in 1..60 {
             let data = (0..i)
                 .map(|_| {
                     Complex::<f32>::new(
@@ -113,7 +113,6 @@ mod tests {
                 .collect::<Vec<_>>();
 
             let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
-            let real_data_clone = real_data.to_vec();
             let real_data_ref = real_data.clone();
 
             let forward_r2c = Zaft::make_r2c_fft_f32(data.len()).unwrap();
@@ -133,7 +132,56 @@ mod tests {
                 .zip(real_data_ref)
                 .enumerate()
                 .for_each(|(idx, (a, b))| {
-                    assert!((a - b).abs() < 1e-2, "a_re {}, b_re {} at {idx}", a, b);
+                    assert!(
+                        (a - b).abs() < 1e-2,
+                        "a_re {}, b_re {} at {idx} at size {}",
+                        a,
+                        b,
+                        data.len()
+                    );
+                });
+        }
+    }
+
+    #[test]
+    fn test_r2c_and_c2r_f64() {
+        for i in 1..60 {
+            let data = (0..i)
+                .map(|_| {
+                    Complex::<f64>::new(
+                        rand::rng().random_range(-1.0..1.0),
+                        rand::rng().random_range(0.0..1.0),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
+            let real_data_ref = real_data.clone();
+
+            let forward_r2c = Zaft::make_r2c_fft_f64(data.len()).unwrap();
+            let inverse_r2c = Zaft::make_c2r_fft_f64(data.len()).unwrap();
+
+            let mut complex_data = vec![Complex::<f64>::default(); data.len() / 2 + 1];
+            forward_r2c.execute(&real_data, &mut complex_data).unwrap();
+            inverse_r2c.execute(&complex_data, &mut real_data).unwrap();
+
+            real_data = real_data
+                .iter()
+                .map(|&x| x * (1.0 / real_data.len() as f64))
+                .collect();
+
+            real_data
+                .iter()
+                .zip(real_data_ref)
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a - b).abs() < 1e-7,
+                        "a_re {}, b_re {} at {idx} at size {}",
+                        a,
+                        b,
+                        data.len()
+                    );
                 });
         }
     }

@@ -37,20 +37,14 @@ use std::time::Instant;
 use zaft::Zaft;
 
 fn main() {
-    let mut data0 = vec![
-        Complex::new(5.0, 3.25),
-        Complex::new(5.0, -1.0),
-        Complex::new(9.6, -2.0),
-        Complex::new(12.6, -3.0),
-        Complex::new(14.6, -6.0),
-    ];
-    let mut data = vec![Complex::new(0.0019528865, 0.); 14];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 6];
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
     for (i, chunk) in data.iter_mut().enumerate() {
-        *chunk = Complex::new(0.0019528865 + i as f32 * 0.1, 0.);
+        *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
     }
+    data = [Complex { re: 0.20984626, im: 0.7396121 }, Complex { re: -0.7039449, im: 0.7016792 }, Complex { re: 0.14677572, im: 0.19478798 }, Complex { re: -0.4070065, im: 0.14004087 }, Complex { re: 0.050101757, im: 0.15234244 }, Complex { re: -0.67406917, im: 0.3613348 }].to_vec();
     //
     let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
     let mut real_data_clone = real_data.to_vec();
