@@ -76,6 +76,7 @@ where
 }
 
 impl AvxButterfly23<f64> {
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn kernel_f64(&self, v: [__m256d; 23]) -> [__m256d; 23] {
         unsafe {
@@ -508,6 +509,7 @@ impl FftExecutor<f64> for AvxButterfly23<f64> {
 }
 
 impl AvxButterfly23<f32> {
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn kernel_f32(&self, v: [__m128; 23]) -> [__m128; 23] {
         unsafe {
