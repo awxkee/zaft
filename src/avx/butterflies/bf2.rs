@@ -329,9 +329,14 @@ impl CompositeFftExecutor<f64> for AvxButterfly2<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::has_valid_avx;
     use rand::Rng;
+
     #[test]
     fn test_butterfly2_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..6 {
             let size = 2usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];

@@ -943,10 +943,14 @@ impl FftExecutor<f32> for AvxButterfly23<f32> {
 mod tests {
     use super::*;
     use crate::dft::Dft;
+    use crate::util::has_valid_avx;
     use rand::Rng;
 
     #[test]
     fn test_butterfly23_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..4 {
             let size = 23usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
@@ -1016,6 +1020,9 @@ mod tests {
 
     #[test]
     fn test_butterfly23_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..4 {
             let size = 23usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];

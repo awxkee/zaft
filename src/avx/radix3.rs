@@ -625,10 +625,14 @@ impl FftExecutor<f32> for AvxFmaRadix3<f32> {
 mod tests {
     use super::*;
     use crate::radix3::Radix3;
+    use crate::util::has_valid_avx;
     use rand::Rng;
 
     #[test]
     fn test_avx_radix3() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..5 {
             let size = 3usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
@@ -702,6 +706,9 @@ mod tests {
 
     #[test]
     fn test_avx_radix3_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..5 {
             let size = 3usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];

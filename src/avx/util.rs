@@ -596,10 +596,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::has_valid_avx;
     use num_complex::ComplexFloat;
 
     #[test]
     fn complex_muld() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f64, 5.0), Complex::new(5.0, -1.15)];
         let values_b = [Complex::new(-5.0f64, 3.0), Complex::new(-1.0, 1.15)];
         let r = values_a
@@ -621,6 +625,9 @@ mod tests {
 
     #[test]
     fn complexd_a_conj_to_b_avx() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f64, 5.0), Complex::new(5.0, -1.15)];
         let values_b = [Complex::new(-5.0f64, 3.0), Complex::new(-1.0, 1.15)];
         let r = values_a
@@ -642,6 +649,9 @@ mod tests {
 
     #[test]
     fn complexd_a_conj_to_b_sse() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f64, 5.0)];
         let values_b = [Complex::new(-5.0f64, 3.0)];
         let r = values_a
@@ -663,6 +673,9 @@ mod tests {
 
     #[test]
     fn complex_a_conj_to_b_avx() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f32, 5.0), Complex::new(5.0, -1.15)];
         let values_b = [Complex::new(-5.0f32, 3.0), Complex::new(-1.0, 1.15)];
         let r = values_a
@@ -684,6 +697,9 @@ mod tests {
 
     #[test]
     fn complex_a_conj_to_b_sse() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f32, 5.0)];
         let values_b = [Complex::new(-5.0f32, 3.0)];
         let r = values_a
@@ -705,6 +721,9 @@ mod tests {
 
     #[test]
     fn complex_a_to_b_conj_sse() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f32, 5.0)];
         let values_b = [Complex::new(-5.0f32, 3.0)];
         let r = values_a
@@ -726,6 +745,9 @@ mod tests {
 
     #[test]
     fn complex_a_to_b_conj_sse_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f64, 5.0)];
         let values_b = [Complex::new(-5.0f64, 3.0)];
         let r = values_a
@@ -747,6 +769,9 @@ mod tests {
 
     #[test]
     fn complexd_a_to_b_conj_avx() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f64, 5.0), Complex::new(5.0, -1.15)];
         let values_b = [Complex::new(-5.0f64, 3.0), Complex::new(-1.0, 1.15)];
         let r = values_a
@@ -768,6 +793,9 @@ mod tests {
 
     #[test]
     fn complexf_a_to_b_conj_avx() {
+        if !has_valid_avx() {
+            return;
+        }
         let values_a = [Complex::new(7.0f32, 5.0), Complex::new(5.0, -1.15)];
         let values_b = [Complex::new(-5.0f32, 3.0), Complex::new(-1.0, 1.15)];
         let r = values_a

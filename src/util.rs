@@ -407,3 +407,9 @@ pub(crate) fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
         None
     }
 }
+
+#[inline]
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
+pub(crate) fn has_valid_avx() -> bool {
+    std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
+}

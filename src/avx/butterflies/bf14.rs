@@ -272,10 +272,14 @@ impl FftExecutor<f32> for AvxButterfly14<f32> {
 mod test {
     use super::*;
     use crate::butterflies::Butterfly14;
+    use crate::util::has_valid_avx;
     use rand::Rng;
 
     #[test]
     fn test_butterfly14_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..3 {
             let size = 14usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
@@ -345,6 +349,9 @@ mod test {
 
     #[test]
     fn test_butterfly13_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..3 {
             let size = 14usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];

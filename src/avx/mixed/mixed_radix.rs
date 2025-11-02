@@ -872,9 +872,13 @@ mod tests {
     use super::*;
     use crate::Zaft;
     use crate::mixed_radix::MixedRadix;
+    use crate::util::has_valid_avx;
 
     #[test]
     fn test_avx_mixed_radix_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 8] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -914,6 +918,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix3_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 9] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -954,6 +961,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix4_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 8] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -993,6 +1003,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix5_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 10] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1034,6 +1047,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix6_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 12] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1077,6 +1093,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix7_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 14] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1122,6 +1141,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix8_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 16] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1173,6 +1195,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix9_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 18] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1226,6 +1251,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix10_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 20] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1277,6 +1305,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix11_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 22] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1330,6 +1361,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix12_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 24] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1389,6 +1423,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix16_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f64>; 32] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1456,6 +1493,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 8] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1495,6 +1535,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix3_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 12] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1538,6 +1581,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix4_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 20] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1589,6 +1635,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix5_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 25] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1645,6 +1694,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix6_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 30] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1706,6 +1758,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix7_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 21] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1758,6 +1813,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix8_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 24] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1813,6 +1871,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix9_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 27] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1871,6 +1932,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix10_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 30] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1932,6 +1996,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix11_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 33] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -1996,6 +2063,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix12_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 36] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -2063,6 +2133,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix13_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 39] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),
@@ -2133,6 +2206,9 @@ mod tests {
 
     #[test]
     fn test_avx_mixed_radix16_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [Complex<f32>; 32] = [
             Complex::new(1.3, 1.6),
             Complex::new(1.7, -0.4),

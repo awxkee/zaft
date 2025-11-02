@@ -33,6 +33,7 @@ use crate::factory::AlgorithmFactory;
 use crate::good_thomas::GoodThomasFft;
 use crate::good_thomas_small::GoodThomasSmallFft;
 use crate::mixed_radix::MixedRadix;
+use crate::util::has_valid_avx;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 
 impl AlgorithmFactory<f64> for f64 {
@@ -69,8 +70,7 @@ impl AlgorithmFactory<f64> for f64 {
         fft_direction: FftDirection,
     ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
-        {
+        if has_valid_avx() {
             use crate::avx::AvxButterfly3;
             return Ok(Box::new(AvxButterfly3::new(fft_direction)));
         }
@@ -102,9 +102,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly4;
                 return Ok(Box::new(AvxButterfly4::new(fft_direction)));
             }
@@ -129,9 +127,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly5;
                 return Ok(Box::new(AvxButterfly5::new(fft_direction)));
             }
@@ -151,9 +147,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly6;
                 return Ok(Box::new(AvxButterfly6::new(fft_direction)));
             }
@@ -178,9 +172,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly7;
                 return Ok(Box::new(AvxButterfly7::new(fft_direction)));
             }
@@ -205,9 +197,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly8;
                 return Ok(Box::new(AvxButterfly8::new(fft_direction)));
             }
@@ -232,9 +222,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly9;
                 return Ok(Box::new(AvxButterfly9::new(fft_direction)));
             }
@@ -259,9 +247,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly10d;
                 return Ok(Box::new(AvxButterfly10d::new(fft_direction)));
             }
@@ -286,9 +272,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly11;
                 return Ok(Box::new(AvxButterfly11::new(fft_direction)));
             }
@@ -313,9 +297,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly12;
                 return Ok(Box::new(AvxButterfly12::new(fft_direction)));
             }
@@ -340,9 +322,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly13;
                 return Ok(Box::new(AvxButterfly13::new(fft_direction)));
             }
@@ -367,9 +347,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly14;
                 return Ok(Box::new(AvxButterfly14::new(fft_direction)));
             }
@@ -394,9 +372,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly15d;
                 return Ok(Box::new(AvxButterfly15d::new(fft_direction)));
             }
@@ -421,9 +397,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly16;
                 return Ok(Box::new(AvxButterfly16::new(fft_direction)));
             }
@@ -448,9 +422,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly17;
                 return Ok(Box::new(AvxButterfly17::new(fft_direction)));
             }
@@ -475,9 +447,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly19;
                 return Ok(Box::new(AvxButterfly19::new(fft_direction)));
             }
@@ -500,8 +470,7 @@ impl AlgorithmFactory<f64> for f64 {
             Ok(Box::new(NeonButterfly23::new(fft_direction)))
         }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
-        {
+        if has_valid_avx() {
             use crate::avx::AvxButterfly23;
             return Ok(Box::new(AvxButterfly23::new(fft_direction)));
         }
@@ -528,9 +497,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            if has_valid_avx() {
                 use crate::avx::AvxButterfly27d;
                 return Ok(Box::new(AvxButterfly27d::new(fft_direction)));
             }
@@ -553,8 +520,7 @@ impl AlgorithmFactory<f64> for f64 {
             Ok(Box::new(NeonButterfly29::new(fft_direction)))
         }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
-        {
+        if has_valid_avx() {
             use crate::avx::AvxButterfly29;
             return Ok(Box::new(AvxButterfly29::new(fft_direction)));
         }
@@ -579,8 +545,7 @@ impl AlgorithmFactory<f64> for f64 {
             Ok(Box::new(NeonButterfly32d::new(fft_direction)))
         }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
-        {
+        if has_valid_avx() {
             use crate::avx::AvxButterfly32d;
             return Ok(Box::new(AvxButterfly32d::new(fft_direction)));
         }
@@ -615,9 +580,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxFmaRadix3;
                     return AvxFmaRadix3::new(n, fft_direction)
                         .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
@@ -652,9 +615,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxFmaRadix4;
                     return AvxFmaRadix4::new(n, fft_direction)
                         .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
@@ -689,9 +650,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxFmaRadix5;
                     return AvxFmaRadix5::new(n, fft_direction)
                         .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
@@ -723,9 +682,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxFmaRadix6;
                     return AvxFmaRadix6::new(n, fft_direction)
                         .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
@@ -757,9 +714,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxFmaRadix7;
                     return AvxFmaRadix7::new(n, fft_direction)
                         .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
@@ -791,9 +746,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxFmaRadix10d;
                     return AvxFmaRadix10d::new(n, fft_direction)
                         .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
@@ -825,9 +778,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxFmaRadix11;
                     return AvxFmaRadix11::new(n, fft_direction)
                         .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
@@ -859,9 +810,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxFmaRadix13;
                     return AvxFmaRadix13::new(n, fft_direction)
                         .map(|x| Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>);
@@ -887,10 +836,7 @@ impl AlgorithmFactory<f64> for f64 {
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-                && n < (u32::MAX - 100_000u32) as usize
-            {
+            if has_valid_avx() && n < (u32::MAX - 100_000u32) as usize {
                 use crate::avx::AvxRadersFft;
                 unsafe {
                     return AvxRadersFft::new(n, convolve_fft, fft_direction)
@@ -942,9 +888,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix2d;
                     return AvxMixedRadix2d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -976,9 +920,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix3d;
                     return AvxMixedRadix3d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1010,9 +952,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix4d;
                     return AvxMixedRadix4d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1044,9 +984,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix5d;
                     return AvxMixedRadix5d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1070,9 +1008,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix6d;
                     return AvxMixedRadix6d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1104,9 +1040,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix7d;
                     return AvxMixedRadix7d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1138,9 +1072,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix8d;
                     return AvxMixedRadix8d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1172,9 +1104,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix9d;
                     return AvxMixedRadix9d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1206,9 +1136,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix10d;
                     return AvxMixedRadix10d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1240,9 +1168,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix11d;
                     return AvxMixedRadix11d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1274,9 +1200,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix12d;
                     return AvxMixedRadix12d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1308,9 +1232,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix13d;
                     return AvxMixedRadix13d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));
@@ -1342,9 +1264,7 @@ impl AlgorithmFactory<f64> for f64 {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
-                if std::arch::is_x86_feature_detected!("avx2")
-                    && std::arch::is_x86_feature_detected!("fma")
-                {
+                if has_valid_avx() {
                     use crate::avx::AvxMixedRadix16d;
                     return AvxMixedRadix16d::new(right_fft)
                         .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f64> + Send + Sync>));

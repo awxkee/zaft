@@ -968,10 +968,14 @@ mod tests {
     use super::*;
     use crate::butterflies::Butterfly5;
     use crate::dft::Dft;
+    use crate::util::has_valid_avx;
     use rand::Rng;
 
     #[test]
     fn test_butterfly5_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..5 {
             let size = 5usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
@@ -1010,6 +1014,9 @@ mod tests {
 
     #[test]
     fn test_butterfly5_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..5 {
             let size = 5usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
@@ -1074,6 +1081,9 @@ mod tests {
 
     #[test]
     fn test_butterfly5_fcma_out_of_place_f64() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..6 {
             let size = 5usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
@@ -1143,7 +1153,10 @@ mod tests {
     }
 
     #[test]
-    fn test_butterfly5_fcma_out_of_place_f32() {
+    fn test_butterfly5_avx_out_of_place_f32() {
+        if !has_valid_avx() {
+            return;
+        }
         for i in 1..6 {
             let size = 5usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
