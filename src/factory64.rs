@@ -33,6 +33,7 @@ use crate::factory::AlgorithmFactory;
 use crate::good_thomas::GoodThomasFft;
 use crate::good_thomas_small::GoodThomasSmallFft;
 use crate::mixed_radix::MixedRadix;
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
 use crate::util::has_valid_avx;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 
