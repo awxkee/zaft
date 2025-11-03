@@ -595,6 +595,9 @@ mod tests {
 
     #[test]
     fn test_fcma_butterfly9_f32() {
+        if !std::arch::is_aarch64_feature_detected!("fcma") {
+            return;
+        }
         for i in 1..5 {
             let size = 9usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
@@ -683,6 +686,9 @@ mod tests {
 
     #[test]
     fn test_fcma_butterfly9_f64() {
+        if !std::arch::is_aarch64_feature_detected!("fcma") {
+            return;
+        }
         for i in 1..5 {
             let size = 9usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
@@ -749,6 +755,9 @@ mod tests {
 
     #[test]
     fn test_butterfly9_out_of_place_f64() {
+        if !std::arch::is_aarch64_feature_detected!("fcma") {
+            return;
+        }
         for i in 1..4 {
             let size = 9usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
@@ -819,6 +828,9 @@ mod tests {
 
     #[test]
     fn test_butterfly9_out_of_place_f32() {
+        if !std::arch::is_aarch64_feature_detected!("fcma") {
+            return;
+        }
         for i in 1..4 {
             let size = 9usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];

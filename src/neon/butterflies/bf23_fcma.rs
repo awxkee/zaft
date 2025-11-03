@@ -883,6 +883,9 @@ mod tests {
 
     #[test]
     fn test_butterfly23_f32() {
+        if !std::arch::is_aarch64_feature_detected!("fcma") {
+            return;
+        }
         for i in 1..5 {
             let size = 23usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
@@ -971,6 +974,9 @@ mod tests {
 
     #[test]
     fn test_butterfly23_f64() {
+        if !std::arch::is_aarch64_feature_detected!("fcma") {
+            return;
+        }
         for i in 1..5 {
             let size = 23usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];

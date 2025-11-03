@@ -1005,6 +1005,9 @@ mod tests {
 
     #[test]
     fn test_neon_radix13f() {
+        if !std::arch::is_aarch64_feature_detected!("fcma") {
+            return;
+        }
         for i in 1..5 {
             let size = 13usize.pow(i);
             let mut input = vec![Complex::<f32>::default(); size];
@@ -1047,6 +1050,9 @@ mod tests {
 
     #[test]
     fn test_neon_radix13_f64() {
+        if !std::arch::is_aarch64_feature_detected!("fcma") {
+            return;
+        }
         for i in 1..5 {
             let size = 13usize.pow(i);
             let mut input = vec![Complex::<f64>::default(); size];
