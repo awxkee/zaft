@@ -1,4 +1,4 @@
-# Zaft FFT Example (Rust)
+# Zaft FFT Example
 
 This example demonstrates how to perform real-to-complex (R2C) and complex-to-real (C2R) FFTs, as well as standard complex-to-complex forward and inverse FFTs using Zaft.
 
