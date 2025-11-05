@@ -27,13 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
+use crate::fast_divider::DividerU16;
 use crate::traits::FftTrigonometry;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
-use strength_reduce::StrengthReducedU16;
 
 pub(crate) struct GoodThomasSmallFft<T> {
     width: usize,
@@ -42,8 +42,8 @@ pub(crate) struct GoodThomasSmallFft<T> {
     height: usize,
     height_size_fft: Box<dyn FftExecutor<T> + Send + Sync>,
 
-    reduced_width: StrengthReducedU16,
-    reduced_width_plus_one: StrengthReducedU16,
+    width_divisor: DividerU16,
+    width_divisor_plus_one: DividerU16,
     execution_length: u16,
     direction: FftDirection,
     transpose_ops: Box<dyn TransposeExecutor<T> + Send + Sync>,
@@ -101,8 +101,8 @@ where
             height,
             height_size_fft: height_fft,
 
-            reduced_width: StrengthReducedU16::new(width as u16),
-            reduced_width_plus_one: StrengthReducedU16::new(width as u16 + 1),
+            width_divisor: DividerU16::new(width as u16),
+            width_divisor_plus_one: DividerU16::new(width as u16 + 1),
 
             execution_length: len as u16,
             direction,
@@ -130,7 +130,7 @@ impl<T: Copy> GoodThomasSmallFft<T> {
         let mut destination_index = 0u16;
         for mut source_row in source.chunks_exact(self.width) {
             let increments_until_cycle = (1
-                + (self.execution_length - destination_index) / self.reduced_width_plus_one)
+                + (self.execution_length - destination_index) / self.width_divisor_plus_one)
                 as usize;
 
             // If we have to rollover output_index on this row, do it in a separate loop
@@ -141,7 +141,7 @@ impl<T: Copy> GoodThomasSmallFft<T> {
                     unsafe {
                         *destination.get_unchecked_mut(destination_index as usize) = *input_element;
                     }
-                    destination_index += self.reduced_width_plus_one.get();
+                    destination_index += self.width_divisor_plus_one.divisor();
                 }
 
                 // Store the split slice back to input_row, os that outside the loop, we can finish the job of iterating the row
@@ -154,7 +154,7 @@ impl<T: Copy> GoodThomasSmallFft<T> {
                 unsafe {
                     *destination.get_unchecked_mut(destination_index as usize) = *input_element;
                 }
-                destination_index += self.reduced_width_plus_one.get();
+                destination_index += self.width_divisor_plus_one.divisor();
             }
 
             // The first index of the next will be the final index this row, plus one.
@@ -177,7 +177,7 @@ impl<T: Copy> GoodThomasSmallFft<T> {
         // This achieves the same result as the modular arithmetic ofthe ruritanian mapping, but with only one integer divison per row, instead of one per element
         for (y, source_chunk) in source.chunks_exact(self.height).enumerate() {
             let (quotient, remainder) =
-                StrengthReducedU16::div_rem(y as u16 * self.height as u16, self.reduced_width);
+                DividerU16::div_rem(y as u16 * self.height as u16, self.width_divisor);
 
             // Compute our base index and starting point in the row
             let mut destination_index = remainder as usize;
