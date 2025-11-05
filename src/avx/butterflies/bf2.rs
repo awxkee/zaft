@@ -329,85 +329,12 @@ impl CompositeFftExecutor<f64> for AvxButterfly2<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::has_valid_avx;
+    use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
     use rand::Rng;
 
-    #[test]
-    fn test_butterfly2_f32() {
-        if !has_valid_avx() {
-            return;
-        }
-        for i in 1..6 {
-            let size = 2usize.pow(i);
-            let mut input = vec![Complex::<f32>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-            let radix_forward = AvxButterfly2::new(FftDirection::Forward);
-            let radix_inverse = AvxButterfly2::new(FftDirection::Inverse);
-            radix_forward.execute(&mut input).unwrap();
-            radix_inverse.execute(&mut input).unwrap();
+    test_avx_butterfly!(test_avx_butterfly2, f32, AvxButterfly2, 2, 1e-5);
+    test_avx_butterfly!(test_avx_butterfly2_f64, f64, AvxButterfly2, 2, 1e-7);
 
-            input = input.iter().map(|&x| x * (1.0 / 2f32)).collect();
-
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-5,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-5,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
-        }
-    }
-
-    #[test]
-    fn test_butterfly2_f64() {
-        for i in 1..7 {
-            let size = 2usize.pow(i);
-            let mut input = vec![Complex::<f64>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-            let radix_forward = AvxButterfly2::new(FftDirection::Forward);
-            let radix_inverse = AvxButterfly2::new(FftDirection::Inverse);
-            radix_forward.execute(&mut input).unwrap();
-            radix_inverse.execute(&mut input).unwrap();
-
-            input = input.iter().map(|&x| x * (1.0 / 2f64)).collect();
-
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-9,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-9,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
-        }
-    }
+    test_oof_avx_butterfly!(test_oof_avx_butterfly2, f32, AvxButterfly2, 2, 1e-5);
+    test_oof_avx_butterfly!(test_oof_avx_butterfly2_f64, f64, AvxButterfly2, 2, 1e-7);
 }

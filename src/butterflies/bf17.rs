@@ -405,43 +405,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::butterflies::test_butterfly;
     use rand::Rng;
 
-    #[test]
-    fn test_butterfly17() {
-        for i in 1..4 {
-            let size = 17usize.pow(i);
-            let mut input = vec![Complex::<f32>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-            let radix_forward = Butterfly17::new(FftDirection::Forward);
-            let radix_inverse = Butterfly17::new(FftDirection::Inverse);
-            radix_forward.execute(&mut input).unwrap();
-            radix_inverse.execute(&mut input).unwrap();
-
-            input = input.iter().map(|&x| x * (1.0 / 17f32)).collect();
-
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-5,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-5,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
-        }
-    }
+    test_butterfly!(test_butterfly17, f32, Butterfly17, 17, 1e-5);
 }

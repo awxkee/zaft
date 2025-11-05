@@ -527,170 +527,21 @@ impl NeonFcmaButterfly12<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::Butterfly12;
+    use crate::neon::butterflies::test_fcma_butterfly;
     use rand::Rng;
 
-    #[test]
-    fn test_butterfly12_f32() {
-        if !std::arch::is_aarch64_feature_detected!("fcma") {
-            return;
-        }
-        for i in 1..5 {
-            let size = 12usize.pow(i);
-            let mut input = vec![Complex::<f32>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-            let mut z_ref = input.to_vec();
-
-            let radix5_reference = Butterfly12::new(FftDirection::Forward);
-            let radix5_inv_reference = Butterfly12::new(FftDirection::Inverse);
-
-            let radix_forward = NeonFcmaButterfly12::new(FftDirection::Forward);
-            let radix_inverse = NeonFcmaButterfly12::new(FftDirection::Inverse);
-            radix_forward.execute(&mut input).unwrap();
-            radix5_reference.execute(&mut z_ref).unwrap();
-
-            input
-                .iter()
-                .zip(z_ref.iter())
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-5,
-                        "a_re {} != b_re {} for size {}, reference failed at {idx}",
-                        a.re,
-                        b.re,
-                        size
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-5,
-                        "a_im {} != b_im {} for size {}, reference failed at {idx}",
-                        a.im,
-                        b.im,
-                        size
-                    );
-                });
-
-            radix_inverse.execute(&mut input).unwrap();
-            radix5_inv_reference.execute(&mut z_ref).unwrap();
-
-            input
-                .iter()
-                .zip(z_ref.iter())
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-5,
-                        "a_re {} != b_re {} for size {}, reference inv failed at {idx}",
-                        a.re,
-                        b.re,
-                        size
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-5,
-                        "a_im {} != b_im {} for size {}, reference inv failed at {idx}",
-                        a.im,
-                        b.im,
-                        size
-                    );
-                });
-
-            input = input.iter().map(|&x| x * (1.0 / 12f32)).collect();
-
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-5,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-5,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
-        }
-    }
-
-    #[test]
-    fn test_butterfly12_f64() {
-        if !std::arch::is_aarch64_feature_detected!("fcma") {
-            return;
-        }
-        for i in 1..5 {
-            let size = 12usize.pow(i);
-            let mut input = vec![Complex::<f64>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-
-            let mut z_ref = input.to_vec();
-
-            let radix12_reference = Butterfly12::new(FftDirection::Forward);
-
-            let radix_forward = NeonFcmaButterfly12::new(FftDirection::Forward);
-            let radix_inverse = NeonFcmaButterfly12::new(FftDirection::Inverse);
-            radix_forward.execute(&mut input).unwrap();
-            radix12_reference.execute(&mut z_ref).unwrap();
-
-            input
-                .iter()
-                .zip(z_ref.iter())
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-9,
-                        "a_re {} != b_re {} for size {}, reference failed at {idx}",
-                        a.re,
-                        b.re,
-                        size
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-9,
-                        "a_im {} != b_im {} for size {}, reference failed at {idx}",
-                        a.im,
-                        b.im,
-                        size
-                    );
-                });
-
-            radix_inverse.execute(&mut input).unwrap();
-
-            input = input.iter().map(|&x| x * (1.0 / 12f64)).collect();
-
-            input
-                .iter()
-                .zip(src.iter())
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-9,
-                        "a_re {} != b_re {} for size {} at {idx}",
-                        a.re,
-                        b.re,
-                        size
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-9,
-                        "a_im {} != b_im {} for size {} at {idx}",
-                        a.im,
-                        b.im,
-                        size
-                    );
-                });
-        }
-    }
+    test_fcma_butterfly!(
+        test_fcma_neon_butterfly11,
+        f32,
+        NeonFcmaButterfly12,
+        12,
+        1e-5
+    );
+    test_fcma_butterfly!(
+        test_fcma_neon_butterfly11_f64,
+        f64,
+        NeonFcmaButterfly12,
+        12,
+        1e-7
+    );
 }
