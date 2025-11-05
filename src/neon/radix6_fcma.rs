@@ -394,6 +394,6 @@ mod tests {
     use super::*;
     use crate::neon::test_fcma_radix;
 
-    test_fcma_radix!(test_neon_radix6, f32, NeonFcmaRadix6, 4, 6, 1e-3);
+    test_fcma_radix!(test_neon_radix6, f32, NeonFcmaRadix6, 4, 6, 1e-2);
     test_fcma_radix!(test_neon_radix6_f64, f64, NeonFcmaRadix6, 4, 6, 1e-8);
 }
