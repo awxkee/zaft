@@ -21,7 +21,6 @@ num-complex = "0.4"
 num-traits = "0.2"
 pxfm = "^0.1.25"
 num-integer = "0.1.46"
-strength_reduce = "0.2.4"
 
 [dev-dependencies]
 rand = "0.9"

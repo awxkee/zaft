@@ -47,6 +47,7 @@ mod dft;
 mod err;
 mod factory;
 mod factory64;
+mod fast_divider;
 mod good_thomas;
 mod good_thomas_small;
 mod mixed_radix;

@@ -453,89 +453,9 @@ impl FftExecutor<f32> for NeonRadix3<f32> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use rand::Rng;
+    use crate::neon::NeonRadix3;
+    use crate::util::test_radix;
 
-    #[test]
-    fn test_neon_radix3() {
-        for i in 1..9 {
-            let size = 3usize.pow(i);
-            let mut input = vec![Complex::<f32>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-            let radix_forward = NeonRadix3::new(size, FftDirection::Forward).unwrap();
-            let radix_inverse = NeonRadix3::new(size, FftDirection::Inverse).unwrap();
-            radix_forward.execute(&mut input).unwrap();
-            radix_inverse.execute(&mut input).unwrap();
-
-            input = input
-                .iter()
-                .map(|&x| Complex::new(x.re as f64, x.im as f64) * (1.0f64 / input.len() as f64))
-                .map(|x| Complex::new(x.re as f32, x.im as f32))
-                .collect();
-
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-4,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-4,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
-        }
-    }
-
-    #[test]
-    fn test_neon_radix3_f64() {
-        for i in 1..9 {
-            let size = 3usize.pow(i);
-            let mut input = vec![Complex::<f64>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-            let radix_forward = NeonRadix3::new(size, FftDirection::Forward).unwrap();
-            let radix_inverse = NeonRadix3::new(size, FftDirection::Inverse).unwrap();
-            radix_forward.execute(&mut input).unwrap();
-            radix_inverse.execute(&mut input).unwrap();
-
-            input = input
-                .iter()
-                .map(|&x| x * (1.0f64 / input.len() as f64))
-                .collect();
-
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-9,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-9,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
-        }
-    }
+    test_radix!(test_neon_radix3, f32, NeonRadix3, 6, 3, 1e-3);
+    test_radix!(test_neon_radix3_f64, f64, NeonRadix3, 6, 3, 1e-8);
 }

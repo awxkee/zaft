@@ -246,46 +246,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
+    use crate::util::test_radix;
 
-    #[test]
-    fn test_radix10() {
-        for i in 1..4 {
-            let size = 10usize.pow(i);
-            let mut input = vec![Complex::<f32>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-            let radix_forward = Radix10::new(size, FftDirection::Forward).unwrap();
-            let radix_inverse = Radix10::new(size, FftDirection::Inverse).unwrap();
-            radix_forward.execute(&mut input).unwrap();
-            radix_inverse.execute(&mut input).unwrap();
-
-            input = input
-                .iter()
-                .map(|&x| x * (1.0 / input.len() as f32))
-                .collect();
-
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-4,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-4,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
-        }
-    }
+    test_radix!(test_radix10, f32, Radix10, 4, 10, 1e-3);
 }

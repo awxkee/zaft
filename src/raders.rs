@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
+use crate::fast_divider::DividerU64;
 use crate::prime_factors::{PrimeFactors, primitive_root};
 use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
 use crate::traits::FftTrigonometry;
@@ -36,7 +37,6 @@ use num_complex::Complex;
 use num_integer::Integer;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
-use strength_reduce::StrengthReducedU64;
 
 pub(crate) struct RadersFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
@@ -75,7 +75,7 @@ where
         let direction = convolve_fft.direction();
         let convolve_fft_len = convolve_fft.length();
         assert_eq!(fft_direction, direction);
-        let reduced_len = StrengthReducedU64::new(size as u64);
+        let reduced_len = DividerU64::new(size as u64);
 
         // compute the primitive root and its inverse for this size
         let primitive_root = primitive_root(size as u64).unwrap();

@@ -413,3 +413,85 @@ pub(crate) fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
 pub(crate) fn has_valid_avx() -> bool {
     std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
 }
+
+#[cfg(test)]
+macro_rules! test_radix {
+    ($method_name: ident, $data_type: ident, $butterfly: ident, $iters: expr, $scale: expr, $tol: expr) => {
+        #[test]
+        fn $method_name() {
+            use crate::FftDirection;
+            use crate::FftExecutor;
+            use num_complex::Complex;
+            use rand::Rng;
+            for i in 1..$iters {
+                let val = $scale as usize;
+                let size = val.pow(i);
+                let mut input = vec![Complex::<$data_type>::default(); size];
+                for z in input.iter_mut() {
+                    *z = Complex {
+                        re: rand::rng().random(),
+                        im: rand::rng().random(),
+                    };
+                }
+                let src = input.to_vec();
+                use crate::dft::Dft;
+                let reference_forward = Dft::new(size, FftDirection::Forward).unwrap();
+
+                let mut ref_src = src.to_vec();
+                reference_forward.execute(&mut ref_src).unwrap();
+
+                let radix_forward = $butterfly::new(size, FftDirection::Forward).unwrap();
+                let radix_inverse = $butterfly::new(size, FftDirection::Inverse).unwrap();
+                radix_forward.execute(&mut input).unwrap();
+
+                input
+                    .iter()
+                    .zip(ref_src.iter())
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < $tol,
+                            "a_re {} != b_re {} for size {} at {idx}",
+                            a.re,
+                            b.re,
+                            size
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < $tol,
+                            "a_im {} != b_im {} for size {} at {idx}",
+                            a.im,
+                            b.im,
+                            size
+                        );
+                    });
+
+                radix_inverse.execute(&mut input).unwrap();
+
+                input = input
+                    .iter()
+                    .map(|&x| x * (1.0 / size as $data_type))
+                    .collect();
+
+                input.iter().zip(src.iter()).for_each(|(a, b)| {
+                    assert!(
+                        (a.re - b.re).abs() < $tol,
+                        "a_re {} != b_re {} for size {}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < $tol,
+                        "a_im {} != b_im {} for size {}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+pub(crate) use test_radix;

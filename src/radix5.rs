@@ -262,74 +262,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dft::Dft;
-    use rand::Rng;
+    use crate::util::test_radix;
 
-    #[test]
-    fn test_radix5() {
-        for i in 1..5 {
-            let size = 5usize.pow(i);
-            let mut input = vec![Complex::<f32>::default(); size];
-            for z in input.iter_mut() {
-                *z = Complex {
-                    re: rand::rng().random(),
-                    im: rand::rng().random(),
-                };
-            }
-            let src = input.to_vec();
-            let mut ref_input = input.to_vec();
-            let radix_forward = Radix5::new(size, FftDirection::Forward).unwrap();
-
-            let reference_dft = Dft::new(size, FftDirection::Forward).unwrap();
-            reference_dft.execute(&mut ref_input).unwrap();
-
-            let radix_inverse = Radix5::new(size, FftDirection::Inverse).unwrap();
-            radix_forward.execute(&mut input).unwrap();
-
-            input
-                .iter()
-                .zip(ref_input.iter())
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-2,
-                        "a_re {} != b_re {} for size {} at {idx}",
-                        a.re,
-                        b.re,
-                        size
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-2,
-                        "a_im {} != b_im {} for size {} at {idx}",
-                        a.im,
-                        b.im,
-                        size
-                    );
-                });
-
-            radix_inverse.execute(&mut input).unwrap();
-
-            input = input
-                .iter()
-                .map(|&x| x * (1.0 / input.len() as f32))
-                .collect();
-
-            input.iter().zip(src.iter()).for_each(|(a, b)| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-4,
-                    "a_re {} != b_re {} for size {}",
-                    a.re,
-                    b.re,
-                    size
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-4,
-                    "a_im {} != b_im {} for size {}",
-                    a.im,
-                    b.im,
-                    size
-                );
-            });
-        }
-    }
+    test_radix!(test_radix5, f32, Radix5, 5, 5, 1e-3);
 }

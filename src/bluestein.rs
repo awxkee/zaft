@@ -27,14 +27,14 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
+use crate::fast_divider::DividerU64;
 use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
-use std::ops::{Add, Mul, Neg, Sub};
-use strength_reduce::{StrengthReducedU64, StrengthReducedU128};
+use std::ops::{Add, Mul, Neg, Rem, Sub};
 
 pub(crate) struct BluesteinFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
@@ -60,7 +60,7 @@ fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
     // Strength-reduced u128s are very heavy, so we only want to use them if we need them - and we only need them if
     // len * len doesn't fit in a u64, AKA if len doesn't fit in a u32
     if destination.len() < u32::MAX as usize {
-        let twice_len_reduced = StrengthReducedU64::new(twice_len as u64);
+        let twice_len_reduced = DividerU64::new(twice_len as u64);
 
         for (i, e) in destination.iter_mut().enumerate() {
             let i_squared = i as u64 * i as u64;
@@ -69,13 +69,13 @@ fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
         }
     } else {
         // Sadly, the len doesn't fit in a u64, so we have to crank it up to u128 arithmetic
-        let twice_len_reduced = StrengthReducedU128::new(twice_len as u128);
+        let twice_len_reduced = twice_len as u128;
 
         for (i, e) in destination.iter_mut().enumerate() {
             // Standard bluestein's twiddle computation requires us to square the index before usingit to compute a twiddle factor
             // And since twiddle factors are cyclic, we can improve precision once the squared index gets converted to floating point by taking a modulo
             let i_squared = i as u128 * i as u128;
-            let i_mod = i_squared % twice_len_reduced;
+            let i_mod = i_squared.rem(twice_len_reduced);
             *e = compute_twiddle(i_mod as usize, twice_len, direction);
         }
     }
