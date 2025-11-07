@@ -42,11 +42,11 @@ jobs:
     name: Tests
     strategy:
       matrix:
-        features: [ "", neon ]
+        features: [ "", neon, fcma ]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
       - run: cargo test  --no-default-features --features "${{ matrix.features }}"
 
   tests_x86:

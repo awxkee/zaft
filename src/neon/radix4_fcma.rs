@@ -27,12 +27,14 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::factory::AlgorithmFactory;
+use crate::neon::radix4::{
+    neon_bitreversed_transpose_f32_radix4, neon_bitreversed_transpose_f64_radix4,
+};
 use crate::neon::util::vfcmulq_fcma_f32;
 use crate::neon::util::vfcmulq_fcma_f64;
 use crate::neon::util::{create_neon_twiddles, vfcmul_fcma_f32};
 use crate::radix4::Radix4Twiddles;
 use crate::traits::FftTrigonometry;
-use crate::util::bitreversed_transpose;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
@@ -96,7 +98,7 @@ impl NeonFcmaRadix4<f64> {
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
-            bitreversed_transpose::<Complex<f64>, 4>(self.base_len, chunk, &mut scratch);
+            neon_bitreversed_transpose_f64_radix4(self.base_len, chunk, &mut scratch);
 
             self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
@@ -261,7 +263,7 @@ impl NeonFcmaRadix4<f32> {
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
-            bitreversed_transpose::<Complex<f32>, 4>(self.base_len, chunk, &mut scratch);
+            neon_bitreversed_transpose_f32_radix4(self.base_len, chunk, &mut scratch);
 
             self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
@@ -277,6 +279,124 @@ impl NeonFcmaRadix4<f32> {
 
                     for data in chunk.chunks_exact_mut(len) {
                         let mut j = 0usize;
+
+                        while j + 4 < quarter {
+                            let a0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
+                            let a1 = vld1q_f32(data.get_unchecked(j + 2..).as_ptr().cast());
+
+                            let tw0_0 =
+                                vld1q_f32(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
+                            let tw1_0 =
+                                vld1q_f32(m_twiddles.get_unchecked(3 * j + 2..).as_ptr().cast());
+                            let tw2_0 =
+                                vld1q_f32(m_twiddles.get_unchecked(3 * j + 4..).as_ptr().cast());
+
+                            let tw0_1 =
+                                vld1q_f32(m_twiddles.get_unchecked(3 * j + 6..).as_ptr().cast());
+                            let tw1_1 =
+                                vld1q_f32(m_twiddles.get_unchecked(3 * j + 8..).as_ptr().cast());
+                            let tw2_1 =
+                                vld1q_f32(m_twiddles.get_unchecked(3 * j + 10..).as_ptr().cast());
+
+                            let b0 = vfcmulq_fcma_f32(
+                                vld1q_f32(data.get_unchecked(j + quarter..).as_ptr().cast()),
+                                tw0_0,
+                            );
+
+                            let b1 = vfcmulq_fcma_f32(
+                                vld1q_f32(data.get_unchecked(j + quarter + 2..).as_ptr().cast()),
+                                tw0_1,
+                            );
+
+                            let c0 = vfcmulq_fcma_f32(
+                                vld1q_f32(data.get_unchecked(j + 2 * quarter..).as_ptr().cast()),
+                                tw1_0,
+                            );
+
+                            let c1 = vfcmulq_fcma_f32(
+                                vld1q_f32(
+                                    data.get_unchecked(j + 2 * quarter + 2..).as_ptr().cast(),
+                                ),
+                                tw1_1,
+                            );
+
+                            let d0 = vfcmulq_fcma_f32(
+                                vld1q_f32(data.get_unchecked(j + 3 * quarter..).as_ptr().cast()),
+                                tw2_0,
+                            );
+
+                            let d1 = vfcmulq_fcma_f32(
+                                vld1q_f32(
+                                    data.get_unchecked(j + 3 * quarter + 2..).as_ptr().cast(),
+                                ),
+                                tw2_1,
+                            );
+
+                            // radix-4 butterfly
+                            let t0_0 = vaddq_f32(a0, c0);
+                            let t1_0 = vsubq_f32(a0, c0);
+                            let t2_0 = vaddq_f32(b0, d0);
+                            let mut t3_0 = vsubq_f32(b0, d0);
+                            t3_0 = vreinterpretq_f32_u32(veorq_u32(
+                                vrev64q_u32(vreinterpretq_u32_f32(t3_0)),
+                                v_i_multiplier,
+                            ));
+
+                            let t0_1 = vaddq_f32(a1, c1);
+                            let t1_1 = vsubq_f32(a1, c1);
+                            let t2_1 = vaddq_f32(b1, d1);
+                            let mut t3_1 = vsubq_f32(b1, d1);
+                            t3_1 = vreinterpretq_f32_u32(veorq_u32(
+                                vrev64q_u32(vreinterpretq_u32_f32(t3_1)),
+                                v_i_multiplier,
+                            ));
+
+                            vst1q_f32(
+                                data.get_unchecked_mut(j..).as_mut_ptr().cast(),
+                                vaddq_f32(t0_0, t2_0),
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + quarter..).as_mut_ptr().cast(),
+                                vaddq_f32(t1_0, t3_0),
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 2 * quarter..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                vsubq_f32(t0_0, t2_0),
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 3 * quarter..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                vsubq_f32(t1_0, t3_0),
+                            );
+
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 2..).as_mut_ptr().cast(),
+                                vaddq_f32(t0_1, t2_1),
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + quarter + 2..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                vaddq_f32(t1_1, t3_1),
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 2 * quarter + 2..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                vsubq_f32(t0_1, t2_1),
+                            );
+                            vst1q_f32(
+                                data.get_unchecked_mut(j + 3 * quarter + 2..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                vsubq_f32(t1_1, t3_1),
+                            );
+
+                            j += 4;
+                        }
 
                         while j + 2 < quarter {
                             let a = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());

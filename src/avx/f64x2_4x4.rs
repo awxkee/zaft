@@ -33,6 +33,30 @@ use std::arch::x86_64::*;
 
 #[inline]
 #[target_feature(enable = "avx")]
+pub(crate) fn avx_transpose_f64x2_4x4_impl(
+    v0: (__m256d, __m256d),
+    v1: (__m256d, __m256d),
+    v2: (__m256d, __m256d),
+    v3: (__m256d, __m256d),
+) -> (
+    (__m256d, __m256d),
+    (__m256d, __m256d),
+    (__m256d, __m256d),
+    (__m256d, __m256d),
+) {
+    // Perform an 4 x 4 matrix transpose by building on top of the existing 2 x 2
+    // matrix transpose implementation:
+    // [ A B ]^T => [ A^T C^T ]
+    // [ C D ]      [ B^T D^T ]
+    let q0 = transpose_f64x2_2x2(v0.0, v1.0);
+    let q1 = transpose_f64x2_2x2(v0.1, v1.1);
+    let q2 = transpose_f64x2_2x2(v2.0, v3.0);
+    let q3 = transpose_f64x2_2x2(v2.1, v3.1);
+    ((q0.0, q2.0), (q0.1, q2.1), (q1.0, q3.0), (q1.1, q3.1))
+}
+
+#[inline]
+#[target_feature(enable = "avx")]
 pub(crate) unsafe fn avx_transpose_f64x2_4x4(
     src: &[Complex<f64>],
     src_stride: usize,

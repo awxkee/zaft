@@ -29,6 +29,8 @@
 mod butterflies;
 mod f32x2_2x2;
 mod f32x2_4x4;
+mod f32x2_6x6;
+mod f32x2_7x7;
 mod f32x2_8x4;
 mod f64x2_2x2;
 mod f64x2_4x4;

@@ -27,11 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::butterflies::AvxButterfly;
+use crate::avx::f32x2_7x7::transpose_7x7_f32;
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
     _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps, _mm256_load4_f32x2,
-    create_avx4_twiddles,
+    avx_bitreversed_transpose, create_avx4_twiddles,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -39,7 +40,7 @@ use crate::radix7::Radix7Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_seven};
+use crate::util::{compute_logarithm, compute_twiddle, is_power_of_seven, reverse_bits};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -118,7 +119,7 @@ impl AvxFmaRadix7<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 7>(7, chunk, &mut scratch);
+                avx_bitreversed_transpose::<Complex<f64>, 7>(7, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
@@ -443,6 +444,129 @@ impl FftExecutor<f64> for AvxFmaRadix7<f64> {
     }
 }
 
+#[inline]
+#[target_feature(enable = "avx2")]
+fn complex7_load_f32(array: &[Complex<f32>], idx: usize) -> (__m256, __m256) {
+    unsafe {
+        (
+            _mm256_loadu_ps(array.get_unchecked(idx..).as_ptr().cast()),
+            _mm256_setr_m128(
+                _mm_loadu_ps(array.get_unchecked(idx + 4..).as_ptr().cast()),
+                _m128s_load_f32x2(array.get_unchecked(idx + 6..).as_ptr().cast()),
+            ),
+        )
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+fn complex7_store_f32(array: &mut [Complex<f32>], idx: usize, v: (__m256, __m256)) {
+    unsafe {
+        _mm256_storeu_ps(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v.0);
+        _mm_storeu_ps(
+            array.get_unchecked_mut(idx + 4..).as_mut_ptr().cast(),
+            _mm256_castps256_ps128(v.1),
+        );
+        _m128s_store_f32x2(
+            array.get_unchecked_mut(idx + 6..).as_mut_ptr().cast(),
+            _mm256_extractf128_ps::<1>(v.1),
+        );
+    }
+}
+
+#[target_feature(enable = "avx2")]
+pub(crate) fn avx_bitreversed_transpose_f32_radix7(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+    const WIDTH: usize = 7;
+    const HEIGHT: usize = 7;
+
+    let rev_digits = compute_logarithm::<7>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    if strided_width == 0 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 5, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 6, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let rows = [
+                complex7_load_f32(input, base_input_idx),
+                complex7_load_f32(input, base_input_idx + width),
+                complex7_load_f32(input, base_input_idx + width * 2),
+                complex7_load_f32(input, base_input_idx + width * 3),
+                complex7_load_f32(input, base_input_idx + width * 4),
+                complex7_load_f32(input, base_input_idx + width * 5),
+                complex7_load_f32(input, base_input_idx + width * 6),
+            ];
+            let transposed = transpose_7x7_f32(
+                [
+                    rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0, rows[5].0, rows[6].0,
+                ],
+                [
+                    rows[0].1, rows[1].1, rows[2].1, rows[3].1, rows[4].1, rows[5].1, rows[6].1,
+                ],
+            );
+
+            complex7_store_f32(
+                output,
+                HEIGHT * y + x_rev[0],
+                (transposed.0[0], transposed.1[0]),
+            );
+            complex7_store_f32(
+                output,
+                HEIGHT * y + x_rev[1],
+                (transposed.0[1], transposed.1[1]),
+            );
+            complex7_store_f32(
+                output,
+                HEIGHT * y + x_rev[2],
+                (transposed.0[2], transposed.1[2]),
+            );
+            complex7_store_f32(
+                output,
+                HEIGHT * y + x_rev[3],
+                (transposed.0[3], transposed.1[3]),
+            );
+            complex7_store_f32(
+                output,
+                HEIGHT * y + x_rev[4],
+                (transposed.0[4], transposed.1[4]),
+            );
+            complex7_store_f32(
+                output,
+                HEIGHT * y + x_rev[5],
+                (transposed.0[5], transposed.1[5]),
+            );
+            complex7_store_f32(
+                output,
+                HEIGHT * y + x_rev[6],
+                (transposed.0[6], transposed.1[6]),
+            );
+        }
+    }
+}
+
 impl AvxFmaRadix7<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
@@ -466,7 +590,7 @@ impl AvxFmaRadix7<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 7>(7, chunk, &mut scratch);
+                avx_bitreversed_transpose_f32_radix7(7, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

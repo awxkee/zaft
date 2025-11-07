@@ -30,11 +30,11 @@ use crate::avx::butterflies::{AvxButterfly, AvxFastButterfly5d, AvxFastButterfly
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
-    _mm256_load4_f32x2, create_avx4_twiddles, shuffle,
+    _mm256_load4_f32x2, avx_bitreversed_transpose, create_avx4_twiddles, shuffle,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
-use crate::util::{bitreversed_transpose, is_power_of_ten};
+use crate::util::is_power_of_ten;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::*;
@@ -80,7 +80,7 @@ impl AvxFmaRadix10d {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 10>(10, chunk, &mut scratch);
+                avx_bitreversed_transpose::<Complex<f64>, 10>(10, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
@@ -434,7 +434,7 @@ impl AvxFmaRadix10f {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 10>(10, chunk, &mut scratch);
+                avx_bitreversed_transpose::<Complex<f32>, 10>(10, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

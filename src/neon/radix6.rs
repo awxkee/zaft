@@ -29,12 +29,15 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
+use crate::neon::f32x2_6x6::transpose_f32x2_6x6;
 use crate::neon::util::{create_neon_twiddles, vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use crate::radix6::Radix6Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_six};
+use crate::util::{
+    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_six, reverse_bits,
+};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -188,6 +191,77 @@ impl FftExecutor<f64> for NeonRadix6<f64> {
         self.execution_length
     }
 }
+#[inline]
+fn complex6_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x3_t {
+    unsafe {
+        float32x4x3_t(
+            vld1q_f32(array.get_unchecked(idx..).as_ptr().cast()),
+            vld1q_f32(array.get_unchecked(idx + 2..).as_ptr().cast()),
+            vld1q_f32(array.get_unchecked(idx + 4..).as_ptr().cast()),
+        )
+    }
+}
+
+#[inline]
+fn complex6_store_f32(array: &mut [Complex<f32>], idx: usize, v: float32x4x3_t) {
+    unsafe {
+        vst1q_f32(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v.0);
+        vst1q_f32(array.get_unchecked_mut(idx + 2..).as_mut_ptr().cast(), v.1);
+        vst1q_f32(array.get_unchecked_mut(idx + 4..).as_mut_ptr().cast(), v.2);
+    }
+}
+
+pub(crate) fn neon_bitreversed_transpose_f32_radix6(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 6;
+    const HEIGHT: usize = 6;
+
+    let rev_digits = compute_logarithm::<6>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 5, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let rows = [
+                complex6_load_f32(input, base_input_idx),
+                complex6_load_f32(input, base_input_idx + width),
+                complex6_load_f32(input, base_input_idx + width * 2),
+                complex6_load_f32(input, base_input_idx + width * 3),
+                complex6_load_f32(input, base_input_idx + width * 4),
+                complex6_load_f32(input, base_input_idx + width * 5),
+            ];
+            let transposed =
+                transpose_f32x2_6x6(rows[0], rows[1], rows[2], rows[3], rows[4], rows[5]);
+
+            complex6_store_f32(output, HEIGHT * y + x_rev[0], transposed.0);
+            complex6_store_f32(output, HEIGHT * y + x_rev[1], transposed.1);
+            complex6_store_f32(output, HEIGHT * y + x_rev[2], transposed.2);
+            complex6_store_f32(output, HEIGHT * y + x_rev[3], transposed.3);
+            complex6_store_f32(output, HEIGHT * y + x_rev[4], transposed.4);
+            complex6_store_f32(output, HEIGHT * y + x_rev[5], transposed.5);
+        }
+    }
+}
 
 impl FftExecutor<f32> for NeonRadix6<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
@@ -205,7 +279,7 @@ impl FftExecutor<f32> for NeonRadix6<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 6>(6, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix6(6, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

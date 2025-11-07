@@ -31,7 +31,7 @@ use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
     _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps, _mm256_load4_f32x2,
-    create_avx4_twiddles,
+    avx_bitreversed_transpose, create_avx4_twiddles,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -39,7 +39,7 @@ use crate::radix11::Radix11Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_eleven};
+use crate::util::{compute_twiddle, is_power_of_eleven};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -115,7 +115,7 @@ impl AvxFmaRadix11<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 11>(11, chunk, &mut scratch);
+                avx_bitreversed_transpose::<Complex<f64>, 11>(11, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
@@ -679,7 +679,7 @@ impl AvxFmaRadix11<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 11>(11, chunk, &mut scratch);
+                avx_bitreversed_transpose::<Complex<f32>, 11>(11, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

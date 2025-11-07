@@ -28,12 +28,15 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
+use crate::neon::radix3::{
+    neon_bitreversed_transpose_f32_radix3, neon_bitreversed_transpose_f64_radix3,
+};
 use crate::neon::util::{create_neon_twiddles, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix3::Radix3Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_three};
+use crate::util::{compute_logarithm, compute_twiddle, is_power_of_three};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -119,7 +122,7 @@ impl NeonFcmaRadix3<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 3>(self.base_len, chunk, &mut scratch);
+                neon_bitreversed_transpose_f64_radix3(self.base_len, chunk, &mut scratch);
 
                 self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
@@ -274,7 +277,7 @@ impl NeonFcmaRadix3<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 3>(self.base_len, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix3(self.base_len, chunk, &mut scratch);
 
                 self.base_fft.execute_out_of_place(&scratch, chunk)?;
 

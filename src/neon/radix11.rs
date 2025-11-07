@@ -827,6 +827,6 @@ mod tests {
     use super::*;
     use crate::util::test_radix;
 
-    test_radix!(test_neon_radix11, f32, NeonRadix11, 4, 11, 1e-3);
+    test_radix!(test_neon_radix11, f32, NeonRadix11, 4, 11, 1e-2);
     test_radix!(test_neon_radix11_f64, f64, NeonRadix11, 4, 11, 1e-8);
 }

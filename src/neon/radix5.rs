@@ -28,6 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
+use crate::neon::f32x2_6x6::transpose_f32x2_6x6;
 use crate::neon::util::{
     create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64,
 };
@@ -35,7 +36,9 @@ use crate::radix5::Radix5Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_five};
+use crate::util::{
+    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_five, reverse_bits,
+};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -199,6 +202,83 @@ impl FftExecutor<f64> for NeonRadix5<f64> {
     }
 }
 
+#[inline]
+fn complex5_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x3_t {
+    unsafe {
+        float32x4x3_t(
+            vld1q_f32(array.get_unchecked(idx..).as_ptr().cast()),
+            vld1q_f32(array.get_unchecked(idx + 2..).as_ptr().cast()),
+            vcombine_f32(
+                vld1_f32(array.get_unchecked(idx + 4..).as_ptr().cast()),
+                vdup_n_f32(0.),
+            ),
+        )
+    }
+}
+
+#[inline]
+fn complex5_store_f32(array: &mut [Complex<f32>], idx: usize, v: float32x4x3_t) {
+    unsafe {
+        vst1q_f32(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v.0);
+        vst1q_f32(array.get_unchecked_mut(idx + 2..).as_mut_ptr().cast(), v.1);
+        vst1_f32(
+            array.get_unchecked_mut(idx + 4..).as_mut_ptr().cast(),
+            vget_low_f32(v.2),
+        );
+    }
+}
+
+pub(crate) fn neon_bitreversed_transpose_f32_radix5(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 5;
+    const HEIGHT: usize = 5;
+
+    let rev_digits = compute_logarithm::<5>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let rows = [
+                complex5_load_f32(input, base_input_idx),
+                complex5_load_f32(input, base_input_idx + width),
+                complex5_load_f32(input, base_input_idx + width * 2),
+                complex5_load_f32(input, base_input_idx + width * 3),
+                complex5_load_f32(input, base_input_idx + width * 4),
+            ];
+            let transposed =
+                transpose_f32x2_6x6(rows[0], rows[1], rows[2], rows[3], rows[4], unsafe {
+                    float32x4x3_t(vdupq_n_f32(0.), vdupq_n_f32(0.), vdupq_n_f32(0.))
+                });
+
+            complex5_store_f32(output, HEIGHT * y + x_rev[0], transposed.0);
+            complex5_store_f32(output, HEIGHT * y + x_rev[1], transposed.1);
+            complex5_store_f32(output, HEIGHT * y + x_rev[2], transposed.2);
+            complex5_store_f32(output, HEIGHT * y + x_rev[3], transposed.3);
+            complex5_store_f32(output, HEIGHT * y + x_rev[4], transposed.4);
+        }
+    }
+}
+
 impl FftExecutor<f32> for NeonRadix5<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % self.execution_length != 0 {
@@ -223,7 +303,7 @@ impl FftExecutor<f32> for NeonRadix5<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 5>(5, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix5(5, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

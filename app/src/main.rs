@@ -37,81 +37,81 @@ use std::time::Instant;
 use zaft::Zaft;
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 6];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 1920];
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
     }
-    data = [
-        Complex {
-            re: 0.20984626,
-            im: 0.7396121,
-        },
-        Complex {
-            re: -0.7039449,
-            im: 0.7016792,
-        },
-        Complex {
-            re: 0.14677572,
-            im: 0.19478798,
-        },
-        Complex {
-            re: -0.4070065,
-            im: 0.14004087,
-        },
-        Complex {
-            re: 0.050101757,
-            im: 0.15234244,
-        },
-        Complex {
-            re: -0.67406917,
-            im: 0.3613348,
-        },
-    ]
-    .to_vec();
+    // data = [
+    //     Complex {
+    //         re: 0.20984626,
+    //         im: 0.7396121,
+    //     },
+    //     Complex {
+    //         re: -0.7039449,
+    //         im: 0.7016792,
+    //     },
+    //     Complex {
+    //         re: 0.14677572,
+    //         im: 0.19478798,
+    //     },
+    //     Complex {
+    //         re: -0.4070065,
+    //         im: 0.14004087,
+    //     },
+    //     Complex {
+    //         re: 0.050101757,
+    //         im: 0.15234244,
+    //     },
+    //     Complex {
+    //         re: -0.67406917,
+    //         im: 0.3613348,
+    //     },
+    // ]
+    // .to_vec();
+    // //
+    // let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
+    // let mut real_data_clone = real_data.to_vec();
+    // let real_data_ref = real_data.clone();
     //
-    let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
-    let mut real_data_clone = real_data.to_vec();
-    let real_data_ref = real_data.clone();
-
-    println!("real data {:?}", real_data);
-
-    let forward_r2c = Zaft::make_r2c_fft_f32(data.len()).unwrap();
-    let inverse_r2c = Zaft::make_c2r_fft_f32(data.len()).unwrap();
-
-    let mut complex_data = vec![Complex::<f32>::default(); data.len() / 2 + 1];
-    forward_r2c.execute(&real_data, &mut complex_data).unwrap();
-    // println!("r2c {:?}", complex_data);
-    inverse_r2c.execute(&complex_data, &mut real_data).unwrap();
-
-    real_data = real_data
-        .iter()
-        .map(|&x| x * (1.0 / real_data.len() as f32))
-        .collect();
-
-    println!("c2r {:?}", real_data);
-
-    let r_r2c = RealFftPlanner::new().plan_fft_forward(real_data.len());
-    let r_c2r = RealFftPlanner::new().plan_fft_inverse(real_data.len());
-    r_r2c
-        .process(&mut real_data_clone, &mut complex_data)
-        .unwrap();
-    r_c2r.process(&mut complex_data, &mut real_data).unwrap();
-
-    real_data = real_data
-        .iter()
-        .map(|&x| x * (1.0 / real_data.len() as f32))
-        .collect();
-
-    real_data
-        .iter()
-        .zip(real_data_ref)
-        .enumerate()
-        .for_each(|(idx, (a, b))| {
-            assert!((a - b).abs() < 1e-2, "a_re {}, b_re {} at {idx}", a, b);
-        });
+    // println!("real data {:?}", real_data);
+    //
+    // let forward_r2c = Zaft::make_r2c_fft_f32(data.len()).unwrap();
+    // let inverse_r2c = Zaft::make_c2r_fft_f32(data.len()).unwrap();
+    //
+    // let mut complex_data = vec![Complex::<f32>::default(); data.len() / 2 + 1];
+    // forward_r2c.execute(&real_data, &mut complex_data).unwrap();
+    // // println!("r2c {:?}", complex_data);
+    // inverse_r2c.execute(&complex_data, &mut real_data).unwrap();
+    //
+    // real_data = real_data
+    //     .iter()
+    //     .map(|&x| x * (1.0 / real_data.len() as f32))
+    //     .collect();
+    //
+    // println!("c2r {:?}", real_data);
+    //
+    // let r_r2c = RealFftPlanner::new().plan_fft_forward(real_data.len());
+    // let r_c2r = RealFftPlanner::new().plan_fft_inverse(real_data.len());
+    // r_r2c
+    //     .process(&mut real_data_clone, &mut complex_data)
+    //     .unwrap();
+    // r_c2r.process(&mut complex_data, &mut real_data).unwrap();
+    //
+    // real_data = real_data
+    //     .iter()
+    //     .map(|&x| x * (1.0 / real_data.len() as f32))
+    //     .collect();
+    //
+    // real_data
+    //     .iter()
+    //     .zip(real_data_ref)
+    //     .enumerate()
+    //     .for_each(|(idx, (a, b))| {
+    //         assert!((a - b).abs() < 1e-2, "a_re {}, b_re {} at {idx}", a, b);
+    //     });
 
     let o_data = data.clone();
     //

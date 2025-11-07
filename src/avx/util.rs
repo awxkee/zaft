@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::traits::FftTrigonometry;
-use crate::util::compute_twiddle;
+use crate::util::{compute_logarithm, compute_twiddle, reverse_bits};
 use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
@@ -591,6 +591,125 @@ where
         }
     }
     Ok(twiddles)
+}
+
+#[target_feature(enable = "avx2")]
+pub(crate) fn avx_bitreversed_transpose<T: Copy, const D: usize>(
+    height: usize,
+    input: &[T],
+    output: &mut [T],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    // Let's make sure the arguments are ok
+    assert!(D > 1 && input.len() % height == 0 && input.len() == output.len());
+
+    let strided_width = width / D;
+    let rev_digits = if D.is_power_of_two() {
+        let width_bits = width.trailing_zeros();
+        let d_bits = D.trailing_zeros();
+
+        // verify that width is a power of d
+        assert!(width_bits % d_bits == 0);
+        width_bits / d_bits
+    } else {
+        compute_logarithm::<D>(width).unwrap()
+    };
+
+    if strided_width == 0 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    for x in 0..strided_width {
+        let x_fwd: [usize; D] = std::array::from_fn(|i| D * x + i);
+        let x_rev = x_fwd.map(|x| reverse_bits::<D>(x, rev_digits));
+
+        let mut y = 0usize;
+
+        while y + 6 < height {
+            let y1 = y + 1;
+            let y2 = y + 2;
+            let y3 = y + 3;
+            let y4 = y + 4;
+            let y5 = y + 5;
+            for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
+                let input_index0 = *fwd + y * width;
+                let output_index0 = y + *rev * height;
+
+                let input_index1 = *fwd + y1 * width;
+                let output_index1 = y1 + *rev * height;
+
+                let input_index2 = *fwd + y2 * width;
+                let output_index2 = y2 + *rev * height;
+
+                let input_index3 = *fwd + y3 * width;
+                let output_index3 = y3 + *rev * height;
+
+                let input_index4 = *fwd + y4 * width;
+                let output_index4 = y4 + *rev * height;
+
+                let input_index5 = *fwd + y5 * width;
+                let output_index5 = y5 + *rev * height;
+
+                unsafe {
+                    *output.get_unchecked_mut(output_index0) = *input.get_unchecked(input_index0);
+                    *output.get_unchecked_mut(output_index1) = *input.get_unchecked(input_index1);
+                    *output.get_unchecked_mut(output_index2) = *input.get_unchecked(input_index2);
+                    *output.get_unchecked_mut(output_index3) = *input.get_unchecked(input_index3);
+                    *output.get_unchecked_mut(output_index4) = *input.get_unchecked(input_index4);
+                    *output.get_unchecked_mut(output_index5) = *input.get_unchecked(input_index5);
+                }
+            }
+
+            y += 6;
+        }
+
+        while y + 4 < height {
+            let y1 = y + 1;
+            let y2 = y + 2;
+            let y3 = y + 3;
+            for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
+                let input_index0 = *fwd + y * width;
+                let output_index0 = y + *rev * height;
+
+                let input_index1 = *fwd + y1 * width;
+                let output_index1 = y1 + *rev * height;
+
+                let input_index2 = *fwd + y2 * width;
+                let output_index2 = y2 + *rev * height;
+
+                let input_index3 = *fwd + y3 * width;
+                let output_index3 = y3 + *rev * height;
+
+                unsafe {
+                    *output.get_unchecked_mut(output_index0) = *input.get_unchecked(input_index0);
+                    *output.get_unchecked_mut(output_index1) = *input.get_unchecked(input_index1);
+                    *output.get_unchecked_mut(output_index2) = *input.get_unchecked(input_index2);
+                    *output.get_unchecked_mut(output_index3) = *input.get_unchecked(input_index3);
+                }
+            }
+
+            y += 4;
+        }
+
+        for y in y..height {
+            for (fwd, rev) in x_fwd.iter().zip(x_rev.iter()) {
+                let input_index = *fwd + y * width;
+                let output_index = y + *rev * height;
+
+                unsafe {
+                    let temp = *input.get_unchecked(input_index);
+                    *output.get_unchecked_mut(output_index) = temp;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
