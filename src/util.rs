@@ -281,14 +281,6 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
         let x_fwd: [usize; D] = std::array::from_fn(|i| D * x + i);
         let x_rev = x_fwd.map(|x| reverse_bits::<D>(x, rev_digits));
 
-        // Assert that the the bit reversed indices will not exceed the length of the output.
-        // The highest index the loop reaches is: (x_rev[n] + 1)*height - 1
-        // The last element of the data is at index: width*height - 1
-        // Thus it is sufficient to assert that x_rev[n]<width.
-        for r in x_rev {
-            assert!(r < width);
-        }
-
         let mut y = 0usize;
 
         while y + 6 < height {
@@ -375,8 +367,8 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
 // When D is a power of 2, this is exactly equal (implementation and assembly)-wise to a bit reversal
 // When D is not a power of 2, think of this function as a logical equivalent to a bit reversal
 #[inline]
-fn reverse_bits<const D: usize>(value: usize, rev_digits: u32) -> usize {
-    assert!(D > 1);
+pub(crate) fn reverse_bits<const D: usize>(value: usize, rev_digits: u32) -> usize {
+    debug_assert!(D > 1);
 
     let mut result: usize = 0;
     let mut value = value;

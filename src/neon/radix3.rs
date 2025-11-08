@@ -28,17 +28,157 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
+use crate::neon::f32x2_4x4::transpose_f32x2_4x4;
+use crate::neon::f64x2_2x2::neon_transpose_f64x2_4x4_impl;
 use crate::neon::util::{create_neon_twiddles, vfcmulq_f32, vfcmulq_f64};
 use crate::radix3::Radix3Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_three};
+use crate::util::{compute_logarithm, compute_twiddle, is_power_of_three, reverse_bits};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
 use std::fmt::Display;
+
+#[inline]
+fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
+    unsafe {
+        float32x4x2_t(
+            vld1q_f32(array.get_unchecked(idx..).as_ptr().cast()),
+            vcombine_f32(
+                vld1_f32(array.get_unchecked(idx + 2..).as_ptr().cast()),
+                vdup_n_f32(0.),
+            ),
+        )
+    }
+}
+
+#[inline]
+fn complex3_store_f32(array: &mut [Complex<f32>], idx: usize, v: float32x4x2_t) {
+    unsafe {
+        vst1q_f32(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v.0);
+        vst1_f32(
+            array.get_unchecked_mut(idx + 2..).as_mut_ptr().cast(),
+            vget_low_f32(v.1),
+        );
+    }
+}
+
+#[inline]
+fn complex3_load_f64(array: &[Complex<f64>], idx: usize) -> float64x2x4_t {
+    unsafe {
+        float64x2x4_t(
+            vld1q_f64(array.get_unchecked(idx..).as_ptr().cast()),
+            vld1q_f64(array.get_unchecked(idx + 1..).as_ptr().cast()),
+            vld1q_f64(array.get_unchecked(idx + 2..).as_ptr().cast()),
+            vdupq_n_f64(0.),
+        )
+    }
+}
+
+#[inline]
+fn complex3_store_f64(array: &mut [Complex<f64>], idx: usize, v: float64x2x4_t) {
+    unsafe {
+        vst1q_f64(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v.0);
+        vst1q_f64(array.get_unchecked_mut(idx + 1..).as_mut_ptr().cast(), v.1);
+        vst1q_f64(array.get_unchecked_mut(idx + 2..).as_mut_ptr().cast(), v.2);
+    }
+}
+
+pub(crate) fn neon_bitreversed_transpose_f32_radix3(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 3;
+    const HEIGHT: usize = 3;
+
+    let rev_digits = compute_logarithm::<3>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let rows = [
+                complex3_load_f32(input, base_input_idx),
+                complex3_load_f32(input, base_input_idx + width),
+                complex3_load_f32(input, base_input_idx + width * 2),
+            ];
+            let transposed = transpose_f32x2_4x4(rows[0], rows[1], rows[2], unsafe {
+                float32x4x2_t(vdupq_n_f32(0.), vdupq_n_f32(0.))
+            });
+
+            complex3_store_f32(output, HEIGHT * y + x_rev[0], transposed.0);
+            complex3_store_f32(output, HEIGHT * y + x_rev[1], transposed.1);
+            complex3_store_f32(output, HEIGHT * y + x_rev[2], transposed.2);
+        }
+    }
+}
+
+pub(crate) fn neon_bitreversed_transpose_f64_radix3(
+    height: usize,
+    input: &[Complex<f64>],
+    output: &mut [Complex<f64>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 3;
+    const HEIGHT: usize = 3;
+
+    let rev_digits = compute_logarithm::<3>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let rows = [
+                complex3_load_f64(input, base_input_idx),
+                complex3_load_f64(input, base_input_idx + width),
+                complex3_load_f64(input, base_input_idx + width * 2),
+            ];
+            let transposed = neon_transpose_f64x2_4x4_impl(rows[0], rows[1], rows[2], unsafe {
+                float64x2x4_t(
+                    vdupq_n_f64(0.),
+                    vdupq_n_f64(0.),
+                    vdupq_n_f64(0.),
+                    vdupq_n_f64(0.),
+                )
+            });
+
+            complex3_store_f64(output, HEIGHT * y + x_rev[0], transposed.0);
+            complex3_store_f64(output, HEIGHT * y + x_rev[1], transposed.1);
+            complex3_store_f64(output, HEIGHT * y + x_rev[2], transposed.2);
+        }
+    }
+}
 
 pub(crate) struct NeonRadix3<T> {
     twiddles: Vec<Complex<T>>,
@@ -118,7 +258,7 @@ impl FftExecutor<f64> for NeonRadix3<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 3>(self.base_len, chunk, &mut scratch);
+                neon_bitreversed_transpose_f64_radix3(self.base_len, chunk, &mut scratch);
 
                 self.base_fft.execute_out_of_place(&scratch, chunk)?;
 
@@ -265,7 +405,7 @@ impl FftExecutor<f32> for NeonRadix3<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 3>(self.base_len, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix3(self.base_len, chunk, &mut scratch);
 
                 self.base_fft.execute_out_of_place(&scratch, chunk)?;
 

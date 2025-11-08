@@ -28,6 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
+use crate::neon::radix5::neon_bitreversed_transpose_f32_radix5;
 use crate::neon::util::{create_neon_twiddles, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix5::Radix5Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
@@ -224,7 +225,7 @@ impl NeonFcmaRadix5<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 5>(5, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix5(5, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

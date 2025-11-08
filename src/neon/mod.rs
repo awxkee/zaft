@@ -33,6 +33,7 @@ mod c2r_fcma;
 mod f32x2_2x2;
 mod f32x2_4x4;
 mod f32x2_6x4;
+mod f32x2_6x6;
 mod f64x2_2x2;
 mod mixed;
 mod r2c;
