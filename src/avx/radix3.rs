@@ -48,7 +48,7 @@ use std::fmt::Display;
 
 #[inline]
 #[target_feature(enable = "avx2")]
-fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> __m256 {
+pub(crate) fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> __m256 {
     unsafe {
         _mm256_setr_m128(
             _mm_loadu_ps(array.get_unchecked(idx..).as_ptr().cast()),
@@ -59,7 +59,7 @@ fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> __m256 {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-fn complex3_store_f32(array: &mut [Complex<f32>], idx: usize, v: __m256) {
+pub(crate) fn complex3_store_f32(array: &mut [Complex<f32>], idx: usize, v: __m256) {
     unsafe {
         _mm_storeu_ps(
             array.get_unchecked_mut(idx..).as_mut_ptr().cast(),
@@ -74,7 +74,7 @@ fn complex3_store_f32(array: &mut [Complex<f32>], idx: usize, v: __m256) {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-fn complex3_load_f64(array: &[Complex<f64>], idx: usize) -> (__m256d, __m256d) {
+pub(crate) fn complex3_load_f64(array: &[Complex<f64>], idx: usize) -> (__m256d, __m256d) {
     unsafe {
         (
             _mm256_loadu_pd(array.get_unchecked(idx..).as_ptr().cast()),
@@ -85,7 +85,7 @@ fn complex3_load_f64(array: &[Complex<f64>], idx: usize) -> (__m256d, __m256d) {
 
 #[inline]
 #[target_feature(enable = "avx2")]
-fn complex3_store_f64(array: &mut [Complex<f64>], idx: usize, v: (__m256d, __m256d)) {
+pub(crate) fn complex3_store_f64(array: &mut [Complex<f64>], idx: usize, v: (__m256d, __m256d)) {
     unsafe {
         _mm256_storeu_pd(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v.0);
         _mm_storeu_pd(

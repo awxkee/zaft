@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
+use crate::avx::mixed::SseStoreF;
 use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::mixed::avx_storef::AvxStoreF;
 use crate::avx::rotate::AvxRotate;
@@ -110,6 +111,29 @@ impl ColumnButterfly4f {
                 AvxStoreF::raw(y1),
                 AvxStoreF::raw(y2),
                 AvxStoreF::raw(y3),
+            ]
+        }
+    }
+
+    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline]
+    pub(crate) unsafe fn exech(&self, v: [SseStoreF; 4]) -> [SseStoreF; 4] {
+        unsafe {
+            let t0 = _mm_add_ps(v[0].v, v[2].v);
+            let t1 = _mm_sub_ps(v[0].v, v[2].v);
+            let t2 = _mm_add_ps(v[1].v, v[3].v);
+            let mut t3 = _mm_sub_ps(v[1].v, v[3].v);
+            t3 = self.rotate.rotate_m128(t3);
+
+            let y0 = _mm_add_ps(t0, t2);
+            let y1 = _mm_add_ps(t1, t3);
+            let y2 = _mm_sub_ps(t0, t2);
+            let y3 = _mm_sub_ps(t1, t3);
+            [
+                SseStoreF::raw(y0),
+                SseStoreF::raw(y1),
+                SseStoreF::raw(y2),
+                SseStoreF::raw(y3),
             ]
         }
     }

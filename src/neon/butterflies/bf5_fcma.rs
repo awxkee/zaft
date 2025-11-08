@@ -504,7 +504,6 @@ impl CompositeFftExecutor<f64> for NeonFcmaButterfly5<f64> {
 mod tests {
     use super::*;
     use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
-    use rand::Rng;
 
     test_fcma_butterfly!(test_neon_butterfly5, f32, NeonFcmaButterfly5, 5, 1e-5);
     test_fcma_butterfly!(test_neon_butterfly5_f64, f64, NeonFcmaButterfly5, 5, 1e-7);

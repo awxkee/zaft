@@ -43,7 +43,7 @@ use std::arch::aarch64::*;
 use std::fmt::Display;
 
 #[inline]
-fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
+pub(crate) fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
     unsafe {
         float32x4x2_t(
             vld1q_f32(array.get_unchecked(idx..).as_ptr().cast()),
@@ -56,7 +56,7 @@ fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
 }
 
 #[inline]
-fn complex3_store_f32(array: &mut [Complex<f32>], idx: usize, v: float32x4x2_t) {
+pub(crate) fn complex3_store_f32(array: &mut [Complex<f32>], idx: usize, v: float32x4x2_t) {
     unsafe {
         vst1q_f32(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v.0);
         vst1_f32(

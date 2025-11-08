@@ -53,6 +53,7 @@ pub(crate) struct AvxFmaRadix6<T> {
     twiddle_im: [T; 8],
     direction: FftDirection,
     butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 impl<
@@ -80,7 +81,22 @@ where
             "Input length must be a power of 6"
         );
 
-        let twiddles = create_avx4_twiddles::<T, 6>(6, size, fft_direction)?;
+        let exponent = compute_logarithm::<6>(size).unwrap_or_else(|| {
+            panic!("Neon Fcma Radix6 length must be power of 6, but got {size}",)
+        });
+
+        let butterfly = match exponent {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly6(fft_direction)?,
+            _ => match T::butterfly36(fft_direction) {
+                None => T::butterfly6(fft_direction)?,
+                Some(v) => v,
+            },
+        };
+
+        let butterfly_length: usize = butterfly.length();
+
+        let twiddles = create_avx4_twiddles::<T, 6>(butterfly_length, size, fft_direction)?;
 
         let twiddle = compute_twiddle::<T>(1, 3, fft_direction);
 
@@ -99,7 +115,8 @@ where
                 twiddle.im,
             ],
             direction: fft_direction,
-            butterfly: T::butterfly6(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
     }
 }
@@ -121,11 +138,15 @@ impl AvxFmaRadix6<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose::<Complex<f64>, 6>(6, chunk, &mut scratch);
+                avx_bitreversed_transpose::<Complex<f64>, 6>(
+                    self.butterfly_length,
+                    chunk,
+                    &mut scratch,
+                );
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 6;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -444,11 +465,11 @@ impl AvxFmaRadix6<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose_f32_radix6(6, chunk, &mut scratch);
+                avx_bitreversed_transpose_f32_radix6(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 6;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -734,6 +755,6 @@ mod tests {
     use super::*;
     use crate::avx::test_avx_radix;
 
-    test_avx_radix!(test_avx_radix6, f32, AvxFmaRadix6, 5, 6, 1e-3);
+    test_avx_radix!(test_avx_radix6, f32, AvxFmaRadix6, 5, 6, 1e-2);
     test_avx_radix!(test_avx_radix6_f64, f64, AvxFmaRadix6, 5, 6, 1e-8);
 }

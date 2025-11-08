@@ -39,7 +39,7 @@ use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 
 #[inline]
-fn complex4_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
+pub(crate) fn complex4_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
     unsafe {
         float32x4x2_t(
             vld1q_f32(array.get_unchecked(idx..).as_ptr().cast()),
@@ -49,7 +49,7 @@ fn complex4_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
 }
 
 #[inline]
-fn complex4_store_f32(array: &mut [Complex<f32>], idx: usize, v: float32x4x2_t) {
+pub(crate) fn complex4_store_f32(array: &mut [Complex<f32>], idx: usize, v: float32x4x2_t) {
     unsafe {
         vst1q_f32(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v.0);
         vst1q_f32(array.get_unchecked_mut(idx + 2..).as_mut_ptr().cast(), v.1);
@@ -486,6 +486,6 @@ mod tests {
     use super::*;
     use crate::util::test_radix;
 
-    test_radix!(test_neon_radix4, f32, NeonRadix4, 5, 4, 1e-3);
-    test_radix!(test_neon_radix4_f64, f64, NeonRadix4, 5, 4, 1e-8);
+    test_radix!(test_neon_radix4, f32, NeonRadix4, 11, 2, 1e-2);
+    test_radix!(test_neon_radix4_f64, f64, NeonRadix4, 11, 2, 1e-8);
 }

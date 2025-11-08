@@ -28,7 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
-use crate::neon::f32x2_6x6::transpose_f32x2_6x6;
+use crate::neon::f32x2_6x6::neon_transpose_f32x2_6x6;
 use crate::neon::util::{
     create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64,
 };
@@ -266,7 +266,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix5(
                 complex5_load_f32(input, base_input_idx + width * 4),
             ];
             let transposed =
-                transpose_f32x2_6x6(rows[0], rows[1], rows[2], rows[3], rows[4], unsafe {
+                neon_transpose_f32x2_6x6(rows[0], rows[1], rows[2], rows[3], rows[4], unsafe {
                     float32x4x3_t(vdupq_n_f32(0.), vdupq_n_f32(0.), vdupq_n_f32(0.))
                 });
 

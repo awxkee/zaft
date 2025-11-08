@@ -35,6 +35,37 @@ pub(crate) struct AvxStoreF {
     pub(crate) v: __m256,
 }
 
+#[derive(Copy, Clone)]
+pub(crate) struct SseStoreF {
+    pub(crate) v: __m128,
+}
+
+impl SseStoreF {
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn from_complex_ref(complex: &[Complex<f32>]) -> Self {
+        unsafe {
+            SseStoreF {
+                v: _mm_loadu_ps(complex.as_ptr().cast()),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn zero() -> Self {
+        Self {
+            v: _mm_setzero_ps(),
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn raw(r: __m128) -> Self {
+        Self { v: r }
+    }
+}
+
 impl AvxStoreF {
     #[inline]
     #[target_feature(enable = "avx")]

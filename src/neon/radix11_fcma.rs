@@ -29,6 +29,7 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
+use crate::neon::radix11::neon_bitreversed_transpose_f32_radix11;
 use crate::neon::util::{create_neon_twiddles, vfcmulq_f64, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix11::Radix11Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
@@ -376,7 +377,7 @@ impl NeonFcmaRadix11<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 11>(11, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix11(11, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

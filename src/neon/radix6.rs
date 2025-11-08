@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::f32x2_6x6::transpose_f32x2_6x6;
+use crate::neon::f32x2_6x6::neon_transpose_f32x2_6x6;
 use crate::neon::util::{create_neon_twiddles, vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use crate::radix6::Radix6Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
@@ -51,6 +51,7 @@ pub(crate) struct NeonRadix6<T> {
     twiddle_im: [T; 4],
     direction: FftDirection,
     butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly_len: usize,
 }
 
 impl<
@@ -78,9 +79,21 @@ where
             "Input length must be a power of 6"
         );
 
-        let twiddles = create_neon_twiddles::<T, 6>(6, size, fft_direction)?;
-
         let twiddle = compute_twiddle::<T>(1, 3, fft_direction);
+
+        let exponent = compute_logarithm::<6>(size).unwrap_or_else(|| {
+            panic!("Neon Fcma Radix6 length must be power of 6, but got {size}",)
+        });
+
+        let butterfly = match exponent {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly6(fft_direction)?,
+            _ => T::butterfly36(fft_direction).map_or_else(|| T::butterfly6(fft_direction), Ok)?,
+        };
+
+        let butterfly_len = butterfly.length();
+
+        let twiddles = create_neon_twiddles::<T, 6>(butterfly_len, size, fft_direction)?;
 
         Ok(NeonRadix6 {
             execution_length: size,
@@ -88,7 +101,8 @@ where
             twiddle_re: twiddle.re,
             twiddle_im: [-twiddle.im, twiddle.im, -twiddle.im, twiddle.im],
             direction: fft_direction,
-            butterfly: T::butterfly6(fft_direction)?,
+            butterfly,
+            butterfly_len,
         })
     }
 }
@@ -109,11 +123,11 @@ impl FftExecutor<f64> for NeonRadix6<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 6>(6, chunk, &mut scratch);
+                bitreversed_transpose::<Complex<f64>, 6>(self.butterfly_len, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 6;
+                let mut len = self.butterfly_len;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -191,6 +205,7 @@ impl FftExecutor<f64> for NeonRadix6<f64> {
         self.execution_length
     }
 }
+
 #[inline]
 fn complex6_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x3_t {
     unsafe {
@@ -251,7 +266,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix6(
                 complex6_load_f32(input, base_input_idx + width * 5),
             ];
             let transposed =
-                transpose_f32x2_6x6(rows[0], rows[1], rows[2], rows[3], rows[4], rows[5]);
+                neon_transpose_f32x2_6x6(rows[0], rows[1], rows[2], rows[3], rows[4], rows[5]);
 
             complex6_store_f32(output, HEIGHT * y + x_rev[0], transposed.0);
             complex6_store_f32(output, HEIGHT * y + x_rev[1], transposed.1);
@@ -279,11 +294,11 @@ impl FftExecutor<f32> for NeonRadix6<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                neon_bitreversed_transpose_f32_radix6(6, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix6(self.butterfly_len, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 6;
+                let mut len = self.butterfly_len;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 

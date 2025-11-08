@@ -873,7 +873,6 @@ impl FftExecutor<f32> for NeonButterfly23<f32> {
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
-    use rand::Rng;
 
     test_butterfly!(test_neon_butterfly23, f32, NeonButterfly23, 23, 1e-5);
     test_butterfly!(test_neon_butterfly23_f64, f64, NeonButterfly23, 23, 1e-7);

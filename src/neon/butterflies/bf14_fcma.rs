@@ -300,7 +300,6 @@ impl NeonFcmaButterfly14<f32> {
 mod tests {
     use super::*;
     use crate::neon::butterflies::test_fcma_butterfly;
-    use rand::Rng;
 
     test_fcma_butterfly!(test_fcma_butterfly14, f32, NeonFcmaButterfly14, 14, 1e-5);
     test_fcma_butterfly!(

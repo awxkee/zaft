@@ -557,6 +557,19 @@ impl AlgorithmFactory<f64> for f64 {
         }
     }
 
+    fn butterfly36(
+        _direction: FftDirection,
+    ) -> Option<Box<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if has_valid_avx() {
+                use crate::avx::AvxButterfly36d;
+                return Some(Box::new(AvxButterfly36d::new(_direction)));
+            }
+        }
+        None
+    }
+
     fn radix3(
         n: usize,
         fft_direction: FftDirection,

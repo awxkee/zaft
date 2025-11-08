@@ -29,6 +29,9 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
+use crate::neon::f32x2_4x4::transpose_f32x2_4x4;
+use crate::neon::radix3::{complex3_load_f32, complex3_store_f32};
+use crate::neon::radix4::{complex4_load_f32, complex4_store_f32};
 use crate::neon::util::{
     create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64, vh_rotate90_f32,
 };
@@ -36,7 +39,9 @@ use crate::radix7::Radix7Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_seven};
+use crate::util::{
+    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_seven, reverse_bits,
+};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -251,6 +256,107 @@ impl FftExecutor<f64> for NeonRadix7<f64> {
     }
 }
 
+pub(crate) fn neon_bitreversed_transpose_f32_radix7(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 7;
+    const HEIGHT: usize = 7;
+
+    let rev_digits = compute_logarithm::<7>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 5, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 6, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            // Graphically, the 7×7 matrix is partitioned as:
+            // +--------+--------+
+            // | 4×4 A0 | 3×4 A1 |
+            // +--------+--------+
+            // | 4×3 B0 | 3×3 B1 |
+            // +--------+--------+
+            // ^ T
+            // +--------+--------+
+            // | 4×4 A0ᵀ | 3×4 B0ᵀ |
+            // +--------+--------+
+            // | 4×3 A1ᵀ | 3×3 B1ᵀ |
+            // +--------+--------+
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let a0 = [
+                complex4_load_f32(input, base_input_idx),
+                complex4_load_f32(input, base_input_idx + width),
+                complex4_load_f32(input, base_input_idx + width * 2),
+                complex4_load_f32(input, base_input_idx + width * 3),
+            ];
+            let transposed_a0 = transpose_f32x2_4x4(a0[0], a0[1], a0[2], a0[3]);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev[0], transposed_a0.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev[1], transposed_a0.1);
+            complex4_store_f32(output, HEIGHT * y + x_rev[2], transposed_a0.2);
+            complex4_store_f32(output, HEIGHT * y + x_rev[3], transposed_a0.3);
+
+            let a1 = [
+                complex3_load_f32(input, base_input_idx + 4),
+                complex3_load_f32(input, base_input_idx + width + 4),
+                complex3_load_f32(input, base_input_idx + width * 2 + 4),
+                complex3_load_f32(input, base_input_idx + width * 3 + 4),
+            ];
+            let transposed_a1 = transpose_f32x2_4x4(a1[0], a1[1], a1[2], a1[3]);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev[4], transposed_a1.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev[5], transposed_a1.1);
+            complex4_store_f32(output, HEIGHT * y + x_rev[6], transposed_a1.2);
+
+            let b0 = [
+                complex4_load_f32(input, base_input_idx + width * 4),
+                complex4_load_f32(input, base_input_idx + width * 5),
+                complex4_load_f32(input, base_input_idx + width * 6),
+            ];
+
+            let transposed_b0 = transpose_f32x2_4x4(b0[0], b0[1], b0[2], unsafe {
+                float32x4x2_t(vdupq_n_f32(0.), vdupq_n_f32(0.))
+            });
+
+            complex3_store_f32(output, HEIGHT * y + x_rev[0] + 4, transposed_b0.0);
+            complex3_store_f32(output, HEIGHT * y + x_rev[1] + 4, transposed_b0.1);
+            complex3_store_f32(output, HEIGHT * y + x_rev[2] + 4, transposed_b0.2);
+            complex3_store_f32(output, HEIGHT * y + x_rev[3] + 4, transposed_b0.3);
+
+            let b1 = [
+                complex3_load_f32(input, base_input_idx + width * 4 + 4),
+                complex3_load_f32(input, base_input_idx + width * 5 + 4),
+                complex3_load_f32(input, base_input_idx + width * 6 + 4),
+            ];
+
+            let transposed_b1 = transpose_f32x2_4x4(b1[0], b1[1], b1[2], unsafe {
+                float32x4x2_t(vdupq_n_f32(0.), vdupq_n_f32(0.))
+            });
+
+            complex3_store_f32(output, HEIGHT * y + x_rev[4] + 4, transposed_b1.0);
+            complex3_store_f32(output, HEIGHT * y + x_rev[5] + 4, transposed_b1.1);
+            complex3_store_f32(output, HEIGHT * y + x_rev[6] + 4, transposed_b1.2);
+        }
+    }
+}
+
 impl FftExecutor<f32> for NeonRadix7<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % self.execution_length != 0 {
@@ -267,7 +373,7 @@ impl FftExecutor<f32> for NeonRadix7<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 7>(7, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix7(7, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
