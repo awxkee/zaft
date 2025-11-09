@@ -34,6 +34,7 @@ mod f32x2_7x7;
 mod f32x2_8x4;
 mod f64x2_2x2;
 mod f64x2_4x4;
+mod f64x2_6x6;
 mod mixed;
 mod r2c;
 mod raders;
@@ -54,7 +55,7 @@ pub(crate) use butterflies::{
     AvxButterfly8, AvxButterfly9, AvxButterfly10d, AvxButterfly10f, AvxButterfly11, AvxButterfly12,
     AvxButterfly13, AvxButterfly14, AvxButterfly15d, AvxButterfly15f, AvxButterfly16,
     AvxButterfly17, AvxButterfly19, AvxButterfly23, AvxButterfly27d, AvxButterfly27f,
-    AvxButterfly29, AvxButterfly32d, AvxButterfly32f,
+    AvxButterfly29, AvxButterfly32d, AvxButterfly32f, AvxButterfly36d, AvxButterfly36f,
 };
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;

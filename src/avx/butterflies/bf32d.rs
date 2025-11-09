@@ -203,63 +203,67 @@ impl AvxButterfly32d {
 
                 _mm256_storeu_pd(chunk.as_mut_ptr().cast(), _mm256_add_pd(evens01, q00));
                 _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens23, q01),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(4..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens45, q02),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens67, q03),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(8..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens89, q04),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(10..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens1011, q05),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(12..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens1213, q06),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(14..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens1415, q07),
-                );
-
-                // upper part
-
-                _mm256_storeu_pd(
                     chunk.get_unchecked_mut(16..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens01, q00),
+                );
+
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens23, q01),
                 );
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(18..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens23, q01),
                 );
+
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens45, q02),
+                );
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(20..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens45, q02),
+                );
+
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens67, q03),
                 );
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(22..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens67, q03),
                 );
+
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(8..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens89, q04),
+                );
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(24..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens89, q04),
+                );
+
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(10..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens1011, q05),
                 );
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(26..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens1011, q05),
                 );
+
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(12..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens1213, q06),
+                );
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(28..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens1213, q06),
+                );
+
+                _mm256_storeu_pd(
+                    chunk.get_unchecked_mut(14..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens1415, q07),
                 );
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(30..).as_mut_ptr().cast(),
@@ -406,63 +410,67 @@ impl AvxButterfly32d {
 
                 _mm256_storeu_pd(dst.as_mut_ptr().cast(), _mm256_add_pd(evens01, q00));
                 _mm256_storeu_pd(
-                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens23, q01),
-                );
-                _mm256_storeu_pd(
-                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens45, q02),
-                );
-                _mm256_storeu_pd(
-                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens67, q03),
-                );
-                _mm256_storeu_pd(
-                    dst.get_unchecked_mut(8..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens89, q04),
-                );
-                _mm256_storeu_pd(
-                    dst.get_unchecked_mut(10..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens1011, q05),
-                );
-                _mm256_storeu_pd(
-                    dst.get_unchecked_mut(12..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens1213, q06),
-                );
-                _mm256_storeu_pd(
-                    dst.get_unchecked_mut(14..).as_mut_ptr().cast(),
-                    _mm256_add_pd(evens1415, q07),
-                );
-
-                // upper part
-
-                _mm256_storeu_pd(
                     dst.get_unchecked_mut(16..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens01, q00),
+                );
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens23, q01),
                 );
                 _mm256_storeu_pd(
                     dst.get_unchecked_mut(18..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens23, q01),
                 );
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens45, q02),
+                );
                 _mm256_storeu_pd(
                     dst.get_unchecked_mut(20..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens45, q02),
+                );
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens67, q03),
                 );
                 _mm256_storeu_pd(
                     dst.get_unchecked_mut(22..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens67, q03),
                 );
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(8..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens89, q04),
+                );
                 _mm256_storeu_pd(
                     dst.get_unchecked_mut(24..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens89, q04),
+                );
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(10..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens1011, q05),
                 );
                 _mm256_storeu_pd(
                     dst.get_unchecked_mut(26..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens1011, q05),
                 );
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(12..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens1213, q06),
+                );
                 _mm256_storeu_pd(
                     dst.get_unchecked_mut(28..).as_mut_ptr().cast(),
                     _mm256_sub_pd(evens1213, q06),
+                );
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(14..).as_mut_ptr().cast(),
+                    _mm256_add_pd(evens1415, q07),
                 );
                 _mm256_storeu_pd(
                     dst.get_unchecked_mut(30..).as_mut_ptr().cast(),

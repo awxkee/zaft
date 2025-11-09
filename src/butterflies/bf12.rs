@@ -137,7 +137,6 @@ where
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
-    use rand::Rng;
 
     test_butterfly!(test_butterfly12, f32, Butterfly12, 12, 1e-5);
 }

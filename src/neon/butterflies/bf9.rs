@@ -557,7 +557,6 @@ impl CompositeFftExecutor<f32> for NeonButterfly9<f32> {
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
-    use rand::Rng;
 
     test_butterfly!(test_neon_butterfly9, f32, NeonButterfly9, 9, 1e-5);
     test_butterfly!(test_neon_butterfly9_f64, f64, NeonButterfly9, 9, 1e-7);

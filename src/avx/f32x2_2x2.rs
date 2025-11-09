@@ -60,3 +60,21 @@ pub(crate) unsafe fn avx_transpose_f32x2_2x2(
         );
     }
 }
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn transpose_f32_2x2_impl(v0: (__m256, __m256)) -> (__m256, __m256) {
+    let l = _mm_unpacklo_pd(
+        _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
+        _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
+    );
+    let h = _mm_unpackhi_pd(
+        _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
+        _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
+    );
+
+    (
+        _mm256_castps128_ps256(_mm_castpd_ps(l)),
+        _mm256_castps128_ps256(_mm_castpd_ps(h)),
+    )
+}

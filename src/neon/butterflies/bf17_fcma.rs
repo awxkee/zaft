@@ -864,7 +864,6 @@ impl NeonFcmaButterfly17<f32> {
 mod tests {
     use super::*;
     use crate::neon::butterflies::test_fcma_butterfly;
-    use rand::Rng;
 
     test_fcma_butterfly!(test_fcma_butterfly17, f32, NeonFcmaButterfly17, 17, 1e-5);
     test_fcma_butterfly!(

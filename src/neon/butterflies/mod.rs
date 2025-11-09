@@ -67,6 +67,9 @@ mod bf3;
 mod bf32;
 #[cfg(feature = "fcma")]
 mod bf32_fcma;
+mod bf36f;
+#[cfg(feature = "fcma")]
+mod bf36f_fcma;
 mod bf4;
 #[cfg(feature = "fcma")]
 mod bf4_fcma;
@@ -149,6 +152,9 @@ pub(crate) use bf29_fcma::NeonFcmaButterfly29;
 pub(crate) use bf32::{NeonButterfly32d, NeonButterfly32f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf32_fcma::{NeonFcmaButterfly32d, NeonFcmaButterfly32f};
+pub(crate) use bf36f::NeonButterfly36f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf36f_fcma::NeonFcmaButterfly36f;
 pub(crate) use fast_bf5::NeonFastButterfly5;
 pub(crate) use fast_bf8::NeonFastButterfly8;
 pub(crate) use shared::NeonButterfly;
@@ -162,6 +168,7 @@ macro_rules! test_fcma_butterfly {
             if !std::arch::is_aarch64_feature_detected!("fcma") {
                 return;
             }
+            use rand::Rng;
             for i in 1..4 {
                 let val = $scale as usize;
                 let size = val.pow(i);
@@ -243,6 +250,7 @@ macro_rules! test_oof_fcma_butterfly {
             if !std::arch::is_aarch64_feature_detected!("fcma") {
                 return;
             }
+            use rand::Rng;
             for i in 1..4 {
                 let kern = $scale;
                 let size = (kern as usize).pow(i);

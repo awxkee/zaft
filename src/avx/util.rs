@@ -138,13 +138,13 @@ pub(crate) const fn shuffle(z: u32, y: u32, x: u32, w: u32) -> i32 {
 
 #[inline]
 #[target_feature(enable = "sse2")]
-pub(crate) unsafe fn _mm_unpacklo_ps64(a: __m128, b: __m128) -> __m128 {
+pub(crate) fn _mm_unpacklo_ps64(a: __m128, b: __m128) -> __m128 {
     _mm_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(a, b)
 }
 
 #[inline]
 #[target_feature(enable = "sse2")]
-pub(crate) unsafe fn _mm_unpacklohi_ps64(a: __m128, b: __m128) -> __m128 {
+pub(crate) fn _mm_unpacklohi_ps64(a: __m128, b: __m128) -> __m128 {
     _mm_shuffle_ps::<{ shuffle(3, 2, 1, 0) }>(a, b)
 }
 

@@ -1002,7 +1002,6 @@ impl FftExecutor<f32> for NeonButterfly19<f32> {
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
-    use rand::Rng;
 
     test_butterfly!(test_neon_butterfly19, f32, NeonButterfly19, 19, 1e-5);
     test_butterfly!(test_neon_butterfly19_f64, f64, NeonButterfly19, 19, 1e-7);

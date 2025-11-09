@@ -37,24 +37,22 @@ pub(crate) fn transpose_f32x2_4x4(
     r2: float32x4x2_t,
     r3: float32x4x2_t,
 ) -> (float32x4x2_t, float32x4x2_t, float32x4x2_t, float32x4x2_t) {
-    unsafe {
-        // Perform an 4 x 4 matrix transpose by building on top of the existing 2 x 2
-        // matrix transpose implementation:
-        // [ A B ]^T => [ A^T C^T ]
-        // [ C D ]      [ B^T D^T ]
+    // Perform an 4 x 4 matrix transpose by building on top of the existing 2 x 2
+    // matrix transpose implementation:
+    // [ A B ]^T => [ A^T C^T ]
+    // [ C D ]      [ B^T D^T ]
 
-        let q0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0.0, r1.0));
-        let q1 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0.1, r1.1));
-        let q2 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r2.0, r3.0));
-        let q3 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r2.1, r3.1));
+    let q0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0.0, r1.0));
+    let q1 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0.1, r1.1));
+    let q2 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r2.0, r3.0));
+    let q3 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r2.1, r3.1));
 
-        (
-            float32x4x2_t(q0.0, q2.0),
-            float32x4x2_t(q0.1, q2.1),
-            float32x4x2_t(q1.0, q3.0),
-            float32x4x2_t(q1.1, q3.1),
-        )
-    }
+    (
+        float32x4x2_t(q0.0, q2.0),
+        float32x4x2_t(q0.1, q2.1),
+        float32x4x2_t(q1.0, q3.0),
+        float32x4x2_t(q1.1, q3.1),
+    )
 }
 
 #[inline]

@@ -31,7 +31,7 @@ use num_complex::Complex;
 use std::arch::aarch64::*;
 
 #[inline(always)]
-pub(crate) unsafe fn neon_transpose_f32x2_2x2_impl(v0: float32x4x2_t) -> float32x4x2_t {
+pub(crate) fn neon_transpose_f32x2_2x2_impl(v0: float32x4x2_t) -> float32x4x2_t {
     unsafe {
         let l = vreinterpretq_f32_f64(vtrn1q_f64(
             vreinterpretq_f64_f32(v0.0),

@@ -27,14 +27,21 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::butterflies::{AvxButterfly, AvxFastButterfly5d, AvxFastButterfly5f};
+use crate::avx::f32x2_2x2::transpose_f32_2x2_impl;
+use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
+use crate::avx::f64x2_2x2::transpose_f64x2_2x2;
+use crate::avx::f64x2_4x4::avx_transpose_f64x2_4x4_impl;
+use crate::avx::radix4::{
+    complex4_load_f32, complex4_load_f64, complex4_store_f32, complex4_store_f64,
+};
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
-    _mm256_load4_f32x2, avx_bitreversed_transpose, create_avx4_twiddles, shuffle,
+    _mm256_load4_f32x2, create_avx4_twiddles, shuffle,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
-use crate::util::is_power_of_ten;
+use crate::util::{compute_logarithm, is_power_of_ten, reverse_bits};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::*;
@@ -66,6 +73,207 @@ impl AvxFmaRadix10d {
     }
 }
 
+#[inline]
+#[target_feature(enable = "avx2")]
+fn complex2_load_f64(array: &[Complex<f64>], idx: usize) -> __m256d {
+    unsafe { _mm256_loadu_pd(array.get_unchecked(idx..).as_ptr().cast()) }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+fn complex2_store_f64(array: &mut [Complex<f64>], idx: usize, v: __m256d) {
+    unsafe {
+        _mm256_storeu_pd(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v);
+    }
+}
+
+#[target_feature(enable = "avx2")]
+fn avx_bitreversed_transpose_f64_radix10(
+    height: usize,
+    input: &[Complex<f64>],
+    output: &mut [Complex<f64>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 10;
+    const HEIGHT: usize = 10;
+
+    let rev_digits = compute_logarithm::<10>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    for x in 0..strided_width {
+        // Graphically, the 10×10 matrix is partitioned as:
+        // +--------+--------+------+
+        // | 4×4 A0 | 4×4 A1 | 4×2 A2 |
+        // +--------+--------+------+
+        // | 4×4 B0 | 4×4 B1 | 4×2 B2 |
+        // +--------+--------+------+
+        // | 2×4 C0 | 2×4 C1 | 2×2 C2 |
+        // +--------+--------+------+
+        // ^ T
+        // +--------+--------+------+
+        // | 4×4 A0ᵀ | 4×4 B0ᵀ | 2×4 C0ᵀ |
+        // +--------+--------+------+
+        // | 4×4 A1ᵀ | 4×4 B1ᵀ | 2×4 C1ᵀ |
+        // +--------+--------+------+
+        // | 4×2 A2ᵀ | 4×2 B2ᵀ | 2×2 C2ᵀ |
+        // +--------+--------+------+
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 5, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 6, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 7, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 8, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 9, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let a0 = [
+                complex4_load_f64(input, base_input_idx),
+                complex4_load_f64(input, base_input_idx + width),
+                complex4_load_f64(input, base_input_idx + width * 2),
+                complex4_load_f64(input, base_input_idx + width * 3),
+            ];
+
+            let a1 = [
+                complex4_load_f64(input, base_input_idx + 4),
+                complex4_load_f64(input, base_input_idx + width + 4),
+                complex4_load_f64(input, base_input_idx + width * 2 + 4),
+                complex4_load_f64(input, base_input_idx + width * 3 + 4),
+            ];
+
+            let transposed_a0 = avx_transpose_f64x2_4x4_impl(a0[0], a0[1], a0[2], a0[3]);
+            let transposed_a1 = avx_transpose_f64x2_4x4_impl(a1[0], a1[1], a1[2], a1[3]);
+
+            complex4_store_f64(output, HEIGHT * y + x_rev[0], transposed_a0.0);
+            complex4_store_f64(output, HEIGHT * y + x_rev[1], transposed_a0.1);
+            complex4_store_f64(output, HEIGHT * y + x_rev[2], transposed_a0.2);
+            complex4_store_f64(output, HEIGHT * y + x_rev[3], transposed_a0.3);
+
+            complex4_store_f64(output, HEIGHT * y + x_rev[4], transposed_a1.0);
+            complex4_store_f64(output, HEIGHT * y + x_rev[5], transposed_a1.1);
+            complex4_store_f64(output, HEIGHT * y + x_rev[6], transposed_a1.2);
+            complex4_store_f64(output, HEIGHT * y + x_rev[7], transposed_a1.3);
+
+            let b0 = [
+                complex4_load_f64(input, base_input_idx + width * 4),
+                complex4_load_f64(input, base_input_idx + width * 5),
+                complex4_load_f64(input, base_input_idx + width * 6),
+                complex4_load_f64(input, base_input_idx + width * 7),
+            ];
+
+            let b1 = [
+                complex4_load_f64(input, base_input_idx + width * 4 + 4),
+                complex4_load_f64(input, base_input_idx + width * 5 + 4),
+                complex4_load_f64(input, base_input_idx + width * 6 + 4),
+                complex4_load_f64(input, base_input_idx + width * 7 + 4),
+            ];
+
+            let transposed_b0 = avx_transpose_f64x2_4x4_impl(b0[0], b0[1], b0[2], b0[3]);
+            let transposed_b1 = avx_transpose_f64x2_4x4_impl(b1[0], b1[1], b1[2], b1[3]);
+
+            complex4_store_f64(output, HEIGHT * y + x_rev[0] + 4, transposed_b0.0);
+            complex4_store_f64(output, HEIGHT * y + x_rev[1] + 4, transposed_b0.1);
+            complex4_store_f64(output, HEIGHT * y + x_rev[2] + 4, transposed_b0.2);
+            complex4_store_f64(output, HEIGHT * y + x_rev[3] + 4, transposed_b0.3);
+
+            complex4_store_f64(output, HEIGHT * y + x_rev[4] + 4, transposed_b1.0);
+            complex4_store_f64(output, HEIGHT * y + x_rev[5] + 4, transposed_b1.1);
+            complex4_store_f64(output, HEIGHT * y + x_rev[6] + 4, transposed_b1.2);
+            complex4_store_f64(output, HEIGHT * y + x_rev[7] + 4, transposed_b1.3);
+
+            let a2 = [
+                complex2_load_f64(input, base_input_idx + 8),
+                complex2_load_f64(input, base_input_idx + width + 8),
+                complex2_load_f64(input, base_input_idx + width * 2 + 8),
+                complex2_load_f64(input, base_input_idx + width * 3 + 8),
+            ];
+
+            let b2 = [
+                complex2_load_f64(input, base_input_idx + width * 4 + 8),
+                complex2_load_f64(input, base_input_idx + width * 5 + 8),
+                complex2_load_f64(input, base_input_idx + width * 6 + 8),
+                complex2_load_f64(input, base_input_idx + width * 7 + 8),
+            ];
+
+            let transposed_a2 = avx_transpose_f64x2_4x4_impl(
+                (a2[0], _mm256_setzero_pd()),
+                (a2[1], _mm256_setzero_pd()),
+                (a2[2], _mm256_setzero_pd()),
+                (a2[3], _mm256_setzero_pd()),
+            );
+
+            let transposed_b2 = avx_transpose_f64x2_4x4_impl(
+                (b2[0], _mm256_setzero_pd()),
+                (b2[1], _mm256_setzero_pd()),
+                (b2[2], _mm256_setzero_pd()),
+                (b2[3], _mm256_setzero_pd()),
+            );
+
+            complex4_store_f64(output, HEIGHT * y + x_rev[8], transposed_a2.0);
+            complex4_store_f64(output, HEIGHT * y + x_rev[9], transposed_a2.1);
+
+            complex4_store_f64(output, HEIGHT * y + x_rev[8] + 4, transposed_b2.0);
+            complex4_store_f64(output, HEIGHT * y + x_rev[9] + 4, transposed_b2.1);
+
+            let c0 = [
+                complex4_load_f64(input, base_input_idx + width * 8),
+                complex4_load_f64(input, base_input_idx + width * 9),
+            ];
+
+            let c1 = [
+                complex4_load_f64(input, base_input_idx + width * 8 + 4),
+                complex4_load_f64(input, base_input_idx + width * 9 + 4),
+            ];
+
+            let transposed_c0 = avx_transpose_f64x2_4x4_impl(
+                c0[0],
+                c0[1],
+                (_mm256_setzero_pd(), _mm256_setzero_pd()),
+                (_mm256_setzero_pd(), _mm256_setzero_pd()),
+            );
+
+            let transposed_c1 = avx_transpose_f64x2_4x4_impl(
+                c1[0],
+                c1[1],
+                (_mm256_setzero_pd(), _mm256_setzero_pd()),
+                (_mm256_setzero_pd(), _mm256_setzero_pd()),
+            );
+
+            complex2_store_f64(output, HEIGHT * y + x_rev[0] + 8, transposed_c0.0.0);
+            complex2_store_f64(output, HEIGHT * y + x_rev[1] + 8, transposed_c0.1.0);
+            complex2_store_f64(output, HEIGHT * y + x_rev[2] + 8, transposed_c0.2.0);
+            complex2_store_f64(output, HEIGHT * y + x_rev[3] + 8, transposed_c0.3.0);
+
+            complex2_store_f64(output, HEIGHT * y + x_rev[4] + 8, transposed_c1.0.0);
+            complex2_store_f64(output, HEIGHT * y + x_rev[5] + 8, transposed_c1.1.0);
+            complex2_store_f64(output, HEIGHT * y + x_rev[6] + 8, transposed_c1.2.0);
+            complex2_store_f64(output, HEIGHT * y + x_rev[7] + 8, transposed_c1.3.0);
+
+            let c2 = [
+                complex2_load_f64(input, base_input_idx + width * 8 + 8),
+                complex2_load_f64(input, base_input_idx + width * 9 + 8),
+            ];
+
+            let transposed_c2 = transpose_f64x2_2x2(c2[0], c2[1]);
+
+            complex2_store_f64(output, HEIGHT * y + x_rev[8] + 8, transposed_c2.0);
+            complex2_store_f64(output, HEIGHT * y + x_rev[9] + 8, transposed_c2.1);
+        }
+    }
+}
+
 impl AvxFmaRadix10d {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
@@ -80,7 +288,7 @@ impl AvxFmaRadix10d {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose::<Complex<f64>, 10>(10, chunk, &mut scratch);
+                avx_bitreversed_transpose_f64_radix10(10, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
@@ -393,6 +601,200 @@ impl FftExecutor<f64> for AvxFmaRadix10d {
     }
 }
 
+#[inline]
+#[target_feature(enable = "avx2")]
+fn complex2_load_f32(array: &[Complex<f32>], idx: usize) -> __m256 {
+    unsafe { _mm256_castps128_ps256(_mm_loadu_ps(array.get_unchecked(idx..).as_ptr().cast())) }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+fn complex2_store_f32(array: &mut [Complex<f32>], idx: usize, v: __m256) {
+    unsafe {
+        _mm_storeu_ps(
+            array.get_unchecked_mut(idx..).as_mut_ptr().cast(),
+            _mm256_castps256_ps128(v),
+        );
+    }
+}
+
+#[target_feature(enable = "avx2")]
+fn avx_bitreversed_transpose_f32_radix10(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 10;
+    const HEIGHT: usize = 10;
+
+    let rev_digits = compute_logarithm::<10>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    for x in 0..strided_width {
+        // Graphically, the 10×10 matrix is partitioned as:
+        // +--------+--------+------+
+        // | 4×4 A0 | 4×4 A1 | 4×2 A2 |
+        // +--------+--------+------+
+        // | 4×4 B0 | 4×4 B1 | 4×2 B2 |
+        // +--------+--------+------+
+        // | 2×4 C0 | 2×4 C1 | 2×2 C2 |
+        // +--------+--------+------+
+        // ^ T
+        // +--------+--------+------+
+        // | 4×4 A0ᵀ | 4×4 B0ᵀ | 2×4 C0ᵀ |
+        // +--------+--------+------+
+        // | 4×4 A1ᵀ | 4×4 B1ᵀ | 2×4 C1ᵀ |
+        // +--------+--------+------+
+        // | 4×2 A2ᵀ | 4×2 B2ᵀ | 2×2 C2ᵀ |
+        // +--------+--------+------+
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 5, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 6, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 7, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 8, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 9, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let a0 = [
+                complex4_load_f32(input, base_input_idx),
+                complex4_load_f32(input, base_input_idx + width),
+                complex4_load_f32(input, base_input_idx + width * 2),
+                complex4_load_f32(input, base_input_idx + width * 3),
+            ];
+
+            let a1 = [
+                complex4_load_f32(input, base_input_idx + 4),
+                complex4_load_f32(input, base_input_idx + width + 4),
+                complex4_load_f32(input, base_input_idx + width * 2 + 4),
+                complex4_load_f32(input, base_input_idx + width * 3 + 4),
+            ];
+
+            let transposed_a0 = avx_transpose_f32x2_4x4_impl(a0[0], a0[1], a0[2], a0[3]);
+            let transposed_a1 = avx_transpose_f32x2_4x4_impl(a1[0], a1[1], a1[2], a1[3]);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev[0], transposed_a0.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev[1], transposed_a0.1);
+            complex4_store_f32(output, HEIGHT * y + x_rev[2], transposed_a0.2);
+            complex4_store_f32(output, HEIGHT * y + x_rev[3], transposed_a0.3);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev[4], transposed_a1.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev[5], transposed_a1.1);
+            complex4_store_f32(output, HEIGHT * y + x_rev[6], transposed_a1.2);
+            complex4_store_f32(output, HEIGHT * y + x_rev[7], transposed_a1.3);
+
+            let b0 = [
+                complex4_load_f32(input, base_input_idx + width * 4),
+                complex4_load_f32(input, base_input_idx + width * 5),
+                complex4_load_f32(input, base_input_idx + width * 6),
+                complex4_load_f32(input, base_input_idx + width * 7),
+            ];
+
+            let b1 = [
+                complex4_load_f32(input, base_input_idx + width * 4 + 4),
+                complex4_load_f32(input, base_input_idx + width * 5 + 4),
+                complex4_load_f32(input, base_input_idx + width * 6 + 4),
+                complex4_load_f32(input, base_input_idx + width * 7 + 4),
+            ];
+
+            let transposed_b0 = avx_transpose_f32x2_4x4_impl(b0[0], b0[1], b0[2], b0[3]);
+            let transposed_b1 = avx_transpose_f32x2_4x4_impl(b1[0], b1[1], b1[2], b1[3]);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev[0] + 4, transposed_b0.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev[1] + 4, transposed_b0.1);
+            complex4_store_f32(output, HEIGHT * y + x_rev[2] + 4, transposed_b0.2);
+            complex4_store_f32(output, HEIGHT * y + x_rev[3] + 4, transposed_b0.3);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev[4] + 4, transposed_b1.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev[5] + 4, transposed_b1.1);
+            complex4_store_f32(output, HEIGHT * y + x_rev[6] + 4, transposed_b1.2);
+            complex4_store_f32(output, HEIGHT * y + x_rev[7] + 4, transposed_b1.3);
+
+            let a2 = [
+                complex2_load_f32(input, base_input_idx + 8),
+                complex2_load_f32(input, base_input_idx + width + 8),
+                complex2_load_f32(input, base_input_idx + width * 2 + 8),
+                complex2_load_f32(input, base_input_idx + width * 3 + 8),
+            ];
+
+            let b2 = [
+                complex2_load_f32(input, base_input_idx + width * 4 + 8),
+                complex2_load_f32(input, base_input_idx + width * 5 + 8),
+                complex2_load_f32(input, base_input_idx + width * 6 + 8),
+                complex2_load_f32(input, base_input_idx + width * 7 + 8),
+            ];
+
+            let transposed_a2 = avx_transpose_f32x2_4x4_impl(a2[0], a2[1], a2[2], a2[3]);
+
+            let transposed_b2 = avx_transpose_f32x2_4x4_impl(b2[0], b2[1], b2[2], b2[3]);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev[8], transposed_a2.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev[9], transposed_a2.1);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev[8] + 4, transposed_b2.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev[9] + 4, transposed_b2.1);
+
+            let c0 = [
+                complex4_load_f32(input, base_input_idx + width * 8),
+                complex4_load_f32(input, base_input_idx + width * 9),
+            ];
+
+            let c1 = [
+                complex4_load_f32(input, base_input_idx + width * 8 + 4),
+                complex4_load_f32(input, base_input_idx + width * 9 + 4),
+            ];
+
+            let transposed_c0 = avx_transpose_f32x2_4x4_impl(
+                c0[0],
+                c0[1],
+                _mm256_setzero_ps(),
+                _mm256_setzero_ps(),
+            );
+
+            let transposed_c1 = avx_transpose_f32x2_4x4_impl(
+                c1[0],
+                c1[1],
+                _mm256_setzero_ps(),
+                _mm256_setzero_ps(),
+            );
+
+            complex2_store_f32(output, HEIGHT * y + x_rev[0] + 8, transposed_c0.0);
+            complex2_store_f32(output, HEIGHT * y + x_rev[1] + 8, transposed_c0.1);
+            complex2_store_f32(output, HEIGHT * y + x_rev[2] + 8, transposed_c0.2);
+            complex2_store_f32(output, HEIGHT * y + x_rev[3] + 8, transposed_c0.3);
+
+            complex2_store_f32(output, HEIGHT * y + x_rev[4] + 8, transposed_c1.0);
+            complex2_store_f32(output, HEIGHT * y + x_rev[5] + 8, transposed_c1.1);
+            complex2_store_f32(output, HEIGHT * y + x_rev[6] + 8, transposed_c1.2);
+            complex2_store_f32(output, HEIGHT * y + x_rev[7] + 8, transposed_c1.3);
+
+            let c2 = [
+                complex2_load_f32(input, base_input_idx + width * 8 + 8),
+                complex2_load_f32(input, base_input_idx + width * 9 + 8),
+            ];
+
+            let transposed_c2 = transpose_f32_2x2_impl((c2[0], c2[1]));
+
+            complex2_store_f32(output, HEIGHT * y + x_rev[8] + 8, transposed_c2.0);
+            complex2_store_f32(output, HEIGHT * y + x_rev[9] + 8, transposed_c2.1);
+        }
+    }
+}
+
 pub(crate) struct AvxFmaRadix10f {
     twiddles: Vec<Complex<f32>>,
     execution_length: usize,
@@ -434,7 +836,7 @@ impl AvxFmaRadix10f {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose::<Complex<f32>, 10>(10, chunk, &mut scratch);
+                avx_bitreversed_transpose_f32_radix10(10, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

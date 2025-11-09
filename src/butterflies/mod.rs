@@ -123,6 +123,7 @@ macro_rules! test_butterfly {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
         fn $method_name() {
+            use rand::Rng;
             for i in 1..4 {
                 let val = $scale as usize;
                 let size = val.pow(i);
@@ -199,6 +200,7 @@ macro_rules! test_oof_butterfly {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
         fn $method_name() {
+            use rand::Rng;
             for i in 1..4 {
                 let kern = $scale;
                 let size = (kern as usize).pow(i);
