@@ -574,6 +574,9 @@ impl Display for FftDirection {
 
 #[cfg(test)]
 mod tests {
+    use crate::Zaft;
+    use num_complex::Complex;
+
     #[test]
     fn power_of_four() {
         fn is_power_of_four(n: u64) -> bool {
@@ -583,5 +586,44 @@ mod tests {
         assert_eq!(is_power_of_four(8), false);
         assert_eq!(is_power_of_four(16), true);
         assert_eq!(is_power_of_four(20), false);
+    }
+
+    #[test]
+    fn test_everything_f32() {
+        for i in 1..1150 {
+            let mut data = vec![Complex::new(0.0019528865, 0.); i];
+            for (i, chunk) in data.iter_mut().enumerate() {
+                *chunk = Complex::new(
+                    -0.19528865 + i as f32 * 0.001,
+                    0.0019528865 - i as f32 * 0.001,
+                );
+            }
+            let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
+            let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
+            let rust_fft_clone = data.clone();
+            zaft_exec.execute(&mut data).unwrap();
+            zaft_inverse.execute(&mut data).unwrap();
+            let data_len = 1. / data.len() as f32;
+            for i in data.iter_mut() {
+                *i *= data_len;
+            }
+            data.iter()
+                .zip(rust_fft_clone)
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-2,
+                        "a_re {}, b_re {} at {idx}",
+                        a.re,
+                        b.re
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-2,
+                        "a_im {}, b_im {} at {idx}",
+                        a.im,
+                        b.im
+                    );
+                });
+        }
     }
 }

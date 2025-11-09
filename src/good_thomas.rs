@@ -223,24 +223,29 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.execution_length];
+        let mut scratch_full = try_vec![Complex::zero(); self.execution_length * 2];
+        let (mut scratch_left, mut scratch_right) =
+            scratch_full.split_at_mut(self.execution_length);
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Re-index the input, copying from the buffer to the scratch in the process
-            self.reindex_input(chunk, &mut scratch);
+            self.reindex_input(chunk, &mut scratch_left);
 
             // run FFTs of size `width`
-            self.width_size_fft.execute(&mut scratch)?;
+            self.width_size_fft.execute(&mut scratch_left)?;
 
             // transpose
-            self.transpose_ops
-                .transpose(&scratch, chunk, self.width, self.height);
+            self.transpose_ops.transpose(
+                &scratch_left,
+                &mut scratch_right,
+                self.width,
+                self.height,
+            );
 
             // run FFTs of size 'height'
-            self.height_size_fft.execute(chunk)?;
+            self.height_size_fft.execute(&mut scratch_right)?;
             // Re-index the output, copying from the scratch to the buffer in the process
-            self.reindex_output(chunk, &mut scratch);
-            chunk.copy_from_slice(&scratch);
+            self.reindex_output(scratch_right, chunk);
         }
         Ok(())
     }

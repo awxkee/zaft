@@ -63,12 +63,43 @@ fn check_power_group(c: &mut Criterion, n: usize, group: String) {
 fn main() {
     let mut data = vec![Complex::new(0.0019528865, 0.); 64];
     let mut c = Criterion::default().sample_size(10);
-    check_power_group(&mut c, 7usize.pow(4), "power 7".to_string());
+    // check_power_group(&mut c, 7usize.pow(4), "power 7".to_string());
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f64 * 0.1, 0.0019528865 - i as f64 * 0.1);
+    }
+    for i in 1..5000 {
+        let mut data = vec![Complex::new(0.0019528865, 0.); i];
+        for (i, chunk) in data.iter_mut().enumerate() {
+            *chunk = Complex::new(
+                -0.19528865 + i as f32 * 0.001,
+                0.0019528865 - i as f32 * 0.001,
+            );
+        }
+        let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
+        let rustfft_exec = FftPlanner::new().plan_fft_forward(data.len());
+        let mut rust_fft_clone = data.clone();
+        zaft_exec.execute(&mut data).unwrap();
+        rustfft_exec.process(&mut rust_fft_clone);
+        data.iter()
+            .zip(rust_fft_clone)
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-2,
+                    "a_re {}, b_re {} at {idx}",
+                    a.re,
+                    b.re
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-2,
+                    "a_im {}, b_im {} at {idx}",
+                    a.im,
+                    b.im
+                );
+            });
     }
     // data = [
     //     Complex {
