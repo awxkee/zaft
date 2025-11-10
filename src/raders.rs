@@ -37,6 +37,7 @@ use num_complex::Complex;
 use num_integer::Integer;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 pub(crate) struct RadersFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
@@ -45,7 +46,7 @@ pub(crate) struct RadersFft<T> {
     direction: FftDirection,
     input_indices: Vec<usize>,
     output_indices: Vec<usize>,
-    spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
+    spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
 }
 
 impl<

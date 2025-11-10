@@ -71,6 +71,23 @@ mod transpose;
 mod transpose_arbitrary;
 mod util;
 
+#[allow(unused_imports)]
+use radix3::Radix3;
+#[allow(unused_imports)]
+use radix4::Radix4;
+#[allow(unused_imports)]
+use radix5::Radix5;
+#[allow(unused_imports)]
+use radix6::Radix6;
+#[allow(unused_imports)]
+use radix7::Radix7;
+#[allow(unused_imports)]
+use radix10::Radix10;
+#[allow(unused_imports)]
+use radix11::Radix11;
+#[allow(unused_imports)]
+use radix13::Radix13;
+
 pub use err::ZaftError;
 use std::fmt::{Display, Formatter};
 
@@ -316,7 +333,8 @@ impl Zaft {
         f64: AsPrimitive<T>,
     {
         let convolve_prime = PrimeFactors::from_number(n as u64 - 1);
-        let big_factor = convolve_prime.factorization.iter().any(|x| x.0 > 25);
+        // n-1 may result in Cunningham chain, and we want to avoid compute multiple prime numbers FFT at once
+        let big_factor = convolve_prime.factorization.iter().any(|x| x.0 > 31 && x.1 == 1);
         if !big_factor {
             let convolve_fft = Zaft::strategy(n - 1, direction);
             T::raders(convolve_fft?, n, direction)
@@ -403,6 +421,8 @@ impl Zaft {
             return T::butterfly27(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 29 {
             return T::butterfly29(fft_direction);
+        } else if n == 31 {
+            return T::butterfly31(fft_direction);
         } else if n == 32 {
             return T::butterfly32(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 36 {

@@ -25,8 +25,8 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::avx::butterflies::AvxButterfly;
 use crate::avx::butterflies::fast_bf7::AvxFastButterfly7;
+use crate::avx::butterflies::{AvxButterfly, shift_load2, shift_load4, shift_store2, shift_store4};
 use crate::avx::util::{
     _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, shuffle,
 };
@@ -174,8 +174,71 @@ impl AvxButterfly14<f32> {
                 ));
             }
 
-            for chunk in in_place.chunks_exact_mut(14) {
-                let u0u1u2u3 = _mm256_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
+            for chunk in in_place.chunks_exact_mut(28) {
+                let (u0, u3, u4, u7) = shift_load4!(chunk, 14, 0);
+                let (u8, u11, u12, u1) = shift_load4!(chunk, 14, 4);
+                let (u2, u5, u6, u9) = shift_load4!(chunk, 14, 8);
+                let (u10, u13) = shift_load2!(chunk, 14, 12);
+
+                let (u0, u1) = AvxButterfly::butterfly2_f32_m128(u0, u1);
+                let (u2, u3) = AvxButterfly::butterfly2_f32_m128(u2, u3);
+                let (u4, u5) = AvxButterfly::butterfly2_f32_m128(u4, u5);
+                let (u6, u7) = AvxButterfly::butterfly2_f32_m128(u6, u7);
+                let (u8, u9) = AvxButterfly::butterfly2_f32_m128(u8, u9);
+                let (u10, u11) = AvxButterfly::butterfly2_f32_m128(u10, u11);
+                let (u12, u13) = AvxButterfly::butterfly2_f32_m128(u12, u13);
+
+                // Outer 7-point butterflies
+                let (y0y7, y2y9, y4y11, y6y13, y8y1, y10y3, y12y5) = self.bf7.exec(
+                    _mm256_setr_m128(u0, u1),
+                    _mm256_setr_m128(u2, u3),
+                    _mm256_setr_m128(u4, u5),
+                    _mm256_setr_m128(u6, u7),
+                    _mm256_setr_m128(u8, u9),
+                    _mm256_setr_m128(u10, u11),
+                    _mm256_setr_m128(u12, u13),
+                ); // (v0, v1, v2, v3, v4, v5, v6)
+
+                shift_store4!(
+                    chunk,
+                    14,
+                    0,
+                    _mm256_castps256_ps128(y0y7),
+                    _mm256_extractf128_ps::<1>(y8y1),
+                    _mm256_castps256_ps128(y2y9),
+                    _mm256_extractf128_ps::<1>(y10y3)
+                );
+                shift_store4!(
+                    chunk,
+                    14,
+                    4,
+                    _mm256_castps256_ps128(y4y11),
+                    _mm256_extractf128_ps::<1>(y12y5),
+                    _mm256_castps256_ps128(y6y13),
+                    _mm256_extractf128_ps::<1>(y0y7)
+                );
+                shift_store4!(
+                    chunk,
+                    14,
+                    8,
+                    _mm256_castps256_ps128(y8y1),
+                    _mm256_extractf128_ps::<1>(y2y9),
+                    _mm256_castps256_ps128(y10y3),
+                    _mm256_extractf128_ps::<1>(y4y11)
+                );
+                shift_store2!(
+                    chunk,
+                    14,
+                    12,
+                    _mm256_castps256_ps128(y12y5),
+                    _mm256_extractf128_ps::<1>(y6y13)
+                );
+            }
+
+            let rem = in_place.chunks_exact_mut(28).into_remainder();
+
+            for chunk in rem.chunks_exact_mut(14) {
+                let u0u1u2u3 = _mm256_loadu_ps(chunk.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());
                 let u8u9u10u11 = _mm256_loadu_ps(chunk.get_unchecked(8..).as_ptr().cast());
                 let u12u13 = _mm_loadu_ps(chunk.get_unchecked(12..).as_ptr().cast());

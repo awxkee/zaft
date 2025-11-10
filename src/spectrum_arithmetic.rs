@@ -32,6 +32,7 @@ use num_traits::{AsPrimitive, MulAdd, Num};
 use std::fmt::Display;
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::{Arc, OnceLock};
 
 pub(crate) trait SpectrumOps<T> {
     // a * b
@@ -43,22 +44,22 @@ pub(crate) trait SpectrumOps<T> {
 }
 
 pub(crate) trait SpectrumOpsFactory<T> {
-    fn make_spectrum_arithmetic() -> Box<dyn SpectrumOps<T> + Send + Sync>;
+    fn make_spectrum_arithmetic() -> Arc<dyn SpectrumOps<T> + Send + Sync>;
 }
 
-impl SpectrumOpsFactory<f32> for f32 {
-    fn make_spectrum_arithmetic() -> Box<dyn SpectrumOps<f32> + Send + Sync> {
+macro_rules! default_arith_module {
+    () => {{
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
             if std::arch::is_aarch64_feature_detected!("fcma") {
                 use crate::neon::NeonFcmaSpectrumArithmetic;
-                return Box::new(NeonFcmaSpectrumArithmetic {
+                return Arc::new(NeonFcmaSpectrumArithmetic {
                     phantom_data: Default::default(),
                 });
             }
             use crate::neon::NeonSpectrumArithmetic;
-            Box::new(NeonSpectrumArithmetic {
+            Arc::new(NeonSpectrumArithmetic {
                 phantom_data: Default::default(),
             })
         }
@@ -68,53 +69,37 @@ impl SpectrumOpsFactory<f32> for f32 {
                 && std::arch::is_x86_feature_detected!("fma")
             {
                 use crate::avx::AvxSpectrumArithmetic;
-                return Box::new(AvxSpectrumArithmetic {
+                return Arc::new(AvxSpectrumArithmetic {
                     phantom_data: Default::default(),
                 });
             }
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
-            Box::new(ScalarSpectrumArithmetic {
+            Arc::new(ScalarSpectrumArithmetic {
                 phantom_data: Default::default(),
             })
         }
+    }};
+}
+
+impl SpectrumOpsFactory<f32> for f32 {
+    fn make_spectrum_arithmetic() -> Arc<dyn SpectrumOps<f32> + Send + Sync> {
+        static ARITHMETIC_MODULE_SINGLE: OnceLock<Arc<dyn SpectrumOps<f32> + Send + Sync>> =
+            OnceLock::new();
+        ARITHMETIC_MODULE_SINGLE
+            .get_or_init(|| default_arith_module!())
+            .clone()
     }
 }
 
 impl SpectrumOpsFactory<f64> for f64 {
-    fn make_spectrum_arithmetic() -> Box<dyn SpectrumOps<f64> + Send + Sync> {
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaSpectrumArithmetic;
-                return Box::new(NeonFcmaSpectrumArithmetic {
-                    phantom_data: Default::default(),
-                });
-            }
-            use crate::neon::NeonSpectrumArithmetic;
-            Box::new(NeonSpectrumArithmetic {
-                phantom_data: Default::default(),
-            })
-        }
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        {
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
-                use crate::avx::AvxSpectrumArithmetic;
-                return Box::new(AvxSpectrumArithmetic {
-                    phantom_data: Default::default(),
-                });
-            }
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            Box::new(ScalarSpectrumArithmetic {
-                phantom_data: Default::default(),
-            })
-        }
+    fn make_spectrum_arithmetic() -> Arc<dyn SpectrumOps<f64> + Send + Sync> {
+        static ARITHMETIC_MODULE_DOUBLE: OnceLock<Arc<dyn SpectrumOps<f64> + Send + Sync>> =
+            OnceLock::new();
+        ARITHMETIC_MODULE_DOUBLE
+            .get_or_init(|| default_arith_module!())
+            .clone()
     }
 }
 

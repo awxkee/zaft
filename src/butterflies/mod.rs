@@ -45,6 +45,7 @@ mod bf23;
 mod bf27;
 mod bf29;
 mod bf3;
+mod bf31;
 mod bf32;
 mod bf4;
 mod bf5;
@@ -99,6 +100,8 @@ pub(crate) use bf23::Butterfly23;
 pub(crate) use bf27::Butterfly27;
 #[allow(unused)]
 pub(crate) use bf29::Butterfly29;
+#[allow(unused)]
+pub(crate) use bf31::Butterfly31;
 #[allow(unused)]
 pub(crate) use bf32::Butterfly32;
 

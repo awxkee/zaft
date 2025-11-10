@@ -61,32 +61,30 @@ impl ColumnButterfly9d {
 impl ColumnButterfly9d {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(&self, v: [AvxStoreD; 9]) -> [AvxStoreD; 9] {
-        unsafe {
-            let (u0, u3, u6) = self.bf3.exec(v[0].v, v[3].v, v[6].v);
-            let (u1, mut u4, mut u7) = self.bf3.exec(v[1].v, v[4].v, v[7].v);
-            let (u2, mut u5, mut u8) = self.bf3.exec(v[2].v, v[5].v, v[8].v);
+    pub(crate) fn exec(&self, v: [AvxStoreD; 9]) -> [AvxStoreD; 9] {
+        let (u0, u3, u6) = self.bf3.exec(v[0].v, v[3].v, v[6].v);
+        let (u1, mut u4, mut u7) = self.bf3.exec(v[1].v, v[4].v, v[7].v);
+        let (u2, mut u5, mut u8) = self.bf3.exec(v[2].v, v[5].v, v[8].v);
 
-            u4 = _mm256_fcmul_pd(u4, self.twiddle1);
-            u7 = _mm256_fcmul_pd(u7, self.twiddle2);
-            u5 = _mm256_fcmul_pd(u5, self.twiddle2);
-            u8 = _mm256_fcmul_pd(u8, self.twiddle4);
+        u4 = _mm256_fcmul_pd(u4, self.twiddle1);
+        u7 = _mm256_fcmul_pd(u7, self.twiddle2);
+        u5 = _mm256_fcmul_pd(u5, self.twiddle2);
+        u8 = _mm256_fcmul_pd(u8, self.twiddle4);
 
-            let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
-            [
-                AvxStoreD::raw(y0),
-                AvxStoreD::raw(y1),
-                AvxStoreD::raw(y2),
-                AvxStoreD::raw(y3),
-                AvxStoreD::raw(y4),
-                AvxStoreD::raw(y5),
-                AvxStoreD::raw(y6),
-                AvxStoreD::raw(y7),
-                AvxStoreD::raw(y8),
-            ]
-        }
+        let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
+        [
+            AvxStoreD::raw(y0),
+            AvxStoreD::raw(y1),
+            AvxStoreD::raw(y2),
+            AvxStoreD::raw(y3),
+            AvxStoreD::raw(y4),
+            AvxStoreD::raw(y5),
+            AvxStoreD::raw(y6),
+            AvxStoreD::raw(y7),
+            AvxStoreD::raw(y8),
+        ]
     }
 }
 
@@ -135,31 +133,29 @@ impl ColumnButterfly9f {
 impl ColumnButterfly9f {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(&self, v: [AvxStoreF; 9]) -> [AvxStoreF; 9] {
-        unsafe {
-            let (u0, u3, u6) = self.bf3.exec(v[0].v, v[3].v, v[6].v);
-            let (u1, mut u4, mut u7) = self.bf3.exec(v[1].v, v[4].v, v[7].v);
-            let (u2, mut u5, mut u8) = self.bf3.exec(v[2].v, v[5].v, v[8].v);
+    pub(crate) fn exec(&self, v: [AvxStoreF; 9]) -> [AvxStoreF; 9] {
+        let (u0, u3, u6) = self.bf3.exec(v[0].v, v[3].v, v[6].v);
+        let (u1, mut u4, mut u7) = self.bf3.exec(v[1].v, v[4].v, v[7].v);
+        let (u2, mut u5, mut u8) = self.bf3.exec(v[2].v, v[5].v, v[8].v);
 
-            u4 = _mm256_fcmul_ps(u4, self.twiddle1);
-            u7 = _mm256_fcmul_ps(u7, self.twiddle2);
-            u5 = _mm256_fcmul_ps(u5, self.twiddle2);
-            u8 = _mm256_fcmul_ps(u8, self.twiddle4);
+        u4 = _mm256_fcmul_ps(u4, self.twiddle1);
+        u7 = _mm256_fcmul_ps(u7, self.twiddle2);
+        u5 = _mm256_fcmul_ps(u5, self.twiddle2);
+        u8 = _mm256_fcmul_ps(u8, self.twiddle4);
 
-            let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
-            [
-                AvxStoreF::raw(y0),
-                AvxStoreF::raw(y1),
-                AvxStoreF::raw(y2),
-                AvxStoreF::raw(y3),
-                AvxStoreF::raw(y4),
-                AvxStoreF::raw(y5),
-                AvxStoreF::raw(y6),
-                AvxStoreF::raw(y7),
-                AvxStoreF::raw(y8),
-            ]
-        }
+        let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
+        [
+            AvxStoreF::raw(y0),
+            AvxStoreF::raw(y1),
+            AvxStoreF::raw(y2),
+            AvxStoreF::raw(y3),
+            AvxStoreF::raw(y4),
+            AvxStoreF::raw(y5),
+            AvxStoreF::raw(y6),
+            AvxStoreF::raw(y7),
+            AvxStoreF::raw(y8),
+        ]
     }
 }

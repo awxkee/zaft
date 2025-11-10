@@ -79,21 +79,19 @@ impl AvxFastButterfly9d {
         __m256d,
         __m256d,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3.exec(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3.exec(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3.exec(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3.exec(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3.exec(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3.exec(u2, u5, u8);
 
-            u4 = _mm256_fcmul_pd(u4, self.tw1);
-            u7 = _mm256_fcmul_pd(u7, self.tw2);
-            u5 = _mm256_fcmul_pd(u5, self.tw2);
-            u8 = _mm256_fcmul_pd(u8, self.tw4);
+        u4 = _mm256_fcmul_pd(u4, self.tw1);
+        u7 = _mm256_fcmul_pd(u7, self.tw2);
+        u5 = _mm256_fcmul_pd(u5, self.tw2);
+        u8 = _mm256_fcmul_pd(u8, self.tw4);
 
-            let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 
     #[inline]

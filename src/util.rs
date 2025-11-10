@@ -78,6 +78,23 @@ pub(crate) fn is_power_of_three(n: u64) -> bool {
     true
 }
 
+#[inline(always)]
+#[allow(unused)]
+pub(crate) fn make_twiddles<const TW: usize, T: Float + FftTrigonometry + 'static>(
+    len: usize,
+    direction: FftDirection,
+) -> [Complex<T>; TW]
+where
+    f64: AsPrimitive<T>,
+{
+    let mut i = 1;
+    [(); TW].map(|_| {
+        let twiddle = compute_twiddle(i, len, direction);
+        i += 1;
+        twiddle
+    })
+}
+
 pub(crate) fn compute_twiddle<T: Float + FftTrigonometry + 'static>(
     index: usize,
     fft_len: usize,

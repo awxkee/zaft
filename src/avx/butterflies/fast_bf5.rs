@@ -65,7 +65,7 @@ impl AvxFastButterfly5d {
 impl AvxFastButterfly5d {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(
+    pub(crate) fn exec(
         &self,
         u0: __m256d,
         u1: __m256d,
@@ -73,38 +73,34 @@ impl AvxFastButterfly5d {
         u3: __m256d,
         u4: __m256d,
     ) -> (__m256d, __m256d, __m256d, __m256d, __m256d) {
-        unsafe {
-            let x14p = _mm256_add_pd(u1, u4);
-            let x14n = _mm256_sub_pd(u1, u4);
-            let x23p = _mm256_add_pd(u2, u3);
-            let x23n = _mm256_sub_pd(u2, u3);
-            let y0 = _mm256_add_pd(_mm256_add_pd(u0, x14p), x23p);
+        let x14p = _mm256_add_pd(u1, u4);
+        let x14n = _mm256_sub_pd(u1, u4);
+        let x23p = _mm256_add_pd(u2, u3);
+        let x23n = _mm256_sub_pd(u2, u3);
+        let y0 = _mm256_add_pd(_mm256_add_pd(u0, x14p), x23p);
 
-            let temp_b1_1 = _mm256_mul_pd(self.tw1_im, x14n);
-            let temp_b2_1 = _mm256_mul_pd(self.tw2_im, x14n);
+        let temp_b1_1 = _mm256_mul_pd(self.tw1_im, x14n);
+        let temp_b2_1 = _mm256_mul_pd(self.tw2_im, x14n);
 
-            let temp_a1 =
-                _mm256_fmadd_pd(self.tw2_re, x23p, _mm256_fmadd_pd(self.tw1_re, x14p, u0));
-            let temp_a2 =
-                _mm256_fmadd_pd(self.tw1_re, x23p, _mm256_fmadd_pd(self.tw2_re, x14p, u0));
+        let temp_a1 = _mm256_fmadd_pd(self.tw2_re, x23p, _mm256_fmadd_pd(self.tw1_re, x14p, u0));
+        let temp_a2 = _mm256_fmadd_pd(self.tw1_re, x23p, _mm256_fmadd_pd(self.tw2_re, x14p, u0));
 
-            let temp_b1 = _mm256_fmadd_pd(self.tw2_im, x23n, temp_b1_1);
-            let temp_b2 = _mm256_fnmadd_pd(self.tw1_im, x23n, temp_b2_1);
+        let temp_b1 = _mm256_fmadd_pd(self.tw2_im, x23n, temp_b1_1);
+        let temp_b2 = _mm256_fnmadd_pd(self.tw1_im, x23n, temp_b2_1);
 
-            let temp_b1_rot = self.rotate.rotate_m256d(temp_b1);
-            let temp_b2_rot = self.rotate.rotate_m256d(temp_b2);
+        let temp_b1_rot = self.rotate.rotate_m256d(temp_b1);
+        let temp_b2_rot = self.rotate.rotate_m256d(temp_b2);
 
-            let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
-            let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);
-            let y3 = _mm256_sub_pd(temp_a2, temp_b2_rot);
-            let y4 = _mm256_sub_pd(temp_a1, temp_b1_rot);
-            (y0, y1, y2, y3, y4)
-        }
+        let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
+        let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);
+        let y3 = _mm256_sub_pd(temp_a2, temp_b2_rot);
+        let y4 = _mm256_sub_pd(temp_a1, temp_b1_rot);
+        (y0, y1, y2, y3, y4)
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec_short(
+    pub(crate) fn exec_short(
         &self,
         u0: __m128d,
         u1: __m128d,
@@ -112,39 +108,37 @@ impl AvxFastButterfly5d {
         u3: __m128d,
         u4: __m128d,
     ) -> (__m128d, __m128d, __m128d, __m128d, __m128d) {
-        unsafe {
-            let x14p = _mm_add_pd(u1, u4);
-            let x14n = _mm_sub_pd(u1, u4);
-            let x23p = _mm_add_pd(u2, u3);
-            let x23n = _mm_sub_pd(u2, u3);
-            let y0 = _mm_add_pd(_mm_add_pd(u0, x14p), x23p);
+        let x14p = _mm_add_pd(u1, u4);
+        let x14n = _mm_sub_pd(u1, u4);
+        let x23p = _mm_add_pd(u2, u3);
+        let x23n = _mm_sub_pd(u2, u3);
+        let y0 = _mm_add_pd(_mm_add_pd(u0, x14p), x23p);
 
-            let temp_b1_1 = _mm_mul_pd(_mm256_castpd256_pd128(self.tw1_im), x14n);
-            let temp_b2_1 = _mm_mul_pd(_mm256_castpd256_pd128(self.tw2_im), x14n);
+        let temp_b1_1 = _mm_mul_pd(_mm256_castpd256_pd128(self.tw1_im), x14n);
+        let temp_b2_1 = _mm_mul_pd(_mm256_castpd256_pd128(self.tw2_im), x14n);
 
-            let temp_a1 = _mm_fmadd_pd(
-                _mm256_castpd256_pd128(self.tw2_re),
-                x23p,
-                _mm_fmadd_pd(_mm256_castpd256_pd128(self.tw1_re), x14p, u0),
-            );
-            let temp_a2 = _mm_fmadd_pd(
-                _mm256_castpd256_pd128(self.tw1_re),
-                x23p,
-                _mm_fmadd_pd(_mm256_castpd256_pd128(self.tw2_re), x14p, u0),
-            );
+        let temp_a1 = _mm_fmadd_pd(
+            _mm256_castpd256_pd128(self.tw2_re),
+            x23p,
+            _mm_fmadd_pd(_mm256_castpd256_pd128(self.tw1_re), x14p, u0),
+        );
+        let temp_a2 = _mm_fmadd_pd(
+            _mm256_castpd256_pd128(self.tw1_re),
+            x23p,
+            _mm_fmadd_pd(_mm256_castpd256_pd128(self.tw2_re), x14p, u0),
+        );
 
-            let temp_b1 = _mm_fmadd_pd(_mm256_castpd256_pd128(self.tw2_im), x23n, temp_b1_1);
-            let temp_b2 = _mm_fnmadd_pd(_mm256_castpd256_pd128(self.tw1_im), x23n, temp_b2_1);
+        let temp_b1 = _mm_fmadd_pd(_mm256_castpd256_pd128(self.tw2_im), x23n, temp_b1_1);
+        let temp_b2 = _mm_fnmadd_pd(_mm256_castpd256_pd128(self.tw1_im), x23n, temp_b2_1);
 
-            let temp_b1_rot = self.rotate.rotate_m128d(temp_b1);
-            let temp_b2_rot = self.rotate.rotate_m128d(temp_b2);
+        let temp_b1_rot = self.rotate.rotate_m128d(temp_b1);
+        let temp_b2_rot = self.rotate.rotate_m128d(temp_b2);
 
-            let y1 = _mm_add_pd(temp_a1, temp_b1_rot);
-            let y2 = _mm_add_pd(temp_a2, temp_b2_rot);
-            let y3 = _mm_sub_pd(temp_a2, temp_b2_rot);
-            let y4 = _mm_sub_pd(temp_a1, temp_b1_rot);
-            (y0, y1, y2, y3, y4)
-        }
+        let y1 = _mm_add_pd(temp_a1, temp_b1_rot);
+        let y2 = _mm_add_pd(temp_a2, temp_b2_rot);
+        let y3 = _mm_sub_pd(temp_a2, temp_b2_rot);
+        let y4 = _mm_sub_pd(temp_a1, temp_b1_rot);
+        (y0, y1, y2, y3, y4)
     }
 }
 
@@ -166,7 +160,7 @@ impl AvxFastButterfly5f {
 impl AvxFastButterfly5f {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn _m256_exec(
+    pub(crate) fn _m256_exec(
         &self,
         u0: __m256,
         u1: __m256,
@@ -174,38 +168,34 @@ impl AvxFastButterfly5f {
         u3: __m256,
         u4: __m256,
     ) -> (__m256, __m256, __m256, __m256, __m256) {
-        unsafe {
-            let x14p = _mm256_add_ps(u1, u4);
-            let x14n = _mm256_sub_ps(u1, u4);
-            let x23p = _mm256_add_ps(u2, u3);
-            let x23n = _mm256_sub_ps(u2, u3);
-            let y0 = _mm256_add_ps(_mm256_add_ps(u0, x14p), x23p);
+        let x14p = _mm256_add_ps(u1, u4);
+        let x14n = _mm256_sub_ps(u1, u4);
+        let x23p = _mm256_add_ps(u2, u3);
+        let x23n = _mm256_sub_ps(u2, u3);
+        let y0 = _mm256_add_ps(_mm256_add_ps(u0, x14p), x23p);
 
-            let temp_b1_1 = _mm256_mul_ps(self.tw1_im, x14n);
-            let temp_b2_1 = _mm256_mul_ps(self.tw2_im, x14n);
+        let temp_b1_1 = _mm256_mul_ps(self.tw1_im, x14n);
+        let temp_b2_1 = _mm256_mul_ps(self.tw2_im, x14n);
 
-            let temp_a1 =
-                _mm256_fmadd_ps(self.tw2_re, x23p, _mm256_fmadd_ps(self.tw1_re, x14p, u0));
-            let temp_a2 =
-                _mm256_fmadd_ps(self.tw1_re, x23p, _mm256_fmadd_ps(self.tw2_re, x14p, u0));
+        let temp_a1 = _mm256_fmadd_ps(self.tw2_re, x23p, _mm256_fmadd_ps(self.tw1_re, x14p, u0));
+        let temp_a2 = _mm256_fmadd_ps(self.tw1_re, x23p, _mm256_fmadd_ps(self.tw2_re, x14p, u0));
 
-            let temp_b1 = _mm256_fmadd_ps(self.tw2_im, x23n, temp_b1_1);
-            let temp_b2 = _mm256_fnmadd_ps(self.tw1_im, x23n, temp_b2_1);
+        let temp_b1 = _mm256_fmadd_ps(self.tw2_im, x23n, temp_b1_1);
+        let temp_b2 = _mm256_fnmadd_ps(self.tw1_im, x23n, temp_b2_1);
 
-            let temp_b1_rot = self.rotate.rotate_m256(temp_b1);
-            let temp_b2_rot = self.rotate.rotate_m256(temp_b2);
+        let temp_b1_rot = self.rotate.rotate_m256(temp_b1);
+        let temp_b2_rot = self.rotate.rotate_m256(temp_b2);
 
-            let y1 = _mm256_add_ps(temp_a1, temp_b1_rot);
-            let y2 = _mm256_add_ps(temp_a2, temp_b2_rot);
-            let y3 = _mm256_sub_ps(temp_a2, temp_b2_rot);
-            let y4 = _mm256_sub_ps(temp_a1, temp_b1_rot);
-            (y0, y1, y2, y3, y4)
-        }
+        let y1 = _mm256_add_ps(temp_a1, temp_b1_rot);
+        let y2 = _mm256_add_ps(temp_a2, temp_b2_rot);
+        let y3 = _mm256_sub_ps(temp_a2, temp_b2_rot);
+        let y4 = _mm256_sub_ps(temp_a1, temp_b1_rot);
+        (y0, y1, y2, y3, y4)
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(
+    pub(crate) fn exec(
         &self,
         u0: __m128,
         u1: __m128,
@@ -213,38 +203,36 @@ impl AvxFastButterfly5f {
         u3: __m128,
         u4: __m128,
     ) -> (__m128, __m128, __m128, __m128, __m128) {
-        unsafe {
-            let x14p = _mm_add_ps(u1, u4);
-            let x14n = _mm_sub_ps(u1, u4);
-            let x23p = _mm_add_ps(u2, u3);
-            let x23n = _mm_sub_ps(u2, u3);
-            let y0 = _mm_add_ps(_mm_add_ps(u0, x14p), x23p);
+        let x14p = _mm_add_ps(u1, u4);
+        let x14n = _mm_sub_ps(u1, u4);
+        let x23p = _mm_add_ps(u2, u3);
+        let x23n = _mm_sub_ps(u2, u3);
+        let y0 = _mm_add_ps(_mm_add_ps(u0, x14p), x23p);
 
-            let temp_b1_1 = _mm_mul_ps(_mm256_castps256_ps128(self.tw1_im), x14n);
-            let temp_b2_1 = _mm_mul_ps(_mm256_castps256_ps128(self.tw2_im), x14n);
+        let temp_b1_1 = _mm_mul_ps(_mm256_castps256_ps128(self.tw1_im), x14n);
+        let temp_b2_1 = _mm_mul_ps(_mm256_castps256_ps128(self.tw2_im), x14n);
 
-            let temp_a1 = _mm_fmadd_ps(
-                _mm256_castps256_ps128(self.tw2_re),
-                x23p,
-                _mm_fmadd_ps(_mm256_castps256_ps128(self.tw1_re), x14p, u0),
-            );
-            let temp_a2 = _mm_fmadd_ps(
-                _mm256_castps256_ps128(self.tw1_re),
-                x23p,
-                _mm_fmadd_ps(_mm256_castps256_ps128(self.tw2_re), x14p, u0),
-            );
+        let temp_a1 = _mm_fmadd_ps(
+            _mm256_castps256_ps128(self.tw2_re),
+            x23p,
+            _mm_fmadd_ps(_mm256_castps256_ps128(self.tw1_re), x14p, u0),
+        );
+        let temp_a2 = _mm_fmadd_ps(
+            _mm256_castps256_ps128(self.tw1_re),
+            x23p,
+            _mm_fmadd_ps(_mm256_castps256_ps128(self.tw2_re), x14p, u0),
+        );
 
-            let temp_b1 = _mm_fmadd_ps(_mm256_castps256_ps128(self.tw2_im), x23n, temp_b1_1);
-            let temp_b2 = _mm_fnmadd_ps(_mm256_castps256_ps128(self.tw1_im), x23n, temp_b2_1);
+        let temp_b1 = _mm_fmadd_ps(_mm256_castps256_ps128(self.tw2_im), x23n, temp_b1_1);
+        let temp_b2 = _mm_fnmadd_ps(_mm256_castps256_ps128(self.tw1_im), x23n, temp_b2_1);
 
-            let temp_b1_rot = self.rotate.rotate_m128(temp_b1);
-            let temp_b2_rot = self.rotate.rotate_m128(temp_b2);
+        let temp_b1_rot = self.rotate.rotate_m128(temp_b1);
+        let temp_b2_rot = self.rotate.rotate_m128(temp_b2);
 
-            let y1 = _mm_add_ps(temp_a1, temp_b1_rot);
-            let y2 = _mm_add_ps(temp_a2, temp_b2_rot);
-            let y3 = _mm_sub_ps(temp_a2, temp_b2_rot);
-            let y4 = _mm_sub_ps(temp_a1, temp_b1_rot);
-            (y0, y1, y2, y3, y4)
-        }
+        let y1 = _mm_add_ps(temp_a1, temp_b1_rot);
+        let y2 = _mm_add_ps(temp_a2, temp_b2_rot);
+        let y3 = _mm_sub_ps(temp_a2, temp_b2_rot);
+        let y4 = _mm_sub_ps(temp_a1, temp_b1_rot);
+        (y0, y1, y2, y3, y4)
     }
 }
