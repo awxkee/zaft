@@ -38,6 +38,7 @@ use num_integer::Integer;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::arch::x86_64::*;
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 pub(crate) struct AvxRadersFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
@@ -46,7 +47,7 @@ pub(crate) struct AvxRadersFft<T> {
     direction: FftDirection,
     input_indices: Vec<u32>,
     output_indices: Vec<u32>,
-    spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
+    spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
 }
 
 pub(crate) trait RadersIndicer<T> {

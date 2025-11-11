@@ -49,30 +49,28 @@ impl ColumnButterfly10d {
 impl ColumnButterfly10d {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(&self, v: [AvxStoreD; 10]) -> [AvxStoreD; 10] {
-        unsafe {
-            let mid0 = self.bf5.exec(v[0].v, v[2].v, v[4].v, v[6].v, v[8].v);
-            let mid1 = self.bf5.exec(v[5].v, v[7].v, v[9].v, v[1].v, v[3].v);
+    pub(crate) fn exec(&self, v: [AvxStoreD; 10]) -> [AvxStoreD; 10] {
+        let mid0 = self.bf5.exec(v[0].v, v[2].v, v[4].v, v[6].v, v[8].v);
+        let mid1 = self.bf5.exec(v[5].v, v[7].v, v[9].v, v[1].v, v[3].v);
 
-            // Since this is good-thomas algorithm, we don't need twiddle factors
-            let (y0, y1) = AvxButterfly::butterfly2_f64(mid0.0, mid1.0);
-            let (y2, y3) = AvxButterfly::butterfly2_f64(mid0.1, mid1.1);
-            let (y4, y5) = AvxButterfly::butterfly2_f64(mid0.2, mid1.2);
-            let (y6, y7) = AvxButterfly::butterfly2_f64(mid0.3, mid1.3);
-            let (y8, y9) = AvxButterfly::butterfly2_f64(mid0.4, mid1.4);
-            [
-                AvxStoreD::raw(y0),
-                AvxStoreD::raw(y3),
-                AvxStoreD::raw(y4),
-                AvxStoreD::raw(y7),
-                AvxStoreD::raw(y8),
-                AvxStoreD::raw(y1),
-                AvxStoreD::raw(y2),
-                AvxStoreD::raw(y5),
-                AvxStoreD::raw(y6),
-                AvxStoreD::raw(y9),
-            ]
-        }
+        // Since this is good-thomas algorithm, we don't need twiddle factors
+        let (y0, y1) = AvxButterfly::butterfly2_f64(mid0.0, mid1.0);
+        let (y2, y3) = AvxButterfly::butterfly2_f64(mid0.1, mid1.1);
+        let (y4, y5) = AvxButterfly::butterfly2_f64(mid0.2, mid1.2);
+        let (y6, y7) = AvxButterfly::butterfly2_f64(mid0.3, mid1.3);
+        let (y8, y9) = AvxButterfly::butterfly2_f64(mid0.4, mid1.4);
+        [
+            AvxStoreD::raw(y0),
+            AvxStoreD::raw(y3),
+            AvxStoreD::raw(y4),
+            AvxStoreD::raw(y7),
+            AvxStoreD::raw(y8),
+            AvxStoreD::raw(y1),
+            AvxStoreD::raw(y2),
+            AvxStoreD::raw(y5),
+            AvxStoreD::raw(y6),
+            AvxStoreD::raw(y9),
+        ]
     }
 }
 
@@ -95,28 +93,26 @@ impl ColumnButterfly10f {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
     pub(crate) unsafe fn exec(&self, v: [AvxStoreF; 10]) -> [AvxStoreF; 10] {
-        unsafe {
-            let mid0 = self.bf5._m256_exec(v[0].v, v[2].v, v[4].v, v[6].v, v[8].v);
-            let mid1 = self.bf5._m256_exec(v[5].v, v[7].v, v[9].v, v[1].v, v[3].v);
+        let mid0 = self.bf5._m256_exec(v[0].v, v[2].v, v[4].v, v[6].v, v[8].v);
+        let mid1 = self.bf5._m256_exec(v[5].v, v[7].v, v[9].v, v[1].v, v[3].v);
 
-            // Since this is good-thomas algorithm, we don't need twiddle factors
-            let (y0, y1) = AvxButterfly::butterfly2_f32(mid0.0, mid1.0);
-            let (y2, y3) = AvxButterfly::butterfly2_f32(mid0.1, mid1.1);
-            let (y4, y5) = AvxButterfly::butterfly2_f32(mid0.2, mid1.2);
-            let (y6, y7) = AvxButterfly::butterfly2_f32(mid0.3, mid1.3);
-            let (y8, y9) = AvxButterfly::butterfly2_f32(mid0.4, mid1.4);
-            [
-                AvxStoreF::raw(y0),
-                AvxStoreF::raw(y3),
-                AvxStoreF::raw(y4),
-                AvxStoreF::raw(y7),
-                AvxStoreF::raw(y8),
-                AvxStoreF::raw(y1),
-                AvxStoreF::raw(y2),
-                AvxStoreF::raw(y5),
-                AvxStoreF::raw(y6),
-                AvxStoreF::raw(y9),
-            ]
-        }
+        // Since this is good-thomas algorithm, we don't need twiddle factors
+        let (y0, y1) = AvxButterfly::butterfly2_f32(mid0.0, mid1.0);
+        let (y2, y3) = AvxButterfly::butterfly2_f32(mid0.1, mid1.1);
+        let (y4, y5) = AvxButterfly::butterfly2_f32(mid0.2, mid1.2);
+        let (y6, y7) = AvxButterfly::butterfly2_f32(mid0.3, mid1.3);
+        let (y8, y9) = AvxButterfly::butterfly2_f32(mid0.4, mid1.4);
+        [
+            AvxStoreF::raw(y0),
+            AvxStoreF::raw(y3),
+            AvxStoreF::raw(y4),
+            AvxStoreF::raw(y7),
+            AvxStoreF::raw(y8),
+            AvxStoreF::raw(y1),
+            AvxStoreF::raw(y2),
+            AvxStoreF::raw(y5),
+            AvxStoreF::raw(y6),
+            AvxStoreF::raw(y9),
+        ]
     }
 }

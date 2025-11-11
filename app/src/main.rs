@@ -60,10 +60,35 @@ fn check_power_group(c: &mut Criterion, n: usize, group: String) {
     });
 }
 
+fn check_power_groups(c: &mut Criterion, n: usize, group: String) {
+    let mut input_power = vec![Complex::<f32>::default(); n];
+    for z in input_power.iter_mut() {
+        *z = Complex {
+            re: rand::rng().random(),
+            im: rand::rng().random(),
+        };
+    }
+
+    c.bench_function(format!("zaft {group}s").as_str(), |b| {
+        let plan = Zaft::make_inverse_fft_f32(input_power.len()).unwrap();
+        let s = input_power
+            .iter()
+            .map(|&x| Complex::new(x.re as f32, x.im as f32))
+            .collect::<Vec<_>>();
+        let mut working = s.to_vec();
+        b.iter(|| {
+            plan.execute(&mut working).unwrap();
+        })
+    });
+}
+
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 64];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 31];
     let mut c = Criterion::default().sample_size(10);
-    check_power_group(&mut c, 7usize.pow(4), "power 7".to_string());
+    check_power_group(&mut c, 512, "power 8 (512)".to_string());
+    check_power_groups(&mut c, 512, "power 8s (512)".to_string());
+    check_power_group(&mut c, 4096, "power 8 (4096)".to_string());
+    check_power_groups(&mut c, 4096, "power 8s (4096)".to_string());
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }

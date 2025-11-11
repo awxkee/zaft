@@ -79,10 +79,8 @@ impl AvxStoreD {
     #[inline]
     #[target_feature(enable = "avx", enable = "fma")]
     pub(crate) fn mul_by_complex(self, other: AvxStoreD) -> Self {
-        unsafe {
-            AvxStoreD {
-                v: _mm256_fcmul_pd(self.v, other.v),
-            }
+        AvxStoreD {
+            v: _mm256_fcmul_pd(self.v, other.v),
         }
     }
 }

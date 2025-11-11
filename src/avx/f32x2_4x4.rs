@@ -67,7 +67,7 @@ pub(crate) unsafe fn avx_transpose_u64_4x4_impl(
 }
 
 #[inline]
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx")]
 pub(crate) fn avx_transpose_f32x2_4x4_impl(
     v0: __m256,
     v1: __m256,

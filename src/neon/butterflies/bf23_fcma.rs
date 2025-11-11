@@ -460,6 +460,57 @@ impl NeonFcmaButterfly23<f64> {
     }
 }
 
+macro_rules! shift_load {
+    ($chunk: expr, $offset0: expr) => {{
+        let q0 = vld1q_f32($chunk.get_unchecked($offset0..).as_ptr().cast());
+        let q1 = vld1q_f32($chunk.get_unchecked($offset0 + 23..).as_ptr().cast());
+        (
+            vcombine_f32(vget_low_f32(q0), vget_low_f32(q1)),
+            vcombine_f32(vget_high_f32(q0), vget_high_f32(q1)),
+        )
+    }};
+}
+
+macro_rules! shift_store {
+    ($chunk: expr, $offset0: expr, $r0: expr, $r1: expr) => {{
+        vst1q_f32(
+            $chunk.get_unchecked_mut($offset0..).as_mut_ptr().cast(),
+            vcombine_f32(vget_low_f32($r0), vget_low_f32($r1)),
+        );
+        vst1q_f32(
+            $chunk
+                .get_unchecked_mut($offset0 + 23..)
+                .as_mut_ptr()
+                .cast(),
+            vcombine_f32(vget_high_f32($r0), vget_high_f32($r1)),
+        );
+    }};
+}
+
+macro_rules! shift_storel {
+    ($chunk: expr, $offset0: expr, $r0: expr) => {{
+        vst1_f32(
+            $chunk.get_unchecked_mut($offset0..).as_mut_ptr().cast(),
+            vget_low_f32($r0),
+        );
+        vst1_f32(
+            $chunk
+                .get_unchecked_mut($offset0 + 23..)
+                .as_mut_ptr()
+                .cast(),
+            vget_high_f32($r0),
+        );
+    }};
+}
+
+macro_rules! shift_loadl {
+    ($chunk: expr, $offset0: expr) => {{
+        let q0 = vld1_f32($chunk.get_unchecked($offset0..).as_ptr().cast());
+        let q1 = vld1_f32($chunk.get_unchecked($offset0 + 23..).as_ptr().cast());
+        vcombine_f32(q0, q1)
+    }};
+}
+
 impl FftExecutor<f32> for NeonFcmaButterfly23<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
@@ -486,7 +537,341 @@ impl NeonFcmaButterfly23<f32> {
         }
 
         unsafe {
-            for chunk in in_place.chunks_exact_mut(23) {
+            for chunk in in_place.chunks_exact_mut(46) {
+                let (u0, u1) = shift_load!(chunk, 0);
+                let (u2, u3) = shift_load!(chunk, 2);
+                let (u4, u5) = shift_load!(chunk, 4);
+                let (u6, u7) = shift_load!(chunk, 6);
+                let (u8, u9) = shift_load!(chunk, 8);
+                let (u10, u11) = shift_load!(chunk, 10);
+                let (u12, u13) = shift_load!(chunk, 12);
+                let (u14, u15) = shift_load!(chunk, 14);
+                let (u16, u17) = shift_load!(chunk, 16);
+                let (u18, u19) = shift_load!(chunk, 18);
+                let (u20, u21) = shift_load!(chunk, 20);
+                let u22 = shift_loadl!(chunk, 22);
+
+                let y00 = u0;
+                let (x1p22, x1m22) = NeonButterfly::butterfly2_f32(u1, u22);
+                let x1m22 = vcaddq_rot90_f32(vdupq_n_f32(0.), x1m22);
+                let y00 = vaddq_f32(y00, x1p22);
+                let (x2p21, x2m21) = NeonButterfly::butterfly2_f32(u2, u21);
+                let x2m21 = vcaddq_rot90_f32(vdupq_n_f32(0.), x2m21);
+                let y00 = vaddq_f32(y00, x2p21);
+                let (x3p20, x3m20) = NeonButterfly::butterfly2_f32(u3, u20);
+                let x3m20 = vcaddq_rot90_f32(vdupq_n_f32(0.), x3m20);
+                let y00 = vaddq_f32(y00, x3p20);
+                let (x4p19, x4m19) = NeonButterfly::butterfly2_f32(u4, u19);
+                let x4m19 = vcaddq_rot90_f32(vdupq_n_f32(0.), x4m19);
+                let y00 = vaddq_f32(y00, x4p19);
+                let (x5p18, x5m18) = NeonButterfly::butterfly2_f32(u5, u18);
+                let x5m18 = vcaddq_rot90_f32(vdupq_n_f32(0.), x5m18);
+                let y00 = vaddq_f32(y00, x5p18);
+                let (x6p17, x6m17) = NeonButterfly::butterfly2_f32(u6, u17);
+                let x6m17 = vcaddq_rot90_f32(vdupq_n_f32(0.), x6m17);
+                let y00 = vaddq_f32(y00, x6p17);
+                let (x7p16, x7m16) = NeonButterfly::butterfly2_f32(u7, u16);
+                let x7m16 = vcaddq_rot90_f32(vdupq_n_f32(0.), x7m16);
+                let y00 = vaddq_f32(y00, x7p16);
+                let (x8p15, x8m15) = NeonButterfly::butterfly2_f32(u8, u15);
+                let x8m15 = vcaddq_rot90_f32(vdupq_n_f32(0.), x8m15);
+                let y00 = vaddq_f32(y00, x8p15);
+                let (x9p14, x9m14) = NeonButterfly::butterfly2_f32(u9, u14);
+                let x9m14 = vcaddq_rot90_f32(vdupq_n_f32(0.), x9m14);
+                let y00 = vaddq_f32(y00, x9p14);
+                let (x10p13, x10m13) = NeonButterfly::butterfly2_f32(u10, u13);
+                let x10m13 = vcaddq_rot90_f32(vdupq_n_f32(0.), x10m13);
+                let y00 = vaddq_f32(y00, x10p13);
+                let (x11p12, x11m12) = NeonButterfly::butterfly2_f32(u11, u12);
+                let x11m12 = vcaddq_rot90_f32(vdupq_n_f32(0.), x11m12);
+                let y00 = vaddq_f32(y00, x11p12);
+
+                let m0122a = vfmaq_n_f32(u0, x1p22, self.twiddle1.re);
+                let m0122a = vfmaq_n_f32(m0122a, x2p21, self.twiddle2.re);
+                let m0122a = vfmaq_n_f32(m0122a, x3p20, self.twiddle3.re);
+                let m0122a = vfmaq_n_f32(m0122a, x4p19, self.twiddle4.re);
+                let m0122a = vfmaq_n_f32(m0122a, x5p18, self.twiddle5.re);
+                let m0122a = vfmaq_n_f32(m0122a, x6p17, self.twiddle6.re);
+                let m0122a = vfmaq_n_f32(m0122a, x7p16, self.twiddle7.re);
+                let m0122a = vfmaq_n_f32(m0122a, x8p15, self.twiddle8.re);
+                let m0122a = vfmaq_n_f32(m0122a, x9p14, self.twiddle9.re);
+                let m0122a = vfmaq_n_f32(m0122a, x10p13, self.twiddle10.re);
+                let m0122a = vfmaq_n_f32(m0122a, x11p12, self.twiddle11.re);
+                let m0122b = vmulq_n_f32(x1m22, self.twiddle1.im);
+                let m0122b = vfmaq_n_f32(m0122b, x2m21, self.twiddle2.im);
+                let m0122b = vfmaq_n_f32(m0122b, x3m20, self.twiddle3.im);
+                let m0122b = vfmaq_n_f32(m0122b, x4m19, self.twiddle4.im);
+                let m0122b = vfmaq_n_f32(m0122b, x5m18, self.twiddle5.im);
+                let m0122b = vfmaq_n_f32(m0122b, x6m17, self.twiddle6.im);
+                let m0122b = vfmaq_n_f32(m0122b, x7m16, self.twiddle7.im);
+                let m0122b = vfmaq_n_f32(m0122b, x8m15, self.twiddle8.im);
+                let m0122b = vfmaq_n_f32(m0122b, x9m14, self.twiddle9.im);
+                let m0122b = vfmaq_n_f32(m0122b, x10m13, self.twiddle10.im);
+                let m0122b = vfmaq_n_f32(m0122b, x11m12, self.twiddle11.im);
+                let (y01, y22) = NeonButterfly::butterfly2_f32(m0122a, m0122b);
+
+                shift_store!(chunk, 0, y00, y01);
+                shift_storel!(chunk, 22, y22);
+
+                let m0221a = vfmaq_n_f32(u0, x1p22, self.twiddle2.re);
+                let m0221a = vfmaq_n_f32(m0221a, x2p21, self.twiddle4.re);
+                let m0221a = vfmaq_n_f32(m0221a, x3p20, self.twiddle6.re);
+                let m0221a = vfmaq_n_f32(m0221a, x4p19, self.twiddle8.re);
+                let m0221a = vfmaq_n_f32(m0221a, x5p18, self.twiddle10.re);
+                let m0221a = vfmaq_n_f32(m0221a, x6p17, self.twiddle11.re);
+                let m0221a = vfmaq_n_f32(m0221a, x7p16, self.twiddle9.re);
+                let m0221a = vfmaq_n_f32(m0221a, x8p15, self.twiddle7.re);
+                let m0221a = vfmaq_n_f32(m0221a, x9p14, self.twiddle5.re);
+                let m0221a = vfmaq_n_f32(m0221a, x10p13, self.twiddle3.re);
+                let m0221a = vfmaq_n_f32(m0221a, x11p12, self.twiddle1.re);
+                let m0221b = vmulq_n_f32(x1m22, self.twiddle2.im);
+                let m0221b = vfmaq_n_f32(m0221b, x2m21, self.twiddle4.im);
+                let m0221b = vfmaq_n_f32(m0221b, x3m20, self.twiddle6.im);
+                let m0221b = vfmaq_n_f32(m0221b, x4m19, self.twiddle8.im);
+                let m0221b = vfmaq_n_f32(m0221b, x5m18, self.twiddle10.im);
+                let m0221b = vfmsq_n_f32(m0221b, x6m17, self.twiddle11.im);
+                let m0221b = vfmsq_n_f32(m0221b, x7m16, self.twiddle9.im);
+                let m0221b = vfmsq_n_f32(m0221b, x8m15, self.twiddle7.im);
+                let m0221b = vfmsq_n_f32(m0221b, x9m14, self.twiddle5.im);
+                let m0221b = vfmsq_n_f32(m0221b, x10m13, self.twiddle3.im);
+                let m0221b = vfmsq_n_f32(m0221b, x11m12, self.twiddle1.im);
+                let (y02, y21) = NeonButterfly::butterfly2_f32(m0221a, m0221b);
+
+                let m0320a = vfmaq_n_f32(u0, x1p22, self.twiddle3.re);
+                let m0320a = vfmaq_n_f32(m0320a, x2p21, self.twiddle6.re);
+                let m0320a = vfmaq_n_f32(m0320a, x3p20, self.twiddle9.re);
+                let m0320a = vfmaq_n_f32(m0320a, x4p19, self.twiddle11.re);
+                let m0320a = vfmaq_n_f32(m0320a, x5p18, self.twiddle8.re);
+                let m0320a = vfmaq_n_f32(m0320a, x6p17, self.twiddle5.re);
+                let m0320a = vfmaq_n_f32(m0320a, x7p16, self.twiddle2.re);
+                let m0320a = vfmaq_n_f32(m0320a, x8p15, self.twiddle1.re);
+                let m0320a = vfmaq_n_f32(m0320a, x9p14, self.twiddle4.re);
+                let m0320a = vfmaq_n_f32(m0320a, x10p13, self.twiddle7.re);
+                let m0320a = vfmaq_n_f32(m0320a, x11p12, self.twiddle10.re);
+                let m0320b = vmulq_n_f32(x1m22, self.twiddle3.im);
+                let m0320b = vfmaq_n_f32(m0320b, x2m21, self.twiddle6.im);
+                let m0320b = vfmaq_n_f32(m0320b, x3m20, self.twiddle9.im);
+                let m0320b = vfmsq_n_f32(m0320b, x4m19, self.twiddle11.im);
+                let m0320b = vfmsq_n_f32(m0320b, x5m18, self.twiddle8.im);
+                let m0320b = vfmsq_n_f32(m0320b, x6m17, self.twiddle5.im);
+                let m0320b = vfmsq_n_f32(m0320b, x7m16, self.twiddle2.im);
+                let m0320b = vfmaq_n_f32(m0320b, x8m15, self.twiddle1.im);
+                let m0320b = vfmaq_n_f32(m0320b, x9m14, self.twiddle4.im);
+                let m0320b = vfmaq_n_f32(m0320b, x10m13, self.twiddle7.im);
+                let m0320b = vfmaq_n_f32(m0320b, x11m12, self.twiddle10.im);
+                let (y03, y20) = NeonButterfly::butterfly2_f32(m0320a, m0320b);
+
+                shift_store!(chunk, 2, y02, y03);
+                shift_store!(chunk, 20, y20, y21);
+
+                let m0419a = vfmaq_n_f32(u0, x1p22, self.twiddle4.re);
+                let m0419a = vfmaq_n_f32(m0419a, x2p21, self.twiddle8.re);
+                let m0419a = vfmaq_n_f32(m0419a, x3p20, self.twiddle11.re);
+                let m0419a = vfmaq_n_f32(m0419a, x4p19, self.twiddle7.re);
+                let m0419a = vfmaq_n_f32(m0419a, x5p18, self.twiddle3.re);
+                let m0419a = vfmaq_n_f32(m0419a, x6p17, self.twiddle1.re);
+                let m0419a = vfmaq_n_f32(m0419a, x7p16, self.twiddle5.re);
+                let m0419a = vfmaq_n_f32(m0419a, x8p15, self.twiddle9.re);
+                let m0419a = vfmaq_n_f32(m0419a, x9p14, self.twiddle10.re);
+                let m0419a = vfmaq_n_f32(m0419a, x10p13, self.twiddle6.re);
+                let m0419a = vfmaq_n_f32(m0419a, x11p12, self.twiddle2.re);
+                let m0419b = vmulq_n_f32(x1m22, self.twiddle4.im);
+                let m0419b = vfmaq_n_f32(m0419b, x2m21, self.twiddle8.im);
+                let m0419b = vfmsq_n_f32(m0419b, x3m20, self.twiddle11.im);
+                let m0419b = vfmsq_n_f32(m0419b, x4m19, self.twiddle7.im);
+                let m0419b = vfmsq_n_f32(m0419b, x5m18, self.twiddle3.im);
+                let m0419b = vfmaq_n_f32(m0419b, x6m17, self.twiddle1.im);
+                let m0419b = vfmaq_n_f32(m0419b, x7m16, self.twiddle5.im);
+                let m0419b = vfmaq_n_f32(m0419b, x8m15, self.twiddle9.im);
+                let m0419b = vfmsq_n_f32(m0419b, x9m14, self.twiddle10.im);
+                let m0419b = vfmsq_n_f32(m0419b, x10m13, self.twiddle6.im);
+                let m0419b = vfmsq_n_f32(m0419b, x11m12, self.twiddle2.im);
+                let (y04, y19) = NeonButterfly::butterfly2_f32(m0419a, m0419b);
+
+                let m0518a = vfmaq_n_f32(u0, x1p22, self.twiddle5.re);
+                let m0518a = vfmaq_n_f32(m0518a, x2p21, self.twiddle10.re);
+                let m0518a = vfmaq_n_f32(m0518a, x3p20, self.twiddle8.re);
+                let m0518a = vfmaq_n_f32(m0518a, x4p19, self.twiddle3.re);
+                let m0518a = vfmaq_n_f32(m0518a, x5p18, self.twiddle2.re);
+                let m0518a = vfmaq_n_f32(m0518a, x6p17, self.twiddle7.re);
+                let m0518a = vfmaq_n_f32(m0518a, x7p16, self.twiddle11.re);
+                let m0518a = vfmaq_n_f32(m0518a, x8p15, self.twiddle6.re);
+                let m0518a = vfmaq_n_f32(m0518a, x9p14, self.twiddle1.re);
+                let m0518a = vfmaq_n_f32(m0518a, x10p13, self.twiddle4.re);
+                let m0518a = vfmaq_n_f32(m0518a, x11p12, self.twiddle9.re);
+                let m0518b = vmulq_n_f32(x1m22, self.twiddle5.im);
+                let m0518b = vfmaq_n_f32(m0518b, x2m21, self.twiddle10.im);
+                let m0518b = vfmsq_n_f32(m0518b, x3m20, self.twiddle8.im);
+                let m0518b = vfmsq_n_f32(m0518b, x4m19, self.twiddle3.im);
+                let m0518b = vfmaq_n_f32(m0518b, x5m18, self.twiddle2.im);
+                let m0518b = vfmaq_n_f32(m0518b, x6m17, self.twiddle7.im);
+                let m0518b = vfmsq_n_f32(m0518b, x7m16, self.twiddle11.im);
+                let m0518b = vfmsq_n_f32(m0518b, x8m15, self.twiddle6.im);
+                let m0518b = vfmsq_n_f32(m0518b, x9m14, self.twiddle1.im);
+                let m0518b = vfmaq_n_f32(m0518b, x10m13, self.twiddle4.im);
+                let m0518b = vfmaq_n_f32(m0518b, x11m12, self.twiddle9.im);
+                let (y05, y18) = NeonButterfly::butterfly2_f32(m0518a, m0518b);
+
+                shift_store!(chunk, 4, y04, y05);
+                shift_store!(chunk, 18, y18, y19);
+
+                let m0617a = vfmaq_n_f32(u0, x1p22, self.twiddle6.re);
+                let m0617a = vfmaq_n_f32(m0617a, x2p21, self.twiddle11.re);
+                let m0617a = vfmaq_n_f32(m0617a, x3p20, self.twiddle5.re);
+                let m0617a = vfmaq_n_f32(m0617a, x4p19, self.twiddle1.re);
+                let m0617a = vfmaq_n_f32(m0617a, x5p18, self.twiddle7.re);
+                let m0617a = vfmaq_n_f32(m0617a, x6p17, self.twiddle10.re);
+                let m0617a = vfmaq_n_f32(m0617a, x7p16, self.twiddle4.re);
+                let m0617a = vfmaq_n_f32(m0617a, x8p15, self.twiddle2.re);
+                let m0617a = vfmaq_n_f32(m0617a, x9p14, self.twiddle8.re);
+                let m0617a = vfmaq_n_f32(m0617a, x10p13, self.twiddle9.re);
+                let m0617a = vfmaq_n_f32(m0617a, x11p12, self.twiddle3.re);
+                let m0617b = vmulq_n_f32(x1m22, self.twiddle6.im);
+                let m0617b = vfmsq_n_f32(m0617b, x2m21, self.twiddle11.im);
+                let m0617b = vfmsq_n_f32(m0617b, x3m20, self.twiddle5.im);
+                let m0617b = vfmaq_n_f32(m0617b, x4m19, self.twiddle1.im);
+                let m0617b = vfmaq_n_f32(m0617b, x5m18, self.twiddle7.im);
+                let m0617b = vfmsq_n_f32(m0617b, x6m17, self.twiddle10.im);
+                let m0617b = vfmsq_n_f32(m0617b, x7m16, self.twiddle4.im);
+                let m0617b = vfmaq_n_f32(m0617b, x8m15, self.twiddle2.im);
+                let m0617b = vfmaq_n_f32(m0617b, x9m14, self.twiddle8.im);
+                let m0617b = vfmsq_n_f32(m0617b, x10m13, self.twiddle9.im);
+                let m0617b = vfmsq_n_f32(m0617b, x11m12, self.twiddle3.im);
+                let (y06, y17) = NeonButterfly::butterfly2_f32(m0617a, m0617b);
+
+                let m0716a = vfmaq_n_f32(u0, x1p22, self.twiddle7.re);
+                let m0716a = vfmaq_n_f32(m0716a, x2p21, self.twiddle9.re);
+                let m0716a = vfmaq_n_f32(m0716a, x3p20, self.twiddle2.re);
+                let m0716a = vfmaq_n_f32(m0716a, x4p19, self.twiddle5.re);
+                let m0716a = vfmaq_n_f32(m0716a, x5p18, self.twiddle11.re);
+                let m0716a = vfmaq_n_f32(m0716a, x6p17, self.twiddle4.re);
+                let m0716a = vfmaq_n_f32(m0716a, x7p16, self.twiddle3.re);
+                let m0716a = vfmaq_n_f32(m0716a, x8p15, self.twiddle10.re);
+                let m0716a = vfmaq_n_f32(m0716a, x9p14, self.twiddle6.re);
+                let m0716a = vfmaq_n_f32(m0716a, x10p13, self.twiddle1.re);
+                let m0716a = vfmaq_n_f32(m0716a, x11p12, self.twiddle8.re);
+                let m0716b = vmulq_n_f32(x1m22, self.twiddle7.im);
+                let m0716b = vfmsq_n_f32(m0716b, x2m21, self.twiddle9.im);
+                let m0716b = vfmsq_n_f32(m0716b, x3m20, self.twiddle2.im);
+                let m0716b = vfmaq_n_f32(m0716b, x4m19, self.twiddle5.im);
+                let m0716b = vfmsq_n_f32(m0716b, x5m18, self.twiddle11.im);
+                let m0716b = vfmsq_n_f32(m0716b, x6m17, self.twiddle4.im);
+                let m0716b = vfmaq_n_f32(m0716b, x7m16, self.twiddle3.im);
+                let m0716b = vfmaq_n_f32(m0716b, x8m15, self.twiddle10.im);
+                let m0716b = vfmsq_n_f32(m0716b, x9m14, self.twiddle6.im);
+                let m0716b = vfmaq_n_f32(m0716b, x10m13, self.twiddle1.im);
+                let m0716b = vfmaq_n_f32(m0716b, x11m12, self.twiddle8.im);
+                let (y07, y16) = NeonButterfly::butterfly2_f32(m0716a, m0716b);
+
+                shift_store!(chunk, 6, y06, y07);
+                shift_store!(chunk, 16, y16, y17);
+
+                let m0815a = vfmaq_n_f32(u0, x1p22, self.twiddle8.re);
+                let m0815a = vfmaq_n_f32(m0815a, x2p21, self.twiddle7.re);
+                let m0815a = vfmaq_n_f32(m0815a, x3p20, self.twiddle1.re);
+                let m0815a = vfmaq_n_f32(m0815a, x4p19, self.twiddle9.re);
+                let m0815a = vfmaq_n_f32(m0815a, x5p18, self.twiddle6.re);
+                let m0815a = vfmaq_n_f32(m0815a, x6p17, self.twiddle2.re);
+                let m0815a = vfmaq_n_f32(m0815a, x7p16, self.twiddle10.re);
+                let m0815a = vfmaq_n_f32(m0815a, x8p15, self.twiddle5.re);
+                let m0815a = vfmaq_n_f32(m0815a, x9p14, self.twiddle3.re);
+                let m0815a = vfmaq_n_f32(m0815a, x10p13, self.twiddle11.re);
+                let m0815a = vfmaq_n_f32(m0815a, x11p12, self.twiddle4.re);
+                let m0815b = vmulq_n_f32(x1m22, self.twiddle8.im);
+                let m0815b = vfmsq_n_f32(m0815b, x2m21, self.twiddle7.im);
+                let m0815b = vfmaq_n_f32(m0815b, x3m20, self.twiddle1.im);
+                let m0815b = vfmaq_n_f32(m0815b, x4m19, self.twiddle9.im);
+                let m0815b = vfmsq_n_f32(m0815b, x5m18, self.twiddle6.im);
+                let m0815b = vfmaq_n_f32(m0815b, x6m17, self.twiddle2.im);
+                let m0815b = vfmaq_n_f32(m0815b, x7m16, self.twiddle10.im);
+                let m0815b = vfmsq_n_f32(m0815b, x8m15, self.twiddle5.im);
+                let m0815b = vfmaq_n_f32(m0815b, x9m14, self.twiddle3.im);
+                let m0815b = vfmaq_n_f32(m0815b, x10m13, self.twiddle11.im);
+                let m0815b = vfmsq_n_f32(m0815b, x11m12, self.twiddle4.im);
+                let (y08, y15) = NeonButterfly::butterfly2_f32(m0815a, m0815b);
+
+                let m0914a = vfmaq_n_f32(u0, x1p22, self.twiddle9.re);
+                let m0914a = vfmaq_n_f32(m0914a, x2p21, self.twiddle5.re);
+                let m0914a = vfmaq_n_f32(m0914a, x3p20, self.twiddle4.re);
+                let m0914a = vfmaq_n_f32(m0914a, x4p19, self.twiddle10.re);
+                let m0914a = vfmaq_n_f32(m0914a, x5p18, self.twiddle1.re);
+                let m0914a = vfmaq_n_f32(m0914a, x6p17, self.twiddle8.re);
+                let m0914a = vfmaq_n_f32(m0914a, x7p16, self.twiddle6.re);
+                let m0914a = vfmaq_n_f32(m0914a, x8p15, self.twiddle3.re);
+                let m0914a = vfmaq_n_f32(m0914a, x9p14, self.twiddle11.re);
+                let m0914a = vfmaq_n_f32(m0914a, x10p13, self.twiddle2.re);
+                let m0914a = vfmaq_n_f32(m0914a, x11p12, self.twiddle7.re);
+                let m0914b = vmulq_n_f32(x1m22, self.twiddle9.im);
+                let m0914b = vfmsq_n_f32(m0914b, x2m21, self.twiddle5.im);
+                let m0914b = vfmaq_n_f32(m0914b, x3m20, self.twiddle4.im);
+                let m0914b = vfmsq_n_f32(m0914b, x4m19, self.twiddle10.im);
+                let m0914b = vfmsq_n_f32(m0914b, x5m18, self.twiddle1.im);
+                let m0914b = vfmaq_n_f32(m0914b, x6m17, self.twiddle8.im);
+                let m0914b = vfmsq_n_f32(m0914b, x7m16, self.twiddle6.im);
+                let m0914b = vfmaq_n_f32(m0914b, x8m15, self.twiddle3.im);
+                let m0914b = vfmsq_n_f32(m0914b, x9m14, self.twiddle11.im);
+                let m0914b = vfmsq_n_f32(m0914b, x10m13, self.twiddle2.im);
+                let m0914b = vfmaq_n_f32(m0914b, x11m12, self.twiddle7.im);
+                let (y09, y14) = NeonButterfly::butterfly2_f32(m0914a, m0914b);
+
+                shift_store!(chunk, 8, y08, y09);
+                shift_store!(chunk, 14, y14, y15);
+
+                let m1013a = vfmaq_n_f32(u0, x1p22, self.twiddle10.re);
+                let m1013a = vfmaq_n_f32(m1013a, x2p21, self.twiddle3.re);
+                let m1013a = vfmaq_n_f32(m1013a, x3p20, self.twiddle7.re);
+                let m1013a = vfmaq_n_f32(m1013a, x4p19, self.twiddle6.re);
+                let m1013a = vfmaq_n_f32(m1013a, x5p18, self.twiddle4.re);
+                let m1013a = vfmaq_n_f32(m1013a, x6p17, self.twiddle9.re);
+                let m1013a = vfmaq_n_f32(m1013a, x7p16, self.twiddle1.re);
+                let m1013a = vfmaq_n_f32(m1013a, x8p15, self.twiddle11.re);
+                let m1013a = vfmaq_n_f32(m1013a, x9p14, self.twiddle2.re);
+                let m1013a = vfmaq_n_f32(m1013a, x10p13, self.twiddle8.re);
+                let m1013a = vfmaq_n_f32(m1013a, x11p12, self.twiddle5.re);
+                let m1013b = vmulq_n_f32(x1m22, self.twiddle10.im);
+                let m1013b = vfmsq_n_f32(m1013b, x2m21, self.twiddle3.im);
+                let m1013b = vfmaq_n_f32(m1013b, x3m20, self.twiddle7.im);
+                let m1013b = vfmsq_n_f32(m1013b, x4m19, self.twiddle6.im);
+                let m1013b = vfmaq_n_f32(m1013b, x5m18, self.twiddle4.im);
+                let m1013b = vfmsq_n_f32(m1013b, x6m17, self.twiddle9.im);
+                let m1013b = vfmaq_n_f32(m1013b, x7m16, self.twiddle1.im);
+                let m1013b = vfmaq_n_f32(m1013b, x8m15, self.twiddle11.im);
+                let m1013b = vfmsq_n_f32(m1013b, x9m14, self.twiddle2.im);
+                let m1013b = vfmaq_n_f32(m1013b, x10m13, self.twiddle8.im);
+                let m1013b = vfmsq_n_f32(m1013b, x11m12, self.twiddle5.im);
+                let (y10, y13) = NeonButterfly::butterfly2_f32(m1013a, m1013b);
+
+                let m1112a = vfmaq_n_f32(u0, x1p22, self.twiddle11.re);
+                let m1112a = vfmaq_n_f32(m1112a, x2p21, self.twiddle1.re);
+                let m1112a = vfmaq_n_f32(m1112a, x3p20, self.twiddle10.re);
+                let m1112a = vfmaq_n_f32(m1112a, x4p19, self.twiddle2.re);
+                let m1112a = vfmaq_n_f32(m1112a, x5p18, self.twiddle9.re);
+                let m1112a = vfmaq_n_f32(m1112a, x6p17, self.twiddle3.re);
+                let m1112a = vfmaq_n_f32(m1112a, x7p16, self.twiddle8.re);
+                let m1112a = vfmaq_n_f32(m1112a, x8p15, self.twiddle4.re);
+                let m1112a = vfmaq_n_f32(m1112a, x9p14, self.twiddle7.re);
+                let m1112a = vfmaq_n_f32(m1112a, x10p13, self.twiddle5.re);
+                let m1112a = vfmaq_n_f32(m1112a, x11p12, self.twiddle6.re);
+                let m1112b = vmulq_n_f32(x1m22, self.twiddle11.im);
+                let m1112b = vfmsq_n_f32(m1112b, x2m21, self.twiddle1.im);
+                let m1112b = vfmaq_n_f32(m1112b, x3m20, self.twiddle10.im);
+                let m1112b = vfmsq_n_f32(m1112b, x4m19, self.twiddle2.im);
+                let m1112b = vfmaq_n_f32(m1112b, x5m18, self.twiddle9.im);
+                let m1112b = vfmsq_n_f32(m1112b, x6m17, self.twiddle3.im);
+                let m1112b = vfmaq_n_f32(m1112b, x7m16, self.twiddle8.im);
+                let m1112b = vfmsq_n_f32(m1112b, x8m15, self.twiddle4.im);
+                let m1112b = vfmaq_n_f32(m1112b, x9m14, self.twiddle7.im);
+                let m1112b = vfmsq_n_f32(m1112b, x10m13, self.twiddle5.im);
+                let m1112b = vfmaq_n_f32(m1112b, x11m12, self.twiddle6.im);
+                let (y11, y12) = NeonButterfly::butterfly2_f32(m1112a, m1112b);
+
+                shift_store!(chunk, 10, y10, y11);
+                shift_store!(chunk, 12, y12, y13);
+            }
+
+            let rem = in_place.chunks_exact_mut(46).into_remainder();
+
+            for chunk in rem.chunks_exact_mut(23) {
                 let u0u1 = vld1q_f32(chunk.as_mut_ptr().cast());
                 let u2u3 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());

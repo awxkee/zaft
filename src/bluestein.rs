@@ -35,6 +35,7 @@ use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Rem, Sub};
+use std::sync::Arc;
 
 pub(crate) struct BluesteinFft<T> {
     convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
@@ -42,7 +43,7 @@ pub(crate) struct BluesteinFft<T> {
     twiddles: Vec<Complex<T>>,
     execution_length: usize,
     direction: FftDirection,
-    spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
+    spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
 }
 
 fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(

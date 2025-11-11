@@ -65,7 +65,7 @@ pub(crate) unsafe fn _mm256_set2_complexd(v0: Complex<f64>, v1: Complex<f64>) ->
 
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
-pub(crate) unsafe fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
+pub(crate) fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_unpacklo_pd(b, b);
     let mut temp2 = _mm_unpackhi_pd(b, b);
     temp2 = _mm_mul_pd(temp2, a);
@@ -75,7 +75,7 @@ pub(crate) unsafe fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
 
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
-pub(crate) unsafe fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
+pub(crate) fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
     let a_yx = _mm256_permute_pd::<0b0101>(a); // [a_im, a_re, b_im, b_re]
 
@@ -89,7 +89,7 @@ pub(crate) unsafe fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
 
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
-pub(crate) unsafe fn _mm_fcmul_ps(a: __m128, b: __m128) -> __m128 {
+pub(crate) fn _mm_fcmul_ps(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(b, b);
     let temp2 = _mm_shuffle_ps::<0xF5>(b, b);
     let mul2 = _mm_mul_ps(a, temp2);
@@ -105,19 +105,19 @@ pub(crate) unsafe fn _m128s_load_f32x2(a: *const Complex<f32>) -> __m128 {
 
 #[inline]
 #[target_feature(enable = "sse4.2")]
-pub(crate) unsafe fn _m128s_store_f32x2(a: *mut Complex<f32>, b: __m128) {
+pub(crate) fn _m128s_store_f32x2(a: *mut Complex<f32>, b: __m128) {
     unsafe { _mm_storeu_si64(a.cast(), _mm_castps_si128(b)) }
 }
 
 #[inline]
 #[target_feature(enable = "sse4.2")]
-pub(crate) unsafe fn _m128s_storeh_f32x2(a: *mut Complex<f32>, b: __m128) {
+pub(crate) fn _m128s_storeh_f32x2(a: *mut Complex<f32>, b: __m128) {
     unsafe { _mm_storeh_pd(a.cast(), _mm_castps_pd(b)) }
 }
 
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
-pub(crate) unsafe fn _mm256_fcmul_ps(a: __m256, b: __m256) -> __m256 {
+pub(crate) fn _mm256_fcmul_ps(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
     let ar = _mm256_moveldup_ps(a); // duplicate even lanes (re parts)
     let ai = _mm256_movehdup_ps(a); // duplicate odd lanes (im parts)
@@ -224,7 +224,7 @@ pub(crate) unsafe fn _mm256s_deinterleave4_epi64(
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn _mm256_permute4x64_ps<const IMM: i32>(a: __m256) -> __m256 {
+pub(crate) fn _mm256_permute4x64_ps<const IMM: i32>(a: __m256) -> __m256 {
     _mm256_castpd_ps(_mm256_permute4x64_pd::<IMM>(_mm256_castps_pd(a)))
 }
 

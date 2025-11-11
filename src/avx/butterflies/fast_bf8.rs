@@ -79,58 +79,56 @@ impl AvxFastButterfly8<f64> {
         __m128d,
         __m128d,
     ) {
-        unsafe {
-            let (u0, u2, u4, u6) = AvxButterfly::butterfly4h_f64(
-                u0,
-                u2,
-                u4,
-                u6,
-                _mm256_castpd256_pd128(self.rotate.rot_flag),
-            );
-            let (u1, mut u3, mut u5, mut u7) = AvxButterfly::butterfly4h_f64(
-                u1,
+        let (u0, u2, u4, u6) = AvxButterfly::butterfly4h_f64(
+            u0,
+            u2,
+            u4,
+            u6,
+            _mm256_castpd256_pd128(self.rotate.rot_flag),
+        );
+        let (u1, mut u3, mut u5, mut u7) = AvxButterfly::butterfly4h_f64(
+            u1,
+            u3,
+            u5,
+            u7,
+            _mm256_castpd256_pd128(self.rotate.rot_flag),
+        );
+
+        u3 = _mm_mul_pd(
+            _mm_add_pd(
+                _mm_xor_pd(
+                    _mm_shuffle_pd::<0b01>(u3, u3),
+                    _mm256_castpd256_pd128(self.rotate.rot_flag),
+                ),
                 u3,
-                u5,
+            ),
+            _mm256_castpd256_pd128(self.root2),
+        );
+        u5 = _mm_xor_pd(
+            _mm_shuffle_pd::<0b01>(u5, u5),
+            _mm256_castpd256_pd128(self.rotate.rot_flag),
+        );
+        u7 = _mm_mul_pd(
+            _mm_sub_pd(
+                _mm_xor_pd(
+                    _mm_shuffle_pd::<0b01>(u7, u7),
+                    _mm256_castpd256_pd128(self.rotate.rot_flag),
+                ),
                 u7,
-                _mm256_castpd256_pd128(self.rotate.rot_flag),
-            );
+            ),
+            _mm256_castpd256_pd128(self.root2),
+        );
 
-            u3 = _mm_mul_pd(
-                _mm_add_pd(
-                    _mm_xor_pd(
-                        _mm_shuffle_pd::<0b01>(u3, u3),
-                        _mm256_castpd256_pd128(self.rotate.rot_flag),
-                    ),
-                    u3,
-                ),
-                _mm256_castpd256_pd128(self.root2),
-            );
-            u5 = _mm_xor_pd(
-                _mm_shuffle_pd::<0b01>(u5, u5),
-                _mm256_castpd256_pd128(self.rotate.rot_flag),
-            );
-            u7 = _mm_mul_pd(
-                _mm_sub_pd(
-                    _mm_xor_pd(
-                        _mm_shuffle_pd::<0b01>(u7, u7),
-                        _mm256_castpd256_pd128(self.rotate.rot_flag),
-                    ),
-                    u7,
-                ),
-                _mm256_castpd256_pd128(self.root2),
-            );
-
-            let (y0, y1) = AvxButterfly::butterfly2_f64_m128(u0, u1);
-            let (y2, y3) = AvxButterfly::butterfly2_f64_m128(u2, u3);
-            let (y4, y5) = AvxButterfly::butterfly2_f64_m128(u4, u5);
-            let (y6, y7) = AvxButterfly::butterfly2_f64_m128(u6, u7);
-            (y0, y2, y4, y6, y1, y3, y5, y7)
-        }
+        let (y0, y1) = AvxButterfly::butterfly2_f64_m128(u0, u1);
+        let (y2, y3) = AvxButterfly::butterfly2_f64_m128(u2, u3);
+        let (y4, y5) = AvxButterfly::butterfly2_f64_m128(u4, u5);
+        let (y6, y7) = AvxButterfly::butterfly2_f64_m128(u6, u7);
+        (y0, y2, y4, y6, y1, y3, y5, y7)
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(
+    pub(crate) fn exec(
         &self,
         u0: __m256d,
         u1: __m256d,
@@ -150,29 +148,26 @@ impl AvxFastButterfly8<f64> {
         __m256d,
         __m256d,
     ) {
-        unsafe {
-            let (u0, u2, u4, u6) =
-                AvxButterfly::butterfly4_f64(u0, u2, u4, u6, self.rotate.rot_flag);
-            let (u1, mut u3, mut u5, mut u7) =
-                AvxButterfly::butterfly4_f64(u1, u3, u5, u7, self.rotate.rot_flag);
+        let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f64(u0, u2, u4, u6, self.rotate.rot_flag);
+        let (u1, mut u3, mut u5, mut u7) =
+            AvxButterfly::butterfly4_f64(u1, u3, u5, u7, self.rotate.rot_flag);
 
-            u3 = _mm256_mul_pd(_mm256_add_pd(self.rotate.rotate_m256d(u3), u3), self.root2);
-            u5 = self.rotate.rotate_m256d(u5);
-            u7 = _mm256_mul_pd(_mm256_sub_pd(self.rotate.rotate_m256d(u7), u7), self.root2);
+        u3 = _mm256_mul_pd(_mm256_add_pd(self.rotate.rotate_m256d(u3), u3), self.root2);
+        u5 = self.rotate.rotate_m256d(u5);
+        u7 = _mm256_mul_pd(_mm256_sub_pd(self.rotate.rotate_m256d(u7), u7), self.root2);
 
-            let (y0, y1) = AvxButterfly::butterfly2_f64(u0, u1);
-            let (y2, y3) = AvxButterfly::butterfly2_f64(u2, u3);
-            let (y4, y5) = AvxButterfly::butterfly2_f64(u4, u5);
-            let (y6, y7) = AvxButterfly::butterfly2_f64(u6, u7);
-            (y0, y2, y4, y6, y1, y3, y5, y7)
-        }
+        let (y0, y1) = AvxButterfly::butterfly2_f64(u0, u1);
+        let (y2, y3) = AvxButterfly::butterfly2_f64(u2, u3);
+        let (y4, y5) = AvxButterfly::butterfly2_f64(u4, u5);
+        let (y6, y7) = AvxButterfly::butterfly2_f64(u6, u7);
+        (y0, y2, y4, y6, y1, y3, y5, y7)
     }
 }
 
 impl AvxFastButterfly8<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec_short(
+    pub(crate) fn exec_short(
         &self,
         u0: __m128,
         u1: __m128,
@@ -192,43 +187,41 @@ impl AvxFastButterfly8<f32> {
         __m128,
         __m128,
     ) {
-        unsafe {
-            let (u0, u2, u4, u6) = AvxButterfly::butterfly4h_f32(
-                u0,
-                u2,
-                u4,
-                u6,
-                _mm_castpd_ps(_mm256_castpd256_pd128(self.rotate.rot_flag)),
-            );
-            let (u1, mut u3, mut u5, mut u7) = AvxButterfly::butterfly4h_f32(
-                u1,
-                u3,
-                u5,
-                u7,
-                _mm_castpd_ps(_mm256_castpd256_pd128(self.rotate.rot_flag)),
-            );
+        let (u0, u2, u4, u6) = AvxButterfly::butterfly4h_f32(
+            u0,
+            u2,
+            u4,
+            u6,
+            _mm_castpd_ps(_mm256_castpd256_pd128(self.rotate.rot_flag)),
+        );
+        let (u1, mut u3, mut u5, mut u7) = AvxButterfly::butterfly4h_f32(
+            u1,
+            u3,
+            u5,
+            u7,
+            _mm_castpd_ps(_mm256_castpd256_pd128(self.rotate.rot_flag)),
+        );
 
-            u3 = _mm_mul_ps(
-                _mm_add_ps(self.rotate.rotate_m128(u3), u3),
-                _mm_castpd_ps(_mm256_castpd256_pd128(self.root2)),
-            );
-            u5 = self.rotate.rotate_m128(u5);
-            u7 = _mm_mul_ps(
-                _mm_sub_ps(self.rotate.rotate_m128(u7), u7),
-                _mm_castpd_ps(_mm256_castpd256_pd128(self.root2)),
-            );
+        u3 = _mm_mul_ps(
+            _mm_add_ps(self.rotate.rotate_m128(u3), u3),
+            _mm_castpd_ps(_mm256_castpd256_pd128(self.root2)),
+        );
+        u5 = self.rotate.rotate_m128(u5);
+        u7 = _mm_mul_ps(
+            _mm_sub_ps(self.rotate.rotate_m128(u7), u7),
+            _mm_castpd_ps(_mm256_castpd256_pd128(self.root2)),
+        );
 
-            let (y0, y1) = AvxButterfly::butterfly2_f32_m128(u0, u1);
-            let (y2, y3) = AvxButterfly::butterfly2_f32_m128(u2, u3);
-            let (y4, y5) = AvxButterfly::butterfly2_f32_m128(u4, u5);
-            let (y6, y7) = AvxButterfly::butterfly2_f32_m128(u6, u7);
-            (y0, y2, y4, y6, y1, y3, y5, y7)
-        }
+        let (y0, y1) = AvxButterfly::butterfly2_f32_m128(u0, u1);
+        let (y2, y3) = AvxButterfly::butterfly2_f32_m128(u2, u3);
+        let (y4, y5) = AvxButterfly::butterfly2_f32_m128(u4, u5);
+        let (y6, y7) = AvxButterfly::butterfly2_f32_m128(u6, u7);
+        (y0, y2, y4, y6, y1, y3, y5, y7)
     }
 
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(
+    pub(crate) fn exec(
         &self,
         u0: __m256,
         u1: __m256,
@@ -248,37 +241,25 @@ impl AvxFastButterfly8<f32> {
         __m256,
         __m256,
     ) {
-        unsafe {
-            let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f32(
-                u0,
-                u2,
-                u4,
-                u6,
-                _mm256_castpd_ps(self.rotate.rot_flag),
-            );
-            let (u1, mut u3, mut u5, mut u7) = AvxButterfly::butterfly4_f32(
-                u1,
-                u3,
-                u5,
-                u7,
-                _mm256_castpd_ps(self.rotate.rot_flag),
-            );
+        let (u0, u2, u4, u6) =
+            AvxButterfly::butterfly4_f32(u0, u2, u4, u6, _mm256_castpd_ps(self.rotate.rot_flag));
+        let (u1, mut u3, mut u5, mut u7) =
+            AvxButterfly::butterfly4_f32(u1, u3, u5, u7, _mm256_castpd_ps(self.rotate.rot_flag));
 
-            u3 = _mm256_mul_ps(
-                _mm256_add_ps(self.rotate.rotate_m256(u3), u3),
-                _mm256_castpd_ps(self.root2),
-            );
-            u5 = self.rotate.rotate_m256(u5);
-            u7 = _mm256_mul_ps(
-                _mm256_sub_ps(self.rotate.rotate_m256(u7), u7),
-                _mm256_castpd_ps(self.root2),
-            );
+        u3 = _mm256_mul_ps(
+            _mm256_add_ps(self.rotate.rotate_m256(u3), u3),
+            _mm256_castpd_ps(self.root2),
+        );
+        u5 = self.rotate.rotate_m256(u5);
+        u7 = _mm256_mul_ps(
+            _mm256_sub_ps(self.rotate.rotate_m256(u7), u7),
+            _mm256_castpd_ps(self.root2),
+        );
 
-            let (y0, y1) = AvxButterfly::butterfly2_f32(u0, u1);
-            let (y2, y3) = AvxButterfly::butterfly2_f32(u2, u3);
-            let (y4, y5) = AvxButterfly::butterfly2_f32(u4, u5);
-            let (y6, y7) = AvxButterfly::butterfly2_f32(u6, u7);
-            (y0, y2, y4, y6, y1, y3, y5, y7)
-        }
+        let (y0, y1) = AvxButterfly::butterfly2_f32(u0, u1);
+        let (y2, y3) = AvxButterfly::butterfly2_f32(u2, u3);
+        let (y4, y5) = AvxButterfly::butterfly2_f32(u4, u5);
+        let (y6, y7) = AvxButterfly::butterfly2_f32(u6, u7);
+        (y0, y2, y4, y6, y1, y3, y5, y7)
     }
 }

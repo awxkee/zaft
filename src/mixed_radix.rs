@@ -36,6 +36,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::fmt::Display;
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 pub(crate) struct MixedRadix<T> {
     execution_length: usize,
@@ -45,7 +46,7 @@ pub(crate) struct MixedRadix<T> {
     width: usize,
     height_executor: Box<dyn FftExecutor<T> + Send + Sync>,
     height: usize,
-    spectrum_ops: Box<dyn SpectrumOps<T> + Send + Sync>,
+    spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
     transpose_executor: Box<dyn TransposeExecutor<T> + Send + Sync>,
 }
 

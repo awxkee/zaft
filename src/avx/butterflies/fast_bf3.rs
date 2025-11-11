@@ -83,7 +83,7 @@ impl AvxFastButterfly3<f32> {
 impl AvxFastButterfly3<f64> {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec_m128(
+    pub(crate) fn exec_m128(
         &self,
         u0: __m128d,
         u1: __m128d,
@@ -104,7 +104,7 @@ impl AvxFastButterfly3<f64> {
 
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(
+    pub(crate) fn exec(
         &self,
         u0: __m256d,
         u1: __m256d,
@@ -127,12 +127,7 @@ impl AvxFastButterfly3<f64> {
 impl AvxFastButterfly3<f32> {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec_m128(
-        &self,
-        u0: __m128,
-        u1: __m128,
-        u2: __m128,
-    ) -> (__m128, __m128, __m128) {
+    pub(crate) fn exec_m128(&self, u0: __m128, u1: __m128, u2: __m128) -> (__m128, __m128, __m128) {
         let xp = _mm_add_ps(u1, u2);
         let xn = _mm_sub_ps(u1, u2);
         let sum = _mm_add_ps(u0, xp);
@@ -161,12 +156,7 @@ impl AvxFastButterfly3<f32> {
 
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(
-        &self,
-        u0: __m256,
-        u1: __m256,
-        u2: __m256,
-    ) -> (__m256, __m256, __m256) {
+    pub(crate) fn exec(&self, u0: __m256, u1: __m256, u2: __m256) -> (__m256, __m256, __m256) {
         let xp = _mm256_add_ps(u1, u2);
         let xn = _mm256_sub_ps(u1, u2);
         let sum = _mm256_add_ps(u0, xp);

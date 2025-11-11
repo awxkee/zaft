@@ -34,7 +34,7 @@ mod mixed_radix;
 pub(super) use avx_stored::AvxStoreD;
 pub(super) use avx_storef::{AvxStoreF, SseStoreF};
 pub(super) use butterflies::{
-    ColumnButterfly4f, ColumnButterfly6d, ColumnButterfly9f, ColumnButterfly16d, ColumnButterfly16f,
+    ColumnButterfly4f, ColumnButterfly6d, ColumnButterfly8d, ColumnButterfly8f, ColumnButterfly9f,
 };
 pub(crate) use mixed_radix::{
     AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,
