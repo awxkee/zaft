@@ -107,21 +107,19 @@ impl NeonFastButterfly9d {
         float64x2_t,
         float64x2_t,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
 
-            u4 = vfcmulq_f64(u4, self.twiddle1);
-            u7 = vfcmulq_f64(u7, self.twiddle2);
-            u5 = vfcmulq_f64(u5, self.twiddle2);
-            u8 = vfcmulq_f64(u8, self.twiddle4);
+        u4 = vfcmulq_f64(u4, self.twiddle1);
+        u7 = vfcmulq_f64(u7, self.twiddle2);
+        u5 = vfcmulq_f64(u5, self.twiddle2);
+        u8 = vfcmulq_f64(u8, self.twiddle4);
 
-            let (y0, y3, y6) = self.bf3(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 }
 
@@ -204,21 +202,19 @@ impl NeonFcmaFastButterfly9d {
         float64x2_t,
         float64x2_t,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
 
-            use crate::neon::util::vfcmulq_fcma_f64;
-            u4 = vfcmulq_fcma_f64(u4, self.twiddle1);
-            u7 = vfcmulq_fcma_f64(u7, self.twiddle2);
-            u5 = vfcmulq_fcma_f64(u5, self.twiddle2);
-            u8 = vfcmulq_fcma_f64(u8, self.twiddle4);
+        use crate::neon::util::vfcmulq_fcma_f64;
+        u4 = vfcmulq_fcma_f64(u4, self.twiddle1);
+        u7 = vfcmulq_fcma_f64(u7, self.twiddle2);
+        u5 = vfcmulq_fcma_f64(u5, self.twiddle2);
+        u8 = vfcmulq_fcma_f64(u8, self.twiddle4);
 
-            let (y0, y3, y6) = self.bf3(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 }

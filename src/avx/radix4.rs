@@ -40,6 +40,7 @@ use crate::util::reverse_bits;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
+use std::any::TypeId;
 use std::arch::x86_64::*;
 
 pub(crate) struct AvxFmaRadix4<T> {
@@ -101,7 +102,12 @@ pub(crate) fn avx_bitreversed_transpose_f32_radix4(
     let width_bits = width.trailing_zeros();
     let d_bits = WIDTH.trailing_zeros();
 
-    assert!(width_bits % d_bits == 0);
+    assert_eq!(
+        width_bits % d_bits,
+        0,
+        "Radix-4 bit transpose assertion failed on input size {}",
+        input.len()
+    );
     let rev_digits = width_bits / d_bits;
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
@@ -154,7 +160,12 @@ pub(crate) fn avx_bitreversed_transpose_f64_radix4(
     let width_bits = width.trailing_zeros();
     let d_bits = WIDTH.trailing_zeros();
 
-    assert!(width_bits % d_bits == 0);
+    assert_eq!(
+        width_bits % d_bits,
+        0,
+        "Radix-4 bit transpose assertion failed on input size {}",
+        input.len()
+    );
     let rev_digits = width_bits / d_bits;
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
@@ -199,16 +210,36 @@ where
         assert!(size.is_power_of_two(), "Input length must be a power of 2");
 
         let exponent = size.trailing_zeros();
-        let base_fft = match exponent {
-            0 => T::butterfly1(fft_direction)?,
-            1 => T::butterfly2(fft_direction)?,
-            2 => T::butterfly4(fft_direction)?,
-            3 => T::butterfly8(fft_direction)?,
-            _ => {
-                if exponent % 2 == 1 {
-                    T::butterfly32(fft_direction)?
-                } else {
-                    T::butterfly16(fft_direction)?
+        let base_fft = if TypeId::of::<T>() == TypeId::of::<f32>() {
+            match exponent {
+                0 => T::butterfly1(fft_direction)?,
+                1 => T::butterfly2(fft_direction)?,
+                2 => T::butterfly4(fft_direction)?,
+                3 => T::butterfly8(fft_direction)?,
+                4 => T::butterfly16(fft_direction)?,
+                _ => {
+                    if exponent % 2 == 1 {
+                        T::butterfly32(fft_direction)?
+                    } else {
+                        match T::butterfly64(fft_direction) {
+                            None => T::butterfly16(fft_direction)?,
+                            Some(v) => v,
+                        }
+                    }
+                }
+            }
+        } else {
+            match exponent {
+                0 => T::butterfly1(fft_direction)?,
+                1 => T::butterfly2(fft_direction)?,
+                2 => T::butterfly4(fft_direction)?,
+                3 => T::butterfly8(fft_direction)?,
+                _ => {
+                    if exponent % 2 == 1 {
+                        T::butterfly32(fft_direction)?
+                    } else {
+                        T::butterfly16(fft_direction)?
+                    }
                 }
             }
         };
@@ -560,81 +591,143 @@ impl AvxFmaRadix4<f32> {
                     for data in chunk.chunks_exact_mut(len) {
                         let mut j = 0usize;
 
+                        macro_rules! make_block {
+                            ($data: expr, $twiddles: expr, $quarter: expr, $j: expr, $start: expr, $tw_start: expr) => {{
+                                let a0 = _mm256_loadu_ps(
+                                    data.get_unchecked(j + $start..).as_ptr().cast(),
+                                );
+
+                                let tw0 = _mm256_loadu_ps(
+                                    $twiddles.get_unchecked(3 * j + $tw_start..).as_ptr().cast(),
+                                );
+                                let tw1 = _mm256_loadu_ps(
+                                    $twiddles
+                                        .get_unchecked(3 * j + $tw_start + 4..)
+                                        .as_ptr()
+                                        .cast(),
+                                );
+                                let tw2 = _mm256_loadu_ps(
+                                    $twiddles
+                                        .get_unchecked(3 * j + $tw_start + 8..)
+                                        .as_ptr()
+                                        .cast(),
+                                );
+
+                                let rk1 = _mm256_loadu_ps(
+                                    $data.get_unchecked(j + $quarter + $start..).as_ptr().cast(),
+                                );
+                                let rk2 = _mm256_loadu_ps(
+                                    $data
+                                        .get_unchecked(j + 2 * $quarter + $start..)
+                                        .as_ptr()
+                                        .cast(),
+                                );
+                                let rk3 = _mm256_loadu_ps(
+                                    $data
+                                        .get_unchecked(j + 3 * $quarter + $start..)
+                                        .as_ptr()
+                                        .cast(),
+                                );
+
+                                let b0 = _mm256_fcmul_ps(rk1, tw0);
+                                let c0 = _mm256_fcmul_ps(rk2, tw1);
+                                let d0 = _mm256_fcmul_ps(rk3, tw2);
+
+                                // radix-4 butterfly
+                                let q0t0 = _mm256_add_ps(a0, c0);
+                                let q0t1 = _mm256_sub_ps(a0, c0);
+                                let q0t2 = _mm256_add_ps(b0, d0);
+                                let mut q0t3 = _mm256_sub_ps(b0, d0);
+                                const SH: i32 = shuffle(2, 3, 0, 1);
+                                q0t3 = _mm256_xor_ps(
+                                    _mm256_shuffle_ps::<SH>(q0t3, q0t3),
+                                    v_i_multiplier,
+                                );
+
+                                let y0 = _mm256_add_ps(q0t0, q0t2);
+                                let y1 = _mm256_add_ps(q0t1, q0t3);
+                                let y2 = _mm256_sub_ps(q0t0, q0t2);
+                                let y3 = _mm256_sub_ps(q0t1, q0t3);
+                                (y0, y1, y2, y3)
+                            }};
+                        }
+
+                        while j + 12 < quarter {
+                            let (y0, y1, y2, y3) = make_block!(data, m_twiddles, quarter, j, 0, 0);
+                            let (y4, y5, y6, y7) = make_block!(data, m_twiddles, quarter, j, 4, 12);
+                            let (y8, y9, y10, y11) =
+                                make_block!(data, m_twiddles, quarter, j, 8, 24);
+
+                            _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + quarter..).as_mut_ptr().cast(),
+                                y1,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * quarter..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y2,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 3 * quarter..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y3,
+                            );
+
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 4..).as_mut_ptr().cast(),
+                                y4,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + quarter + 4..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y5,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * quarter + 4..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y6,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 3 * quarter + 4..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y7,
+                            );
+
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 8..).as_mut_ptr().cast(),
+                                y8,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + quarter + 8..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y9,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * quarter + 8..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y10,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 3 * quarter + 8..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                y11,
+                            );
+
+                            j += 12;
+                        }
+
                         while j + 8 < quarter {
-                            let a0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
-                            let a1 = _mm256_loadu_ps(data.get_unchecked(j + 4..).as_ptr().cast());
-
-                            let tw0_0 =
-                                _mm256_loadu_ps(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
-                            let tw1_0 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(3 * j + 4..).as_ptr().cast(),
-                            );
-                            let tw2_0 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(3 * j + 8..).as_ptr().cast(),
-                            );
-
-                            let tw0_1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(3 * j + 12..).as_ptr().cast(),
-                            );
-                            let tw1_1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(3 * j + 16..).as_ptr().cast(),
-                            );
-                            let tw2_1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(3 * j + 20..).as_ptr().cast(),
-                            );
-
-                            let rk1_0 =
-                                _mm256_loadu_ps(data.get_unchecked(j + quarter..).as_ptr().cast());
-                            let rk2_0 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
-                            );
-                            let rk3_0 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
-                            );
-
-                            let rk1_1 = _mm256_loadu_ps(
-                                data.get_unchecked(j + quarter + 4..).as_ptr().cast(),
-                            );
-                            let rk2_1 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 2 * quarter + 4..).as_ptr().cast(),
-                            );
-                            let rk3_1 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 3 * quarter + 4..).as_ptr().cast(),
-                            );
-
-                            let b0 = _mm256_fcmul_ps(rk1_0, tw0_0);
-                            let c0 = _mm256_fcmul_ps(rk2_0, tw1_0);
-                            let d0 = _mm256_fcmul_ps(rk3_0, tw2_0);
-
-                            let b1 = _mm256_fcmul_ps(rk1_1, tw0_1);
-                            let c1 = _mm256_fcmul_ps(rk2_1, tw1_1);
-                            let d1 = _mm256_fcmul_ps(rk3_1, tw2_1);
-
-                            // radix-4 butterfly
-                            let q0t0 = _mm256_add_ps(a0, c0);
-                            let q0t1 = _mm256_sub_ps(a0, c0);
-                            let q0t2 = _mm256_add_ps(b0, d0);
-                            let mut q0t3 = _mm256_sub_ps(b0, d0);
-                            const SH: i32 = shuffle(2, 3, 0, 1);
-                            q0t3 =
-                                _mm256_xor_ps(_mm256_shuffle_ps::<SH>(q0t3, q0t3), v_i_multiplier);
-
-                            let q1t0 = _mm256_add_ps(a1, c1);
-                            let q1t1 = _mm256_sub_ps(a1, c1);
-                            let q1t2 = _mm256_add_ps(b1, d1);
-                            let mut q1t3 = _mm256_sub_ps(b1, d1);
-                            q1t3 =
-                                _mm256_xor_ps(_mm256_shuffle_ps::<SH>(q1t3, q1t3), v_i_multiplier);
-
-                            let y0 = _mm256_add_ps(q0t0, q0t2);
-                            let y1 = _mm256_add_ps(q0t1, q0t3);
-                            let y2 = _mm256_sub_ps(q0t0, q0t2);
-                            let y3 = _mm256_sub_ps(q0t1, q0t3);
-
-                            let y4 = _mm256_add_ps(q1t0, q1t2);
-                            let y5 = _mm256_add_ps(q1t1, q1t3);
-                            let y6 = _mm256_sub_ps(q1t0, q1t2);
-                            let y7 = _mm256_sub_ps(q1t1, q1t3);
+                            let (y0, y1, y2, y3) = make_block!(data, m_twiddles, quarter, j, 0, 0);
+                            let (y4, y5, y6, y7) = make_block!(data, m_twiddles, quarter, j, 4, 12);
 
                             _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
                             _mm256_storeu_ps(
@@ -681,44 +774,7 @@ impl AvxFmaRadix4<f32> {
                         }
 
                         while j + 4 < quarter {
-                            let a0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
-
-                            let tw0 =
-                                _mm256_loadu_ps(m_twiddles.get_unchecked(3 * j..).as_ptr().cast());
-                            let tw1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(3 * j + 4..).as_ptr().cast(),
-                            );
-                            let tw2 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(3 * j + 8..).as_ptr().cast(),
-                            );
-
-                            let rk1 =
-                                _mm256_loadu_ps(data.get_unchecked(j + quarter..).as_ptr().cast());
-                            let rk2 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 2 * quarter..).as_ptr().cast(),
-                            );
-                            let rk3 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 3 * quarter..).as_ptr().cast(),
-                            );
-
-                            let b0 = _mm256_fcmul_ps(rk1, tw0);
-                            let c0 = _mm256_fcmul_ps(rk2, tw1);
-                            let d0 = _mm256_fcmul_ps(rk3, tw2);
-
-                            // radix-4 butterfly
-                            let q0t0 = _mm256_add_ps(a0, c0);
-                            let q0t1 = _mm256_sub_ps(a0, c0);
-                            let q0t2 = _mm256_add_ps(b0, d0);
-                            let mut q0t3 = _mm256_sub_ps(b0, d0);
-                            const SH: i32 = shuffle(2, 3, 0, 1);
-                            q0t3 =
-                                _mm256_xor_ps(_mm256_shuffle_ps::<SH>(q0t3, q0t3), v_i_multiplier);
-
-                            let y0 = _mm256_add_ps(q0t0, q0t2);
-                            let y1 = _mm256_add_ps(q0t1, q0t3);
-                            let y2 = _mm256_sub_ps(q0t0, q0t2);
-                            let y3 = _mm256_sub_ps(q0t1, q0t3);
-
+                            let (y0, y1, y2, y3) = make_block!(data, m_twiddles, quarter, j, 0, 0);
                             _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
                             _mm256_storeu_ps(
                                 data.get_unchecked_mut(j + quarter..).as_mut_ptr().cast(),
@@ -884,8 +940,9 @@ impl FftExecutor<f32> for AvxFmaRadix4<f32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::avx::test_avx_radix;
+    use crate::avx::{test_avx_radix, test_avx_radix_fast};
 
-    test_avx_radix!(test_avx_radix4, f32, AvxFmaRadix4, 6, 4, 1e-3);
-    test_avx_radix!(test_avx_radix4_f64, f64, AvxFmaRadix4, 6, 4, 1e-8);
+    test_avx_radix!(test_avx_radix4, f32, AvxFmaRadix4, 13, 2, 1e-2);
+    test_avx_radix_fast!(test_avx_radix4_fast, f32, AvxFmaRadix4, Radix4, 13, 2, 1e-2);
+    test_avx_radix_fast!(test_avx_radix4_f64, f64, AvxFmaRadix4, Radix4, 13, 2, 1e-8);
 }

@@ -28,18 +28,23 @@
  */
 use crate::FftDirection;
 use crate::avx::butterflies::AvxFastButterfly3;
-use crate::avx::util::{_mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps};
+use crate::avx::util::{
+    _mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_set_complex,
+};
 use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
 
 pub(crate) struct AvxFastButterfly9f {
     tw1: __m256,
+    qtw1: __m256,
+    qtw2: __m256,
+    qtw4: __m256,
     pub(crate) bf3: AvxFastButterfly3<f32>,
 }
 
 impl AvxFastButterfly9f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> Self {
+    pub(crate) fn new(direction: FftDirection) -> Self {
         let tw1 = compute_twiddle::<f32>(1, 9, direction);
         let tw2 = compute_twiddle::<f32>(2, 9, direction);
         let tw4 = compute_twiddle::<f32>(4, 9, direction);
@@ -48,6 +53,9 @@ impl AvxFastButterfly9f {
                 tw1: _mm256_setr_ps(
                     tw1.re, tw1.im, tw2.re, tw2.im, tw2.re, tw2.im, tw4.re, tw4.im,
                 ),
+                qtw1: _mm256_set_complex(tw1),
+                qtw2: _mm256_set_complex(tw2),
+                qtw4: _mm256_set_complex(tw4),
                 bf3: AvxFastButterfly3::<f32>::new(direction),
             }
         }
@@ -77,50 +85,86 @@ impl AvxFastButterfly9f {
         __m128,
         __m128,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3.exec_m128(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3.exec_m128(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3.exec_m128(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3.exec_m128(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3.exec_m128(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3.exec_m128(u2, u5, u8);
 
-            let mut u4u7u5u8 =
-                _mm256_create_ps(_mm_unpacklo_ps64(u4, u7), _mm_unpacklo_ps64(u5, u8));
-            let mut u4u7u5u8_hi =
-                _mm256_create_ps(_mm_unpackhi_ps64(u4, u7), _mm_unpackhi_ps64(u5, u8));
+        let mut u4u7u5u8 = _mm256_create_ps(_mm_unpacklo_ps64(u4, u7), _mm_unpacklo_ps64(u5, u8));
+        let mut u4u7u5u8_hi =
+            _mm256_create_ps(_mm_unpackhi_ps64(u4, u7), _mm_unpackhi_ps64(u5, u8));
 
-            u4u7u5u8 = _mm256_fcmul_ps(u4u7u5u8, self.tw1);
-            u4u7u5u8_hi = _mm256_fcmul_ps(u4u7u5u8_hi, self.tw1);
+        u4u7u5u8 = _mm256_fcmul_ps(u4u7u5u8, self.tw1);
+        u4u7u5u8_hi = _mm256_fcmul_ps(u4u7u5u8_hi, self.tw1);
 
-            u4 = _mm_unpacklo_ps64(
-                _mm256_castps256_ps128(u4u7u5u8),
-                _mm256_castps256_ps128(u4u7u5u8_hi),
-            );
-            u7 = _mm_unpackhi_ps64(
-                _mm256_castps256_ps128(u4u7u5u8),
-                _mm256_castps256_ps128(u4u7u5u8_hi),
-            );
-            let u5u8 = _mm256_extractf128_ps::<1>(u4u7u5u8);
-            let u5u8_hi = _mm256_extractf128_ps::<1>(u4u7u5u8_hi);
-            u5 = _mm_unpacklo_ps64(u5u8, u5u8_hi);
-            u8 = _mm_unpackhi_ps64(u5u8, u5u8_hi);
+        u4 = _mm_unpacklo_ps64(
+            _mm256_castps256_ps128(u4u7u5u8),
+            _mm256_castps256_ps128(u4u7u5u8_hi),
+        );
+        u7 = _mm_unpackhi_ps64(
+            _mm256_castps256_ps128(u4u7u5u8),
+            _mm256_castps256_ps128(u4u7u5u8_hi),
+        );
+        let u5u8 = _mm256_extractf128_ps::<1>(u4u7u5u8);
+        let u5u8_hi = _mm256_extractf128_ps::<1>(u4u7u5u8_hi);
+        u5 = _mm_unpacklo_ps64(u5u8, u5u8_hi);
+        u8 = _mm_unpackhi_ps64(u5u8, u5u8_hi);
 
-            let (y0y1, y3y4, y6y7) = self.bf3.exec(
-                _mm256_create_ps(u0, u3),
-                _mm256_create_ps(u1, u4),
-                _mm256_create_ps(u2, u5),
-            );
-            let (y2, y5, y8) = self.bf3.exec_m128(u6, u7, u8);
-            (
-                _mm256_castps256_ps128(y0y1),
-                _mm256_extractf128_ps::<1>(y0y1),
-                y2,
-                _mm256_castps256_ps128(y3y4),
-                _mm256_extractf128_ps::<1>(y3y4),
-                y5,
-                _mm256_castps256_ps128(y6y7),
-                _mm256_extractf128_ps::<1>(y6y7),
-                y8,
-            )
-        }
+        let (y0y1, y3y4, y6y7) = self.bf3.exec(
+            _mm256_create_ps(u0, u3),
+            _mm256_create_ps(u1, u4),
+            _mm256_create_ps(u2, u5),
+        );
+        let (y2, y5, y8) = self.bf3.exec_m128(u6, u7, u8);
+        (
+            _mm256_castps256_ps128(y0y1),
+            _mm256_extractf128_ps::<1>(y0y1),
+            y2,
+            _mm256_castps256_ps128(y3y4),
+            _mm256_extractf128_ps::<1>(y3y4),
+            y5,
+            _mm256_castps256_ps128(y6y7),
+            _mm256_extractf128_ps::<1>(y6y7),
+            y8,
+        )
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx", enable = "fma")]
+    pub(crate) fn exec_m256(
+        &self,
+        u0: __m256,
+        u1: __m256,
+        u2: __m256,
+        u3: __m256,
+        u4: __m256,
+        u5: __m256,
+        u6: __m256,
+        u7: __m256,
+        u8: __m256,
+    ) -> (
+        __m256,
+        __m256,
+        __m256,
+        __m256,
+        __m256,
+        __m256,
+        __m256,
+        __m256,
+        __m256,
+    ) {
+        let (u0, u3, u6) = self.bf3.exec(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3.exec(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3.exec(u2, u5, u8);
+
+        u4 = _mm256_fcmul_ps(u4, self.qtw1);
+        u7 = _mm256_fcmul_ps(u7, self.qtw2);
+        u5 = _mm256_fcmul_ps(u5, self.qtw2);
+        u8 = _mm256_fcmul_ps(u8, self.qtw4);
+
+        let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 }
 

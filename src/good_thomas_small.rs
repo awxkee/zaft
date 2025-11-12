@@ -174,7 +174,7 @@ impl<T: Copy> GoodThomasSmallFft<T> {
         // 4: Instead of starting copying from the beginning of the row, start copying from after the rollover point
         // 5: When we hit the end of the row, continue from the beginning of the row, continuing to increment the output index by self.width
         //
-        // This achieves the same result as the modular arithmetic ofthe ruritanian mapping, but with only one integer divison per row, instead of one per element
+        // This achieves the same result as the modular arithmetic of the ruritanian mapping, but with only one integer divison per row, instead of one per element
         for (y, source_chunk) in source.chunks_exact(self.height).enumerate() {
             let (quotient, remainder) =
                 DividerU16::div_rem(y as u16 * self.height as u16, self.width_divisor);

@@ -118,30 +118,28 @@ impl AvxFastButterfly9d {
         __m128d,
         __m128d,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3.exec_m128(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3.exec_m128(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3.exec_m128(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3.exec_m128(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3.exec_m128(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3.exec_m128(u2, u5, u8);
 
-            const LO_LO: i32 = 0b0010_0000;
+        const LO_LO: i32 = 0b0010_0000;
 
-            let u4u7 = _mm256_fcmul_pd(
-                _mm256_create_pd(u4, u7),
-                _mm256_permute2f128_pd::<LO_LO>(self.tw1, self.tw2),
-            );
-            u4 = _mm256_castpd256_pd128(u4u7);
-            u7 = _mm256_extractf128_pd::<1>(u4u7);
-            let u5u8 = _mm256_fcmul_pd(
-                _mm256_create_pd(u5, u8),
-                _mm256_permute2f128_pd::<LO_LO>(self.tw2, self.tw4),
-            );
-            u5 = _mm256_castpd256_pd128(u5u8);
-            u8 = _mm256_extractf128_pd::<1>(u5u8);
+        let u4u7 = _mm256_fcmul_pd(
+            _mm256_create_pd(u4, u7),
+            _mm256_permute2f128_pd::<LO_LO>(self.tw1, self.tw2),
+        );
+        u4 = _mm256_castpd256_pd128(u4u7);
+        u7 = _mm256_extractf128_pd::<1>(u4u7);
+        let u5u8 = _mm256_fcmul_pd(
+            _mm256_create_pd(u5, u8),
+            _mm256_permute2f128_pd::<LO_LO>(self.tw2, self.tw4),
+        );
+        u5 = _mm256_castpd256_pd128(u5u8);
+        u8 = _mm256_extractf128_pd::<1>(u5u8);
 
-            let (y0, y3, y6) = self.bf3.exec_m128(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3.exec_m128(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3.exec_m128(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3.exec_m128(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3.exec_m128(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3.exec_m128(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 }

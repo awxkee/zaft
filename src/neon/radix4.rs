@@ -36,6 +36,7 @@ use crate::util::reverse_bits;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
+use std::any::TypeId;
 use std::arch::aarch64::*;
 
 #[inline]
@@ -191,16 +192,36 @@ where
         // assert_eq!(size.trailing_zeros() % 2, 0, "Radix-4 requires power of 4");
 
         let exponent = size.trailing_zeros();
-        let base_fft = match exponent {
-            0 => T::butterfly1(fft_direction)?,
-            1 => T::butterfly2(fft_direction)?,
-            2 => T::butterfly4(fft_direction)?,
-            3 => T::butterfly8(fft_direction)?,
-            _ => {
-                if exponent % 2 == 1 {
-                    T::butterfly32(fft_direction)?
-                } else {
-                    T::butterfly16(fft_direction)?
+        let base_fft = if TypeId::of::<T>() == TypeId::of::<f32>() {
+            match exponent {
+                0 => T::butterfly1(fft_direction)?,
+                1 => T::butterfly2(fft_direction)?,
+                2 => T::butterfly4(fft_direction)?,
+                3 => T::butterfly8(fft_direction)?,
+                4 => T::butterfly16(fft_direction)?,
+                _ => {
+                    if exponent % 2 == 1 {
+                        T::butterfly32(fft_direction)?
+                    } else {
+                        match T::butterfly64(fft_direction) {
+                            None => T::butterfly16(fft_direction)?,
+                            Some(v) => v,
+                        }
+                    }
+                }
+            }
+        } else {
+            match exponent {
+                0 => T::butterfly1(fft_direction)?,
+                1 => T::butterfly2(fft_direction)?,
+                2 => T::butterfly4(fft_direction)?,
+                3 => T::butterfly8(fft_direction)?,
+                _ => {
+                    if exponent % 2 == 1 {
+                        T::butterfly32(fft_direction)?
+                    } else {
+                        T::butterfly16(fft_direction)?
+                    }
                 }
             }
         };

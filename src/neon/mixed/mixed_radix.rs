@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(clippy::modulo_one)]
 use crate::err::try_vec;
 use crate::neon::mixed::bf2::{ColumnButterfly2d, ColumnButterfly2f};
 use crate::neon::mixed::bf3::{ColumnButterfly3d, ColumnButterfly3f};
@@ -706,7 +707,7 @@ macro_rules! define_mixed_radix_neon_f_fcma {
 }
 
 use crate::neon::mixed::bf5::*;
-use crate::neon::mixed::bf6::{ColumnButterfly6d, ColumnButterfly6f};
+use crate::neon::mixed::bf6::*;
 use crate::neon::mixed::bf7::*;
 use crate::neon::mixed::bf8::*;
 use crate::neon::mixed::bf9::*;
@@ -777,6 +778,8 @@ define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix3f, ColumnButterfly3f, 3);
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix4f, ColumnFcmaButterfly4f, 4);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix5f, ColumnFcmaButterfly5f, 5);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix6f, ColumnFcmaButterfly6f, 6);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix7f, ColumnFcmaButterfly7f, 7);
 #[cfg(feature = "fcma")]

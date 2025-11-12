@@ -50,10 +50,14 @@ mod bf16_fcma;
 mod bf17;
 #[cfg(feature = "fcma")]
 mod bf17_fcma;
+mod bf18;
 mod bf19;
 #[cfg(feature = "fcma")]
 mod bf19_fcma;
 mod bf2;
+mod bf20;
+#[cfg(feature = "fcma")]
+mod bf20_fcma;
 mod bf23;
 #[cfg(feature = "fcma")]
 mod bf23_fcma;
@@ -83,6 +87,11 @@ mod bf5;
 #[cfg(feature = "fcma")]
 mod bf5_fcma;
 mod bf6;
+mod bf64f;
+#[cfg(feature = "fcma")]
+mod bf64f_fcma;
+#[cfg(feature = "fcma")]
+mod bf6_fcma;
 mod bf7;
 #[cfg(feature = "fcma")]
 mod bf7_fcma;
@@ -110,6 +119,8 @@ pub(crate) use bf5::NeonButterfly5;
 #[cfg(feature = "fcma")]
 pub(crate) use bf5_fcma::NeonFcmaButterfly5;
 pub(crate) use bf6::NeonButterfly6;
+#[cfg(feature = "fcma")]
+pub(crate) use bf6_fcma::NeonFcmaButterfly6;
 pub(crate) use bf7::NeonButterfly7;
 #[cfg(feature = "fcma")]
 pub(crate) use bf7_fcma::NeonFcmaButterfly7;
@@ -143,9 +154,15 @@ pub(crate) use bf16_fcma::NeonFcmaButterfly16;
 pub(crate) use bf17::NeonButterfly17;
 #[cfg(feature = "fcma")]
 pub(crate) use bf17_fcma::NeonFcmaButterfly17;
+pub(crate) use bf18::{NeonButterfly18d, NeonButterfly18f};
+#[cfg(feature = "fcma")]
+pub(crate) use bf18::{NeonFcmaButterfly18d, NeonFcmaButterfly18f};
 pub(crate) use bf19::NeonButterfly19;
 #[cfg(feature = "fcma")]
 pub(crate) use bf19_fcma::NeonFcmaButterfly19;
+pub(crate) use bf20::NeonButterfly20;
+#[cfg(feature = "fcma")]
+pub(crate) use bf20_fcma::NeonFcmaButterfly20;
 pub(crate) use bf23::NeonButterfly23;
 #[cfg(feature = "fcma")]
 pub(crate) use bf23_fcma::NeonFcmaButterfly23;
@@ -167,9 +184,52 @@ pub(crate) use bf32_fcma::{NeonFcmaButterfly32d, NeonFcmaButterfly32f};
 pub(crate) use bf36f::NeonButterfly36f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf36f_fcma::NeonFcmaButterfly36f;
+pub(crate) use bf64f::NeonButterfly64f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf64f_fcma::NeonFcmaButterfly64f;
 pub(crate) use fast_bf5::NeonFastButterfly5;
 pub(crate) use fast_bf8::NeonFastButterfly8;
+use num_complex::Complex;
 pub(crate) use shared::NeonButterfly;
+
+#[inline]
+pub(crate) fn make_mixedradix_twiddle_chunk_f32(
+    x: usize,
+    y: usize,
+    len: usize,
+    direction: FftDirection,
+) -> NeonStoreF {
+    let mut twiddle_chunk = [Complex::<f32>::default(); 2];
+    use crate::util::compute_twiddle;
+    #[allow(clippy::needless_range_loop)]
+    for i in 0..2 {
+        twiddle_chunk[i] = compute_twiddle(y * (x + i), len, direction);
+    }
+
+    NeonStoreF::from_complex_ref(twiddle_chunk.as_slice())
+}
+
+macro_rules! gen_butterfly_twiddles_separated_columns_f32 {
+    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
+        const FFT_LEN: usize = $num_rows * $num_cols;
+        const TWIDDLE_ROWS: usize = $num_rows - 1;
+        const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
+        const TWIDDLE_VECTOR_COLS: usize = TWIDDLE_COLS / 2;
+        const TWIDDLE_VECTOR_COUNT: usize = TWIDDLE_VECTOR_COLS * TWIDDLE_ROWS;
+        let mut twiddles = [NeonStoreF::default(); TWIDDLE_VECTOR_COUNT];
+        for index in 0..TWIDDLE_VECTOR_COUNT {
+            let y = (index % TWIDDLE_ROWS) + 1;
+            let x = (index / TWIDDLE_ROWS) * 2 + $skip_cols;
+
+            use crate::neon::butterflies::make_mixedradix_twiddle_chunk_f32;
+
+            twiddles[index] = make_mixedradix_twiddle_chunk_f32(x, y, FFT_LEN, $direction);
+        }
+        twiddles
+    }};
+}
+
+pub(crate) use gen_butterfly_twiddles_separated_columns_f32;
 
 #[cfg(test)]
 #[cfg(feature = "fcma")]
@@ -338,6 +398,8 @@ macro_rules! test_oof_fcma_butterfly {
     };
 }
 
+use crate::FftDirection;
+use crate::neon::mixed::NeonStoreF;
 #[cfg(test)]
 #[cfg(feature = "fcma")]
 pub(crate) use test_oof_fcma_butterfly;

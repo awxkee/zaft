@@ -303,70 +303,64 @@ impl ColumnFcmaButterfly8f {
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 8]) -> [NeonStoreF; 8] {
-        unsafe {
-            match self.direction {
-                FftDirection::Forward => {
-                    let (u0, u2, u4, u6) = NeonButterfly::bf4_forward_f32(
-                        store[0].v, store[2].v, store[4].v, store[6].v,
-                    );
-                    let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_forward_f32(
-                        store[1].v, store[3].v, store[5].v, store[7].v,
-                    );
+        match self.direction {
+            FftDirection::Forward => {
+                let (u0, u2, u4, u6) =
+                    NeonButterfly::bf4_forward_f32(store[0].v, store[2].v, store[4].v, store[6].v);
+                let (u1, mut u3, mut u5, mut u7) =
+                    NeonButterfly::bf4_forward_f32(store[1].v, store[3].v, store[5].v, store[7].v);
 
-                    u3 = vmulq_n_f32(vcaddq_rot270_f32(u3, u3), self.root2);
-                    u5 = vcaddq_rot270_f32(vdupq_n_f32(0.), u5);
-                    u7 = vmulq_n_f32(
-                        vsubq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), u7), u7),
-                        self.root2,
-                    );
+                u3 = vmulq_n_f32(vcaddq_rot270_f32(u3, u3), self.root2);
+                u5 = vcaddq_rot270_f32(vdupq_n_f32(0.), u5);
+                u7 = vmulq_n_f32(
+                    vsubq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), u7), u7),
+                    self.root2,
+                );
 
-                    let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
-                    let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
-                    let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
-                    let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
+                let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
+                let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
+                let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
+                let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
 
-                    [
-                        NeonStoreF::raw(zy0),
-                        NeonStoreF::raw(zy2),
-                        NeonStoreF::raw(zy4),
-                        NeonStoreF::raw(zy6),
-                        NeonStoreF::raw(zy1),
-                        NeonStoreF::raw(zy3),
-                        NeonStoreF::raw(zy5),
-                        NeonStoreF::raw(zy7),
-                    ]
-                }
-                FftDirection::Inverse => {
-                    let (u0, u2, u4, u6) = NeonButterfly::bf4_backward_f32(
-                        store[0].v, store[2].v, store[4].v, store[6].v,
-                    );
-                    let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4_backward_f32(
-                        store[1].v, store[3].v, store[5].v, store[7].v,
-                    );
+                [
+                    NeonStoreF::raw(zy0),
+                    NeonStoreF::raw(zy2),
+                    NeonStoreF::raw(zy4),
+                    NeonStoreF::raw(zy6),
+                    NeonStoreF::raw(zy1),
+                    NeonStoreF::raw(zy3),
+                    NeonStoreF::raw(zy5),
+                    NeonStoreF::raw(zy7),
+                ]
+            }
+            FftDirection::Inverse => {
+                let (u0, u2, u4, u6) =
+                    NeonButterfly::bf4_backward_f32(store[0].v, store[2].v, store[4].v, store[6].v);
+                let (u1, mut u3, mut u5, mut u7) =
+                    NeonButterfly::bf4_backward_f32(store[1].v, store[3].v, store[5].v, store[7].v);
 
-                    u3 = vmulq_n_f32(vcaddq_rot90_f32(u3, u3), self.root2);
-                    u5 = vcaddq_rot90_f32(vdupq_n_f32(0.), u5);
-                    u7 = vmulq_n_f32(
-                        vsubq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), u7), u7),
-                        self.root2,
-                    );
+                u3 = vmulq_n_f32(vcaddq_rot90_f32(u3, u3), self.root2);
+                u5 = vcaddq_rot90_f32(vdupq_n_f32(0.), u5);
+                u7 = vmulq_n_f32(
+                    vsubq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), u7), u7),
+                    self.root2,
+                );
 
-                    let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
-                    let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
-                    let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
-                    let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
+                let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
+                let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
+                let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
+                let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
 
-                    [
-                        NeonStoreF::raw(zy0),
-                        NeonStoreF::raw(zy2),
-                        NeonStoreF::raw(zy4),
-                        NeonStoreF::raw(zy6),
-                        NeonStoreF::raw(zy1),
-                        NeonStoreF::raw(zy3),
-                        NeonStoreF::raw(zy5),
-                        NeonStoreF::raw(zy7),
-                    ]
-                }
+                [
+                    NeonStoreF::raw(zy0),
+                    NeonStoreF::raw(zy2),
+                    NeonStoreF::raw(zy4),
+                    NeonStoreF::raw(zy6),
+                    NeonStoreF::raw(zy1),
+                    NeonStoreF::raw(zy3),
+                    NeonStoreF::raw(zy5),
+                    NeonStoreF::raw(zy7),
+                ]
             }
         }
     }
