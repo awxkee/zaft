@@ -62,7 +62,7 @@ where
 
 impl AvxButterfly11<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+    fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe {
             if in_place.len() % 11 != 0 {
                 return Err(ZaftError::InvalidSizeMultiplier(
@@ -358,7 +358,7 @@ impl AvxButterfly11<f64> {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_out_of_place_f64(
+    fn execute_out_of_place_f64(
         &self,
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
@@ -1262,7 +1262,6 @@ impl FftExecutor<f32> for AvxButterfly11<f32> {
 mod test {
     use super::*;
     use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
-    use rand::Rng;
 
     test_avx_butterfly!(test_avx_butterfly11, f32, AvxButterfly11, 11, 1e-5);
     test_avx_butterfly!(test_avx_butterfly11_f64, f64, AvxButterfly11, 11, 1e-7);

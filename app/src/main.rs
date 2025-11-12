@@ -30,7 +30,7 @@
 // #![feature(duration_millis_float)]
 extern crate core;
 
-use criterion::Criterion;
+use criterion::{BatchSize, Criterion};
 use rand::Rng;
 use realfft::RealFftPlanner;
 use rustfft::FftPlanner;
@@ -82,18 +82,43 @@ fn check_power_groups(c: &mut Criterion, n: usize, group: String) {
     });
 }
 
+pub fn bench_zaft_averages(c: &mut Criterion) {
+    c.bench_function("zaft avg1", |b| {
+        b.iter_batched(
+            || {
+                // Prepare all inputs and FFT plans
+                (500..=1500)
+                    .map(|n| {
+                        let input: Vec<Complex<f32>> =
+                            (0..n).map(|i| Complex::new(i as f32, 0.0)).collect();
+                        let fft = Zaft::make_forward_fft_f32(n).unwrap();
+                        (input, fft)
+                    })
+                    .collect::<Vec<_>>()
+            },
+            |mut plans_and_inputs| {
+                // Execute FFTs for all sizes
+                for (input, fft) in plans_and_inputs.iter() {
+                    let mut c = input.to_vec();
+                    fft.execute(&mut c).unwrap();
+                }
+            },
+            BatchSize::LargeInput,
+        );
+    });
+}
+
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 31];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 4096];
     let mut c = Criterion::default().sample_size(10);
-    check_power_group(&mut c, 512, "power 8 (512)".to_string());
-    check_power_groups(&mut c, 512, "power 8s (512)".to_string());
-    check_power_group(&mut c, 4096, "power 8 (4096)".to_string());
-    check_power_groups(&mut c, 4096, "power 8s (4096)".to_string());
+    // check_power_group(&mut c, 2usize.pow(15), "2^15".to_string());
+    // bench_zaft_averages(&mut c);
+    check_power_groups(&mut c, 7usize.pow(4), "7^4".to_string());
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
     for (i, chunk) in data.iter_mut().enumerate() {
-        *chunk = Complex::new(-0.19528865 + i as f64 * 0.1, 0.0019528865 - i as f64 * 0.1);
+        *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
     }
     // data = [
     //     Complex {
@@ -190,10 +215,10 @@ fn main() {
     //     }
     // }
 
-    let forward = Zaft::make_forward_fft_f64(cvt.len()).unwrap();
-    let inverse = Zaft::make_inverse_fft_f64(cvt.len()).unwrap();
+    let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
+    let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
 
-    let mut planner = FftPlanner::<f64>::new();
+    let mut planner = FftPlanner::<f32>::new();
 
     let planned_fft = planner.plan_fft_forward(data.len());
     let planned_fft_inv = planner.plan_fft_inverse(data.len());
@@ -209,11 +234,11 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
     println!("Mine inverse -----");
@@ -224,7 +249,7 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
 
     // for (i, val) in data.iter().enumerate() {
@@ -236,7 +261,7 @@ fn main() {
     planned_fft_inv.process(&mut cvt);
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
     // for (i, val) in cvt.iter().enumerate() {

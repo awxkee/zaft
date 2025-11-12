@@ -293,4 +293,64 @@ where
         };
         (y0, y1, y2, y3, y4)
     }
+
+    #[inline]
+    pub(crate) fn exec5(
+        &self,
+        u0: Complex<T>,
+        u1: Complex<T>,
+        u2: Complex<T>,
+        u3: Complex<T>,
+        u4: Complex<T>,
+    ) -> [Complex<T>; 5] {
+        let x14p = u1 + u4;
+        let x14n = u1 - u4;
+        let x23p = u2 + u3;
+        let x23n = u2 - u3;
+        let y0 = u0 + x14p + x23p;
+
+        let b14re_a = fmla(
+            self.twiddle2.re,
+            x23p.re,
+            fmla(self.twiddle1.re, x14p.re, u0.re),
+        );
+        let b14re_b = fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
+        let b23re_a = fmla(
+            self.twiddle1.re,
+            x23p.re,
+            fmla(self.twiddle2.re, x14p.re, u0.re),
+        );
+        let b23re_b = fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
+
+        let b14im_a = fmla(
+            self.twiddle2.re,
+            x23p.im,
+            fmla(self.twiddle1.re, x14p.im, u0.im),
+        );
+        let b14im_b = fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
+        let b23im_a = fmla(
+            self.twiddle1.re,
+            x23p.im,
+            fmla(self.twiddle2.re, x14p.im, u0.im),
+        );
+        let b23im_b = fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
+
+        let y1 = Complex {
+            re: b14re_a - b14re_b,
+            im: b14im_a + b14im_b,
+        };
+        let y2 = Complex {
+            re: b23re_a - b23re_b,
+            im: b23im_a + b23im_b,
+        };
+        let y3 = Complex {
+            re: b23re_a + b23re_b,
+            im: b23im_a - b23im_b,
+        };
+        let y4 = Complex {
+            re: b14re_a + b14re_b,
+            im: b14im_a - b14im_b,
+        };
+        [y0, y1, y2, y3, y4]
+    }
 }

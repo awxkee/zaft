@@ -53,23 +53,21 @@ pub(crate) struct NeonButterfly27d {
 
 impl NeonButterfly27d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        unsafe {
-            Self {
-                direction: fft_direction,
-                twiddle1: vdup_complex_f64(compute_twiddle(1, 27, fft_direction)),
-                twiddle2: vdup_complex_f64(compute_twiddle(2, 27, fft_direction)),
-                twiddle3: vdup_complex_f64(compute_twiddle(3, 27, fft_direction)),
-                twiddle4: vdup_complex_f64(compute_twiddle(4, 27, fft_direction)),
-                twiddle5: vdup_complex_f64(compute_twiddle(5, 27, fft_direction)),
-                twiddle6: vdup_complex_f64(compute_twiddle(6, 27, fft_direction)),
-                twiddle7: vdup_complex_f64(compute_twiddle(7, 27, fft_direction)),
-                twiddle8: vdup_complex_f64(compute_twiddle(8, 27, fft_direction)),
-                twiddle9: vdup_complex_f64(compute_twiddle(10, 27, fft_direction)),
-                twiddle10: vdup_complex_f64(compute_twiddle(12, 27, fft_direction)),
-                twiddle11: vdup_complex_f64(compute_twiddle(14, 27, fft_direction)),
-                twiddle12: vdup_complex_f64(compute_twiddle(16, 27, fft_direction)),
-                bf9: NeonFastButterfly9d::new(fft_direction),
-            }
+        Self {
+            direction: fft_direction,
+            twiddle1: vdup_complex_f64(compute_twiddle(1, 27, fft_direction)),
+            twiddle2: vdup_complex_f64(compute_twiddle(2, 27, fft_direction)),
+            twiddle3: vdup_complex_f64(compute_twiddle(3, 27, fft_direction)),
+            twiddle4: vdup_complex_f64(compute_twiddle(4, 27, fft_direction)),
+            twiddle5: vdup_complex_f64(compute_twiddle(5, 27, fft_direction)),
+            twiddle6: vdup_complex_f64(compute_twiddle(6, 27, fft_direction)),
+            twiddle7: vdup_complex_f64(compute_twiddle(7, 27, fft_direction)),
+            twiddle8: vdup_complex_f64(compute_twiddle(8, 27, fft_direction)),
+            twiddle9: vdup_complex_f64(compute_twiddle(10, 27, fft_direction)),
+            twiddle10: vdup_complex_f64(compute_twiddle(12, 27, fft_direction)),
+            twiddle11: vdup_complex_f64(compute_twiddle(14, 27, fft_direction)),
+            twiddle12: vdup_complex_f64(compute_twiddle(16, 27, fft_direction)),
+            bf9: NeonFastButterfly9d::new(fft_direction),
         }
     }
 }

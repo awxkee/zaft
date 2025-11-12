@@ -340,8 +340,9 @@ macro_rules! define_mixed_radixf {
 
                         for i in 1..ROW_COUNT {
                             let twiddle = &twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR..];
+                            let tw =  AvxStoreF::from_complex_ref(twiddle);
                             let output =
-                                AvxStoreF::mul_by_complex(output[i], AvxStoreF::from_complex_ref(twiddle));
+                                AvxStoreF::mul_by_complex(output[i], tw);
                             unsafe {
                                 output.write(scratch.get_unchecked_mut(index_base + len_per_row * i..))
                             }

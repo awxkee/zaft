@@ -88,7 +88,7 @@ impl NeonFcmaButterfly5<f32> {
             let a1_a2_2 = vcombine_f32(vget_low_f32(tw2_re), vget_low_f32(tw1_re));
 
             for chunk in in_place.chunks_exact_mut(10) {
-                let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
+                let uz0 = vld1q_f32(chunk.as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
                 let uz3 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
@@ -148,7 +148,7 @@ impl NeonFcmaButterfly5<f32> {
             let rem = in_place.chunks_exact_mut(10).into_remainder();
 
             for chunk in rem.chunks_exact_mut(5) {
-                let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
+                let uz0 = vld1q_f32(chunk.as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
 
                 let u0 = vget_low_f32(uz0);
@@ -225,7 +225,7 @@ impl NeonFcmaButterfly5<f32> {
             let a1_a2_2 = vcombine_f32(vget_low_f32(tw2_re), vget_low_f32(tw1_re));
 
             for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
-                let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
+                let uz0 = vld1q_f32(src.as_ptr().cast());
                 let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
                 let uz3 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
@@ -286,7 +286,7 @@ impl NeonFcmaButterfly5<f32> {
             let rem_src = src.chunks_exact(10).remainder();
 
             for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
-                let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
+                let uz0 = vld1q_f32(src.as_ptr().cast());
                 let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
 
                 let u0 = vget_low_f32(uz0);
@@ -445,7 +445,7 @@ impl NeonFcmaButterfly5<f64> {
             let tw2_im = vdupq_n_f64(self.twiddle2.im);
 
             for (dst, src) in dst.chunks_exact_mut(5).zip(src.chunks_exact(5)) {
-                let u0 = vld1q_f64(src.get_unchecked(0..).as_ptr().cast());
+                let u0 = vld1q_f64(src.as_ptr().cast());
                 let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
                 let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
                 let u3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());

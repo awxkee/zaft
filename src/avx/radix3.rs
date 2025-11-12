@@ -564,68 +564,128 @@ impl AvxFmaRadix3<f32> {
                     let third = len / 3;
 
                     for data in chunk.chunks_exact_mut(len) {
+                        macro_rules! make_block {
+                            ($data: expr, $twiddles: expr, $third: expr, $j: expr, $start: expr, $tw_start: expr) => {{
+                                let u0 = _mm256_loadu_ps(
+                                    $data.get_unchecked($j + $start..).as_ptr().cast(),
+                                );
+
+                                let tw0 = _mm256_loadu_ps(
+                                    $twiddles
+                                        .get_unchecked(2 * $j + $tw_start..)
+                                        .as_ptr()
+                                        .cast(),
+                                );
+                                let tw1 = _mm256_loadu_ps(
+                                    $twiddles
+                                        .get_unchecked(2 * $j + $tw_start + 4..)
+                                        .as_ptr()
+                                        .cast(),
+                                );
+
+                                let rk1 = _mm256_loadu_ps(
+                                    $data.get_unchecked($j + $third + $start..).as_ptr().cast(),
+                                );
+                                let rk2 = _mm256_loadu_ps(
+                                    $data
+                                        .get_unchecked($j + 2 * $third + $start..)
+                                        .as_ptr()
+                                        .cast(),
+                                );
+
+                                let u1 = _mm256_fcmul_ps(rk1, tw0);
+                                let u2 = _mm256_fcmul_ps(rk2, tw1);
+
+                                // Radix-3 butterfly
+                                let xp_0 = _mm256_add_ps(u1, u2);
+                                let xn_0 = _mm256_sub_ps(u1, u2);
+                                let sum_0 = _mm256_add_ps(u0, xp_0);
+
+                                const SH: i32 = shuffle(2, 3, 0, 1);
+
+                                let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
+                                let xn_rot = _mm256_permute_ps::<SH>(xn_0);
+
+                                let vy0 = sum_0;
+                                let vy1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
+                                let vy2 = _mm256_fnmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
+                                (vy0, vy1, vy2)
+                            }};
+                        }
+
                         let mut j = 0usize;
 
+                        while j + 16 < third {
+                            let (vy0, vy1, vy2) = make_block!(data, m_twiddles, third, j, 0, 0);
+                            let (vy0_1, vy1_1, vy2_1) =
+                                make_block!(data, m_twiddles, third, j, 4, 8);
+                            let (vy0_2, vy1_2, vy2_2) =
+                                make_block!(data, m_twiddles, third, j, 8, 16);
+                            let (vy0_3, vy1_3, vy2_3) =
+                                make_block!(data, m_twiddles, third, j, 12, 24);
+
+                            _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
+                                vy1,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
+                                vy2,
+                            );
+
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 4..).as_mut_ptr().cast(),
+                                vy0_1,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + third + 4..).as_mut_ptr().cast(),
+                                vy1_1,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * third + 4..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                vy2_1,
+                            );
+
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 8..).as_mut_ptr().cast(),
+                                vy0_2,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + third + 8..).as_mut_ptr().cast(),
+                                vy1_2,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * third + 8..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                vy2_2,
+                            );
+
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 12..).as_mut_ptr().cast(),
+                                vy0_3,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + third + 12..).as_mut_ptr().cast(),
+                                vy1_3,
+                            );
+                            _mm256_storeu_ps(
+                                data.get_unchecked_mut(j + 2 * third + 12..)
+                                    .as_mut_ptr()
+                                    .cast(),
+                                vy2_3,
+                            );
+
+                            j += 16;
+                        }
+
                         while j + 8 < third {
-                            let u0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
-                            let u0_1 = _mm256_loadu_ps(data.get_unchecked(j + 4..).as_ptr().cast());
-
-                            let tw0 =
-                                _mm256_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
-                            let tw1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(2 * j + 4..).as_ptr().cast(),
-                            );
-
-                            let tw2 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(2 * j + 8..).as_ptr().cast(),
-                            );
-                            let tw3 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(2 * j + 12..).as_ptr().cast(),
-                            );
-
-                            let rk1 =
-                                _mm256_loadu_ps(data.get_unchecked(j + third..).as_ptr().cast());
-                            let rk2 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                            );
-
-                            let rk1_1 = _mm256_loadu_ps(
-                                data.get_unchecked(j + third + 4..).as_ptr().cast(),
-                            );
-                            let rk2_1 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 2 * third + 4..).as_ptr().cast(),
-                            );
-
-                            let u1 = _mm256_fcmul_ps(rk1, tw0);
-                            let u2 = _mm256_fcmul_ps(rk2, tw1);
-
-                            let u1_1 = _mm256_fcmul_ps(rk1_1, tw2);
-                            let u2_1 = _mm256_fcmul_ps(rk2_1, tw3);
-
-                            // Radix-3 butterfly
-                            let xp_0 = _mm256_add_ps(u1, u2);
-                            let xn_0 = _mm256_sub_ps(u1, u2);
-                            let sum_0 = _mm256_add_ps(u0, xp_0);
-
-                            let xp_1 = _mm256_add_ps(u1_1, u2_1);
-                            let xn_1 = _mm256_sub_ps(u1_1, u2_1);
-                            let sum_1 = _mm256_add_ps(u0_1, xp_1);
-
-                            const SH: i32 = shuffle(2, 3, 0, 1);
-
-                            let vw_1_0 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
-                            let xn_rot_0 = _mm256_permute_ps::<SH>(xn_0);
-
-                            let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_1, u0_1);
-                            let xn_rot_1 = _mm256_permute_ps::<SH>(xn_1);
-
-                            let vy0 = sum_0;
-                            let vy1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot_0, vw_1_0);
-                            let vy2 = _mm256_fnmadd_ps(twiddle_w_2, xn_rot_0, vw_1_0);
-
-                            let vy0_1 = sum_1;
-                            let vy1_1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot_1, vw_1_1);
-                            let vy2_1 = _mm256_fnmadd_ps(twiddle_w_2, xn_rot_1, vw_1_1);
+                            let (vy0, vy1, vy2) = make_block!(data, m_twiddles, third, j, 0, 0);
+                            let (vy0_1, vy1_1, vy2_1) =
+                                make_block!(data, m_twiddles, third, j, 4, 8);
 
                             _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             _mm256_storeu_ps(
@@ -656,36 +716,7 @@ impl AvxFmaRadix3<f32> {
                         }
 
                         while j + 4 < third {
-                            let u0 = _mm256_loadu_ps(data.get_unchecked(j..).as_ptr().cast());
-
-                            let tw0 =
-                                _mm256_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
-                            let tw1 = _mm256_loadu_ps(
-                                m_twiddles.get_unchecked(2 * (j + 2)..).as_ptr().cast(),
-                            );
-
-                            let rk1 =
-                                _mm256_loadu_ps(data.get_unchecked(j + third..).as_ptr().cast());
-                            let rk2 = _mm256_loadu_ps(
-                                data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                            );
-
-                            let u1 = _mm256_fcmul_ps(rk1, tw0);
-                            let u2 = _mm256_fcmul_ps(rk2, tw1);
-
-                            // Radix-3 butterfly
-                            let xp_0 = _mm256_add_ps(u1, u2);
-                            let xn_0 = _mm256_sub_ps(u1, u2);
-                            let sum_0 = _mm256_add_ps(u0, xp_0);
-
-                            const SH: i32 = shuffle(2, 3, 0, 1);
-
-                            let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
-                            let xn_rot = _mm256_permute_ps::<SH>(xn_0);
-
-                            let vy0 = sum_0;
-                            let vy1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
-                            let vy2 = _mm256_fnmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
+                            let (vy0, vy1, vy2) = make_block!(data, m_twiddles, third, j, 0, 0);
 
                             _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             _mm256_storeu_ps(

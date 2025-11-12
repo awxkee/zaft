@@ -34,9 +34,12 @@ mod bf14;
 mod bf15;
 mod bf16;
 mod bf17;
+mod bf18;
 mod bf19;
 mod bf2;
+mod bf20;
 mod bf23;
+mod bf25;
 mod bf27d;
 mod bf27f;
 mod bf29;
@@ -47,8 +50,10 @@ mod bf32f;
 mod bf36d;
 mod bf36f;
 mod bf4;
+mod bf49;
 mod bf5;
 mod bf6;
+mod bf64f;
 mod bf7;
 mod bf8;
 mod bf9;
@@ -77,8 +82,11 @@ pub(crate) use bf14::AvxButterfly14;
 pub(crate) use bf15::{AvxButterfly15d, AvxButterfly15f};
 pub(crate) use bf16::AvxButterfly16;
 pub(crate) use bf17::AvxButterfly17;
+pub(crate) use bf18::{AvxButterfly18d, AvxButterfly18f};
 pub(crate) use bf19::AvxButterfly19;
+pub(crate) use bf20::{AvxButterfly20d, AvxButterfly20f};
 pub(crate) use bf23::AvxButterfly23;
+pub(crate) use bf25::{AvxButterfly25d, AvxButterfly25f};
 pub(crate) use bf27d::AvxButterfly27d;
 pub(crate) use bf27f::AvxButterfly27f;
 pub(crate) use bf29::AvxButterfly29;
@@ -87,6 +95,8 @@ pub(crate) use bf32d::AvxButterfly32d;
 pub(crate) use bf32f::AvxButterfly32f;
 pub(crate) use bf36d::AvxButterfly36d;
 pub(crate) use bf36f::AvxButterfly36f;
+pub(crate) use bf49::{AvxButterfly49d, AvxButterfly49f};
+pub(crate) use bf64f::AvxButterfly64f;
 pub(crate) use fast_bf3::AvxFastButterfly3;
 pub(crate) use fast_bf4::AvxFastButterfly4;
 pub(crate) use fast_bf5::{AvxFastButterfly5d, AvxFastButterfly5f};
@@ -415,6 +425,26 @@ macro_rules! gen_butterfly_twiddles_interleaved_columns_f32 {
     }};
 }
 
+macro_rules! gen_butterfly_twiddles_separated_columns_f32 {
+    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
+        const FFT_LEN: usize = $num_rows * $num_cols;
+        const TWIDDLE_ROWS: usize = $num_rows - 1;
+        const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
+        const TWIDDLE_VECTOR_COLS: usize = TWIDDLE_COLS / 4;
+        const TWIDDLE_VECTOR_COUNT: usize = TWIDDLE_VECTOR_COLS * TWIDDLE_ROWS;
+        let mut twiddles = [AvxStoreF::zero(); TWIDDLE_VECTOR_COUNT];
+        for index in 0..TWIDDLE_VECTOR_COUNT {
+            let y = (index % TWIDDLE_ROWS) + 1;
+            let x = (index / TWIDDLE_ROWS) * 4 + $skip_cols;
+            use crate::avx::butterflies::make_mixedradix_twiddle_chunk_f32;
+            twiddles[index] = make_mixedradix_twiddle_chunk_f32(x, y, FFT_LEN, $direction);
+        }
+        twiddles
+    }};
+}
+
+pub(crate) use gen_butterfly_twiddles_separated_columns_f32;
+
 pub(crate) use gen_butterfly_twiddles_interleaved_columns_f32;
 pub(crate) use gen_butterfly_twiddles_interleaved_columns_f64;
 
@@ -427,6 +457,7 @@ macro_rules! test_avx_butterfly {
             if !has_valid_avx() {
                 return;
             }
+            use rand::Rng;
             for i in 1..4 {
                 let val = $scale as usize;
                 let size = val.pow(i);
@@ -507,6 +538,7 @@ macro_rules! test_oof_avx_butterfly {
             if !has_valid_avx() {
                 return;
             }
+            use rand::Rng;
             for i in 1..4 {
                 let kern = $scale;
                 let size = (kern as usize).pow(i);

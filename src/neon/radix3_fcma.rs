@@ -118,6 +118,7 @@ impl NeonFcmaRadix3<f64> {
         unsafe {
             let twiddle_re = vdupq_n_f64(self.twiddle_re);
             let twiddle_w_2 = vld1q_f64(self.twiddle_im.as_ptr().cast());
+            let n_twiddle_w_2 = vnegq_f64(twiddle_w_2);
 
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
@@ -171,20 +172,15 @@ impl NeonFcmaRadix3<f64> {
                             let sum1 = vaddq_f64(u3, xp1);
 
                             let w_01 = vfmaq_f64(u0, twiddle_re, xp0);
-
-                            let xn0_rot90 = vextq_f64::<1>(xn0, xn0);
-
                             let w_02 = vfmaq_f64(u3, twiddle_re, xp1);
 
-                            let xn1_rot90 = vextq_f64::<1>(xn1, xn1);
-
                             let vy0 = sum0;
-                            let vy1 = vfmaq_f64(w_01, twiddle_w_2, xn0_rot90);
-                            let vy2 = vfmsq_f64(w_01, twiddle_w_2, xn0_rot90);
+                            let vy1 = vcmlaq_rot90_f64(w_01, twiddle_w_2, xn0);
+                            let vy2 = vcmlaq_rot90_f64(w_01, n_twiddle_w_2, xn0);
 
                             let vy3 = sum1;
-                            let vy4 = vfmaq_f64(w_02, twiddle_w_2, xn1_rot90);
-                            let vy5 = vfmsq_f64(w_02, twiddle_w_2, xn1_rot90);
+                            let vy4 = vcmlaq_rot90_f64(w_02, twiddle_w_2, xn1);
+                            let vy5 = vcmlaq_rot90_f64(w_02, n_twiddle_w_2, xn1);
 
                             vst1q_f64(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1q_f64(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
@@ -223,11 +219,10 @@ impl NeonFcmaRadix3<f64> {
                             let sum = vaddq_f64(u0, xp);
 
                             let w_1 = vfmaq_f64(u0, twiddle_re, xp);
-                            let xn_rot = vextq_f64::<1>(xn, xn);
 
                             let vy0 = sum;
-                            let vy1 = vfmaq_f64(w_1, twiddle_w_2, xn_rot);
-                            let vy2 = vfmsq_f64(w_1, twiddle_w_2, xn_rot);
+                            let vy1 = vcmlaq_rot90_f64(w_1, twiddle_w_2, xn);
+                            let vy2 = vcmlaq_rot90_f64(w_1, n_twiddle_w_2, xn);
 
                             vst1q_f64(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1q_f64(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
@@ -273,6 +268,7 @@ impl NeonFcmaRadix3<f32> {
         unsafe {
             let twiddle_re = vdupq_n_f32(self.twiddle_re);
             let twiddle_w_2 = vld1q_f32(self.twiddle_im.as_ptr().cast());
+            let n_twiddle_w_2 = vnegq_f32(twiddle_w_2);
 
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
@@ -336,19 +332,15 @@ impl NeonFcmaRadix3<f32> {
                             let sum1 = vaddq_f32(u3, xp1);
 
                             let w_01 = vfmaq_f32(u0, twiddle_re, xp0);
-
-                            let xn0_rot = vrev64q_f32(xn0);
-                            let xn1_rot = vrev64q_f32(xn1);
-
                             let w_02 = vfmaq_f32(u3, twiddle_re, xp1);
 
                             let vy0 = sum0;
-                            let vy1 = vfmaq_f32(w_01, twiddle_w_2, xn0_rot);
-                            let vy2 = vfmsq_f32(w_01, twiddle_w_2, xn0_rot);
+                            let vy1 = vcmlaq_rot90_f32(w_01, twiddle_w_2, xn0);
+                            let vy2 = vcmlaq_rot90_f32(w_01, n_twiddle_w_2, xn0);
 
                             let vy3 = sum1;
-                            let vy4 = vfmaq_f32(w_02, twiddle_w_2, xn1_rot);
-                            let vy5 = vfmsq_f32(w_02, twiddle_w_2, xn1_rot);
+                            let vy4 = vcmlaq_rot90_f32(w_02, twiddle_w_2, xn1);
+                            let vy5 = vcmlaq_rot90_f32(w_02, n_twiddle_w_2, xn1);
 
                             vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1q_f32(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
@@ -377,7 +369,7 @@ impl NeonFcmaRadix3<f32> {
 
                             let tw0 = vld1q_f32(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
                             let tw1 =
-                                vld1q_f32(m_twiddles.get_unchecked(2 * (j + 1)..).as_ptr().cast());
+                                vld1q_f32(m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast());
 
                             let u1 = vfcmulq_fcma_f32(
                                 vld1q_f32(data.get_unchecked(j + third..).as_ptr().cast()),
@@ -395,11 +387,9 @@ impl NeonFcmaRadix3<f32> {
 
                             let w_1 = vfmaq_f32(u0, twiddle_re, xp);
 
-                            let xn_rot = vrev64q_f32(xn);
-
                             let vy0 = sum;
-                            let vy1 = vfmaq_f32(w_1, twiddle_w_2, xn_rot);
-                            let vy2 = vfmsq_f32(w_1, twiddle_w_2, xn_rot);
+                            let vy1 = vcmlaq_rot90_f32(w_1, twiddle_w_2, xn);
+                            let vy2 = vcmlaq_rot90_f32(w_1, n_twiddle_w_2, xn);
 
                             vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1q_f32(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
@@ -434,11 +424,9 @@ impl NeonFcmaRadix3<f32> {
 
                             let w_1 = vfma_f32(u0, vget_low_f32(twiddle_re), xp);
 
-                            let xn_rot = vext_f32::<1>(xn, xn);
-
                             let vy0 = sum;
-                            let vy1 = vfma_f32(w_1, vget_low_f32(twiddle_w_2), xn_rot);
-                            let vy2 = vfms_f32(w_1, vget_low_f32(twiddle_w_2), xn_rot);
+                            let vy1 = vcmla_rot90_f32(w_1, vget_low_f32(twiddle_w_2), xn);
+                            let vy2 = vcmla_rot90_f32(w_1, vget_low_f32(n_twiddle_w_2), xn);
 
                             vst1_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
                             vst1_f32(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);

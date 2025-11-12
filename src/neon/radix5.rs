@@ -52,6 +52,7 @@ pub(crate) struct NeonRadix5<T> {
     twiddle2: Complex<T>,
     direction: FftDirection,
     butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 impl<
@@ -79,7 +80,16 @@ where
             "Input length must be a power of 5"
         );
 
-        let twiddles = create_neon_twiddles::<T, 5>(5, size, fft_direction)?;
+        let log5 = compute_logarithm::<5>(size).unwrap();
+        let butterfly = match log5 {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly5(fft_direction)?,
+            _ => T::butterfly25(fft_direction)?,
+        };
+
+        let butterfly_length = butterfly.length();
+
+        let twiddles = create_neon_twiddles::<T, 5>(butterfly_length, size, fft_direction)?;
 
         Ok(NeonRadix5 {
             execution_length: size,
@@ -87,7 +97,8 @@ where
             twiddle1: compute_twiddle(1, 5, fft_direction),
             twiddle2: compute_twiddle(2, 5, fft_direction),
             direction: fft_direction,
-            butterfly: T::butterfly5(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
     }
 }
@@ -111,11 +122,15 @@ impl FftExecutor<f64> for NeonRadix5<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 5>(5, chunk, &mut scratch);
+                bitreversed_transpose::<Complex<f64>, 5>(
+                    self.butterfly_length,
+                    chunk,
+                    &mut scratch,
+                );
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 5;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -303,11 +318,11 @@ impl FftExecutor<f32> for NeonRadix5<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                neon_bitreversed_transpose_f32_radix5(5, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix5(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 5;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 

@@ -32,7 +32,8 @@ use crate::factory::AlgorithmFactory;
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::{
-    bitreversed_transpose, compute_twiddle, is_power_of_five, radixn_floating_twiddles_from_base,
+    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_five,
+    radixn_floating_twiddles_from_base,
 };
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -47,6 +48,7 @@ pub(crate) struct Radix5<T> {
     twiddle2: Complex<T>,
     direction: FftDirection,
     butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 pub(crate) trait Radix5Twiddles {
@@ -106,7 +108,16 @@ where
             "Input length must be a power of 5"
         );
 
-        let twiddles = T::make_twiddles_with_base(5, size, fft_direction)?;
+        let log5 = compute_logarithm::<5>(size).unwrap();
+        let butterfly = match log5 {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly5(fft_direction)?,
+            _ => T::butterfly25(fft_direction)?,
+        };
+
+        let twiddles = T::make_twiddles_with_base(butterfly.length(), size, fft_direction)?;
+
+        let butterfly_length = butterfly.length();
 
         Ok(Radix5 {
             execution_length: size,
@@ -114,7 +125,8 @@ where
             twiddle1: compute_twiddle(1, 5, fft_direction),
             twiddle2: compute_twiddle(2, 5, fft_direction),
             direction: fft_direction,
-            butterfly: T::butterfly5(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
     }
 }
@@ -146,11 +158,11 @@ where
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
-            bitreversed_transpose::<Complex<T>, 5>(5, chunk, &mut scratch);
+            bitreversed_transpose::<Complex<T>, 5>(self.butterfly_length, chunk, &mut scratch);
 
             self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-            let mut len = 5;
+            let mut len = self.butterfly_length;
 
             unsafe {
                 let mut m_twiddles = self.twiddles.as_slice();

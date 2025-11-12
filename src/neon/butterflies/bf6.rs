@@ -71,7 +71,7 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
 
         for chunk in in_place.chunks_exact_mut(12) {
             unsafe {
-                let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
+                let uz0 = vld1q_f32(chunk.as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
                 let uz3 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
@@ -97,7 +97,7 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
                 let row4 = pack_complex_hi(y2, y3);
                 let row5 = pack_complex_hi(y4, y5);
 
-                vst1q_f32(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), row0);
+                vst1q_f32(chunk.as_mut_ptr().cast(), row0);
                 vst1q_f32(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), row1);
                 vst1q_f32(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), row2);
                 vst1q_f32(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), row3);
@@ -110,7 +110,7 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
 
         for chunk in rem.chunks_exact_mut(6) {
             unsafe {
-                let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
+                let uz0 = vld1q_f32(chunk.as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
 
@@ -207,7 +207,7 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
                 let row4 = pack_complex_hi(y2, y3);
                 let row5 = pack_complex_hi(y4, y5);
 
-                vst1q_f32(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), row0);
+                vst1q_f32(dst.as_mut_ptr().cast(), row0);
                 vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), row1);
                 vst1q_f32(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), row2);
                 vst1q_f32(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), row3);
@@ -221,7 +221,7 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
 
         for (dst, src) in rem_dst.chunks_exact_mut(6).zip(rem_src.chunks_exact(6)) {
             unsafe {
-                let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
+                let uz0 = vld1q_f32(src.as_ptr().cast());
                 let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
 
@@ -285,7 +285,7 @@ impl FftExecutor<f64> for NeonButterfly6<f64> {
 
         for chunk in in_place.chunks_exact_mut(6) {
             unsafe {
-                let u0 = vld1q_f64(chunk.get_unchecked(0..).as_ptr().cast());
+                let u0 = vld1q_f64(chunk.as_ptr().cast());
                 let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
                 let u2 = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
                 let u3 = vld1q_f64(chunk.get_unchecked(3..).as_ptr().cast());
@@ -300,7 +300,7 @@ impl FftExecutor<f64> for NeonButterfly6<f64> {
                 let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);
                 let (y2, y5) = NeonButterfly::butterfly2_f64(t4, t5);
 
-                vst1q_f64(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
+                vst1q_f64(chunk.as_mut_ptr().cast(), y0);
                 vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
                 vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
                 vst1q_f64(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), y3);
@@ -339,7 +339,7 @@ impl FftExecutorOutOfPlace<f64> for NeonButterfly6<f64> {
 
         for (dst, src) in dst.chunks_exact_mut(6).zip(src.chunks_exact(6)) {
             unsafe {
-                let u0 = vld1q_f64(src.get_unchecked(0..).as_ptr().cast());
+                let u0 = vld1q_f64(src.as_ptr().cast());
                 let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
                 let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
                 let u3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());
@@ -354,7 +354,7 @@ impl FftExecutorOutOfPlace<f64> for NeonButterfly6<f64> {
                 let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);
                 let (y2, y5) = NeonButterfly::butterfly2_f64(t4, t5);
 
-                vst1q_f64(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
+                vst1q_f64(dst.as_mut_ptr().cast(), y0);
                 vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
                 vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
                 vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y3);

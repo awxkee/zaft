@@ -48,15 +48,17 @@ mod radix6;
 mod radix7;
 mod rotate;
 mod spectrum_arithmetic;
+mod transpose_5x5;
 mod util;
 
 pub(crate) use butterflies::{
     AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5, AvxButterfly6, AvxButterfly7,
     AvxButterfly8, AvxButterfly9, AvxButterfly10d, AvxButterfly10f, AvxButterfly11, AvxButterfly12,
     AvxButterfly13, AvxButterfly14, AvxButterfly15d, AvxButterfly15f, AvxButterfly16,
-    AvxButterfly17, AvxButterfly19, AvxButterfly23, AvxButterfly27d, AvxButterfly27f,
-    AvxButterfly29, AvxButterfly31, AvxButterfly32d, AvxButterfly32f, AvxButterfly36d,
-    AvxButterfly36f,
+    AvxButterfly17, AvxButterfly18d, AvxButterfly18f, AvxButterfly19, AvxButterfly20d,
+    AvxButterfly20f, AvxButterfly23, AvxButterfly25d, AvxButterfly25f, AvxButterfly27d,
+    AvxButterfly27f, AvxButterfly29, AvxButterfly31, AvxButterfly32d, AvxButterfly32f,
+    AvxButterfly36d, AvxButterfly36f, AvxButterfly49d, AvxButterfly49f, AvxButterfly64f,
 };
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
 pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
@@ -104,8 +106,8 @@ macro_rules! test_avx_radix {
                 let mut input = vec![Complex::<$data_type>::default(); size];
                 for z in input.iter_mut() {
                     *z = Complex {
-                        re: rand::rng().random(),
-                        im: rand::rng().random(),
+                        re: rand::rng().random_range(-1.1..1.1),
+                        im: rand::rng().random_range(-1.1..1.1),
                     };
                 }
                 let src = input.to_vec();
@@ -169,4 +171,90 @@ macro_rules! test_avx_radix {
 }
 
 #[cfg(test)]
+macro_rules! test_avx_radix_fast {
+    ($method_name: ident, $data_type: ident, $butterfly: ident, $fast_bf: ident, $iters: expr, $scale: expr, $tol: expr) => {
+        #[test]
+        fn $method_name() {
+            use crate::util::has_valid_avx;
+            if !has_valid_avx() {
+                return;
+            }
+            use crate::FftDirection;
+            use crate::FftExecutor;
+            use num_complex::Complex;
+            use rand::Rng;
+            for i in 1..$iters {
+                let val = $scale as usize;
+                let size = val.pow(i);
+                let mut input = vec![Complex::<$data_type>::default(); size];
+                for z in input.iter_mut() {
+                    *z = Complex {
+                        re: rand::rng().random_range(-1.1..1.1),
+                        im: rand::rng().random_range(-1.1..1.1),
+                    };
+                }
+                let src = input.to_vec();
+                use crate::$fast_bf;
+                let reference_forward = $fast_bf::new(size, FftDirection::Forward).unwrap();
+
+                let mut ref_src = src.to_vec();
+                reference_forward.execute(&mut ref_src).unwrap();
+
+                let radix_forward = $butterfly::new(size, FftDirection::Forward).unwrap();
+                let radix_inverse = $butterfly::new(size, FftDirection::Inverse).unwrap();
+                radix_forward.execute(&mut input).unwrap();
+
+                input
+                    .iter()
+                    .zip(ref_src.iter())
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < $tol,
+                            "a_re {} != b_re {} for size {} at {idx}",
+                            a.re,
+                            b.re,
+                            size
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < $tol,
+                            "a_im {} != b_im {} for size {} at {idx}",
+                            a.im,
+                            b.im,
+                            size
+                        );
+                    });
+
+                radix_inverse.execute(&mut input).unwrap();
+
+                input = input
+                    .iter()
+                    .map(|&x| x * (1.0 / size as $data_type))
+                    .collect();
+
+                input.iter().zip(src.iter()).for_each(|(a, b)| {
+                    assert!(
+                        (a.re - b.re).abs() < $tol,
+                        "a_re {} != b_re {} for size {}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < $tol,
+                        "a_im {} != b_im {} for size {}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+            }
+        }
+    };
+}
+
+#[cfg(test)]
 pub(crate) use test_avx_radix;
+
+#[cfg(test)]
+pub(crate) use test_avx_radix_fast;

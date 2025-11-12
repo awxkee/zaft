@@ -97,6 +97,19 @@ impl AvxStoreF {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn set_complex4(
+        v0: Complex<f32>,
+        v1: Complex<f32>,
+        v2: Complex<f32>,
+        v3: Complex<f32>,
+    ) -> Self {
+        AvxStoreF {
+            v: _mm256_setr_ps(v0.re, v0.im, v1.re, v1.im, v2.re, v2.im, v3.re, v3.im),
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn from_complex2(complex: &[Complex<f32>]) -> Self {
         unsafe {
             AvxStoreF {
@@ -143,12 +156,12 @@ impl AvxStoreF {
     #[inline]
     #[target_feature(enable = "avx")]
     pub(crate) fn write_lo3(&self, to_ref: &mut [Complex<f32>]) {
-        unsafe { _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v)) }
         unsafe {
+            _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v));
             _mm_storeu_si64(
                 to_ref.get_unchecked_mut(2..).as_mut_ptr().cast(),
                 _mm_castps_si128(_mm256_extractf128_ps::<1>(self.v)),
-            )
+            );
         }
     }
 

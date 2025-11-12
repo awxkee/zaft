@@ -27,11 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::f32x2_6x6::transpose_6x6_f32;
+use crate::avx::mixed::AvxStoreD;
 use crate::avx::rotate::AvxRotate;
+use crate::avx::transpose_5x5::transpose_5x5_f64;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
-    avx_bitreversed_transpose, create_avx4_twiddles, shuffle,
+    create_avx4_twiddles, shuffle,
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
@@ -57,6 +59,7 @@ pub(crate) struct AvxFmaRadix5<T> {
     tw1tw2_re: [T; 8],
     tw2tw1_re: [T; 8],
     butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 impl<
@@ -84,7 +87,16 @@ where
             "Input length must be a power of 5"
         );
 
-        let twiddles = create_avx4_twiddles::<T, 5>(5, size, fft_direction)?;
+        let log5 = compute_logarithm::<5>(size).unwrap();
+        let butterfly = match log5 {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly5(fft_direction)?,
+            _ => T::butterfly25(fft_direction)?,
+        };
+
+        let butterfly_length = butterfly.length();
+
+        let twiddles = create_avx4_twiddles::<T, 5>(butterfly_length, size, fft_direction)?;
         let tw1 = compute_twiddle(1, 5, fft_direction);
         let tw2 = compute_twiddle(2, 5, fft_direction);
 
@@ -106,8 +118,107 @@ where
                 tw2.re, tw2.re, tw1.re, tw1.re, tw2.re, tw2.re, tw1.re, tw1.re,
             ],
             direction: fft_direction,
-            butterfly: T::butterfly5(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+fn complex5_load_f64(array: &[Complex<f64>], idx: usize) -> (AvxStoreD, AvxStoreD, AvxStoreD) {
+    unsafe {
+        (
+            AvxStoreD::from_complex_ref(array.get_unchecked(idx..)),
+            AvxStoreD::from_complex_ref(array.get_unchecked(idx + 2..)),
+            AvxStoreD::from_complex(array.get_unchecked(idx + 4)),
+        )
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+fn complex5_store_f64(array: &mut [Complex<f64>], idx: usize, v: [AvxStoreD; 3]) {
+    unsafe {
+        v[0].write(array.get_unchecked_mut(idx..));
+        v[1].write(array.get_unchecked_mut(idx + 2..));
+        v[2].write_lo(array.get_unchecked_mut(idx + 4..));
+    }
+}
+
+#[target_feature(enable = "avx2")]
+pub(crate) fn avx_bitreversed_transpose_f64_radix5(
+    height: usize,
+    input: &[Complex<f64>],
+    output: &mut [Complex<f64>],
+) {
+    let width = input.len() / height;
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+    const WIDTH: usize = 5;
+    const HEIGHT: usize = 5;
+
+    let rev_digits = compute_logarithm::<5>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    if strided_width == 0 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            let rows = [
+                complex5_load_f64(input, base_input_idx),
+                complex5_load_f64(input, base_input_idx + width),
+                complex5_load_f64(input, base_input_idx + width * 2),
+                complex5_load_f64(input, base_input_idx + width * 3),
+                complex5_load_f64(input, base_input_idx + width * 4),
+            ];
+            let transposed = transpose_5x5_f64(
+                [rows[0].0, rows[1].0, rows[2].0, rows[3].0, rows[4].0],
+                [rows[0].1, rows[1].1, rows[2].1, rows[3].1, rows[4].1],
+                [rows[0].2, rows[1].2, rows[2].2, rows[3].2, rows[4].2],
+            );
+
+            complex5_store_f64(
+                output,
+                HEIGHT * y + x_rev[0],
+                [transposed.0[0], transposed.1[0], transposed.2[0]],
+            );
+            complex5_store_f64(
+                output,
+                HEIGHT * y + x_rev[1],
+                [transposed.0[1], transposed.1[1], transposed.2[1]],
+            );
+            complex5_store_f64(
+                output,
+                HEIGHT * y + x_rev[2],
+                [transposed.0[2], transposed.1[2], transposed.2[2]],
+            );
+            complex5_store_f64(
+                output,
+                HEIGHT * y + x_rev[3],
+                [transposed.0[3], transposed.1[3], transposed.2[3]],
+            );
+            complex5_store_f64(
+                output,
+                HEIGHT * y + x_rev[4],
+                [transposed.0[4], transposed.1[4], transposed.2[4]],
+            );
+        }
     }
 }
 
@@ -132,11 +243,11 @@ impl AvxFmaRadix5<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose::<Complex<f64>, 5>(5, chunk, &mut scratch);
+                avx_bitreversed_transpose_f64_radix5(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 5;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -486,11 +597,11 @@ impl AvxFmaRadix5<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose_f32_radix5(5, chunk, &mut scratch);
+                avx_bitreversed_transpose_f32_radix5(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 5;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 

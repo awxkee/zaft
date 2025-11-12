@@ -107,21 +107,19 @@ impl NeonFastButterfly9d {
         float64x2_t,
         float64x2_t,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
 
-            u4 = vfcmulq_f64(u4, self.twiddle1);
-            u7 = vfcmulq_f64(u7, self.twiddle2);
-            u5 = vfcmulq_f64(u5, self.twiddle2);
-            u8 = vfcmulq_f64(u8, self.twiddle4);
+        u4 = vfcmulq_f64(u4, self.twiddle1);
+        u7 = vfcmulq_f64(u7, self.twiddle2);
+        u5 = vfcmulq_f64(u5, self.twiddle2);
+        u8 = vfcmulq_f64(u8, self.twiddle4);
 
-            let (y0, y3, y6) = self.bf3(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 }
 
@@ -129,6 +127,7 @@ impl NeonFastButterfly9d {
 pub(crate) struct NeonFcmaFastButterfly9d {
     tw3_re: f64,
     tw3_im: float64x2_t,
+    n_tw3_im: float64x2_t,
     twiddle1: float64x2_t,
     twiddle2: float64x2_t,
     twiddle4: float64x2_t,
@@ -142,13 +141,15 @@ impl NeonFcmaFastButterfly9d {
         let tw2 = compute_twiddle::<f64>(2, 9, fft_direction);
         let tw4 = compute_twiddle::<f64>(4, 9, fft_direction);
         unsafe {
+            let q = vld1q_f64(
+                [-twiddle3.im, twiddle3.im, -twiddle3.im, twiddle3.im]
+                    .as_ptr()
+                    .cast(),
+            );
             NeonFcmaFastButterfly9d {
                 tw3_re: twiddle3.re,
-                tw3_im: vld1q_f64(
-                    [-twiddle3.im, twiddle3.im, -twiddle3.im, twiddle3.im]
-                        .as_ptr()
-                        .cast(),
-                ),
+                tw3_im: q,
+                n_tw3_im: vnegq_f64(q),
                 twiddle1: vld1q_f64([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr().cast()),
                 twiddle2: vld1q_f64([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr().cast()),
                 twiddle4: vld1q_f64([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr().cast()),
@@ -172,11 +173,10 @@ impl NeonFcmaFastButterfly9d {
         let sum = vaddq_f64(u0, xp);
 
         let w_1 = vfmaq_n_f64(u0, xp, self.tw3_re);
-        let xn_rot = vextq_f64::<1>(xn, xn);
 
         let y0 = sum;
-        let y1 = vfmaq_f64(w_1, self.tw3_im, xn_rot);
-        let y2 = vfmsq_f64(w_1, self.tw3_im, xn_rot);
+        let y1 = vcmlaq_rot90_f64(w_1, self.tw3_im, xn);
+        let y2 = vcmlaq_rot90_f64(w_1, self.n_tw3_im, xn);
         (y0, y1, y2)
     }
 
@@ -204,21 +204,19 @@ impl NeonFcmaFastButterfly9d {
         float64x2_t,
         float64x2_t,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
 
-            use crate::neon::util::vfcmulq_fcma_f64;
-            u4 = vfcmulq_fcma_f64(u4, self.twiddle1);
-            u7 = vfcmulq_fcma_f64(u7, self.twiddle2);
-            u5 = vfcmulq_fcma_f64(u5, self.twiddle2);
-            u8 = vfcmulq_fcma_f64(u8, self.twiddle4);
+        use crate::neon::util::vfcmulq_fcma_f64;
+        u4 = vfcmulq_fcma_f64(u4, self.twiddle1);
+        u7 = vfcmulq_fcma_f64(u7, self.twiddle2);
+        u5 = vfcmulq_fcma_f64(u5, self.twiddle2);
+        u8 = vfcmulq_fcma_f64(u8, self.twiddle4);
 
-            let (y0, y3, y6) = self.bf3(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 }

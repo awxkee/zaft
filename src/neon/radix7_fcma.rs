@@ -35,7 +35,7 @@ use crate::radix7::Radix7Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_seven};
+use crate::util::{bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_seven};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -50,6 +50,7 @@ pub(crate) struct NeonFcmaRadix7<T> {
     twiddle3: Complex<T>,
     direction: FftDirection,
     butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 impl<
@@ -77,7 +78,16 @@ where
             "Input length must be a power of 7"
         );
 
-        let twiddles = create_neon_twiddles::<T, 7>(7, size, fft_direction)?;
+        let log7 = compute_logarithm::<7>(size).unwrap();
+        let butterfly = match log7 {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly7(fft_direction)?,
+            _ => T::butterfly49(fft_direction).map_or_else(|| T::butterfly7(fft_direction), Ok)?,
+        };
+
+        let butterfly_length = butterfly.length();
+
+        let twiddles = create_neon_twiddles::<T, 7>(butterfly_length, size, fft_direction)?;
 
         Ok(NeonFcmaRadix7 {
             execution_length: size,
@@ -86,7 +96,8 @@ where
             twiddle2: compute_twiddle(2, 7, fft_direction),
             twiddle3: compute_twiddle(3, 7, fft_direction),
             direction: fft_direction,
-            butterfly: T::butterfly7(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
     }
 }
@@ -118,11 +129,15 @@ impl NeonFcmaRadix7<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 7>(7, chunk, &mut scratch);
+                bitreversed_transpose::<Complex<f64>, 7>(
+                    self.butterfly_length,
+                    chunk,
+                    &mut scratch,
+                );
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 7;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -282,11 +297,11 @@ impl NeonFcmaRadix7<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                neon_bitreversed_transpose_f32_radix7(7, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix7(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 7;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 

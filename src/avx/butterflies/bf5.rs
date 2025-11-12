@@ -967,7 +967,6 @@ impl FftExecutor<f64> for AvxButterfly5<f64> {
 mod tests {
     use super::*;
     use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
-    use rand::Rng;
 
     test_avx_butterfly!(test_avx_butterfly5, f32, AvxButterfly5, 5, 1e-5);
     test_avx_butterfly!(test_avx_butterfly5_f64, f64, AvxButterfly5, 5, 1e-7);

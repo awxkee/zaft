@@ -161,126 +161,120 @@ impl ColumnFcmaButterfly16d {
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, v: [NeonStoreD; 16]) -> [NeonStoreD; 16] {
-        unsafe {
-            match self.direction {
-                FftDirection::Forward => {
-                    let evens = self.bf8.forward(
-                        v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
-                    );
+        match self.direction {
+            FftDirection::Forward => {
+                let evens = self.bf8.forward(
+                    v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
+                );
 
-                    let mut odds_1 =
-                        NeonButterfly::bf4_f64_forward(v[1].v, v[5].v, v[9].v, v[13].v);
-                    let mut odds_2 =
-                        NeonButterfly::bf4_f64_forward(v[15].v, v[3].v, v[7].v, v[11].v);
+                let mut odds_1 = NeonButterfly::bf4_f64_forward(v[1].v, v[5].v, v[9].v, v[13].v);
+                let mut odds_2 = NeonButterfly::bf4_f64_forward(v[15].v, v[3].v, v[7].v, v[11].v);
 
-                    odds_1.1 = vfcmulq_fcma_f64(odds_1.1, self.twiddle1);
-                    odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, self.twiddle1);
+                odds_1.1 = vfcmulq_fcma_f64(odds_1.1, self.twiddle1);
+                odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, self.twiddle1);
 
-                    odds_1.2 = vfcmulq_fcma_f64(odds_1.2, self.twiddle2);
-                    odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, self.twiddle2);
+                odds_1.2 = vfcmulq_fcma_f64(odds_1.2, self.twiddle2);
+                odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, self.twiddle2);
 
-                    odds_1.3 = vfcmulq_fcma_f64(odds_1.3, self.twiddle3);
-                    odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, self.twiddle3);
+                odds_1.3 = vfcmulq_fcma_f64(odds_1.3, self.twiddle3);
+                odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, self.twiddle3);
 
-                    // step 4: cross FFTs
-                    let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
-                    odds_1.0 = o01;
-                    odds_2.0 = o02;
+                // step 4: cross FFTs
+                let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
+                odds_1.0 = o01;
+                odds_2.0 = o02;
 
-                    let (o03, o04) = NeonButterfly::butterfly2_f64(odds_1.1, odds_2.1);
-                    odds_1.1 = o03;
-                    odds_2.1 = o04;
-                    let (o05, o06) = NeonButterfly::butterfly2_f64(odds_1.2, odds_2.2);
-                    odds_1.2 = o05;
-                    odds_2.2 = o06;
-                    let (o07, o08) = NeonButterfly::butterfly2_f64(odds_1.3, odds_2.3);
-                    odds_1.3 = o07;
-                    odds_2.3 = o08;
+                let (o03, o04) = NeonButterfly::butterfly2_f64(odds_1.1, odds_2.1);
+                odds_1.1 = o03;
+                odds_2.1 = o04;
+                let (o05, o06) = NeonButterfly::butterfly2_f64(odds_1.2, odds_2.2);
+                odds_1.2 = o05;
+                odds_2.2 = o06;
+                let (o07, o08) = NeonButterfly::butterfly2_f64(odds_1.3, odds_2.3);
+                odds_1.3 = o07;
+                odds_2.3 = o08;
 
-                    // apply the butterfly 4 twiddle factor, which is just a rotation
-                    odds_2.0 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.0);
-                    odds_2.1 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.1);
-                    odds_2.2 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.2);
-                    odds_2.3 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.3);
+                // apply the butterfly 4 twiddle factor, which is just a rotation
+                odds_2.0 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.0);
+                odds_2.1 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.1);
+                odds_2.2 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.2);
+                odds_2.3 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.3);
 
-                    [
-                        NeonStoreD::raw(vaddq_f64(evens.0, odds_1.0)),
-                        NeonStoreD::raw(vaddq_f64(evens.1, odds_1.1)),
-                        NeonStoreD::raw(vaddq_f64(evens.2, odds_1.2)),
-                        NeonStoreD::raw(vaddq_f64(evens.3, odds_1.3)),
-                        NeonStoreD::raw(vaddq_f64(evens.4, odds_2.0)),
-                        NeonStoreD::raw(vaddq_f64(evens.5, odds_2.1)),
-                        NeonStoreD::raw(vaddq_f64(evens.6, odds_2.2)),
-                        NeonStoreD::raw(vaddq_f64(evens.7, odds_2.3)),
-                        NeonStoreD::raw(vsubq_f64(evens.0, odds_1.0)),
-                        NeonStoreD::raw(vsubq_f64(evens.1, odds_1.1)),
-                        NeonStoreD::raw(vsubq_f64(evens.2, odds_1.2)),
-                        NeonStoreD::raw(vsubq_f64(evens.3, odds_1.3)),
-                        NeonStoreD::raw(vsubq_f64(evens.4, odds_2.0)),
-                        NeonStoreD::raw(vsubq_f64(evens.5, odds_2.1)),
-                        NeonStoreD::raw(vsubq_f64(evens.6, odds_2.2)),
-                        NeonStoreD::raw(vsubq_f64(evens.7, odds_2.3)),
-                    ]
-                }
-                FftDirection::Inverse => {
-                    let evens = self.bf8.backward(
-                        v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
-                    );
+                [
+                    NeonStoreD::raw(vaddq_f64(evens.0, odds_1.0)),
+                    NeonStoreD::raw(vaddq_f64(evens.1, odds_1.1)),
+                    NeonStoreD::raw(vaddq_f64(evens.2, odds_1.2)),
+                    NeonStoreD::raw(vaddq_f64(evens.3, odds_1.3)),
+                    NeonStoreD::raw(vaddq_f64(evens.4, odds_2.0)),
+                    NeonStoreD::raw(vaddq_f64(evens.5, odds_2.1)),
+                    NeonStoreD::raw(vaddq_f64(evens.6, odds_2.2)),
+                    NeonStoreD::raw(vaddq_f64(evens.7, odds_2.3)),
+                    NeonStoreD::raw(vsubq_f64(evens.0, odds_1.0)),
+                    NeonStoreD::raw(vsubq_f64(evens.1, odds_1.1)),
+                    NeonStoreD::raw(vsubq_f64(evens.2, odds_1.2)),
+                    NeonStoreD::raw(vsubq_f64(evens.3, odds_1.3)),
+                    NeonStoreD::raw(vsubq_f64(evens.4, odds_2.0)),
+                    NeonStoreD::raw(vsubq_f64(evens.5, odds_2.1)),
+                    NeonStoreD::raw(vsubq_f64(evens.6, odds_2.2)),
+                    NeonStoreD::raw(vsubq_f64(evens.7, odds_2.3)),
+                ]
+            }
+            FftDirection::Inverse => {
+                let evens = self.bf8.backward(
+                    v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
+                );
 
-                    let mut odds_1 =
-                        NeonButterfly::bf4_f64_backward(v[1].v, v[5].v, v[9].v, v[13].v);
-                    let mut odds_2 =
-                        NeonButterfly::bf4_f64_backward(v[15].v, v[3].v, v[7].v, v[11].v);
+                let mut odds_1 = NeonButterfly::bf4_f64_backward(v[1].v, v[5].v, v[9].v, v[13].v);
+                let mut odds_2 = NeonButterfly::bf4_f64_backward(v[15].v, v[3].v, v[7].v, v[11].v);
 
-                    odds_1.1 = vfcmulq_fcma_f64(odds_1.1, self.twiddle1);
-                    odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, self.twiddle1);
+                odds_1.1 = vfcmulq_fcma_f64(odds_1.1, self.twiddle1);
+                odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, self.twiddle1);
 
-                    odds_1.2 = vfcmulq_fcma_f64(odds_1.2, self.twiddle2);
-                    odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, self.twiddle2);
+                odds_1.2 = vfcmulq_fcma_f64(odds_1.2, self.twiddle2);
+                odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, self.twiddle2);
 
-                    odds_1.3 = vfcmulq_fcma_f64(odds_1.3, self.twiddle3);
-                    odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, self.twiddle3);
+                odds_1.3 = vfcmulq_fcma_f64(odds_1.3, self.twiddle3);
+                odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, self.twiddle3);
 
-                    // step 4: cross FFTs
-                    let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
-                    odds_1.0 = o01;
-                    odds_2.0 = o02;
+                // step 4: cross FFTs
+                let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
+                odds_1.0 = o01;
+                odds_2.0 = o02;
 
-                    let (o03, o04) = NeonButterfly::butterfly2_f64(odds_1.1, odds_2.1);
-                    odds_1.1 = o03;
-                    odds_2.1 = o04;
-                    let (o05, o06) = NeonButterfly::butterfly2_f64(odds_1.2, odds_2.2);
-                    odds_1.2 = o05;
-                    odds_2.2 = o06;
-                    let (o07, o08) = NeonButterfly::butterfly2_f64(odds_1.3, odds_2.3);
-                    odds_1.3 = o07;
-                    odds_2.3 = o08;
+                let (o03, o04) = NeonButterfly::butterfly2_f64(odds_1.1, odds_2.1);
+                odds_1.1 = o03;
+                odds_2.1 = o04;
+                let (o05, o06) = NeonButterfly::butterfly2_f64(odds_1.2, odds_2.2);
+                odds_1.2 = o05;
+                odds_2.2 = o06;
+                let (o07, o08) = NeonButterfly::butterfly2_f64(odds_1.3, odds_2.3);
+                odds_1.3 = o07;
+                odds_2.3 = o08;
 
-                    // apply the butterfly 4 twiddle factor, which is just a rotation
-                    odds_2.0 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.0);
-                    odds_2.1 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.1);
-                    odds_2.2 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.2);
-                    odds_2.3 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.3);
+                // apply the butterfly 4 twiddle factor, which is just a rotation
+                odds_2.0 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.0);
+                odds_2.1 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.1);
+                odds_2.2 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.2);
+                odds_2.3 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.3);
 
-                    [
-                        NeonStoreD::raw(vaddq_f64(evens.0, odds_1.0)),
-                        NeonStoreD::raw(vaddq_f64(evens.1, odds_1.1)),
-                        NeonStoreD::raw(vaddq_f64(evens.2, odds_1.2)),
-                        NeonStoreD::raw(vaddq_f64(evens.3, odds_1.3)),
-                        NeonStoreD::raw(vaddq_f64(evens.4, odds_2.0)),
-                        NeonStoreD::raw(vaddq_f64(evens.5, odds_2.1)),
-                        NeonStoreD::raw(vaddq_f64(evens.6, odds_2.2)),
-                        NeonStoreD::raw(vaddq_f64(evens.7, odds_2.3)),
-                        NeonStoreD::raw(vsubq_f64(evens.0, odds_1.0)),
-                        NeonStoreD::raw(vsubq_f64(evens.1, odds_1.1)),
-                        NeonStoreD::raw(vsubq_f64(evens.2, odds_1.2)),
-                        NeonStoreD::raw(vsubq_f64(evens.3, odds_1.3)),
-                        NeonStoreD::raw(vsubq_f64(evens.4, odds_2.0)),
-                        NeonStoreD::raw(vsubq_f64(evens.5, odds_2.1)),
-                        NeonStoreD::raw(vsubq_f64(evens.6, odds_2.2)),
-                        NeonStoreD::raw(vsubq_f64(evens.7, odds_2.3)),
-                    ]
-                }
+                [
+                    NeonStoreD::raw(vaddq_f64(evens.0, odds_1.0)),
+                    NeonStoreD::raw(vaddq_f64(evens.1, odds_1.1)),
+                    NeonStoreD::raw(vaddq_f64(evens.2, odds_1.2)),
+                    NeonStoreD::raw(vaddq_f64(evens.3, odds_1.3)),
+                    NeonStoreD::raw(vaddq_f64(evens.4, odds_2.0)),
+                    NeonStoreD::raw(vaddq_f64(evens.5, odds_2.1)),
+                    NeonStoreD::raw(vaddq_f64(evens.6, odds_2.2)),
+                    NeonStoreD::raw(vaddq_f64(evens.7, odds_2.3)),
+                    NeonStoreD::raw(vsubq_f64(evens.0, odds_1.0)),
+                    NeonStoreD::raw(vsubq_f64(evens.1, odds_1.1)),
+                    NeonStoreD::raw(vsubq_f64(evens.2, odds_1.2)),
+                    NeonStoreD::raw(vsubq_f64(evens.3, odds_1.3)),
+                    NeonStoreD::raw(vsubq_f64(evens.4, odds_2.0)),
+                    NeonStoreD::raw(vsubq_f64(evens.5, odds_2.1)),
+                    NeonStoreD::raw(vsubq_f64(evens.6, odds_2.2)),
+                    NeonStoreD::raw(vsubq_f64(evens.7, odds_2.3)),
+                ]
             }
         }
     }
@@ -495,126 +489,120 @@ impl ColumnFcmaButterfly16f {
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, v: [NeonStoreF; 16]) -> [NeonStoreF; 16] {
-        unsafe {
-            match self.direction {
-                FftDirection::Forward => {
-                    let evens = self.bf8.forward(
-                        v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
-                    );
+        match self.direction {
+            FftDirection::Forward => {
+                let evens = self.bf8.forward(
+                    v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
+                );
 
-                    let mut odds_1 =
-                        NeonButterfly::bf4_forward_f32(v[1].v, v[5].v, v[9].v, v[13].v);
-                    let mut odds_2 =
-                        NeonButterfly::bf4_forward_f32(v[15].v, v[3].v, v[7].v, v[11].v);
+                let mut odds_1 = NeonButterfly::bf4_forward_f32(v[1].v, v[5].v, v[9].v, v[13].v);
+                let mut odds_2 = NeonButterfly::bf4_forward_f32(v[15].v, v[3].v, v[7].v, v[11].v);
 
-                    odds_1.1 = vfcmulq_fcma_f32(odds_1.1, self.twiddle1);
-                    odds_2.1 = vfcmulq_b_conj_fcma_f32(odds_2.1, self.twiddle1);
+                odds_1.1 = vfcmulq_fcma_f32(odds_1.1, self.twiddle1);
+                odds_2.1 = vfcmulq_b_conj_fcma_f32(odds_2.1, self.twiddle1);
 
-                    odds_1.2 = vfcmulq_fcma_f32(odds_1.2, self.twiddle2);
-                    odds_2.2 = vfcmulq_b_conj_fcma_f32(odds_2.2, self.twiddle2);
+                odds_1.2 = vfcmulq_fcma_f32(odds_1.2, self.twiddle2);
+                odds_2.2 = vfcmulq_b_conj_fcma_f32(odds_2.2, self.twiddle2);
 
-                    odds_1.3 = vfcmulq_fcma_f32(odds_1.3, self.twiddle3);
-                    odds_2.3 = vfcmulq_b_conj_fcma_f32(odds_2.3, self.twiddle3);
+                odds_1.3 = vfcmulq_fcma_f32(odds_1.3, self.twiddle3);
+                odds_2.3 = vfcmulq_b_conj_fcma_f32(odds_2.3, self.twiddle3);
 
-                    // step 4: cross FFTs
-                    let (o01, o02) = NeonButterfly::butterfly2_f32(odds_1.0, odds_2.0);
-                    odds_1.0 = o01;
-                    odds_2.0 = o02;
+                // step 4: cross FFTs
+                let (o01, o02) = NeonButterfly::butterfly2_f32(odds_1.0, odds_2.0);
+                odds_1.0 = o01;
+                odds_2.0 = o02;
 
-                    let (o03, o04) = NeonButterfly::butterfly2_f32(odds_1.1, odds_2.1);
-                    odds_1.1 = o03;
-                    odds_2.1 = o04;
-                    let (o05, o06) = NeonButterfly::butterfly2_f32(odds_1.2, odds_2.2);
-                    odds_1.2 = o05;
-                    odds_2.2 = o06;
-                    let (o07, o08) = NeonButterfly::butterfly2_f32(odds_1.3, odds_2.3);
-                    odds_1.3 = o07;
-                    odds_2.3 = o08;
+                let (o03, o04) = NeonButterfly::butterfly2_f32(odds_1.1, odds_2.1);
+                odds_1.1 = o03;
+                odds_2.1 = o04;
+                let (o05, o06) = NeonButterfly::butterfly2_f32(odds_1.2, odds_2.2);
+                odds_1.2 = o05;
+                odds_2.2 = o06;
+                let (o07, o08) = NeonButterfly::butterfly2_f32(odds_1.3, odds_2.3);
+                odds_1.3 = o07;
+                odds_2.3 = o08;
 
-                    // apply the butterfly 4 twiddle factor, which is just a rotation
-                    odds_2.0 = vcaddq_rot270_f32(vdupq_n_f32(0.), odds_2.0);
-                    odds_2.1 = vcaddq_rot270_f32(vdupq_n_f32(0.), odds_2.1);
-                    odds_2.2 = vcaddq_rot270_f32(vdupq_n_f32(0.), odds_2.2);
-                    odds_2.3 = vcaddq_rot270_f32(vdupq_n_f32(0.), odds_2.3);
+                // apply the butterfly 4 twiddle factor, which is just a rotation
+                odds_2.0 = vcaddq_rot270_f32(vdupq_n_f32(0.), odds_2.0);
+                odds_2.1 = vcaddq_rot270_f32(vdupq_n_f32(0.), odds_2.1);
+                odds_2.2 = vcaddq_rot270_f32(vdupq_n_f32(0.), odds_2.2);
+                odds_2.3 = vcaddq_rot270_f32(vdupq_n_f32(0.), odds_2.3);
 
-                    [
-                        NeonStoreF::raw(vaddq_f32(evens.0, odds_1.0)),
-                        NeonStoreF::raw(vaddq_f32(evens.1, odds_1.1)),
-                        NeonStoreF::raw(vaddq_f32(evens.2, odds_1.2)),
-                        NeonStoreF::raw(vaddq_f32(evens.3, odds_1.3)),
-                        NeonStoreF::raw(vaddq_f32(evens.4, odds_2.0)),
-                        NeonStoreF::raw(vaddq_f32(evens.5, odds_2.1)),
-                        NeonStoreF::raw(vaddq_f32(evens.6, odds_2.2)),
-                        NeonStoreF::raw(vaddq_f32(evens.7, odds_2.3)),
-                        NeonStoreF::raw(vsubq_f32(evens.0, odds_1.0)),
-                        NeonStoreF::raw(vsubq_f32(evens.1, odds_1.1)),
-                        NeonStoreF::raw(vsubq_f32(evens.2, odds_1.2)),
-                        NeonStoreF::raw(vsubq_f32(evens.3, odds_1.3)),
-                        NeonStoreF::raw(vsubq_f32(evens.4, odds_2.0)),
-                        NeonStoreF::raw(vsubq_f32(evens.5, odds_2.1)),
-                        NeonStoreF::raw(vsubq_f32(evens.6, odds_2.2)),
-                        NeonStoreF::raw(vsubq_f32(evens.7, odds_2.3)),
-                    ]
-                }
-                FftDirection::Inverse => {
-                    let evens = self.bf8.backward(
-                        v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
-                    );
+                [
+                    NeonStoreF::raw(vaddq_f32(evens.0, odds_1.0)),
+                    NeonStoreF::raw(vaddq_f32(evens.1, odds_1.1)),
+                    NeonStoreF::raw(vaddq_f32(evens.2, odds_1.2)),
+                    NeonStoreF::raw(vaddq_f32(evens.3, odds_1.3)),
+                    NeonStoreF::raw(vaddq_f32(evens.4, odds_2.0)),
+                    NeonStoreF::raw(vaddq_f32(evens.5, odds_2.1)),
+                    NeonStoreF::raw(vaddq_f32(evens.6, odds_2.2)),
+                    NeonStoreF::raw(vaddq_f32(evens.7, odds_2.3)),
+                    NeonStoreF::raw(vsubq_f32(evens.0, odds_1.0)),
+                    NeonStoreF::raw(vsubq_f32(evens.1, odds_1.1)),
+                    NeonStoreF::raw(vsubq_f32(evens.2, odds_1.2)),
+                    NeonStoreF::raw(vsubq_f32(evens.3, odds_1.3)),
+                    NeonStoreF::raw(vsubq_f32(evens.4, odds_2.0)),
+                    NeonStoreF::raw(vsubq_f32(evens.5, odds_2.1)),
+                    NeonStoreF::raw(vsubq_f32(evens.6, odds_2.2)),
+                    NeonStoreF::raw(vsubq_f32(evens.7, odds_2.3)),
+                ]
+            }
+            FftDirection::Inverse => {
+                let evens = self.bf8.backward(
+                    v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
+                );
 
-                    let mut odds_1 =
-                        NeonButterfly::bf4_backward_f32(v[1].v, v[5].v, v[9].v, v[13].v);
-                    let mut odds_2 =
-                        NeonButterfly::bf4_backward_f32(v[15].v, v[3].v, v[7].v, v[11].v);
+                let mut odds_1 = NeonButterfly::bf4_backward_f32(v[1].v, v[5].v, v[9].v, v[13].v);
+                let mut odds_2 = NeonButterfly::bf4_backward_f32(v[15].v, v[3].v, v[7].v, v[11].v);
 
-                    odds_1.1 = vfcmulq_fcma_f32(odds_1.1, self.twiddle1);
-                    odds_2.1 = vfcmulq_b_conj_fcma_f32(odds_2.1, self.twiddle1);
+                odds_1.1 = vfcmulq_fcma_f32(odds_1.1, self.twiddle1);
+                odds_2.1 = vfcmulq_b_conj_fcma_f32(odds_2.1, self.twiddle1);
 
-                    odds_1.2 = vfcmulq_fcma_f32(odds_1.2, self.twiddle2);
-                    odds_2.2 = vfcmulq_b_conj_fcma_f32(odds_2.2, self.twiddle2);
+                odds_1.2 = vfcmulq_fcma_f32(odds_1.2, self.twiddle2);
+                odds_2.2 = vfcmulq_b_conj_fcma_f32(odds_2.2, self.twiddle2);
 
-                    odds_1.3 = vfcmulq_fcma_f32(odds_1.3, self.twiddle3);
-                    odds_2.3 = vfcmulq_b_conj_fcma_f32(odds_2.3, self.twiddle3);
+                odds_1.3 = vfcmulq_fcma_f32(odds_1.3, self.twiddle3);
+                odds_2.3 = vfcmulq_b_conj_fcma_f32(odds_2.3, self.twiddle3);
 
-                    // step 4: cross FFTs
-                    let (o01, o02) = NeonButterfly::butterfly2_f32(odds_1.0, odds_2.0);
-                    odds_1.0 = o01;
-                    odds_2.0 = o02;
+                // step 4: cross FFTs
+                let (o01, o02) = NeonButterfly::butterfly2_f32(odds_1.0, odds_2.0);
+                odds_1.0 = o01;
+                odds_2.0 = o02;
 
-                    let (o03, o04) = NeonButterfly::butterfly2_f32(odds_1.1, odds_2.1);
-                    odds_1.1 = o03;
-                    odds_2.1 = o04;
-                    let (o05, o06) = NeonButterfly::butterfly2_f32(odds_1.2, odds_2.2);
-                    odds_1.2 = o05;
-                    odds_2.2 = o06;
-                    let (o07, o08) = NeonButterfly::butterfly2_f32(odds_1.3, odds_2.3);
-                    odds_1.3 = o07;
-                    odds_2.3 = o08;
+                let (o03, o04) = NeonButterfly::butterfly2_f32(odds_1.1, odds_2.1);
+                odds_1.1 = o03;
+                odds_2.1 = o04;
+                let (o05, o06) = NeonButterfly::butterfly2_f32(odds_1.2, odds_2.2);
+                odds_1.2 = o05;
+                odds_2.2 = o06;
+                let (o07, o08) = NeonButterfly::butterfly2_f32(odds_1.3, odds_2.3);
+                odds_1.3 = o07;
+                odds_2.3 = o08;
 
-                    // apply the butterfly 4 twiddle factor, which is just a rotation
-                    odds_2.0 = vcaddq_rot90_f32(vdupq_n_f32(0.), odds_2.0);
-                    odds_2.1 = vcaddq_rot90_f32(vdupq_n_f32(0.), odds_2.1);
-                    odds_2.2 = vcaddq_rot90_f32(vdupq_n_f32(0.), odds_2.2);
-                    odds_2.3 = vcaddq_rot90_f32(vdupq_n_f32(0.), odds_2.3);
+                // apply the butterfly 4 twiddle factor, which is just a rotation
+                odds_2.0 = vcaddq_rot90_f32(vdupq_n_f32(0.), odds_2.0);
+                odds_2.1 = vcaddq_rot90_f32(vdupq_n_f32(0.), odds_2.1);
+                odds_2.2 = vcaddq_rot90_f32(vdupq_n_f32(0.), odds_2.2);
+                odds_2.3 = vcaddq_rot90_f32(vdupq_n_f32(0.), odds_2.3);
 
-                    [
-                        NeonStoreF::raw(vaddq_f32(evens.0, odds_1.0)),
-                        NeonStoreF::raw(vaddq_f32(evens.1, odds_1.1)),
-                        NeonStoreF::raw(vaddq_f32(evens.2, odds_1.2)),
-                        NeonStoreF::raw(vaddq_f32(evens.3, odds_1.3)),
-                        NeonStoreF::raw(vaddq_f32(evens.4, odds_2.0)),
-                        NeonStoreF::raw(vaddq_f32(evens.5, odds_2.1)),
-                        NeonStoreF::raw(vaddq_f32(evens.6, odds_2.2)),
-                        NeonStoreF::raw(vaddq_f32(evens.7, odds_2.3)),
-                        NeonStoreF::raw(vsubq_f32(evens.0, odds_1.0)),
-                        NeonStoreF::raw(vsubq_f32(evens.1, odds_1.1)),
-                        NeonStoreF::raw(vsubq_f32(evens.2, odds_1.2)),
-                        NeonStoreF::raw(vsubq_f32(evens.3, odds_1.3)),
-                        NeonStoreF::raw(vsubq_f32(evens.4, odds_2.0)),
-                        NeonStoreF::raw(vsubq_f32(evens.5, odds_2.1)),
-                        NeonStoreF::raw(vsubq_f32(evens.6, odds_2.2)),
-                        NeonStoreF::raw(vsubq_f32(evens.7, odds_2.3)),
-                    ]
-                }
+                [
+                    NeonStoreF::raw(vaddq_f32(evens.0, odds_1.0)),
+                    NeonStoreF::raw(vaddq_f32(evens.1, odds_1.1)),
+                    NeonStoreF::raw(vaddq_f32(evens.2, odds_1.2)),
+                    NeonStoreF::raw(vaddq_f32(evens.3, odds_1.3)),
+                    NeonStoreF::raw(vaddq_f32(evens.4, odds_2.0)),
+                    NeonStoreF::raw(vaddq_f32(evens.5, odds_2.1)),
+                    NeonStoreF::raw(vaddq_f32(evens.6, odds_2.2)),
+                    NeonStoreF::raw(vaddq_f32(evens.7, odds_2.3)),
+                    NeonStoreF::raw(vsubq_f32(evens.0, odds_1.0)),
+                    NeonStoreF::raw(vsubq_f32(evens.1, odds_1.1)),
+                    NeonStoreF::raw(vsubq_f32(evens.2, odds_1.2)),
+                    NeonStoreF::raw(vsubq_f32(evens.3, odds_1.3)),
+                    NeonStoreF::raw(vsubq_f32(evens.4, odds_2.0)),
+                    NeonStoreF::raw(vsubq_f32(evens.5, odds_2.1)),
+                    NeonStoreF::raw(vsubq_f32(evens.6, odds_2.2)),
+                    NeonStoreF::raw(vsubq_f32(evens.7, odds_2.3)),
+                ]
             }
         }
     }
