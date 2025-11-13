@@ -330,7 +330,6 @@ impl CompositeFftExecutor<f64> for AvxButterfly2<f64> {
 mod tests {
     use super::*;
     use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
-    use rand::Rng;
 
     test_avx_butterfly!(test_avx_butterfly2, f32, AvxButterfly2, 2, 1e-5);
     test_avx_butterfly!(test_avx_butterfly2_f64, f64, AvxButterfly2, 2, 1e-7);

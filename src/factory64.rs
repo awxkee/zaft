@@ -145,21 +145,13 @@ impl AlgorithmFactory<f64> for f64 {
     fn butterfly6(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            use crate::neon::NeonButterfly6;
-            Ok(Box::new(NeonButterfly6::new(fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if has_valid_avx() {
-                use crate::avx::AvxButterfly6;
-                return Ok(Box::new(AvxButterfly6::new(fft_direction)));
-            }
-            use crate::butterflies::Butterfly6;
-            Ok(Box::new(Butterfly6::new(fft_direction)))
-        }
+        make_default_butterfly!(
+            fft_direction,
+            Butterfly6,
+            AvxButterfly6,
+            NeonButterfly6,
+            NeonFcmaButterfly6
+        )
     }
 
     fn butterfly7(
@@ -294,6 +286,18 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    fn butterfly18(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        make_default_butterfly!(
+            fft_direction,
+            Butterfly18,
+            AvxButterfly18d,
+            NeonButterfly18d,
+            NeonFcmaButterfly18d
+        )
+    }
+
     fn butterfly19(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -303,6 +307,18 @@ impl AlgorithmFactory<f64> for f64 {
             AvxButterfly19,
             NeonButterfly19,
             NeonFcmaButterfly19
+        )
+    }
+
+    fn butterfly20(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        make_default_butterfly!(
+            fft_direction,
+            Butterfly20,
+            AvxButterfly20d,
+            NeonButterfly20,
+            NeonFcmaButterfly20
         )
     }
 
@@ -376,6 +392,10 @@ impl AlgorithmFactory<f64> for f64 {
                 return Some(Box::new(AvxButterfly36d::new(_direction)));
             }
         }
+        None
+    }
+
+    fn butterfly64(_: FftDirection) -> Option<Box<dyn CompositeFftExecutor<f64> + Send + Sync>> {
         None
     }
 

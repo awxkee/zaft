@@ -28,7 +28,7 @@
  */
 #![allow(clippy::needless_range_loop)]
 use crate::neon::f32x2_6x6::neon_transpose_f32x2_6x6_aos;
-use crate::neon::mixed::{ColumnButterfly6f, NeonStoreF};
+use crate::neon::mixed::{ColumnFcmaButterfly6f, NeonStoreF};
 use crate::neon::util::vfcmulq_fcma_f32;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
@@ -38,7 +38,7 @@ use std::arch::aarch64::{vld1q_f32, vst1q_f32};
 pub(crate) struct NeonFcmaButterfly36f {
     direction: FftDirection,
     twiddles: [Complex<f32>; 30],
-    bf6_column: ColumnButterfly6f,
+    bf6_column: ColumnFcmaButterfly6f,
 }
 
 impl NeonFcmaButterfly36f {
@@ -59,7 +59,7 @@ impl NeonFcmaButterfly36f {
         NeonFcmaButterfly36f {
             direction,
             twiddles,
-            bf6_column: ColumnButterfly6f::new(direction),
+            bf6_column: ColumnFcmaButterfly6f::new(direction),
         }
     }
 }

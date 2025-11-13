@@ -195,61 +195,59 @@ impl NeonFastButterfly16d {
         float64x2_t,
         float64x2_t,
     ) {
-        unsafe {
-            let evens = self.bf8.forward(u0, u2, u4, u6, u8, u10, u12, u14);
+        let evens = self.bf8.forward(u0, u2, u4, u6, u8, u10, u12, u14);
 
-            let mut odds_1 = NeonButterfly::bf4_f64_forward(u1, u5, u9, u13);
-            let mut odds_2 = NeonButterfly::bf4_f64_forward(u15, u3, u7, u11);
+        let mut odds_1 = NeonButterfly::bf4_f64_forward(u1, u5, u9, u13);
+        let mut odds_2 = NeonButterfly::bf4_f64_forward(u15, u3, u7, u11);
 
-            odds_1.1 = vfcmulq_fcma_f64(odds_1.1, self.twiddle1);
-            odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, self.twiddle1);
+        odds_1.1 = vfcmulq_fcma_f64(odds_1.1, self.twiddle1);
+        odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, self.twiddle1);
 
-            odds_1.2 = vfcmulq_fcma_f64(odds_1.2, self.twiddle2);
-            odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, self.twiddle2);
+        odds_1.2 = vfcmulq_fcma_f64(odds_1.2, self.twiddle2);
+        odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, self.twiddle2);
 
-            odds_1.3 = vfcmulq_fcma_f64(odds_1.3, self.twiddle3);
-            odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, self.twiddle3);
+        odds_1.3 = vfcmulq_fcma_f64(odds_1.3, self.twiddle3);
+        odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, self.twiddle3);
 
-            // step 4: cross FFTs
-            let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
-            odds_1.0 = o01;
-            odds_2.0 = o02;
+        // step 4: cross FFTs
+        let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
+        odds_1.0 = o01;
+        odds_2.0 = o02;
 
-            let (o03, o04) = NeonButterfly::butterfly2_f64(odds_1.1, odds_2.1);
-            odds_1.1 = o03;
-            odds_2.1 = o04;
-            let (o05, o06) = NeonButterfly::butterfly2_f64(odds_1.2, odds_2.2);
-            odds_1.2 = o05;
-            odds_2.2 = o06;
-            let (o07, o08) = NeonButterfly::butterfly2_f64(odds_1.3, odds_2.3);
-            odds_1.3 = o07;
-            odds_2.3 = o08;
+        let (o03, o04) = NeonButterfly::butterfly2_f64(odds_1.1, odds_2.1);
+        odds_1.1 = o03;
+        odds_2.1 = o04;
+        let (o05, o06) = NeonButterfly::butterfly2_f64(odds_1.2, odds_2.2);
+        odds_1.2 = o05;
+        odds_2.2 = o06;
+        let (o07, o08) = NeonButterfly::butterfly2_f64(odds_1.3, odds_2.3);
+        odds_1.3 = o07;
+        odds_2.3 = o08;
 
-            // apply the butterfly 4 twiddle factor, which is just a rotation
-            odds_2.0 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.0);
-            odds_2.1 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.1);
-            odds_2.2 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.2);
-            odds_2.3 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.3);
+        // apply the butterfly 4 twiddle factor, which is just a rotation
+        odds_2.0 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.0);
+        odds_2.1 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.1);
+        odds_2.2 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.2);
+        odds_2.3 = vcaddq_rot270_f64(vdupq_n_f64(0.), odds_2.3);
 
-            (
-                vaddq_f64(evens.0, odds_1.0),
-                vaddq_f64(evens.1, odds_1.1),
-                vaddq_f64(evens.2, odds_1.2),
-                vaddq_f64(evens.3, odds_1.3),
-                vaddq_f64(evens.4, odds_2.0),
-                vaddq_f64(evens.5, odds_2.1),
-                vaddq_f64(evens.6, odds_2.2),
-                vaddq_f64(evens.7, odds_2.3),
-                vsubq_f64(evens.0, odds_1.0),
-                vsubq_f64(evens.1, odds_1.1),
-                vsubq_f64(evens.2, odds_1.2),
-                vsubq_f64(evens.3, odds_1.3),
-                vsubq_f64(evens.4, odds_2.0),
-                vsubq_f64(evens.5, odds_2.1),
-                vsubq_f64(evens.6, odds_2.2),
-                vsubq_f64(evens.7, odds_2.3),
-            )
-        }
+        (
+            vaddq_f64(evens.0, odds_1.0),
+            vaddq_f64(evens.1, odds_1.1),
+            vaddq_f64(evens.2, odds_1.2),
+            vaddq_f64(evens.3, odds_1.3),
+            vaddq_f64(evens.4, odds_2.0),
+            vaddq_f64(evens.5, odds_2.1),
+            vaddq_f64(evens.6, odds_2.2),
+            vaddq_f64(evens.7, odds_2.3),
+            vsubq_f64(evens.0, odds_1.0),
+            vsubq_f64(evens.1, odds_1.1),
+            vsubq_f64(evens.2, odds_1.2),
+            vsubq_f64(evens.3, odds_1.3),
+            vsubq_f64(evens.4, odds_2.0),
+            vsubq_f64(evens.5, odds_2.1),
+            vsubq_f64(evens.6, odds_2.2),
+            vsubq_f64(evens.7, odds_2.3),
+        )
     }
 
     #[inline]
@@ -291,60 +289,58 @@ impl NeonFastButterfly16d {
         float64x2_t,
         float64x2_t,
     ) {
-        unsafe {
-            let evens = self.bf8.backward(u0, u2, u4, u6, u8, u10, u12, u14);
+        let evens = self.bf8.backward(u0, u2, u4, u6, u8, u10, u12, u14);
 
-            let mut odds_1 = NeonButterfly::bf4_f64_backward(u1, u5, u9, u13);
-            let mut odds_2 = NeonButterfly::bf4_f64_backward(u15, u3, u7, u11);
+        let mut odds_1 = NeonButterfly::bf4_f64_backward(u1, u5, u9, u13);
+        let mut odds_2 = NeonButterfly::bf4_f64_backward(u15, u3, u7, u11);
 
-            odds_1.1 = vfcmulq_fcma_f64(odds_1.1, self.twiddle1);
-            odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, self.twiddle1);
+        odds_1.1 = vfcmulq_fcma_f64(odds_1.1, self.twiddle1);
+        odds_2.1 = vfcmulq_conj_b_fcma_f64(odds_2.1, self.twiddle1);
 
-            odds_1.2 = vfcmulq_fcma_f64(odds_1.2, self.twiddle2);
-            odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, self.twiddle2);
+        odds_1.2 = vfcmulq_fcma_f64(odds_1.2, self.twiddle2);
+        odds_2.2 = vfcmulq_conj_b_fcma_f64(odds_2.2, self.twiddle2);
 
-            odds_1.3 = vfcmulq_fcma_f64(odds_1.3, self.twiddle3);
-            odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, self.twiddle3);
+        odds_1.3 = vfcmulq_fcma_f64(odds_1.3, self.twiddle3);
+        odds_2.3 = vfcmulq_conj_b_fcma_f64(odds_2.3, self.twiddle3);
 
-            // step 4: cross FFTs
-            let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
-            odds_1.0 = o01;
-            odds_2.0 = o02;
+        // step 4: cross FFTs
+        let (o01, o02) = NeonButterfly::butterfly2_f64(odds_1.0, odds_2.0);
+        odds_1.0 = o01;
+        odds_2.0 = o02;
 
-            let (o03, o04) = NeonButterfly::butterfly2_f64(odds_1.1, odds_2.1);
-            odds_1.1 = o03;
-            odds_2.1 = o04;
-            let (o05, o06) = NeonButterfly::butterfly2_f64(odds_1.2, odds_2.2);
-            odds_1.2 = o05;
-            odds_2.2 = o06;
-            let (o07, o08) = NeonButterfly::butterfly2_f64(odds_1.3, odds_2.3);
-            odds_1.3 = o07;
-            odds_2.3 = o08;
+        let (o03, o04) = NeonButterfly::butterfly2_f64(odds_1.1, odds_2.1);
+        odds_1.1 = o03;
+        odds_2.1 = o04;
+        let (o05, o06) = NeonButterfly::butterfly2_f64(odds_1.2, odds_2.2);
+        odds_1.2 = o05;
+        odds_2.2 = o06;
+        let (o07, o08) = NeonButterfly::butterfly2_f64(odds_1.3, odds_2.3);
+        odds_1.3 = o07;
+        odds_2.3 = o08;
 
-            // apply the butterfly 4 twiddle factor, which is just a rotation
-            odds_2.0 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.0);
-            odds_2.1 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.1);
-            odds_2.2 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.2);
-            odds_2.3 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.3);
+        // apply the butterfly 4 twiddle factor, which is just a rotation
+        odds_2.0 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.0);
+        odds_2.1 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.1);
+        odds_2.2 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.2);
+        odds_2.3 = vcaddq_rot90_f64(vdupq_n_f64(0.), odds_2.3);
 
-            (
-                vaddq_f64(evens.0, odds_1.0),
-                vaddq_f64(evens.1, odds_1.1),
-                vaddq_f64(evens.2, odds_1.2),
-                vaddq_f64(evens.3, odds_1.3),
-                vaddq_f64(evens.4, odds_2.0),
-                vaddq_f64(evens.5, odds_2.1),
-                vaddq_f64(evens.6, odds_2.2),
-                vaddq_f64(evens.7, odds_2.3),
-                vsubq_f64(evens.0, odds_1.0),
-                vsubq_f64(evens.1, odds_1.1),
-                vsubq_f64(evens.2, odds_1.2),
-                vsubq_f64(evens.3, odds_1.3),
-                vsubq_f64(evens.4, odds_2.0),
-                vsubq_f64(evens.5, odds_2.1),
-                vsubq_f64(evens.6, odds_2.2),
-                vsubq_f64(evens.7, odds_2.3),
-            )
-        }
+        (
+            vaddq_f64(evens.0, odds_1.0),
+            vaddq_f64(evens.1, odds_1.1),
+            vaddq_f64(evens.2, odds_1.2),
+            vaddq_f64(evens.3, odds_1.3),
+            vaddq_f64(evens.4, odds_2.0),
+            vaddq_f64(evens.5, odds_2.1),
+            vaddq_f64(evens.6, odds_2.2),
+            vaddq_f64(evens.7, odds_2.3),
+            vsubq_f64(evens.0, odds_1.0),
+            vsubq_f64(evens.1, odds_1.1),
+            vsubq_f64(evens.2, odds_1.2),
+            vsubq_f64(evens.3, odds_1.3),
+            vsubq_f64(evens.4, odds_2.0),
+            vsubq_f64(evens.5, odds_2.1),
+            vsubq_f64(evens.6, odds_2.2),
+            vsubq_f64(evens.7, odds_2.3),
+        )
     }
 }

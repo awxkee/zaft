@@ -334,7 +334,10 @@ impl Zaft {
     {
         let convolve_prime = PrimeFactors::from_number(n as u64 - 1);
         // n-1 may result in Cunningham chain, and we want to avoid compute multiple prime numbers FFT at once
-        let big_factor = convolve_prime.factorization.iter().any(|x| x.0 > 31 && x.1 == 1);
+        let big_factor = convolve_prime
+            .factorization
+            .iter()
+            .any(|x| x.0 > 31 && x.1 == 1);
         if !big_factor {
             let convolve_fft = Zaft::strategy(n - 1, direction);
             T::raders(convolve_fft?, n, direction)
@@ -413,8 +416,12 @@ impl Zaft {
             return T::butterfly16(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 17 {
             return T::butterfly17(fft_direction);
+        } else if n == 18 {
+            return T::butterfly18(fft_direction);
         } else if n == 19 {
             return T::butterfly19(fft_direction);
+        } else if n == 20 {
+            return T::butterfly20(fft_direction);
         } else if n == 23 {
             return T::butterfly23(fft_direction);
         } else if n == 27 {
@@ -427,6 +434,10 @@ impl Zaft {
             return T::butterfly32(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 36 {
             if let Some(executor) = T::butterfly36(fft_direction) {
+                return Ok(executor.into_fft_executor());
+            }
+        } else if n == 64 {
+            if let Some(executor) = T::butterfly64(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
         }

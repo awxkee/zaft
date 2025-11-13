@@ -81,10 +81,8 @@ impl NeonStoreD {
 
     #[inline]
     pub(crate) fn mul_by_complex(self, other: NeonStoreD) -> Self {
-        unsafe {
-            NeonStoreD {
-                v: vfcmulq_f64(self.v, other.v),
-            }
+        NeonStoreD {
+            v: vfcmulq_f64(self.v, other.v),
         }
     }
 
@@ -138,17 +136,15 @@ impl NeonStoreF {
 
     #[inline]
     pub(crate) fn mul_by_complex(self, other: NeonStoreF) -> Self {
-        unsafe {
-            NeonStoreF {
-                v: vfcmulq_f32(self.v, other.v),
-            }
+        NeonStoreF {
+            v: vfcmulq_f32(self.v, other.v),
         }
     }
 
     #[inline]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
-    pub(crate) unsafe fn fcmul_fcma(self, other: NeonStoreF) -> Self {
+    pub(crate) fn fcmul_fcma(self, other: NeonStoreF) -> Self {
         NeonStoreF {
             v: vcmlaq_rot90_f32(
                 vcmlaq_f32(vdupq_n_f32(0.), self.v, other.v),
@@ -195,17 +191,15 @@ impl NeonStoreFh {
 
     #[inline]
     pub(crate) fn mul_by_complex(self, other: NeonStoreFh) -> Self {
-        unsafe {
-            NeonStoreFh {
-                v: vfcmul_f32(self.v, other.v),
-            }
+        NeonStoreFh {
+            v: vfcmul_f32(self.v, other.v),
         }
     }
 
     #[inline]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
-    pub(crate) unsafe fn fcmul_fcma(self, other: NeonStoreFh) -> Self {
+    pub(crate) fn fcmul_fcma(self, other: NeonStoreFh) -> Self {
         NeonStoreFh {
             v: vcmla_rot90_f32(vcmla_f32(vdup_n_f32(0.), self.v, other.v), self.v, other.v),
         }

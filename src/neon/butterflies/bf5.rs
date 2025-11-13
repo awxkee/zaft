@@ -69,7 +69,7 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
             let rot_sign = vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr());
 
             for chunk in in_place.chunks_exact_mut(10) {
-                let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
+                let uz0 = vld1q_f32(chunk.as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
                 let uz3 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());

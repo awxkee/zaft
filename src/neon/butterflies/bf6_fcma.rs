@@ -36,14 +36,14 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 
-pub(crate) struct NeonButterfly6<T> {
+pub(crate) struct NeonFcmaButterfly6<T> {
     direction: FftDirection,
     twiddle_re: T,
     twiddle_im: [T; 4],
 }
 
 impl<T: Default + Clone + Radix6Twiddles + 'static + Copy + FftTrigonometry + Float>
-    NeonButterfly6<T>
+    NeonFcmaButterfly6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -57,8 +57,24 @@ where
     }
 }
 
-impl FftExecutor<f32> for NeonButterfly6<f32> {
+impl FftExecutor<f32> for NeonFcmaButterfly6<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_impl(in_place) }
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    #[inline]
+    fn length(&self) -> usize {
+        6
+    }
+}
+
+impl NeonFcmaButterfly6<f32> {
+    #[target_feature(enable = "fcma")]
+    fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % 6 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -66,11 +82,12 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
             ));
         }
 
-        let twiddle_re = unsafe { vdupq_n_f32(self.twiddle_re) };
-        let twiddle_w_2 = unsafe { vld1q_f32(self.twiddle_im.as_ptr().cast()) };
+        unsafe {
+            let twiddle_re = vdupq_n_f32(self.twiddle_re);
+            let twiddle_w_2 = vld1q_f32(self.twiddle_im.as_ptr().cast());
+            let n_twiddle_w_2 = vnegq_f32(twiddle_w_2);
 
-        for chunk in in_place.chunks_exact_mut(12) {
-            unsafe {
+            for chunk in in_place.chunks_exact_mut(12) {
                 let uz0 = vld1q_f32(chunk.as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
@@ -82,10 +99,22 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
                 let (u2, u3) = (pack_complex_lo(uz1, uz4), pack_complex_hi(uz1, uz4));
                 let (u4, u5) = (pack_complex_lo(uz2, uz10), pack_complex_hi(uz2, uz10));
 
-                let (t0, t2, t4) =
-                    NeonButterfly::butterfly3_f32(u0, u2, u4, twiddle_re, twiddle_w_2);
-                let (t1, t3, t5) =
-                    NeonButterfly::butterfly3_f32(u3, u5, u1, twiddle_re, twiddle_w_2);
+                let (t0, t2, t4) = NeonButterfly::butterfly3_f32_fcma(
+                    u0,
+                    u2,
+                    u4,
+                    twiddle_re,
+                    twiddle_w_2,
+                    n_twiddle_w_2,
+                );
+                let (t1, t3, t5) = NeonButterfly::butterfly3_f32_fcma(
+                    u3,
+                    u5,
+                    u1,
+                    twiddle_re,
+                    twiddle_w_2,
+                    n_twiddle_w_2,
+                );
                 let (y0, y3) = NeonButterfly::butterfly2_f32(t0, t1);
                 let (y4, y1) = NeonButterfly::butterfly2_f32(t2, t3);
                 let (y2, y5) = NeonButterfly::butterfly2_f32(t4, t5);
@@ -104,12 +133,10 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
                 vst1q_f32(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), row4);
                 vst1q_f32(chunk.get_unchecked_mut(10..).as_mut_ptr().cast(), row5);
             }
-        }
 
-        let rem = in_place.chunks_exact_mut(12).into_remainder();
+            let rem = in_place.chunks_exact_mut(12).into_remainder();
 
-        for chunk in rem.chunks_exact_mut(6) {
-            unsafe {
+            for chunk in rem.chunks_exact_mut(6) {
                 let uz0 = vld1q_f32(chunk.as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
@@ -118,28 +145,27 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
                 let (u2, u3) = (vget_low_f32(uz1), vget_high_f32(uz1));
                 let (u4, u5) = (vget_low_f32(uz2), vget_high_f32(uz2));
 
-                let (t0, t2, t4) = NeonButterfly::butterfly3h_f32(
+                let (t0, t2, t4) = NeonButterfly::butterfly3h_f32_fcma(
                     u0,
                     u2,
                     u4,
                     vget_low_f32(twiddle_re),
                     vget_low_f32(twiddle_w_2),
+                    vget_low_f32(n_twiddle_w_2),
                 );
-                let (t1, t3, t5) = NeonButterfly::butterfly3h_f32(
+                let (t1, t3, t5) = NeonButterfly::butterfly3h_f32_fcma(
                     u3,
                     u5,
                     u1,
                     vget_low_f32(twiddle_re),
                     vget_low_f32(twiddle_w_2),
+                    vget_low_f32(n_twiddle_w_2),
                 );
                 let (y0, y3) = NeonButterfly::butterfly2h_f32(t0, t1);
                 let (y4, y1) = NeonButterfly::butterfly2h_f32(t2, t3);
                 let (y2, y5) = NeonButterfly::butterfly2h_f32(t4, t5);
 
-                vst1q_f32(
-                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                    vcombine_f32(y0, y1),
-                );
+                vst1q_f32(chunk.as_mut_ptr().cast(), vcombine_f32(y0, y1));
                 vst1q_f32(
                     chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
                     vcombine_f32(y2, y3),
@@ -152,18 +178,9 @@ impl FftExecutor<f32> for NeonButterfly6<f32> {
         }
         Ok(())
     }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        6
-    }
 }
 
-impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
+impl FftExecutorOutOfPlace<f32> for NeonFcmaButterfly6<f32> {
     fn execute_out_of_place(
         &self,
         src: &[Complex<f32>],
@@ -176,12 +193,13 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
-        let twiddle_re = unsafe { vdupq_n_f32(self.twiddle_re) };
-        let twiddle_w_2 = unsafe { vld1q_f32(self.twiddle_im.as_ptr().cast()) };
+        unsafe {
+            let twiddle_re = vdupq_n_f32(self.twiddle_re);
+            let twiddle_w_2 = vld1q_f32(self.twiddle_im.as_ptr().cast());
+            let n_twiddle_w_2 = vnegq_f32(twiddle_w_2);
 
-        for (dst, src) in dst.chunks_exact_mut(12).zip(src.chunks_exact(12)) {
-            unsafe {
-                let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
+            for (dst, src) in dst.chunks_exact_mut(12).zip(src.chunks_exact(12)) {
+                let uz0 = vld1q_f32(src.as_ptr().cast());
                 let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
                 let uz3 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
@@ -192,10 +210,22 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
                 let (u2, u3) = (pack_complex_lo(uz1, uz4), pack_complex_hi(uz1, uz4));
                 let (u4, u5) = (pack_complex_lo(uz2, uz10), pack_complex_hi(uz2, uz10));
 
-                let (t0, t2, t4) =
-                    NeonButterfly::butterfly3_f32(u0, u2, u4, twiddle_re, twiddle_w_2);
-                let (t1, t3, t5) =
-                    NeonButterfly::butterfly3_f32(u3, u5, u1, twiddle_re, twiddle_w_2);
+                let (t0, t2, t4) = NeonButterfly::butterfly3_f32_fcma(
+                    u0,
+                    u2,
+                    u4,
+                    twiddle_re,
+                    twiddle_w_2,
+                    n_twiddle_w_2,
+                );
+                let (t1, t3, t5) = NeonButterfly::butterfly3_f32_fcma(
+                    u3,
+                    u5,
+                    u1,
+                    twiddle_re,
+                    twiddle_w_2,
+                    n_twiddle_w_2,
+                );
                 let (y0, y3) = NeonButterfly::butterfly2_f32(t0, t1);
                 let (y4, y1) = NeonButterfly::butterfly2_f32(t2, t3);
                 let (y2, y5) = NeonButterfly::butterfly2_f32(t4, t5);
@@ -214,13 +244,11 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
                 vst1q_f32(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), row4);
                 vst1q_f32(dst.get_unchecked_mut(10..).as_mut_ptr().cast(), row5);
             }
-        }
 
-        let rem_src = src.chunks_exact(12).remainder();
-        let rem_dst = dst.chunks_exact_mut(12).into_remainder();
+            let rem_src = src.chunks_exact(12).remainder();
+            let rem_dst = dst.chunks_exact_mut(12).into_remainder();
 
-        for (dst, src) in rem_dst.chunks_exact_mut(6).zip(rem_src.chunks_exact(6)) {
-            unsafe {
+            for (dst, src) in rem_dst.chunks_exact_mut(6).zip(rem_src.chunks_exact(6)) {
                 let uz0 = vld1q_f32(src.as_ptr().cast());
                 let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
@@ -229,28 +257,27 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
                 let (u2, u3) = (vget_low_f32(uz1), vget_high_f32(uz1));
                 let (u4, u5) = (vget_low_f32(uz2), vget_high_f32(uz2));
 
-                let (t0, t2, t4) = NeonButterfly::butterfly3h_f32(
+                let (t0, t2, t4) = NeonButterfly::butterfly3h_f32_fcma(
                     u0,
                     u2,
                     u4,
                     vget_low_f32(twiddle_re),
                     vget_low_f32(twiddle_w_2),
+                    vget_low_f32(n_twiddle_w_2),
                 );
-                let (t1, t3, t5) = NeonButterfly::butterfly3h_f32(
+                let (t1, t3, t5) = NeonButterfly::butterfly3h_f32_fcma(
                     u3,
                     u5,
                     u1,
                     vget_low_f32(twiddle_re),
                     vget_low_f32(twiddle_w_2),
+                    vget_low_f32(n_twiddle_w_2),
                 );
                 let (y0, y3) = NeonButterfly::butterfly2h_f32(t0, t1);
                 let (y4, y1) = NeonButterfly::butterfly2h_f32(t2, t3);
                 let (y2, y5) = NeonButterfly::butterfly2h_f32(t4, t5);
 
-                vst1q_f32(
-                    dst.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                    vcombine_f32(y0, y1),
-                );
+                vst1q_f32(dst.as_mut_ptr().cast(), vcombine_f32(y0, y1));
                 vst1q_f32(
                     dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
                     vcombine_f32(y2, y3),
@@ -265,13 +292,13 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly6<f32> {
     }
 }
 
-impl CompositeFftExecutor<f32> for NeonButterfly6<f32> {
+impl CompositeFftExecutor<f32> for NeonFcmaButterfly6<f32> {
     fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }
 
-impl FftExecutor<f64> for NeonButterfly6<f64> {
+impl FftExecutor<f64> for NeonFcmaButterfly6<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if in_place.len() % 6 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
@@ -280,11 +307,12 @@ impl FftExecutor<f64> for NeonButterfly6<f64> {
             ));
         }
 
-        let twiddle_re = unsafe { vdupq_n_f64(self.twiddle_re) };
-        let twiddle_w_2 = unsafe { vld1q_f64(self.twiddle_im.as_ptr().cast()) };
+        unsafe {
+            let twiddle_re = vdupq_n_f64(self.twiddle_re);
+            let twiddle_w_2 = vld1q_f64(self.twiddle_im.as_ptr().cast());
+            let n_twiddle_w_2 = vnegq_f64(twiddle_w_2);
 
-        for chunk in in_place.chunks_exact_mut(6) {
-            unsafe {
+            for chunk in in_place.chunks_exact_mut(6) {
                 let u0 = vld1q_f64(chunk.as_ptr().cast());
                 let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
                 let u2 = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
@@ -292,10 +320,22 @@ impl FftExecutor<f64> for NeonButterfly6<f64> {
                 let u4 = vld1q_f64(chunk.get_unchecked(4..).as_ptr().cast());
                 let u5 = vld1q_f64(chunk.get_unchecked(5..).as_ptr().cast());
 
-                let (t0, t2, t4) =
-                    NeonButterfly::butterfly3_f64(u0, u2, u4, twiddle_re, twiddle_w_2);
-                let (t1, t3, t5) =
-                    NeonButterfly::butterfly3_f64(u3, u5, u1, twiddle_re, twiddle_w_2);
+                let (t0, t2, t4) = NeonButterfly::butterfly3_f64_fcma(
+                    u0,
+                    u2,
+                    u4,
+                    twiddle_re,
+                    twiddle_w_2,
+                    n_twiddle_w_2,
+                );
+                let (t1, t3, t5) = NeonButterfly::butterfly3_f64_fcma(
+                    u3,
+                    u5,
+                    u1,
+                    twiddle_re,
+                    twiddle_w_2,
+                    n_twiddle_w_2,
+                );
                 let (y0, y3) = NeonButterfly::butterfly2_f64(t0, t1);
                 let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);
                 let (y2, y5) = NeonButterfly::butterfly2_f64(t4, t5);
@@ -321,7 +361,7 @@ impl FftExecutor<f64> for NeonButterfly6<f64> {
     }
 }
 
-impl FftExecutorOutOfPlace<f64> for NeonButterfly6<f64> {
+impl FftExecutorOutOfPlace<f64> for NeonFcmaButterfly6<f64> {
     fn execute_out_of_place(
         &self,
         src: &[Complex<f64>],
@@ -334,11 +374,12 @@ impl FftExecutorOutOfPlace<f64> for NeonButterfly6<f64> {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
-        let twiddle_re = unsafe { vdupq_n_f64(self.twiddle_re) };
-        let twiddle_w_2 = unsafe { vld1q_f64(self.twiddle_im.as_ptr().cast()) };
+        unsafe {
+            let twiddle_re = vdupq_n_f64(self.twiddle_re);
+            let twiddle_w_2 = vld1q_f64(self.twiddle_im.as_ptr().cast());
+            let n_twiddle_w_2 = vnegq_f64(twiddle_w_2);
 
-        for (dst, src) in dst.chunks_exact_mut(6).zip(src.chunks_exact(6)) {
-            unsafe {
+            for (dst, src) in dst.chunks_exact_mut(6).zip(src.chunks_exact(6)) {
                 let u0 = vld1q_f64(src.as_ptr().cast());
                 let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
                 let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
@@ -346,10 +387,22 @@ impl FftExecutorOutOfPlace<f64> for NeonButterfly6<f64> {
                 let u4 = vld1q_f64(src.get_unchecked(4..).as_ptr().cast());
                 let u5 = vld1q_f64(src.get_unchecked(5..).as_ptr().cast());
 
-                let (t0, t2, t4) =
-                    NeonButterfly::butterfly3_f64(u0, u2, u4, twiddle_re, twiddle_w_2);
-                let (t1, t3, t5) =
-                    NeonButterfly::butterfly3_f64(u3, u5, u1, twiddle_re, twiddle_w_2);
+                let (t0, t2, t4) = NeonButterfly::butterfly3_f64_fcma(
+                    u0,
+                    u2,
+                    u4,
+                    twiddle_re,
+                    twiddle_w_2,
+                    n_twiddle_w_2,
+                );
+                let (t1, t3, t5) = NeonButterfly::butterfly3_f64_fcma(
+                    u3,
+                    u5,
+                    u1,
+                    twiddle_re,
+                    twiddle_w_2,
+                    n_twiddle_w_2,
+                );
                 let (y0, y3) = NeonButterfly::butterfly2_f64(t0, t1);
                 let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);
                 let (y2, y5) = NeonButterfly::butterfly2_f64(t4, t5);
@@ -366,7 +419,7 @@ impl FftExecutorOutOfPlace<f64> for NeonButterfly6<f64> {
     }
 }
 
-impl CompositeFftExecutor<f64> for NeonButterfly6<f64> {
+impl CompositeFftExecutor<f64> for NeonFcmaButterfly6<f64> {
     fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
         self
     }
@@ -375,10 +428,10 @@ impl CompositeFftExecutor<f64> for NeonButterfly6<f64> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
-    test_butterfly!(test_neon_butterfly6, f32, NeonButterfly6, 6, 1e-5);
-    test_butterfly!(test_neon_butterfly6_f64, f64, NeonButterfly6, 6, 1e-7);
-    test_oof_butterfly!(test_oof_butterfly6, f32, NeonButterfly6, 6, 1e-5);
-    test_oof_butterfly!(test_oof_butterfly6_f64, f64, NeonButterfly6, 6, 1e-9);
+    test_fcma_butterfly!(test_neon_butterfly6, f32, NeonFcmaButterfly6, 6, 1e-5);
+    test_fcma_butterfly!(test_neon_butterfly6_f64, f64, NeonFcmaButterfly6, 6, 1e-7);
+    test_oof_fcma_butterfly!(test_oof_butterfly6, f32, NeonFcmaButterfly6, 6, 1e-5);
+    test_oof_fcma_butterfly!(test_oof_butterfly6_f64, f64, NeonFcmaButterfly6, 6, 1e-9);
 }

@@ -78,7 +78,7 @@ where
 impl AvxButterfly23<f64> {
     #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn kernel_f64(&self, v: [__m256d; 23]) -> [__m256d; 23] {
+    fn kernel_f64(&self, v: [__m256d; 23]) -> [__m256d; 23] {
         let y00 = v[0];
         let (x1p22, x1m22) = AvxButterfly::butterfly2_f64(v[1], v[22]);
         let x1m22 = self.rotate.rotate_m256d(x1m22);
@@ -509,7 +509,7 @@ impl FftExecutor<f64> for AvxButterfly23<f64> {
 impl AvxButterfly23<f32> {
     #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn kernel_f32(&self, v: [__m128; 23]) -> [__m128; 23] {
+    fn kernel_f32(&self, v: [__m128; 23]) -> [__m128; 23] {
         let y00 = v[0];
         let (x1p22, x1m22) = AvxButterfly::butterfly2_f32_m128(v[1], v[22]);
         let x1m22 = self.rotate.rotate_m128(x1m22);
@@ -962,7 +962,6 @@ impl FftExecutor<f32> for AvxButterfly23<f32> {
 mod tests {
     use super::*;
     use crate::avx::butterflies::test_avx_butterfly;
-    use rand::Rng;
 
     test_avx_butterfly!(test_avx_butterfly23, f32, AvxButterfly23, 23, 1e-5);
     test_avx_butterfly!(test_avx_butterfly23_f64, f64, AvxButterfly23, 23, 1e-7);

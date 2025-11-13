@@ -27,9 +27,11 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::butterflies::fast_bf9::AvxFastButterfly9f;
+use crate::avx::butterflies::{shift_load4, shift_store4};
 use crate::avx::util::{
-    _m128s_load_f32x2, _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpackhilo_ps64,
-    _mm_unpacklo_ps64, _mm_unpacklohi_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_set4_complex,
+    _m128s_load_f32x2, _m128s_store_f32x2, _m128s_storeh_f32x2, _mm_unpackhi_ps64,
+    _mm_unpackhilo_ps64, _mm_unpacklo_ps64, _mm_unpacklohi_ps64, _mm256_create_ps, _mm256_fcmul_ps,
+    _mm256_set2_complex, _mm256_set4_complex,
 };
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
@@ -43,6 +45,14 @@ pub(crate) struct AvxButterfly27f {
     tw3tw6tw4tw8: __m256,
     tw5tw9tw6tw10: __m256,
     tw7tw11tw8tw12: __m256,
+    tw1: __m256,
+    tw2: __m256,
+    tw3: __m256,
+    tw4: __m256,
+    tw5: __m256,
+    tw6: __m256,
+    tw7: __m256,
+    tw8: __m256,
 }
 
 impl AvxButterfly27f {
@@ -66,6 +76,14 @@ impl AvxButterfly27f {
                 tw3tw6tw4tw8: _mm256_set4_complex(t3, t6, t4, t8),
                 tw5tw9tw6tw10: _mm256_set4_complex(t5, t9, t6, t10),
                 tw7tw11tw8tw12: _mm256_set4_complex(t7, t11, t8, t12),
+                tw1: _mm256_set2_complex(t1, t2),
+                tw2: _mm256_set2_complex(t3, t4),
+                tw3: _mm256_set2_complex(t5, t6),
+                tw4: _mm256_set2_complex(t7, t8),
+                tw5: _mm256_set2_complex(t2, t4),
+                tw6: _mm256_set2_complex(t6, t8),
+                tw7: _mm256_set2_complex(t9, t10),
+                tw8: _mm256_set2_complex(t11, t12),
                 bf9: AvxFastButterfly9f::new(fft_direction),
             }
         }
@@ -83,7 +101,131 @@ impl AvxButterfly27f {
         }
 
         unsafe {
-            for chunk in in_place.chunks_exact_mut(27) {
+            for chunk in in_place.chunks_exact_mut(54) {
+                let (u0, u1, u2, u3) = shift_load4!(chunk, 27, 0);
+                let (u4, u5, u6, u7) = shift_load4!(chunk, 27, 4);
+                let (u8, u9, u10, u11) = shift_load4!(chunk, 27, 8);
+                let (u12, u13, u14, u15) = shift_load4!(chunk, 27, 12);
+                let (u16, u17, u18, u19) = shift_load4!(chunk, 27, 16);
+                let (u20, u21, u22, _) = shift_load4!(chunk, 27, 20);
+                let (u23, u24, u25, u26) = shift_load4!(chunk, 27, 23);
+
+                let s0s1 = self.bf9.exec_m256(
+                    _mm256_create_ps(u0, u1),
+                    _mm256_create_ps(u3, u4),
+                    _mm256_create_ps(u6, u7),
+                    _mm256_create_ps(u9, u10),
+                    _mm256_create_ps(u12, u13),
+                    _mm256_create_ps(u15, u16),
+                    _mm256_create_ps(u18, u19),
+                    _mm256_create_ps(u21, u22),
+                    _mm256_create_ps(u24, u25),
+                );
+
+                let s1_1xs1_2 = _mm256_fcmul_ps(
+                    _mm256_create_ps(
+                        _mm256_extractf128_ps::<1>(s0s1.1),
+                        _mm256_extractf128_ps::<1>(s0s1.2),
+                    ),
+                    self.tw1,
+                );
+                let s1_3xs1_4 = _mm256_fcmul_ps(
+                    _mm256_create_ps(
+                        _mm256_extractf128_ps::<1>(s0s1.3),
+                        _mm256_extractf128_ps::<1>(s0s1.4),
+                    ),
+                    self.tw2,
+                );
+                let s1_5xs1_6 = _mm256_fcmul_ps(
+                    _mm256_create_ps(
+                        _mm256_extractf128_ps::<1>(s0s1.5),
+                        _mm256_extractf128_ps::<1>(s0s1.6),
+                    ),
+                    self.tw3,
+                );
+                let s1_7xs1_8 = _mm256_fcmul_ps(
+                    _mm256_create_ps(
+                        _mm256_extractf128_ps::<1>(s0s1.7),
+                        _mm256_extractf128_ps::<1>(s0s1.8),
+                    ),
+                    self.tw4,
+                );
+
+                let s2 = self.bf9.exec(u2, u5, u8, u11, u14, u17, u20, u23, u26);
+
+                let s2_1xs2_2 = _mm256_fcmul_ps(_mm256_create_ps(s2.1, s2.2), self.tw5);
+                let s2_3xs2_4 = _mm256_fcmul_ps(_mm256_create_ps(s2.3, s2.4), self.tw6);
+                let s2_5xs2_6 = _mm256_fcmul_ps(_mm256_create_ps(s2.5, s2.6), self.tw7);
+                let s2_7xs2_8 = _mm256_fcmul_ps(_mm256_create_ps(s2.7, s2.8), self.tw8);
+
+                let z0 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.0),
+                    _mm256_extractf128_ps::<1>(s0s1.0),
+                    s2.0,
+                );
+
+                let z1 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.1),
+                    _mm256_castps256_ps128(s1_1xs1_2),
+                    _mm256_castps256_ps128(s2_1xs2_2),
+                );
+                let z2 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.2),
+                    _mm256_extractf128_ps::<1>(s1_1xs1_2),
+                    _mm256_extractf128_ps::<1>(s2_1xs2_2),
+                );
+                let z3 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.3),
+                    _mm256_castps256_ps128(s1_3xs1_4),
+                    _mm256_castps256_ps128(s2_3xs2_4),
+                );
+
+                shift_store4!(chunk, 27, 0, z0.0, z1.0, z2.0, z3.0);
+                shift_store4!(chunk, 27, 9, z0.1, z1.1, z2.1, z3.1);
+                shift_store4!(chunk, 27, 18, z0.2, z1.2, z2.2, z3.2);
+                let z4 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.4),
+                    _mm256_extractf128_ps::<1>(s1_3xs1_4),
+                    _mm256_extractf128_ps::<1>(s2_3xs2_4),
+                );
+                let z5 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.5),
+                    _mm256_castps256_ps128(s1_5xs1_6),
+                    _mm256_castps256_ps128(s2_5xs2_6),
+                );
+                let z6 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.6),
+                    _mm256_extractf128_ps::<1>(s1_5xs1_6),
+                    _mm256_extractf128_ps::<1>(s2_5xs2_6),
+                );
+                let z7 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.7),
+                    _mm256_castps256_ps128(s1_7xs1_8),
+                    _mm256_castps256_ps128(s2_7xs2_8),
+                );
+
+                shift_store4!(chunk, 27, 4, z4.0, z5.0, z6.0, z7.0);
+                shift_store4!(chunk, 27, 13, z4.1, z5.1, z6.1, z7.1);
+                shift_store4!(chunk, 27, 22, z4.2, z5.2, z6.2, z7.2);
+
+                let z8 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.8),
+                    _mm256_extractf128_ps::<1>(s1_7xs1_8),
+                    _mm256_extractf128_ps::<1>(s2_7xs2_8),
+                );
+                _m128s_store_f32x2(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), z8.0);
+                _m128s_storeh_f32x2(chunk.get_unchecked_mut(8 + 27..).as_mut_ptr().cast(), z8.0);
+
+                _m128s_store_f32x2(chunk.get_unchecked_mut(17..).as_mut_ptr().cast(), z8.1);
+                _m128s_storeh_f32x2(chunk.get_unchecked_mut(17 + 27..).as_mut_ptr().cast(), z8.1);
+
+                _m128s_store_f32x2(chunk.get_unchecked_mut(26..).as_mut_ptr().cast(), z8.2);
+                _m128s_storeh_f32x2(chunk.get_unchecked_mut(26 + 27..).as_mut_ptr().cast(), z8.2);
+            }
+
+            let rem = in_place.chunks_exact_mut(54).into_remainder();
+
+            for chunk in rem.chunks_exact_mut(27) {
                 let u0u1u2u3 = _mm256_loadu_ps(chunk.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());
                 let u8u9u10u11 = _mm256_loadu_ps(chunk.get_unchecked(8..).as_ptr().cast());
@@ -218,7 +360,132 @@ impl AvxButterfly27f {
         }
 
         unsafe {
-            for (dst, src) in dst.chunks_exact_mut(27).zip(src.chunks_exact(27)) {
+            for (dst, src) in dst.chunks_exact_mut(54).zip(src.chunks_exact(54)) {
+                let (u0, u1, u2, u3) = shift_load4!(src, 27, 0);
+                let (u4, u5, u6, u7) = shift_load4!(src, 27, 4);
+                let (u8, u9, u10, u11) = shift_load4!(src, 27, 8);
+                let (u12, u13, u14, u15) = shift_load4!(src, 27, 12);
+                let (u16, u17, u18, u19) = shift_load4!(src, 27, 16);
+                let (u20, u21, u22, _) = shift_load4!(src, 27, 20);
+                let (u23, u24, u25, u26) = shift_load4!(src, 27, 23);
+
+                let s0s1 = self.bf9.exec_m256(
+                    _mm256_create_ps(u0, u1),
+                    _mm256_create_ps(u3, u4),
+                    _mm256_create_ps(u6, u7),
+                    _mm256_create_ps(u9, u10),
+                    _mm256_create_ps(u12, u13),
+                    _mm256_create_ps(u15, u16),
+                    _mm256_create_ps(u18, u19),
+                    _mm256_create_ps(u21, u22),
+                    _mm256_create_ps(u24, u25),
+                );
+
+                let s1_1xs1_2 = _mm256_fcmul_ps(
+                    _mm256_create_ps(
+                        _mm256_extractf128_ps::<1>(s0s1.1),
+                        _mm256_extractf128_ps::<1>(s0s1.2),
+                    ),
+                    self.tw1,
+                );
+                let s1_3xs1_4 = _mm256_fcmul_ps(
+                    _mm256_create_ps(
+                        _mm256_extractf128_ps::<1>(s0s1.3),
+                        _mm256_extractf128_ps::<1>(s0s1.4),
+                    ),
+                    self.tw2,
+                );
+                let s1_5xs1_6 = _mm256_fcmul_ps(
+                    _mm256_create_ps(
+                        _mm256_extractf128_ps::<1>(s0s1.5),
+                        _mm256_extractf128_ps::<1>(s0s1.6),
+                    ),
+                    self.tw3,
+                );
+                let s1_7xs1_8 = _mm256_fcmul_ps(
+                    _mm256_create_ps(
+                        _mm256_extractf128_ps::<1>(s0s1.7),
+                        _mm256_extractf128_ps::<1>(s0s1.8),
+                    ),
+                    self.tw4,
+                );
+
+                let s2 = self.bf9.exec(u2, u5, u8, u11, u14, u17, u20, u23, u26);
+
+                let s2_1xs2_2 = _mm256_fcmul_ps(_mm256_create_ps(s2.1, s2.2), self.tw5);
+                let s2_3xs2_4 = _mm256_fcmul_ps(_mm256_create_ps(s2.3, s2.4), self.tw6);
+                let s2_5xs2_6 = _mm256_fcmul_ps(_mm256_create_ps(s2.5, s2.6), self.tw7);
+                let s2_7xs2_8 = _mm256_fcmul_ps(_mm256_create_ps(s2.7, s2.8), self.tw8);
+
+                let z0 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.0),
+                    _mm256_extractf128_ps::<1>(s0s1.0),
+                    s2.0,
+                );
+
+                let z1 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.1),
+                    _mm256_castps256_ps128(s1_1xs1_2),
+                    _mm256_castps256_ps128(s2_1xs2_2),
+                );
+                let z2 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.2),
+                    _mm256_extractf128_ps::<1>(s1_1xs1_2),
+                    _mm256_extractf128_ps::<1>(s2_1xs2_2),
+                );
+                let z3 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.3),
+                    _mm256_castps256_ps128(s1_3xs1_4),
+                    _mm256_castps256_ps128(s2_3xs2_4),
+                );
+
+                shift_store4!(dst, 27, 0, z0.0, z1.0, z2.0, z3.0);
+                shift_store4!(dst, 27, 9, z0.1, z1.1, z2.1, z3.1);
+                shift_store4!(dst, 27, 18, z0.2, z1.2, z2.2, z3.2);
+                let z4 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.4),
+                    _mm256_extractf128_ps::<1>(s1_3xs1_4),
+                    _mm256_extractf128_ps::<1>(s2_3xs2_4),
+                );
+                let z5 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.5),
+                    _mm256_castps256_ps128(s1_5xs1_6),
+                    _mm256_castps256_ps128(s2_5xs2_6),
+                );
+                let z6 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.6),
+                    _mm256_extractf128_ps::<1>(s1_5xs1_6),
+                    _mm256_extractf128_ps::<1>(s2_5xs2_6),
+                );
+                let z7 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.7),
+                    _mm256_castps256_ps128(s1_7xs1_8),
+                    _mm256_castps256_ps128(s2_7xs2_8),
+                );
+
+                shift_store4!(dst, 27, 4, z4.0, z5.0, z6.0, z7.0);
+                shift_store4!(dst, 27, 13, z4.1, z5.1, z6.1, z7.1);
+                shift_store4!(dst, 27, 22, z4.2, z5.2, z6.2, z7.2);
+
+                let z8 = self.bf9.bf3.exec_m128(
+                    _mm256_castps256_ps128(s0s1.8),
+                    _mm256_extractf128_ps::<1>(s1_7xs1_8),
+                    _mm256_extractf128_ps::<1>(s2_7xs2_8),
+                );
+                _m128s_store_f32x2(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), z8.0);
+                _m128s_storeh_f32x2(dst.get_unchecked_mut(8 + 27..).as_mut_ptr().cast(), z8.0);
+
+                _m128s_store_f32x2(dst.get_unchecked_mut(17..).as_mut_ptr().cast(), z8.1);
+                _m128s_storeh_f32x2(dst.get_unchecked_mut(17 + 27..).as_mut_ptr().cast(), z8.1);
+
+                _m128s_store_f32x2(dst.get_unchecked_mut(26..).as_mut_ptr().cast(), z8.2);
+                _m128s_storeh_f32x2(dst.get_unchecked_mut(26 + 27..).as_mut_ptr().cast(), z8.2);
+            }
+
+            let rem_dst = dst.chunks_exact_mut(54).into_remainder();
+            let rem_src = src.chunks_exact(54).remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(27).zip(rem_src.chunks_exact(27)) {
                 let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
                 let u8u9u10u11 = _mm256_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
@@ -362,7 +629,6 @@ impl FftExecutor<f32> for AvxButterfly27f {
 mod test {
     use super::*;
     use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
-    use rand::Rng;
 
     test_avx_butterfly!(test_avx_butterfly27, f32, AvxButterfly27f, 27, 1e-5);
     test_oof_avx_butterfly!(test_oof_avx_butterfly27, f32, AvxButterfly27f, 27, 1e-5);

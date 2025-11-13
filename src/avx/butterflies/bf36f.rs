@@ -38,7 +38,7 @@ use std::arch::x86_64::*;
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_9x4_to_4x9_emptycolumn1_f32(
+fn transpose_9x4_to_4x9_emptycolumn1_f32(
     rows0: [SseStoreF; 4],
     rows1: [AvxStoreF; 4],
     rows2: [AvxStoreF; 4],
@@ -257,8 +257,8 @@ impl CompositeFftExecutor<f32> for AvxButterfly36f {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
 
-    test_butterfly!(test_avx_butterfly36, f32, AvxButterfly36f, 36, 1e-4);
-    test_oof_butterfly!(test_avx_neon_butterfly36, f32, AvxButterfly36f, 36, 1e-4);
+    test_avx_butterfly!(test_avx_butterfly36, f32, AvxButterfly36f, 36, 1e-4);
+    test_oof_avx_butterfly!(test_avx_neon_butterfly36, f32, AvxButterfly36f, 36, 1e-4);
 }

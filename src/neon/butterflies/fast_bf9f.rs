@@ -129,21 +129,19 @@ impl NeonFastButterfly9f {
         float32x4_t,
         float32x4_t,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
 
-            u4 = vfcmulq_f32(u4, self.twiddle1);
-            u7 = vfcmulq_f32(u7, self.twiddle2);
-            u5 = vfcmulq_f32(u5, self.twiddle2);
-            u8 = vfcmulq_f32(u8, self.twiddle4);
+        u4 = vfcmulq_f32(u4, self.twiddle1);
+        u7 = vfcmulq_f32(u7, self.twiddle2);
+        u5 = vfcmulq_f32(u5, self.twiddle2);
+        u8 = vfcmulq_f32(u8, self.twiddle4);
 
-            let (y0, y3, y6) = self.bf3(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 
     #[inline(always)]
@@ -297,23 +295,21 @@ impl NeonFcmaFastButterfly9f {
         float32x4_t,
         float32x4_t,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
+        let (u0, u3, u6) = self.bf3(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3(u2, u5, u8);
 
-            use crate::neon::util::vfcmulq_fcma_f32;
+        use crate::neon::util::vfcmulq_fcma_f32;
 
-            u4 = vfcmulq_fcma_f32(u4, self.twiddle1);
-            u7 = vfcmulq_fcma_f32(u7, self.twiddle2);
-            u5 = vfcmulq_fcma_f32(u5, self.twiddle2);
-            u8 = vfcmulq_fcma_f32(u8, self.twiddle4);
+        u4 = vfcmulq_fcma_f32(u4, self.twiddle1);
+        u7 = vfcmulq_fcma_f32(u7, self.twiddle2);
+        u5 = vfcmulq_fcma_f32(u5, self.twiddle2);
+        u8 = vfcmulq_fcma_f32(u8, self.twiddle4);
 
-            let (y0, y3, y6) = self.bf3(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 
     #[inline]
@@ -340,28 +336,26 @@ impl NeonFcmaFastButterfly9f {
         float32x2_t,
         float32x2_t,
     ) {
-        unsafe {
-            let (u0, u3, u6) = self.bf3h(u0, u3, u6);
-            let (u1, mut u4, mut u7) = self.bf3h(u1, u4, u7);
-            let (u2, mut u5, mut u8) = self.bf3h(u2, u5, u8);
-            use crate::neon::util::vfcmulq_fcma_f32;
-            let u4u7 = vfcmulq_fcma_f32(
-                vcombine_f32(u4, u7),
-                vcombine_f32(vget_low_f32(self.twiddle1), vget_low_f32(self.twiddle2)),
-            );
-            u4 = vget_low_f32(u4u7);
-            u7 = vget_high_f32(u4u7);
-            let u5u8 = vfcmulq_fcma_f32(
-                vcombine_f32(u5, u8),
-                vcombine_f32(vget_low_f32(self.twiddle2), vget_low_f32(self.twiddle4)),
-            );
-            u5 = vget_low_f32(u5u8);
-            u8 = vget_high_f32(u5u8);
+        let (u0, u3, u6) = self.bf3h(u0, u3, u6);
+        let (u1, mut u4, mut u7) = self.bf3h(u1, u4, u7);
+        let (u2, mut u5, mut u8) = self.bf3h(u2, u5, u8);
+        use crate::neon::util::vfcmulq_fcma_f32;
+        let u4u7 = vfcmulq_fcma_f32(
+            vcombine_f32(u4, u7),
+            vcombine_f32(vget_low_f32(self.twiddle1), vget_low_f32(self.twiddle2)),
+        );
+        u4 = vget_low_f32(u4u7);
+        u7 = vget_high_f32(u4u7);
+        let u5u8 = vfcmulq_fcma_f32(
+            vcombine_f32(u5, u8),
+            vcombine_f32(vget_low_f32(self.twiddle2), vget_low_f32(self.twiddle4)),
+        );
+        u5 = vget_low_f32(u5u8);
+        u8 = vget_high_f32(u5u8);
 
-            let (y0, y3, y6) = self.bf3h(u0, u1, u2);
-            let (y1, y4, y7) = self.bf3h(u3, u4, u5);
-            let (y2, y5, y8) = self.bf3h(u6, u7, u8);
-            (y0, y1, y2, y3, y4, y5, y6, y7, y8)
-        }
+        let (y0, y3, y6) = self.bf3h(u0, u1, u2);
+        let (y1, y4, y7) = self.bf3h(u3, u4, u5);
+        let (y2, y5, y8) = self.bf3h(u6, u7, u8);
+        (y0, y1, y2, y3, y4, y5, y6, y7, y8)
     }
 }

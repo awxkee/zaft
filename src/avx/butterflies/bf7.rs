@@ -1192,7 +1192,6 @@ impl FftExecutor<f32> for AvxButterfly7<f32> {
 mod test {
     use super::*;
     use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
-    use rand::Rng;
 
     test_avx_butterfly!(test_avx_butterfly7, f32, AvxButterfly7, 7, 1e-5);
     test_avx_butterfly!(test_avx_butterfly7_f64, f64, AvxButterfly7, 7, 1e-7);

@@ -39,8 +39,10 @@ mod bf14;
 mod bf15;
 mod bf16;
 mod bf17;
+mod bf18;
 mod bf19;
 mod bf2;
+mod bf20;
 mod bf23;
 mod bf27;
 mod bf29;
@@ -93,7 +95,11 @@ pub(crate) use bf16::Butterfly16;
 #[allow(unused)]
 pub(crate) use bf17::Butterfly17;
 #[allow(unused)]
+pub(crate) use bf18::Butterfly18;
+#[allow(unused)]
 pub(crate) use bf19::Butterfly19;
+#[allow(unused)]
+pub(crate) use bf20::Butterfly20;
 #[allow(unused)]
 pub(crate) use bf23::Butterfly23;
 #[allow(unused)]

@@ -51,18 +51,16 @@ pub(crate) struct NeonFcmaButterfly32d {
 
 impl NeonFcmaButterfly32d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        unsafe {
-            Self {
-                direction: fft_direction,
-                twiddle1: vdup_complex_f64(compute_twiddle(1, 32, fft_direction)),
-                twiddle2: vdup_complex_f64(compute_twiddle(2, 32, fft_direction)),
-                twiddle3: vdup_complex_f64(compute_twiddle(3, 32, fft_direction)),
-                twiddle4: vdup_complex_f64(compute_twiddle(4, 32, fft_direction)),
-                twiddle5: vdup_complex_f64(compute_twiddle(5, 32, fft_direction)),
-                twiddle6: vdup_complex_f64(compute_twiddle(6, 32, fft_direction)),
-                twiddle7: vdup_complex_f64(compute_twiddle(7, 32, fft_direction)),
-                bf16: NeonFastButterfly16d::new(fft_direction),
-            }
+        Self {
+            direction: fft_direction,
+            twiddle1: vdup_complex_f64(compute_twiddle(1, 32, fft_direction)),
+            twiddle2: vdup_complex_f64(compute_twiddle(2, 32, fft_direction)),
+            twiddle3: vdup_complex_f64(compute_twiddle(3, 32, fft_direction)),
+            twiddle4: vdup_complex_f64(compute_twiddle(4, 32, fft_direction)),
+            twiddle5: vdup_complex_f64(compute_twiddle(5, 32, fft_direction)),
+            twiddle6: vdup_complex_f64(compute_twiddle(6, 32, fft_direction)),
+            twiddle7: vdup_complex_f64(compute_twiddle(7, 32, fft_direction)),
+            bf16: NeonFastButterfly16d::new(fft_direction),
         }
     }
 }
