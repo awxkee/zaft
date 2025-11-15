@@ -60,9 +60,8 @@ impl R2CTwiddlesFactory<f32> for f32 {
         }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            use crate::util::has_valid_avx;
+            if has_valid_avx() {
                 use crate::avx::R2CAvxTwiddles;
                 return Box::new(R2CAvxTwiddles {});
             }
@@ -92,9 +91,8 @@ impl R2CTwiddlesFactory<f64> for f64 {
         }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
-            if std::arch::is_x86_feature_detected!("avx2")
-                && std::arch::is_x86_feature_detected!("fma")
-            {
+            use crate::util::has_valid_avx;
+            if has_valid_avx() {
                 use crate::avx::R2CAvxTwiddles;
                 return Box::new(R2CAvxTwiddles {});
             }

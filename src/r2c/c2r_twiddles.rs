@@ -53,6 +53,14 @@ impl C2RTwiddlesFactory<f32> for f32 {
             use crate::neon::C2RNeonTwiddles;
             Box::new(C2RNeonTwiddles {})
         }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            use crate::util::has_valid_avx;
+            if has_valid_avx() {
+                use crate::avx::C2RAvxTwiddles;
+                return Box::new(C2RAvxTwiddles {});
+            }
+        }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             Box::new(C2RHandler {
@@ -73,6 +81,14 @@ impl C2RTwiddlesFactory<f64> for f64 {
             }
             use crate::neon::C2RNeonTwiddles;
             Box::new(C2RNeonTwiddles {})
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            use crate::util::has_valid_avx;
+            if has_valid_avx() {
+                use crate::avx::C2RAvxTwiddles;
+                return Box::new(C2RAvxTwiddles {});
+            }
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
