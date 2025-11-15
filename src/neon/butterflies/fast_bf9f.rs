@@ -197,6 +197,7 @@ impl NeonFastButterfly9f {
 pub(crate) struct NeonFcmaFastButterfly9f {
     tw3_re: f32,
     tw3_im: float32x4_t,
+    n_tw3_im: float32x4_t,
     twiddle1: float32x4_t,
     twiddle2: float32x4_t,
     twiddle4: float32x4_t,
@@ -210,13 +211,15 @@ impl NeonFcmaFastButterfly9f {
         let tw2 = compute_twiddle::<f32>(2, 9, fft_direction);
         let tw4 = compute_twiddle::<f32>(4, 9, fft_direction);
         unsafe {
+            let q = vld1q_f32(
+                [-twiddle3.im, twiddle3.im, -twiddle3.im, twiddle3.im]
+                    .as_ptr()
+                    .cast(),
+            );
             NeonFcmaFastButterfly9f {
                 tw3_re: twiddle3.re,
-                tw3_im: vld1q_f32(
-                    [-twiddle3.im, twiddle3.im, -twiddle3.im, twiddle3.im]
-                        .as_ptr()
-                        .cast(),
-                ),
+                tw3_im: q,
+                n_tw3_im: vnegq_f32(q),
                 twiddle1: vld1q_f32([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr().cast()),
                 twiddle2: vld1q_f32([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr().cast()),
                 twiddle4: vld1q_f32([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr().cast()),
@@ -227,48 +230,44 @@ impl NeonFcmaFastButterfly9f {
 
 #[cfg(feature = "fcma")]
 impl NeonFcmaFastButterfly9f {
-    #[inline(always)]
+    #[inline]
+    #[target_feature(enable = "fcma")]
     pub(crate) fn bf3(
         &self,
         u0: float32x4_t,
         u1: float32x4_t,
         u2: float32x4_t,
     ) -> (float32x4_t, float32x4_t, float32x4_t) {
-        unsafe {
-            let xp = vaddq_f32(u1, u2);
-            let xn = vsubq_f32(u1, u2);
-            let sum = vaddq_f32(u0, xp);
+        let xp = vaddq_f32(u1, u2);
+        let xn = vsubq_f32(u1, u2);
+        let sum = vaddq_f32(u0, xp);
 
-            let w_1 = vfmaq_n_f32(u0, xp, self.tw3_re);
-            let xn_rot = vrev64q_f32(xn);
+        let w_1 = vfmaq_n_f32(u0, xp, self.tw3_re);
 
-            let y0 = sum;
-            let y1 = vfmaq_f32(w_1, self.tw3_im, xn_rot);
-            let y2 = vfmsq_f32(w_1, self.tw3_im, xn_rot);
-            (y0, y1, y2)
-        }
+        let y0 = sum;
+        let y1 = vcmlaq_rot90_f32(w_1, self.tw3_im, xn);
+        let y2 = vcmlaq_rot90_f32(w_1, self.n_tw3_im, xn);
+        (y0, y1, y2)
     }
 
-    #[inline(always)]
+    #[inline]
+    #[target_feature(enable = "fcma")]
     pub(crate) fn bf3h(
         &self,
         u0: float32x2_t,
         u1: float32x2_t,
         u2: float32x2_t,
     ) -> (float32x2_t, float32x2_t, float32x2_t) {
-        unsafe {
-            let xp = vadd_f32(u1, u2);
-            let xn = vsub_f32(u1, u2);
-            let sum = vadd_f32(u0, xp);
+        let xp = vadd_f32(u1, u2);
+        let xn = vsub_f32(u1, u2);
+        let sum = vadd_f32(u0, xp);
 
-            let w_1 = vfma_n_f32(u0, xp, self.tw3_re);
-            let xn_rot = vext_f32::<1>(xn, xn);
+        let w_1 = vfma_n_f32(u0, xp, self.tw3_re);
 
-            let y0 = sum;
-            let y1 = vfma_f32(w_1, vget_low_f32(self.tw3_im), xn_rot);
-            let y2 = vfms_f32(w_1, vget_low_f32(self.tw3_im), xn_rot);
-            (y0, y1, y2)
-        }
+        let y0 = sum;
+        let y1 = vcmla_rot90_f32(w_1, vget_low_f32(self.tw3_im), xn);
+        let y2 = vcmla_rot90_f32(w_1, vget_low_f32(self.n_tw3_im), xn);
+        (y0, y1, y2)
     }
 
     #[inline]

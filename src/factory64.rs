@@ -334,6 +334,18 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    fn butterfly25(
+        fft_direction: FftDirection,
+    ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
+        make_default_butterfly!(
+            fft_direction,
+            Butterfly25,
+            AvxButterfly25d,
+            NeonButterfly25d,
+            NeonFcmaButterfly25d
+        )
+    }
+
     fn butterfly27(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn CompositeFftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -391,6 +403,17 @@ impl AlgorithmFactory<f64> for f64 {
                 use crate::avx::AvxButterfly36d;
                 return Some(Box::new(AvxButterfly36d::new(_direction)));
             }
+        }
+        None
+    }
+
+    fn butterfly49(
+        _fft_direction: FftDirection,
+    ) -> Option<Box<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if has_valid_avx() {
+            use crate::avx::AvxButterfly49d;
+            return Some(Box::new(AvxButterfly49d::new(_fft_direction)));
         }
         None
     }

@@ -424,6 +424,8 @@ impl Zaft {
             return T::butterfly20(fft_direction);
         } else if n == 23 {
             return T::butterfly23(fft_direction);
+        } else if n == 25 {
+            return T::butterfly25(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 27 {
             return T::butterfly27(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 29 {
@@ -434,6 +436,10 @@ impl Zaft {
             return T::butterfly32(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 36 {
             if let Some(executor) = T::butterfly36(fft_direction) {
+                return Ok(executor.into_fft_executor());
+            }
+        } else if n == 49 {
+            if let Some(executor) = T::butterfly49(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
         } else if n == 64 {

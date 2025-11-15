@@ -29,7 +29,7 @@ rand = "0.9"
 default = ["neon", "avx"]
 # Aarch64 NEON intrinsics
 neon = []
-# Aarch64 FCMA feature, required nightly
+# Aarch64 FCMA feature, nightly is required
 fcma = ["neon"]
 # x86_64 AVX intrinsics
 avx = []

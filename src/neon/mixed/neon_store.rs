@@ -89,7 +89,7 @@ impl NeonStoreD {
     #[inline]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
-    pub(crate) unsafe fn fcmul_fcma(self, other: NeonStoreD) -> Self {
+    pub(crate) fn fcmul_fcma(self, other: NeonStoreD) -> Self {
         NeonStoreD {
             v: vcmlaq_rot90_f64(
                 vcmlaq_f64(vdupq_n_f64(0.), self.v, other.v),
@@ -120,18 +120,83 @@ impl NeonStoreF {
         }
     }
 
-    // #[inline]
-    // pub(crate) fn from_complex(complex: &Complex<f32>) -> Self {
-    //     unsafe {
-    //         NeonStoreF {
-    //             v: vld1q_f32(complex as *const Complex<f32> as *const f32),
-    //         }
-    //     }
-    // }
+    #[inline]
+    pub(crate) fn from_complex_ref2(complex: &[Complex<f32>], offset: usize) -> (Self, Self) {
+        unsafe {
+            let q0 = vld1q_f32(complex.as_ptr().cast());
+            let q1 = vld1q_f32(complex.get_unchecked(offset..).as_ptr().cast());
+            (
+                NeonStoreF {
+                    v: vcombine_f32(vget_low_f32(q0), vget_low_f32(q1)),
+                },
+                NeonStoreF {
+                    v: vcombine_f32(vget_high_f32(q0), vget_high_f32(q1)),
+                },
+            )
+        }
+    }
+
+    #[inline]
+    pub(crate) fn lo(self) -> NeonStoreFh {
+        unsafe { NeonStoreFh::raw(vget_low_f32(self.v)) }
+    }
+
+    #[inline]
+    pub(crate) fn hi(self) -> NeonStoreFh {
+        unsafe { NeonStoreFh::raw(vget_high_f32(self.v)) }
+    }
+
+    #[inline]
+    pub(crate) fn from_complex(complex: &Complex<f32>) -> Self {
+        unsafe {
+            NeonStoreF {
+                v: vld1q_f32(
+                    [complex.re, complex.im, complex.re, complex.im]
+                        .as_ptr()
+                        .cast(),
+                ),
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_complex2(v0: Complex<f32>, v1: Complex<f32>) -> Self {
+        unsafe {
+            NeonStoreF {
+                v: vld1q_f32([v0.re, v0.im, v1.re, v1.im].as_ptr().cast()),
+            }
+        }
+    }
 
     #[inline]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f32>]) {
         unsafe { vst1q_f32(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline]
+    pub(crate) fn write_lo(&self, to_ref: &mut [Complex<f32>]) {
+        unsafe { vst1_f32(to_ref.as_mut_ptr().cast(), vget_low_f32(self.v)) }
+    }
+
+    #[inline]
+    pub(crate) fn write_split2(&self, to_ref: &mut [Complex<f32>], offset: usize) {
+        unsafe {
+            vst1_f32(to_ref.as_mut_ptr().cast(), vget_low_f32(self.v));
+            vst1_f32(
+                to_ref.get_unchecked_mut(offset..).as_mut_ptr().cast(),
+                vget_high_f32(self.v),
+            )
+        }
+    }
+
+    #[inline]
+    pub(crate) fn write2(&self, other: Self, to_ref: &mut [Complex<f32>], offset: usize) {
+        unsafe {
+            let q0 = vcombine_f32(vget_low_f32(self.v), vget_low_f32(other.v));
+            let q1 = vcombine_f32(vget_high_f32(self.v), vget_high_f32(other.v));
+            vst1q_f32(to_ref.as_mut_ptr().cast(), q0);
+            vst1q_f32(to_ref.get_unchecked_mut(offset..).as_mut_ptr().cast(), q1);
+        }
     }
 
     #[inline]
@@ -180,6 +245,18 @@ impl NeonStoreFh {
         unsafe {
             NeonStoreFh {
                 v: vld1_f32(complex as *const Complex<f32> as *const f32),
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_complex2(complex: &Complex<f32>, offset: usize) -> NeonStoreF {
+        unsafe {
+            NeonStoreF {
+                v: vcombine_f32(
+                    vld1_f32(complex as *const Complex<f32> as *const f32),
+                    vld1_f32((complex as *const Complex<f32>).wrapping_add(offset) as *const f32),
+                ),
             }
         }
     }

@@ -42,9 +42,15 @@ mod bf9;
 mod mixed_radix;
 mod neon_store;
 
+pub(crate) use bf5::{ColumnButterfly5d, ColumnButterfly5f};
+#[cfg(feature = "fcma")]
+pub(crate) use bf5::{ColumnFcmaButterfly5d, ColumnFcmaButterfly5f};
 pub(crate) use bf6::ColumnButterfly6f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf6::ColumnFcmaButterfly6f;
+pub(crate) use bf7::ColumnButterfly7f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf7::ColumnFcmaButterfly7f;
 pub(crate) use bf8::ColumnButterfly8f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf8::ColumnFcmaButterfly8f;
@@ -66,4 +72,4 @@ pub(crate) use mixed_radix::{
     NeonMixedRadix12, NeonMixedRadix12f, NeonMixedRadix13, NeonMixedRadix13f, NeonMixedRadix16,
     NeonMixedRadix16f,
 };
-pub(crate) use neon_store::NeonStoreF;
+pub(crate) use neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};

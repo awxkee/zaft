@@ -66,6 +66,12 @@ impl AvxStoreD {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn set_complex2(p0: Complex<f64>, p1: Complex<f64>) -> AvxStoreD {
+        AvxStoreD::raw(_mm256_setr_pd(p0.re, p0.im, p1.re, p1.im))
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f64>]) {
         unsafe { _mm256_storeu_pd(to_ref.as_mut_ptr().cast(), self.v) }
     }

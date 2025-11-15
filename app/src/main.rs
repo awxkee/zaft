@@ -113,7 +113,7 @@ fn main() {
     let mut c = Criterion::default().sample_size(10);
     // check_power_group(&mut c, 2usize.pow(15), "2^15".to_string());
     // bench_zaft_averages(&mut c);
-    check_power_groups(&mut c, 3usize.pow(9), "3^9".to_string());
+    check_power_groups(&mut c, 7usize.pow(4), "7^4".to_string());
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }

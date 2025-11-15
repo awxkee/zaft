@@ -174,11 +174,17 @@ impl AvxButterfly36f {
 
                 let output_rows = self.bf9_column.exec(transposed);
 
-                for r in 0..3 {
-                    output_rows[r * 3].write(chunk.get_unchecked_mut(r * 12..));
-                    output_rows[r * 3 + 1].write(chunk.get_unchecked_mut(r * 12 + 4..));
-                    output_rows[r * 3 + 2].write(chunk.get_unchecked_mut(r * 12 + 8..));
-                }
+                output_rows[0].write(chunk);
+                output_rows[3].write(chunk.get_unchecked_mut(12..));
+                output_rows[6].write(chunk.get_unchecked_mut(24..));
+
+                output_rows[1].write(chunk.get_unchecked_mut(4..));
+                output_rows[4].write(chunk.get_unchecked_mut(16..));
+                output_rows[7].write(chunk.get_unchecked_mut(28..));
+
+                output_rows[2].write(chunk.get_unchecked_mut(8..));
+                output_rows[5].write(chunk.get_unchecked_mut(20..));
+                output_rows[8].write(chunk.get_unchecked_mut(32..));
             }
         }
         Ok(())
@@ -237,11 +243,17 @@ impl AvxButterfly36f {
 
                 let output_rows = self.bf9_column.exec(transposed);
 
-                for r in 0..3 {
-                    output_rows[r * 3].write(dst.get_unchecked_mut(r * 12..));
-                    output_rows[r * 3 + 1].write(dst.get_unchecked_mut(r * 12 + 4..));
-                    output_rows[r * 3 + 2].write(dst.get_unchecked_mut(r * 12 + 8..));
-                }
+                output_rows[0].write(dst);
+                output_rows[3].write(dst.get_unchecked_mut(12..));
+                output_rows[6].write(dst.get_unchecked_mut(24..));
+
+                output_rows[1].write(dst.get_unchecked_mut(4..));
+                output_rows[4].write(dst.get_unchecked_mut(16..));
+                output_rows[7].write(dst.get_unchecked_mut(28..));
+
+                output_rows[2].write(dst.get_unchecked_mut(8..));
+                output_rows[5].write(dst.get_unchecked_mut(20..));
+                output_rows[8].write(dst.get_unchecked_mut(32..));
             }
         }
         Ok(())
