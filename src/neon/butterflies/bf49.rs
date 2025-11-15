@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(clippy::needless_range_loop)]
 use crate::neon::f32x2_7x7::neon_transpose_f32x2_7x7_aos;
 use crate::neon::mixed::{ColumnButterfly7f, NeonStoreF};
 use crate::util::compute_twiddle;
