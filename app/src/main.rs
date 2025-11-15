@@ -109,11 +109,11 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 4096];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 1201];
     let mut c = Criterion::default().sample_size(10);
     // check_power_group(&mut c, 2usize.pow(15), "2^15".to_string());
     // bench_zaft_averages(&mut c);
-    check_power_groups(&mut c, 7usize.pow(4), "7^4".to_string());
+    // check_power_groups(&mut c, 7usize.pow(4), "7^4".to_string());
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
