@@ -54,6 +54,9 @@ pub(crate) use bf7::ColumnFcmaButterfly7f;
 pub(crate) use bf8::ColumnButterfly8f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf8::ColumnFcmaButterfly8f;
+pub(crate) use bf9::{ColumnButterfly9d, ColumnButterfly9f};
+#[cfg(feature = "fcma")]
+pub(crate) use bf9::{ColumnFcmaButterfly9d, ColumnFcmaButterfly9f};
 pub(crate) use bf10::{ColumnButterfly10d, ColumnButterfly10f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf10::{ColumnFcmaButterfly10d, ColumnFcmaButterfly10f};
