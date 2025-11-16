@@ -139,10 +139,6 @@ impl Zaft {
         true
     }
 
-    #[cfg(any(
-        all(target_arch = "aarch64", feature = "neon"),
-        all(target_arch = "x86_64", feature = "avx")
-    ))]
     fn try_split_mixed_radix_butterflies<
         T: AlgorithmFactory<T>
             + FftTrigonometry
@@ -163,6 +159,13 @@ impl Zaft {
     where
         f64: AsPrimitive<T>,
     {
+        #[cfg(not(any(
+            all(target_arch = "aarch64", feature = "neon"),
+            all(target_arch = "x86_64", feature = "avx")
+        )))]
+        {
+            return Ok(None);
+        }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         if !std::arch::is_x86_feature_detected!("avx2")
             || !std::arch::is_x86_feature_detected!("fma")
