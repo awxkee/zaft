@@ -37,7 +37,7 @@ pub(crate) struct ColumnButterfly10d {
 
 impl ColumnButterfly10d {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly10d {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly10d {
         unsafe {
             Self {
                 bf5: AvxFastButterfly5d::new(direction),

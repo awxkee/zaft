@@ -35,7 +35,7 @@ pub(super) use avx_stored::AvxStoreD;
 pub(super) use avx_storef::{AvxStoreF, SseStoreF};
 pub(super) use butterflies::{
     ColumnButterfly4f, ColumnButterfly5d, ColumnButterfly5f, ColumnButterfly6d, ColumnButterfly7d,
-    ColumnButterfly7f, ColumnButterfly8d, ColumnButterfly8f, ColumnButterfly9f,
+    ColumnButterfly7f, ColumnButterfly8d, ColumnButterfly8f, ColumnButterfly9f, ColumnButterfly10d,
 };
 pub(crate) use mixed_radix::{
     AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,

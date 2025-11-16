@@ -422,7 +422,14 @@ impl AlgorithmFactory<f64> for f64 {
         None
     }
 
-    fn butterfly100(_: FftDirection) -> Option<Box<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+    fn butterfly100(
+        fft_direction: FftDirection,
+    ) -> Option<Box<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if has_valid_avx() {
+            use crate::avx::AvxButterfly100d;
+            return Some(Box::new(AvxButterfly100d::new(fft_direction)));
+        }
         None
     }
 
