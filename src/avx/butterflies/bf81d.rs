@@ -315,5 +315,5 @@ mod tests {
     use crate::avx::butterflies::{test_avx_butterfly_small, test_oof_avx_butterfly_small};
 
     test_avx_butterfly_small!(test_avx_butterfly81, f64, AvxButterfly81d, 81, 1e-7);
-    test_oof_avx_butterfly_small!(test_oof_neon_butterfly81, f64, AvxButterfly81d, 81, 1e-7);
+    test_oof_avx_butterfly_small!(test_oof_avx_butterfly81, f64, AvxButterfly81d, 81, 1e-7);
 }
