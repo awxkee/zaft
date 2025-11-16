@@ -92,7 +92,7 @@ impl ColumnButterfly10f {
 impl ColumnButterfly10f {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) unsafe fn exec(&self, v: [AvxStoreF; 10]) -> [AvxStoreF; 10] {
+    pub(crate) fn exec(&self, v: [AvxStoreF; 10]) -> [AvxStoreF; 10] {
         let mid0 = self.bf5._m256_exec(v[0].v, v[2].v, v[4].v, v[6].v, v[8].v);
         let mid1 = self.bf5._m256_exec(v[5].v, v[7].v, v[9].v, v[1].v, v[3].v);
 

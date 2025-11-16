@@ -59,8 +59,9 @@ pub(crate) use butterflies::{
     AvxButterfly17, AvxButterfly18d, AvxButterfly18f, AvxButterfly19, AvxButterfly20d,
     AvxButterfly20f, AvxButterfly23, AvxButterfly25d, AvxButterfly25f, AvxButterfly27d,
     AvxButterfly27f, AvxButterfly29, AvxButterfly31, AvxButterfly32d, AvxButterfly32f,
-    AvxButterfly36d, AvxButterfly36f, AvxButterfly49d, AvxButterfly49f, AvxButterfly64d,
-    AvxButterfly64f, AvxButterfly81d, AvxButterfly81f, AvxButterfly100d, AvxButterfly100f,
+    AvxButterfly36d, AvxButterfly36f, AvxButterfly48d, AvxButterfly49d, AvxButterfly49f,
+    AvxButterfly64d, AvxButterfly64f, AvxButterfly81d, AvxButterfly81f, AvxButterfly100d,
+    AvxButterfly100f,
 };
 pub(crate) use c2r::C2RAvxTwiddles;
 pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;

@@ -369,7 +369,7 @@ impl Zaft {
                     {
                         use crate::util::has_valid_avx;
                         if has_valid_avx() {
-                            return try_mixed_radix!(product / 100, 100);
+                            try_mixed_radix!(product / 100, 100)
                         }
                     }
                 }

@@ -47,7 +47,7 @@ pub(crate) struct ColumnButterfly16d {
 
 impl ColumnButterfly16d {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly16d {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly16d {
         let tw1 = compute_twiddle(1, 16, direction);
         let tw2 = compute_twiddle(2, 16, direction);
         let tw3 = compute_twiddle(3, 16, direction);
@@ -137,7 +137,7 @@ pub(crate) struct ColumnButterfly16f {
 
 impl ColumnButterfly16f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly16f {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly16f {
         let tw1 = compute_twiddle(1, 16, direction);
         let tw2 = compute_twiddle(2, 16, direction);
         let tw3 = compute_twiddle(3, 16, direction);
