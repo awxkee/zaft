@@ -70,7 +70,7 @@ impl AvxButterfly100f {
         Self {
             direction: fft_direction,
             twiddles,
-            bf10: unsafe { ColumnButterfly10f::new(fft_direction) },
+            bf10: ColumnButterfly10f::new(fft_direction),
         }
     }
 }
