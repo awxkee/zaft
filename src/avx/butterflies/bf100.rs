@@ -96,7 +96,7 @@ pub(crate) fn transpose_10x2(rows: [AvxStoreD; 10]) -> [AvxStoreD; 10] {
 
 impl FftExecutor<f64> for AvxButterfly100d {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        self.execute_impl(in_place)
+        unsafe { self.execute_impl(in_place) }
     }
 
     fn direction(&self) -> FftDirection {
@@ -110,6 +110,7 @@ impl FftExecutor<f64> for AvxButterfly100d {
 }
 
 impl AvxButterfly100d {
+    #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if in_place.len() % 100 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
@@ -168,11 +169,12 @@ impl FftExecutorOutOfPlace<f64> for AvxButterfly100d {
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        self.execute_out_of_place_impl(src, dst)
+        unsafe { self.execute_out_of_place_impl(src, dst) }
     }
 }
 
 impl AvxButterfly100d {
+    #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_out_of_place_impl(
         &self,
         src: &[Complex<f64>],
