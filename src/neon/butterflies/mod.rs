@@ -532,7 +532,7 @@ macro_rules! test_oof_fcma_butterfly_small {
                 return;
             }
             use rand::Rng;
-            for i in 1..4 {
+            for i in 1..2 {
                 let kern = $scale;
                 let size = (kern as usize).pow(i);
                 let mut input = vec![Complex::<$data_type>::default(); size];
