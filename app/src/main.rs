@@ -109,16 +109,17 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 576];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 1024];
     let mut c = Criterion::default().sample_size(10);
     // bench_zaft_averages(&mut c);
-    check_power_groups(&mut c, 288, "288".to_string());
-    check_power_groups(&mut c, 576, "576".to_string());
+    // check_power_group(&mut c, 1024, "1024".to_string());
+    // check_power_groups(&mut c, 288, "288".to_string());
+    // check_power_groups(&mut c, 576, "576".to_string());
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
     for (i, chunk) in data.iter_mut().enumerate() {
-        *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
+        *chunk = Complex::new(-0.19528865 + i as f64 * 0.1, 0.0019528865 - i as f64 * 0.1);
     }
     // data = [
     //     Complex {
@@ -215,10 +216,10 @@ fn main() {
     //     }
     // }
 
-    let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
-    let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
+    let forward = Zaft::make_forward_fft_f64(cvt.len()).unwrap();
+    let inverse = Zaft::make_inverse_fft_f64(cvt.len()).unwrap();
 
-    let mut planner = FftPlanner::<f32>::new();
+    let mut planner = FftPlanner::<f64>::new();
 
     let planned_fft = planner.plan_fft_forward(data.len());
     let planned_fft_inv = planner.plan_fft_inverse(data.len());
@@ -234,11 +235,11 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
         .collect();
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
         .collect();
 
     println!("Mine inverse -----");
@@ -249,7 +250,7 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
         .collect();
 
     // for (i, val) in data.iter().enumerate() {
@@ -261,7 +262,7 @@ fn main() {
     planned_fft_inv.process(&mut cvt);
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
         .collect();
 
     // for (i, val) in cvt.iter().enumerate() {

@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::radix4::{
@@ -99,7 +100,7 @@ impl NeonFcmaRadix4<f64> {
             ));
         }
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
@@ -555,7 +556,7 @@ impl NeonFcmaRadix4<f32> {
             ));
         }
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first

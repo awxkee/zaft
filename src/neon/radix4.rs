@@ -37,6 +37,7 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
+use crate::err::try_vec;
 
 #[inline]
 pub(crate) fn complex4_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
@@ -237,7 +238,7 @@ impl FftExecutor<f64> for NeonRadix4<f64> {
             })
         };
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
@@ -339,7 +340,7 @@ impl FftExecutor<f32> for NeonRadix4<f32> {
             })
         };
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first

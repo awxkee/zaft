@@ -272,7 +272,7 @@ impl Zaft {
     where
         f64: AsPrimitive<T>,
     {
-        let factorization = prime_factors.factorization;
+        let factorization = &prime_factors.factorization;
         let product = factorization.iter().map(|&x| x.0.pow(x.1)).product::<u64>();
 
         let (n_length, q_length) = if product <= 529 {
@@ -290,9 +290,11 @@ impl Zaft {
             }
         };
 
-        // if product == 288 {
-        //     return Ok(Zaft::try_split_mixed_radix_butterflies(8, 36, direction)?.unwrap());
-        // }
+        if prime_factors.is_power_of_two_and_three() {
+            if product == 288 {
+                return Ok(Zaft::try_split_mixed_radix_butterflies(8, 36, direction)?.unwrap());
+            }
+        }
 
         #[cfg(any(
             all(target_arch = "aarch64", feature = "neon"),
