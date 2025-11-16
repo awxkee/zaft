@@ -45,15 +45,15 @@ mod neon_store;
 pub(crate) use bf5::{ColumnButterfly5d, ColumnButterfly5f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf5::{ColumnFcmaButterfly5d, ColumnFcmaButterfly5f};
-pub(crate) use bf6::ColumnButterfly6f;
+pub(crate) use bf6::{ColumnButterfly6d, ColumnButterfly6f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf6::ColumnFcmaButterfly6f;
-pub(crate) use bf7::ColumnButterfly7f;
+pub(crate) use bf6::{ColumnFcmaButterfly6d, ColumnFcmaButterfly6f};
+pub(crate) use bf7::{ColumnButterfly7d, ColumnButterfly7f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf7::ColumnFcmaButterfly7f;
-pub(crate) use bf8::ColumnButterfly8f;
+pub(crate) use bf7::{ColumnFcmaButterfly7d, ColumnFcmaButterfly7f};
+pub(crate) use bf8::{ColumnButterfly8d, ColumnButterfly8f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf8::ColumnFcmaButterfly8f;
+pub(crate) use bf8::{ColumnFcmaButterfly8d, ColumnFcmaButterfly8f};
 pub(crate) use bf9::{ColumnButterfly9d, ColumnButterfly9f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf9::{ColumnFcmaButterfly9d, ColumnFcmaButterfly9f};
@@ -64,11 +64,11 @@ pub(crate) use bf10::{ColumnFcmaButterfly10d, ColumnFcmaButterfly10f};
 pub(crate) use mixed_radix::{
     NeonFcmaMixedRadix2, NeonFcmaMixedRadix2f, NeonFcmaMixedRadix3, NeonFcmaMixedRadix3f,
     NeonFcmaMixedRadix4, NeonFcmaMixedRadix4f, NeonFcmaMixedRadix5, NeonFcmaMixedRadix5f,
-    NeonFcmaMixedRadix6f, NeonFcmaMixedRadix7, NeonFcmaMixedRadix7f, NeonFcmaMixedRadix8,
-    NeonFcmaMixedRadix8f, NeonFcmaMixedRadix9, NeonFcmaMixedRadix9f, NeonFcmaMixedRadix10,
-    NeonFcmaMixedRadix10f, NeonFcmaMixedRadix11, NeonFcmaMixedRadix11f, NeonFcmaMixedRadix12,
-    NeonFcmaMixedRadix12f, NeonFcmaMixedRadix13, NeonFcmaMixedRadix13f, NeonFcmaMixedRadix16,
-    NeonFcmaMixedRadix16f,
+    NeonFcmaMixedRadix6, NeonFcmaMixedRadix6f, NeonFcmaMixedRadix7, NeonFcmaMixedRadix7f,
+    NeonFcmaMixedRadix8, NeonFcmaMixedRadix8f, NeonFcmaMixedRadix9, NeonFcmaMixedRadix9f,
+    NeonFcmaMixedRadix10, NeonFcmaMixedRadix10f, NeonFcmaMixedRadix11, NeonFcmaMixedRadix11f,
+    NeonFcmaMixedRadix12, NeonFcmaMixedRadix12f, NeonFcmaMixedRadix13, NeonFcmaMixedRadix13f,
+    NeonFcmaMixedRadix16, NeonFcmaMixedRadix16f,
 };
 pub(crate) use mixed_radix::{
     NeonMixedRadix2, NeonMixedRadix2f, NeonMixedRadix3, NeonMixedRadix3f, NeonMixedRadix4,
