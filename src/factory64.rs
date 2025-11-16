@@ -423,14 +423,27 @@ impl AlgorithmFactory<f64> for f64 {
     }
 
     fn butterfly100(
-        fft_direction: FftDirection,
+        _fft_direction: FftDirection,
     ) -> Option<Box<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly100d;
+                return Some(Box::new(NeonFcmaButterfly100d::new(_fft_direction)));
+            }
+            use crate::neon::NeonButterfly100d;
+            Some(Box::new(NeonButterfly100d::new(_fft_direction)))
+        }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         if has_valid_avx() {
             use crate::avx::AvxButterfly100d;
-            return Some(Box::new(AvxButterfly100d::new(fft_direction)));
+            return Some(Box::new(AvxButterfly100d::new(_fft_direction)));
         }
-        None
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            None
+        }
     }
 
     fn radix3(

@@ -28,7 +28,11 @@
  */
 mod bf10;
 mod bf100;
+#[cfg(feature = "fcma")]
 mod bf100_fcma;
+mod bf100d;
+#[cfg(feature = "fcma")]
+mod bf100d_fcma;
 #[cfg(feature = "fcma")]
 mod bf10_fcma;
 mod bf11;
@@ -204,6 +208,9 @@ pub(crate) use bf64f_fcma::NeonFcmaButterfly64f;
 pub(crate) use bf100::NeonButterfly100f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf100_fcma::NeonFcmaButterfly100f;
+pub(crate) use bf100d::NeonButterfly100d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf100d_fcma::NeonFcmaButterfly100d;
 pub(crate) use fast_bf5::NeonFastButterfly5;
 pub(crate) use fast_bf8::NeonFastButterfly8;
 use num_complex::Complex;
