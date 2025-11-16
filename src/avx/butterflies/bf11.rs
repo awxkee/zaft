@@ -63,18 +63,17 @@ where
 impl AvxButterfly11<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        if in_place.len() % 11 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                in_place.len(),
+                self.length(),
+            ));
+        }
+
+        let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
         unsafe {
-            if in_place.len() % 11 != 0 {
-                return Err(ZaftError::InvalidSizeMultiplier(
-                    in_place.len(),
-                    self.length(),
-                ));
-            }
-
-            let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
-
             for chunk in in_place.chunks_exact_mut(22) {
-                let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
+                let u0u1 = _mm256_loadu_pd(chunk.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
                 let u6u7 = _mm256_loadu_pd(chunk.get_unchecked(6..).as_ptr().cast());
@@ -185,7 +184,7 @@ impl AvxButterfly11<f64> {
                 let (y05, y06) = AvxButterfly::butterfly2_f64(m0506a, m0506b);
 
                 _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
+                    chunk.as_mut_ptr().cast(),
                     _mm256_permute2f128_pd::<LO_LO>(y00, y01),
                 );
                 _mm256_storeu_pd(
@@ -233,7 +232,7 @@ impl AvxButterfly11<f64> {
             let rem = in_place.chunks_exact_mut(22).into_remainder();
 
             for chunk in rem.chunks_exact_mut(11) {
-                let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
+                let u0u1 = _mm256_loadu_pd(chunk.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
                 let u6u7 = _mm256_loadu_pd(chunk.get_unchecked(6..).as_ptr().cast());
@@ -331,10 +330,7 @@ impl AvxButterfly11<f64> {
                 let m0506b = _mm_fmadd_pd(x5m6, _mm_set1_pd(self.twiddle3.im), m0506b);
                 let (y05, y06) = AvxButterfly::butterfly2_f64_m128(m0506a, m0506b);
 
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                    _mm256_create_pd(y00, y01),
-                );
+                _mm256_storeu_pd(chunk.as_mut_ptr().cast(), _mm256_create_pd(y00, y01));
                 _mm256_storeu_pd(
                     chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
                     _mm256_create_pd(y02, y03),
@@ -693,16 +689,16 @@ impl FftExecutor<f64> for AvxButterfly11<f64> {
 impl AvxButterfly11<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        if in_place.len() % 11 != 0 {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                in_place.len(),
+                self.length(),
+            ));
+        }
+
+        let rotate = AvxRotate::<f32>::new(FftDirection::Inverse);
+
         unsafe {
-            if in_place.len() % 11 != 0 {
-                return Err(ZaftError::InvalidSizeMultiplier(
-                    in_place.len(),
-                    self.length(),
-                ));
-            }
-
-            let rotate = AvxRotate::<f32>::new(FftDirection::Inverse);
-
             for chunk in in_place.chunks_exact_mut(22) {
                 let u0u1u2u3 = _mm256_loadu_ps(chunk.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());

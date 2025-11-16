@@ -742,6 +742,8 @@ define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix4, ColumnFcmaButterfly4d, 4);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix5, ColumnFcmaButterfly5d, 5);
 #[cfg(feature = "fcma")]
+define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix6, ColumnFcmaButterfly6d, 6);
+#[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix7, ColumnFcmaButterfly7d, 7);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix8, ColumnFcmaButterfly8d, 8);

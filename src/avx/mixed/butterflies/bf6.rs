@@ -37,7 +37,7 @@ pub(crate) struct ColumnButterfly6d {
 
 impl ColumnButterfly6d {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly6d {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly6d {
         unsafe {
             Self {
                 bf3: AvxFastButterfly3::<f64>::new(direction),
@@ -73,7 +73,7 @@ pub(crate) struct ColumnButterfly6f {
 
 impl ColumnButterfly6f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly6f {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly6f {
         unsafe {
             Self {
                 bf3: AvxFastButterfly3::<f32>::new(direction),

@@ -27,8 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod bf10;
+mod bf100d;
+mod bf100f;
 mod bf11;
 mod bf12;
+mod bf121d;
+mod bf121f;
 mod bf13;
 mod bf14;
 mod bf15;
@@ -47,15 +51,22 @@ mod bf3;
 mod bf31;
 mod bf32d;
 mod bf32f;
+mod bf35d;
+mod bf35f;
 mod bf36d;
 mod bf36f;
 mod bf4;
+mod bf48d;
+mod bf48f;
 mod bf49;
 mod bf5;
 mod bf6;
+mod bf64d;
 mod bf64f;
 mod bf7;
 mod bf8;
+mod bf81d;
+mod bf81f;
 mod bf9;
 mod fast_bf3;
 mod fast_bf4;
@@ -93,10 +104,21 @@ pub(crate) use bf29::AvxButterfly29;
 pub(crate) use bf31::AvxButterfly31;
 pub(crate) use bf32d::AvxButterfly32d;
 pub(crate) use bf32f::AvxButterfly32f;
+pub(crate) use bf35d::AvxButterfly35d;
+pub(crate) use bf35f::AvxButterfly35f;
 pub(crate) use bf36d::AvxButterfly36d;
 pub(crate) use bf36f::AvxButterfly36f;
+pub(crate) use bf48d::AvxButterfly48d;
+pub(crate) use bf48f::AvxButterfly48f;
 pub(crate) use bf49::{AvxButterfly49d, AvxButterfly49f};
+pub(crate) use bf64d::AvxButterfly64d;
 pub(crate) use bf64f::AvxButterfly64f;
+pub(crate) use bf81d::AvxButterfly81d;
+pub(crate) use bf81f::AvxButterfly81f;
+pub(crate) use bf100d::AvxButterfly100d;
+pub(crate) use bf100f::AvxButterfly100f;
+pub(crate) use bf121d::AvxButterfly121d;
+pub(crate) use bf121f::AvxButterfly121f;
 pub(crate) use fast_bf3::AvxFastButterfly3;
 pub(crate) use fast_bf4::AvxFastButterfly4;
 pub(crate) use fast_bf5::{AvxFastButterfly5d, AvxFastButterfly5f};
@@ -458,9 +480,9 @@ macro_rules! test_avx_butterfly {
                 return;
             }
             use rand::Rng;
-            for i in 1..4 {
+            for i in 1..20 {
                 let val = $scale as usize;
-                let size = val.pow(i);
+                let size = val * i;
                 let mut input = vec![Complex::<$data_type>::default(); size];
                 for z in input.iter_mut() {
                     *z = Complex {
@@ -539,9 +561,9 @@ macro_rules! test_oof_avx_butterfly {
                 return;
             }
             use rand::Rng;
-            for i in 1..4 {
+            for i in 1..20 {
                 let kern = $scale;
-                let size = (kern as usize).pow(i);
+                let size = (kern as usize) * i;
                 let mut input = vec![Complex::<$data_type>::default(); size];
                 for z in input.iter_mut() {
                     *z = Complex {
