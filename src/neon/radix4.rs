@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::f32x2_4x4::transpose_f32x2_4x4;
 use crate::neon::f64x2_2x2::neon_transpose_f64x2_4x4_impl;
@@ -37,7 +38,6 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
-use crate::err::try_vec;
 
 #[inline]
 pub(crate) fn complex4_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
