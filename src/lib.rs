@@ -476,6 +476,10 @@ impl Zaft {
             if let Some(executor) = T::butterfly36(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
+        } else if n == 48 {
+            if let Some(executor) = T::butterfly48(fft_direction) {
+                return Ok(executor);
+            }
         } else if n == 49 {
             if let Some(executor) = T::butterfly49(fft_direction) {
                 return Ok(executor.into_fft_executor());

@@ -112,7 +112,7 @@ fn main() {
     let mut data = vec![Complex::new(0.0019528865, 0.); 432];
     let mut c = Criterion::default().sample_size(10);
     // bench_zaft_averages(&mut c);
-    check_power_group(&mut c, 1920, "1920".to_string());
+    check_power_group(&mut c, 48, "48".to_string());
     // check_power_groups(&mut c, 432, "432".to_string());
     // check_power_groups(&mut c, 576, "576".to_string());
     // check_power_groups(&mut c, 1152, "1152".to_string());
