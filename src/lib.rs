@@ -290,6 +290,10 @@ impl Zaft {
             }
         };
 
+        // if product == 288 {
+        //     return Ok(Zaft::try_split_mixed_radix_butterflies(8, 36, direction)?.unwrap());
+        // }
+
         #[cfg(any(
             all(target_arch = "aarch64", feature = "neon"),
             all(target_arch = "x86_64", feature = "avx")

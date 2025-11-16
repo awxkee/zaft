@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 rustfft = { version = "6.4", default-features = false, features = ["avx", "neon"] }
-zaft = { path = "../", features = ["neon", "avx"], default-features = false }
+zaft = { path = "../", features = ["fcma", "avx"], default-features = false }
 num-complex = "0.4.6"
 rand = "0.9"
 criterion = "0.7.0"
