@@ -207,6 +207,7 @@ macro_rules! test_butterfly {
 #[cfg(test)]
 pub(crate) use test_butterfly;
 
+#[allow(unused)]
 #[cfg(test)]
 macro_rules! test_butterfly_small {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
@@ -281,6 +282,7 @@ macro_rules! test_butterfly_small {
     };
 }
 
+#[allow(unused)]
 #[cfg(test)]
 pub(crate) use test_butterfly_small;
 
@@ -368,6 +370,7 @@ macro_rules! test_oof_butterfly {
 #[cfg(test)]
 pub(crate) use test_oof_butterfly;
 
+#[allow(unused)]
 #[cfg(test)]
 macro_rules! test_oof_butterfly_small {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
@@ -450,4 +453,5 @@ macro_rules! test_oof_butterfly_small {
 }
 
 #[cfg(test)]
+#[allow(unused)]
 pub(crate) use test_oof_butterfly_small;

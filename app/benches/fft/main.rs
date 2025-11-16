@@ -271,12 +271,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     }
 
     // check_power_group(c, 1920, "Full HD".to_string());
-    check_power_group(c, 1000, "power 10".to_string());
+    // check_power_group(c, 1000, "power 10".to_string());
     // check_power_group(c, 11 * 11 * 11, "power 11".to_string());
     // check_power_group(c, 13 * 13 * 13, "power 13".to_string());
     // check_power_group(c, 3125, "power 5".to_string());
     // check_power_group(c, 19, "bf-19".to_string());
-    check_power_group(c, 7 * 7 * 7 * 7, "power 7".to_string());
+    // check_power_group(c, 7 * 7 * 7 * 7, "power 7".to_string());
     // check_power_group(c, 3usize.pow(9), "3^9".to_string());
 
     /* c.bench_function("rustfft prime 1201", |b| {
@@ -375,69 +375,69 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         })
     });*/
 
-    c.bench_function("rustfft power2", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power2.len());
-        let mut working = input_power2.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power2", |b| {
-        let plan = Zaft::make_forward_fft_f64(input_power2.len()).unwrap();
-        let mut working = input_power2.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft power2s", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power2s.len());
-        let mut working = input_power2s.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power2s", |b| {
-        let plan = Zaft::make_forward_fft_f32(input_power2s.len()).unwrap();
-        let mut working = input_power2s.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft power4", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power4.len());
-        let mut working = input_power4.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power4", |b| {
-        let plan = Zaft::make_forward_fft_f64(input_power4.len()).unwrap();
-        let mut working = input_power4.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function("rustfft power4s", |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power4s.len());
-        let mut working = input_power4s.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function("zaft power4s", |b| {
-        let plan = Zaft::make_forward_fft_f32(input_power4s.len()).unwrap();
-        let mut working = input_power4s.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
+    // c.bench_function("rustfft power2", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_power2.len());
+    //     let mut working = input_power2.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    // 
+    // c.bench_function("zaft power2", |b| {
+    //     let plan = Zaft::make_forward_fft_f64(input_power2.len()).unwrap();
+    //     let mut working = input_power2.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    // 
+    // c.bench_function("rustfft power2s", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_power2s.len());
+    //     let mut working = input_power2s.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    // 
+    // c.bench_function("zaft power2s", |b| {
+    //     let plan = Zaft::make_forward_fft_f32(input_power2s.len()).unwrap();
+    //     let mut working = input_power2s.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    // 
+    // c.bench_function("rustfft power4", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_power4.len());
+    //     let mut working = input_power4.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    // 
+    // c.bench_function("zaft power4", |b| {
+    //     let plan = Zaft::make_forward_fft_f64(input_power4.len()).unwrap();
+    //     let mut working = input_power4.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
+    // 
+    // c.bench_function("rustfft power4s", |b| {
+    //     let plan = FftPlanner::new().plan_fft_forward(input_power4s.len());
+    //     let mut working = input_power4s.to_vec();
+    //     b.iter(|| {
+    //         plan.process(&mut working);
+    //     })
+    // });
+    // 
+    // c.bench_function("zaft power4s", |b| {
+    //     let plan = Zaft::make_forward_fft_f32(input_power4s.len()).unwrap();
+    //     let mut working = input_power4s.to_vec();
+    //     b.iter(|| {
+    //         plan.execute(&mut working).unwrap();
+    //     })
+    // });
 
     c.bench_function("rustfft power3", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power3.len());
