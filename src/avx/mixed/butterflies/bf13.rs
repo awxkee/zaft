@@ -47,7 +47,7 @@ pub(crate) struct ColumnButterfly13d {
 
 impl ColumnButterfly13d {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly13d {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly13d {
         Self {
             rotate: AvxRotate::new(FftDirection::Inverse),
             twiddle1: compute_twiddle(1, 13, direction),
@@ -199,7 +199,7 @@ pub(crate) struct ColumnButterfly13f {
 
 impl ColumnButterfly13f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly13f {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly13f {
         Self {
             rotate: AvxRotate::new(FftDirection::Inverse),
             twiddle1: compute_twiddle(1, 13, direction),

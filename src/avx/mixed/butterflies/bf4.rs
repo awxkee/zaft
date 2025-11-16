@@ -39,7 +39,7 @@ pub(crate) struct ColumnButterfly4d {
 
 impl ColumnButterfly4d {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly4d {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly4d {
         unsafe {
             Self {
                 rotate: _mm256_loadu_pd(match direction {
@@ -58,7 +58,7 @@ impl ColumnButterfly4d {
 impl ColumnButterfly4d {
     #[target_feature(enable = "avx")]
     #[inline]
-    pub(crate) unsafe fn exec(&self, v: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
+    pub(crate) fn exec(&self, v: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
         let t0 = _mm256_add_pd(v[0].v, v[2].v);
         let t1 = _mm256_sub_pd(v[0].v, v[2].v);
         let t2 = _mm256_add_pd(v[1].v, v[3].v);
@@ -84,7 +84,7 @@ pub(crate) struct ColumnButterfly4f {
 
 impl ColumnButterfly4f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly4f {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly4f {
         Self {
             rotate: AvxRotate::new(direction),
         }

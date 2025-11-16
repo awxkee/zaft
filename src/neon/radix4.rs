@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::f32x2_4x4::transpose_f32x2_4x4;
 use crate::neon::f64x2_2x2::neon_transpose_f64x2_4x4_impl;
@@ -36,7 +37,6 @@ use crate::util::reverse_bits;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
-use std::any::TypeId;
 use std::arch::aarch64::*;
 
 #[inline]
@@ -192,35 +192,19 @@ where
         // assert_eq!(size.trailing_zeros() % 2, 0, "Radix-4 requires power of 4");
 
         let exponent = size.trailing_zeros();
-        let base_fft = if TypeId::of::<T>() == TypeId::of::<f32>() {
-            match exponent {
-                0 => T::butterfly1(fft_direction)?,
-                1 => T::butterfly2(fft_direction)?,
-                2 => T::butterfly4(fft_direction)?,
-                3 => T::butterfly8(fft_direction)?,
-                4 => T::butterfly16(fft_direction)?,
-                _ => {
-                    if exponent % 2 == 1 {
-                        T::butterfly32(fft_direction)?
-                    } else {
-                        match T::butterfly64(fft_direction) {
-                            None => T::butterfly16(fft_direction)?,
-                            Some(v) => v,
-                        }
-                    }
-                }
-            }
-        } else {
-            match exponent {
-                0 => T::butterfly1(fft_direction)?,
-                1 => T::butterfly2(fft_direction)?,
-                2 => T::butterfly4(fft_direction)?,
-                3 => T::butterfly8(fft_direction)?,
-                _ => {
-                    if exponent % 2 == 1 {
-                        T::butterfly32(fft_direction)?
-                    } else {
-                        T::butterfly16(fft_direction)?
+        let base_fft = match exponent {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly2(fft_direction)?,
+            2 => T::butterfly4(fft_direction)?,
+            3 => T::butterfly8(fft_direction)?,
+            4 => T::butterfly16(fft_direction)?,
+            _ => {
+                if exponent % 2 == 1 {
+                    T::butterfly32(fft_direction)?
+                } else {
+                    match T::butterfly64(fft_direction) {
+                        None => T::butterfly16(fft_direction)?,
+                        Some(v) => v,
                     }
                 }
             }
@@ -254,7 +238,7 @@ impl FftExecutor<f64> for NeonRadix4<f64> {
             })
         };
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
@@ -356,7 +340,7 @@ impl FftExecutor<f32> for NeonRadix4<f32> {
             })
         };
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first

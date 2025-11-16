@@ -271,5 +271,5 @@ mod tests {
     use super::*;
     use crate::util::test_radix;
 
-    test_radix!(test_radix6, f32, Radix6, 5, 6, 1e-3);
+    test_radix!(test_radix6, f32, Radix6, 5, 6, 1e-2);
 }

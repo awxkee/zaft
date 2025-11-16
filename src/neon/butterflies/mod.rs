@@ -27,6 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod bf10;
+mod bf100;
+#[cfg(feature = "fcma")]
+mod bf100_fcma;
+mod bf100d;
+#[cfg(feature = "fcma")]
+mod bf100d_fcma;
 #[cfg(feature = "fcma")]
 mod bf10_fcma;
 mod bf11;
@@ -80,19 +86,34 @@ mod bf31f_fcma;
 mod bf32;
 #[cfg(feature = "fcma")]
 mod bf32_fcma;
+mod bf36d;
+#[cfg(feature = "fcma")]
+mod bf36d_fcma;
 mod bf36f;
 #[cfg(feature = "fcma")]
 mod bf36f_fcma;
 mod bf4;
+mod bf48d;
+#[cfg(feature = "fcma")]
+mod bf48d_fcma;
+mod bf48f;
+#[cfg(feature = "fcma")]
+mod bf48f_fcma;
 mod bf49;
 #[cfg(feature = "fcma")]
 mod bf49_fcma;
+mod bf49d;
+#[cfg(feature = "fcma")]
+mod bf49d_fcma;
 #[cfg(feature = "fcma")]
 mod bf4_fcma;
 mod bf5;
 #[cfg(feature = "fcma")]
 mod bf5_fcma;
 mod bf6;
+mod bf64d;
+#[cfg(feature = "fcma")]
+mod bf64d_fcma;
 mod bf64f;
 #[cfg(feature = "fcma")]
 mod bf64f_fcma;
@@ -102,6 +123,12 @@ mod bf7;
 #[cfg(feature = "fcma")]
 mod bf7_fcma;
 mod bf8;
+mod bf81d;
+#[cfg(feature = "fcma")]
+mod bf81d_fcma;
+mod bf81f;
+#[cfg(feature = "fcma")]
+mod bf81f_fcma;
 #[cfg(feature = "fcma")]
 mod bf8_fcma;
 mod bf9;
@@ -190,15 +217,42 @@ pub(crate) use bf31f_fcma::NeonFcmaButterfly31f;
 pub(crate) use bf32::{NeonButterfly32d, NeonButterfly32f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf32_fcma::{NeonFcmaButterfly32d, NeonFcmaButterfly32f};
+pub(crate) use bf36d::NeonButterfly36d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf36d_fcma::NeonFcmaButterfly36d;
 pub(crate) use bf36f::NeonButterfly36f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf36f_fcma::NeonFcmaButterfly36f;
+pub(crate) use bf48d::NeonButterfly48d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf48d_fcma::NeonFcmaButterfly48d;
+pub(crate) use bf48f::NeonButterfly48f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf48f_fcma::NeonFcmaButterfly48f;
 pub(crate) use bf49::NeonButterfly49f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf49_fcma::NeonFcmaButterfly49f;
+pub(crate) use bf49d::NeonButterfly49d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf49d_fcma::NeonFcmaButterfly49d;
+pub(crate) use bf64d::NeonButterfly64d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf64d_fcma::NeonFcmaButterfly64d;
 pub(crate) use bf64f::NeonButterfly64f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf64f_fcma::NeonFcmaButterfly64f;
+pub(crate) use bf81d::NeonButterfly81d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf81d_fcma::NeonFcmaButterfly81d;
+pub(crate) use bf81f::NeonButterfly81f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf81f_fcma::NeonFcmaButterfly81f;
+pub(crate) use bf100::NeonButterfly100f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf100_fcma::NeonFcmaButterfly100f;
+pub(crate) use bf100d::NeonButterfly100d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf100d_fcma::NeonFcmaButterfly100d;
 pub(crate) use fast_bf5::NeonFastButterfly5;
 pub(crate) use fast_bf8::NeonFastButterfly8;
 use num_complex::Complex;
@@ -327,6 +381,88 @@ pub(crate) use test_fcma_butterfly;
 
 #[cfg(test)]
 #[cfg(feature = "fcma")]
+macro_rules! test_fcma_butterfly_small {
+    ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
+        #[test]
+        fn $method_name() {
+            if !std::arch::is_aarch64_feature_detected!("fcma") {
+                return;
+            }
+            use rand::Rng;
+            for i in 1..2 {
+                let val = $scale as usize;
+                let size = val.pow(i);
+                let mut input = vec![Complex::<$data_type>::default(); size];
+                for z in input.iter_mut() {
+                    *z = Complex {
+                        re: rand::rng().random(),
+                        im: rand::rng().random(),
+                    };
+                }
+                let src = input.to_vec();
+                use crate::dft::Dft;
+                let reference_forward = Dft::new($scale, FftDirection::Forward).unwrap();
+
+                let mut ref_src = src.to_vec();
+                reference_forward.execute(&mut ref_src).unwrap();
+
+                let radix_forward = $butterfly::new(FftDirection::Forward);
+                let radix_inverse = $butterfly::new(FftDirection::Inverse);
+                radix_forward.execute(&mut input).unwrap();
+
+                input
+                    .iter()
+                    .zip(ref_src.iter())
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < $tol,
+                            "a_re {} != b_re {} for size {} at {idx}",
+                            a.re,
+                            b.re,
+                            size
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < $tol,
+                            "a_im {} != b_im {} for size {} at {idx}",
+                            a.im,
+                            b.im,
+                            size
+                        );
+                    });
+
+                radix_inverse.execute(&mut input).unwrap();
+
+                let val = $scale as $data_type;
+                input = input.iter().map(|&x| x * (1.0 / val)).collect();
+
+                input.iter().zip(src.iter()).for_each(|(a, b)| {
+                    assert!(
+                        (a.re - b.re).abs() < $tol,
+                        "a_re {} != b_re {} for size {}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < $tol,
+                        "a_im {} != b_im {} for size {}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+#[cfg(feature = "fcma")]
+pub(crate) use test_fcma_butterfly_small;
+
+#[cfg(test)]
+#[cfg(feature = "fcma")]
 macro_rules! test_oof_fcma_butterfly {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
@@ -415,3 +551,92 @@ use crate::neon::mixed::NeonStoreF;
 #[cfg(test)]
 #[cfg(feature = "fcma")]
 pub(crate) use test_oof_fcma_butterfly;
+
+#[cfg(test)]
+#[cfg(feature = "fcma")]
+macro_rules! test_oof_fcma_butterfly_small {
+    ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
+        #[test]
+        fn $method_name() {
+            if !std::arch::is_aarch64_feature_detected!("fcma") {
+                return;
+            }
+            use rand::Rng;
+            for i in 1..2 {
+                let kern = $scale;
+                let size = (kern as usize).pow(i);
+                let mut input = vec![Complex::<$data_type>::default(); size];
+                for z in input.iter_mut() {
+                    *z = Complex {
+                        re: rand::rng().random(),
+                        im: rand::rng().random(),
+                    };
+                }
+                let src = input.to_vec();
+                let mut out_of_place = vec![Complex::<$data_type>::default(); size];
+                let mut ref_input = input.to_vec();
+                let radix_forward = $butterfly::new(FftDirection::Forward);
+                let radix_inverse = $butterfly::new(FftDirection::Inverse);
+
+                use crate::dft::Dft;
+                let reference_dft = Dft::new($scale, FftDirection::Forward).unwrap();
+                reference_dft.execute(&mut ref_input).unwrap();
+
+                radix_forward
+                    .execute_out_of_place(&input, &mut out_of_place)
+                    .unwrap();
+
+                out_of_place
+                    .iter()
+                    .zip(ref_input.iter())
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < $tol,
+                            "a_re {} != b_re {} for size {} at {idx}",
+                            a.re,
+                            b.re,
+                            size
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < $tol,
+                            "a_im {} != b_im {} for size {} at {idx}",
+                            a.im,
+                            b.im,
+                            size
+                        );
+                    });
+
+                radix_inverse
+                    .execute_out_of_place(&out_of_place, &mut input)
+                    .unwrap();
+
+                input = input
+                    .iter()
+                    .map(|&x| x * (1.0 / (kern as $data_type)))
+                    .collect();
+
+                input.iter().zip(src.iter()).for_each(|(a, b)| {
+                    assert!(
+                        (a.re - b.re).abs() < $tol,
+                        "a_re {} != b_re {} for size {}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < $tol,
+                        "a_im {} != b_im {} for size {}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+#[cfg(feature = "fcma")]
+pub(crate) use test_oof_fcma_butterfly_small;

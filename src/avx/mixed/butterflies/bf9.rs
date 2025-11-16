@@ -43,7 +43,7 @@ pub(crate) struct ColumnButterfly9d {
 
 impl ColumnButterfly9d {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly9d {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly9d {
         let tw1 = compute_twiddle::<f64>(1, 9, direction);
         let tw2 = compute_twiddle::<f64>(2, 9, direction);
         let tw4 = compute_twiddle::<f64>(4, 9, direction);
@@ -97,7 +97,7 @@ pub(crate) struct ColumnButterfly9f {
 
 impl ColumnButterfly9f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly9f {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly9f {
         let tw1 = compute_twiddle::<f32>(1, 9, direction);
         let tw2 = compute_twiddle::<f32>(2, 9, direction);
         let tw4 = compute_twiddle::<f32>(4, 9, direction);
