@@ -291,9 +291,38 @@ impl Zaft {
         };
 
         if prime_factors.is_power_of_two_and_three() {
-            if product == 288 {
-                return Ok(Zaft::try_split_mixed_radix_butterflies(8, 36, direction)?.unwrap());
+            if product % 36 == 0 && product / 36 > 1 && product / 36 <= 16 {
+                return if let Some(executor) =
+                    Zaft::try_split_mixed_radix_butterflies(product / 36, 36, direction)?
+                {
+                    Ok(executor)
+                } else {
+                    let p_fft = Zaft::strategy((product / 36) as usize, direction)?;
+                    let q_fft = Zaft::strategy(36, direction)?;
+                    T::mixed_radix(p_fft, q_fft)
+                };
             }
+            let product2 = prime_factors
+                .factorization
+                .iter()
+                .filter(|x| x.0 == 2)
+                .map(|x| x.0.pow(x.1))
+                .product::<u64>();
+            let product3 = prime_factors
+                .factorization
+                .iter()
+                .filter(|x| x.0 == 3)
+                .map(|x| x.0.pow(x.1))
+                .product::<u64>();
+            return if let Some(executor) =
+                Zaft::try_split_mixed_radix_butterflies(product2, product3, direction)?
+            {
+                Ok(executor)
+            } else {
+                let p_fft = Zaft::strategy(product2 as usize, direction)?;
+                let q_fft = Zaft::strategy(product3 as usize, direction)?;
+                T::mixed_radix(p_fft, q_fft)
+            };
         }
 
         #[cfg(any(
