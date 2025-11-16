@@ -132,7 +132,7 @@ impl NeonFcmaButterfly81f {
                     rows = self.bf9.exec(rows);
 
                     for i in 1..9 {
-                        rows[i] = NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 32]);
+                        rows[i] = NeonStoreF::fcmul_fcma(rows[i], self.twiddles[i - 1 + 32]);
                     }
 
                     let transposed = transpose_9x2(rows);
@@ -235,7 +235,7 @@ impl NeonFcmaButterfly81f {
                     rows = self.bf9.exec(rows);
 
                     for i in 1..9 {
-                        rows[i] = NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 32]);
+                        rows[i] = NeonStoreF::fcmul_fcma(rows[i], self.twiddles[i - 1 + 32]);
                     }
 
                     let transposed = transpose_9x2(rows);
