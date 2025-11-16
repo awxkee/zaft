@@ -115,8 +115,8 @@ impl AvxButterfly36f {
         AvxButterfly36f {
             direction,
             twiddles: unsafe { gen_butterfly_twiddles_interleaved_columns!(4, 9, 1, direction) },
-            bf4_column: unsafe { ColumnButterfly4f::new(direction) },
-            bf9_column: unsafe { ColumnButterfly9f::new(direction) },
+            bf4_column: ColumnButterfly4f::new(direction),
+            bf9_column: ColumnButterfly9f::new(direction),
         }
     }
 }

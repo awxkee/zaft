@@ -84,7 +84,7 @@ pub(crate) struct ColumnButterfly4f {
 
 impl ColumnButterfly4f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly4f {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly4f {
         Self {
             rotate: AvxRotate::new(direction),
         }
