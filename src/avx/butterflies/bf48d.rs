@@ -193,5 +193,5 @@ mod tests {
     use super::*;
     use crate::avx::butterflies::test_avx_butterfly_small;
 
-    test_avx_butterfly_small!(test_neon_butterfly48, f64, AvxButterfly48d, 48, 1e-3);
+    test_avx_butterfly_small!(test_avx_butterfly48_f64, f64, AvxButterfly48d, 48, 1e-3);
 }

@@ -668,6 +668,11 @@ impl AlgorithmFactory<f32> for f32 {
     fn butterfly48(
         _fft_direction: FftDirection,
     ) -> Option<Box<dyn FftExecutor<f32> + Send + Sync>> {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if has_valid_avx() {
+            use crate::avx::AvxButterfly48f;
+            return Some(Box::new(AvxButterfly48f::new(_fft_direction)));
+        }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]

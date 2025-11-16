@@ -79,13 +79,13 @@ impl ColumnButterfly12d {
 }
 
 pub(crate) struct ColumnButterfly12f {
-    bf4: AvxFastButterfly4<f32>,
+    pub(crate) bf4: AvxFastButterfly4<f32>,
     bf3: AvxFastButterfly3<f32>,
 }
 
 impl ColumnButterfly12f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly12f {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly12f {
         unsafe {
             Self {
                 bf3: AvxFastButterfly3::<f32>::new(direction),
