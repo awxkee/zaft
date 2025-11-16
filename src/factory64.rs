@@ -422,6 +422,10 @@ impl AlgorithmFactory<f64> for f64 {
         None
     }
 
+    fn butterfly100(_: FftDirection) -> Option<Box<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        None
+    }
+
     fn radix3(
         n: usize,
         fft_direction: FftDirection,

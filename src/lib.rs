@@ -446,6 +446,10 @@ impl Zaft {
             if let Some(executor) = T::butterfly64(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
+        } else if n == 100 {
+            if let Some(executor) = T::butterfly100(fft_direction) {
+                return Ok(executor.into_fft_executor());
+            }
         }
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {

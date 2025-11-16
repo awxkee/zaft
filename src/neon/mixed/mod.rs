@@ -54,6 +54,9 @@ pub(crate) use bf7::ColumnFcmaButterfly7f;
 pub(crate) use bf8::ColumnButterfly8f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf8::ColumnFcmaButterfly8f;
+pub(crate) use bf10::ColumnButterfly10f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf10::ColumnFcmaButterfly10f;
 #[cfg(feature = "fcma")]
 pub(crate) use mixed_radix::{
     NeonFcmaMixedRadix2, NeonFcmaMixedRadix2f, NeonFcmaMixedRadix3, NeonFcmaMixedRadix3f,
