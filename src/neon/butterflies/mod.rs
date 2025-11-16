@@ -94,6 +94,11 @@ mod bf36f;
 mod bf36f_fcma;
 mod bf4;
 mod bf48d;
+#[cfg(feature = "fcma")]
+mod bf48d_fcma;
+mod bf48f;
+#[cfg(feature = "fcma")]
+mod bf48f_fcma;
 mod bf49;
 #[cfg(feature = "fcma")]
 mod bf49_fcma;
@@ -137,8 +142,6 @@ mod fast_bf8;
 mod fast_bf9d;
 mod fast_bf9f;
 mod shared;
-#[cfg(feature = "fcma")]
-mod bf48d_fcma;
 
 pub(crate) use bf2::NeonButterfly2;
 pub(crate) use bf3::NeonButterfly3;
@@ -223,6 +226,9 @@ pub(crate) use bf36f_fcma::NeonFcmaButterfly36f;
 pub(crate) use bf48d::NeonButterfly48d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf48d_fcma::NeonFcmaButterfly48d;
+pub(crate) use bf48f::NeonButterfly48f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf48f_fcma::NeonFcmaButterfly48f;
 pub(crate) use bf49::NeonButterfly49f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf49_fcma::NeonFcmaButterfly49f;

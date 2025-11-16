@@ -191,6 +191,15 @@ impl PrimeFactors {
         }
         false
     }
+
+    pub(crate) fn is_power_of_two_and_five(&self) -> bool {
+        if self.factorization.len() == 2 {
+            let is_any_two = self.factorization.iter().any(|p| p.0 == 2);
+            let is_any_three = self.factorization.iter().any(|p| p.0 == 5);
+            return is_any_two && is_any_three;
+        }
+        false
+    }
 }
 
 pub(crate) fn split_factors_closest(factors: &[(u64, u32)]) -> (u64, u64) {

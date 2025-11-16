@@ -35,6 +35,7 @@ use rand::Rng;
 use realfft::RealFftPlanner;
 use rustfft::FftPlanner;
 use rustfft::num_complex::Complex;
+use std::fmt::format;
 use std::time::Instant;
 use zaft::Zaft;
 
@@ -109,10 +110,24 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 432];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 200];
     let mut c = Criterion::default().sample_size(10);
     // bench_zaft_averages(&mut c);
-    check_power_group(&mut c, 48, "48".to_string());
+    // check_power_groups(&mut c, 48, "48".to_string());
+    for i in 3..15 {
+        check_power_groups(
+            &mut c,
+            25 * 2usize.pow(i),
+            format!("size {}, power {i}", 25 * 2usize.pow(i)),
+        );
+    }
+    // for i in 1..5 {
+    //     check_power_groups(
+    //         &mut c,
+    //         48 * 3usize.pow(i),
+    //         format!("size {}", 48 * 3usize.pow(i)),
+    //     );
+    // }
     // check_power_groups(&mut c, 432, "432".to_string());
     // check_power_groups(&mut c, 576, "576".to_string());
     // check_power_groups(&mut c, 1152, "1152".to_string());

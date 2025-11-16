@@ -293,30 +293,43 @@ impl Zaft {
             }
         };
 
-        if prime_factors.is_power_of_two_and_three() {
-            if product % 36 == 0 && product / 36 > 1 && product / 36 <= 16 {
+        macro_rules! try_mixed_radix {
+            ($q: expr, $p: expr) => {{
                 return if let Some(executor) =
-                    Zaft::try_split_mixed_radix_butterflies(product / 36, 36, direction)?
+                    Zaft::try_split_mixed_radix_butterflies($q, $p, direction)?
                 {
                     Ok(executor)
                 } else {
-                    let p_fft = Zaft::strategy((product / 36) as usize, direction)?;
-                    let q_fft = Zaft::strategy(36, direction)?;
+                    let p_fft = Zaft::strategy($q as usize, direction)?;
+                    let q_fft = Zaft::strategy($p, direction)?;
                     T::mixed_radix(p_fft, q_fft)
                 };
+            }};
+        }
+
+        if prime_factors.is_power_of_two_and_three() {
+            if product % 36 == 0 && product / 36 > 1 && product / 36 <= 16 {
+                if T::butterfly36(direction).is_some() {
+                    try_mixed_radix!(product / 36, 36)
+                }
+            }
+            if product % 48 == 0 && product / 48 > 1 && product / 48 <= 16 {
+                if T::butterfly48(direction).is_some() {
+                    try_mixed_radix!(product / 48, 48)
+                }
             }
             let product2 = prime_factors
                 .factorization
                 .iter()
-                .filter(|x| x.0 == 2)
+                .find(|x| x.0 == 2)
                 .map(|x| x.0.pow(x.1))
-                .product::<u64>();
+                .expect("Factor of 2 must present in 2^n*3^m branch");
             let product3 = prime_factors
                 .factorization
                 .iter()
-                .filter(|x| x.0 == 3)
+                .find(|x| x.0 == 3)
                 .map(|x| x.0.pow(x.1))
-                .product::<u64>();
+                .expect("Factor of 3 must present in 2^n*3^m branch");
             return if let Some(executor) =
                 Zaft::try_split_mixed_radix_butterflies(product2, product3, direction)?
             {
@@ -326,6 +339,41 @@ impl Zaft {
                 let q_fft = Zaft::strategy(product3 as usize, direction)?;
                 T::mixed_radix(p_fft, q_fft)
             };
+        } else if prime_factors.is_power_of_two_and_five() {
+            let factor_of_5 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 5)
+                .map(|x| x.1)
+                .expect("Factor of 5 should exist if factor of 2^n*5^m branch");
+            let factor_of_2 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 2)
+                .map(|x| x.1)
+                .expect("Factor of 2 should exist if factor of 2^n*5^m branch");
+            if factor_of_5 == 1 {
+                if factor_of_2 >= 8 && factor_of_2 != 9 {
+                    try_mixed_radix!(product / 5, 5)
+                }
+                if factor_of_2 <= 6 {
+                    try_mixed_radix!(product / 20, 20)
+                }
+            } else if factor_of_5 == 2 {
+                if factor_of_2 >= 3 {
+                    #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                    {
+                        try_mixed_radix!(product / 100, 100)
+                    }
+                    #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+                    {
+                        use crate::util::has_valid_avx;
+                        if has_valid_avx() {
+                            return try_mixed_radix!(product / 100, 100);
+                        }
+                    }
+                }
+            }
         }
 
         #[cfg(any(
@@ -372,10 +420,7 @@ impl Zaft {
     {
         let convolve_prime = PrimeFactors::from_number(n as u64 - 1);
         // n-1 may result in Cunningham chain, and we want to avoid compute multiple prime numbers FFT at once
-        let big_factor = convolve_prime
-            .factorization
-            .iter()
-            .any(|x| x.0 > 31 && x.1 == 1);
+        let big_factor = convolve_prime.factorization.iter().any(|x| x.0 > 31);
         if !big_factor {
             let convolve_fft = Zaft::strategy(n - 1, direction);
             T::raders(convolve_fft?, n, direction)
