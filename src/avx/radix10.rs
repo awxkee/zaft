@@ -52,6 +52,7 @@ pub(crate) struct AvxFmaRadix10d {
     bf5: AvxFastButterfly5d,
     direction: FftDirection,
     butterfly: Box<dyn CompositeFftExecutor<f64> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 impl AvxFmaRadix10d {
@@ -61,14 +62,25 @@ impl AvxFmaRadix10d {
             "Input length must be a power of 10"
         );
 
-        let twiddles = create_avx4_twiddles::<f64, 10>(10, size, fft_direction)?;
+        let log10 = compute_logarithm::<10>(size).unwrap();
+        let butterfly = match log10 {
+            0 => f64::butterfly1(fft_direction)?,
+            1 => f64::butterfly10(fft_direction)?,
+            _ => f64::butterfly100(fft_direction)
+                .map_or_else(|| f64::butterfly10(fft_direction), Ok)?,
+        };
+
+        let butterfly_length = butterfly.length();
+
+        let twiddles = create_avx4_twiddles::<f64, 10>(butterfly_length, size, fft_direction)?;
 
         Ok(AvxFmaRadix10d {
             execution_length: size,
             twiddles,
             bf5: unsafe { AvxFastButterfly5d::new(fft_direction) },
             direction: fft_direction,
-            butterfly: f64::butterfly10(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
     }
 }
@@ -288,11 +300,11 @@ impl AvxFmaRadix10d {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose_f64_radix10(10, chunk, &mut scratch);
+                avx_bitreversed_transpose_f64_radix10(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 10;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -801,6 +813,7 @@ pub(crate) struct AvxFmaRadix10f {
     bf5: AvxFastButterfly5f,
     direction: FftDirection,
     butterfly: Box<dyn CompositeFftExecutor<f32> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 impl AvxFmaRadix10f {
@@ -810,14 +823,25 @@ impl AvxFmaRadix10f {
             "Input length must be a power of 10"
         );
 
-        let twiddles = create_avx4_twiddles::<f32, 10>(10, size, fft_direction)?;
+        let log10 = compute_logarithm::<10>(size).unwrap();
+        let butterfly = match log10 {
+            0 => f32::butterfly1(fft_direction)?,
+            1 => f32::butterfly10(fft_direction)?,
+            _ => f32::butterfly100(fft_direction)
+                .map_or_else(|| f32::butterfly10(fft_direction), Ok)?,
+        };
+
+        let butterfly_length = butterfly.length();
+
+        let twiddles = create_avx4_twiddles::<f32, 10>(butterfly_length, size, fft_direction)?;
 
         Ok(AvxFmaRadix10f {
             execution_length: size,
             twiddles,
             bf5: unsafe { AvxFastButterfly5f::new(fft_direction) },
             direction: fft_direction,
-            butterfly: f32::butterfly10(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
     }
 }
@@ -836,11 +860,11 @@ impl AvxFmaRadix10f {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose_f32_radix10(10, chunk, &mut scratch);
+                avx_bitreversed_transpose_f32_radix10(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 10;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 

@@ -31,7 +31,8 @@
     clippy::assign_op_pattern,
     clippy::only_used_in_recursion,
     clippy::too_many_arguments,
-    clippy::type_complexity
+    clippy::type_complexity,
+    clippy::modulo_one
 )]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(
@@ -139,10 +140,6 @@ impl Zaft {
         true
     }
 
-    #[cfg(any(
-        all(target_arch = "aarch64", feature = "neon"),
-        all(target_arch = "x86_64", feature = "avx")
-    ))]
     fn try_split_mixed_radix_butterflies<
         T: AlgorithmFactory<T>
             + FftTrigonometry
@@ -156,101 +153,114 @@ impl Zaft {
             + Copy
             + Display,
     >(
-        n_length: u64,
-        q_length: u64,
-        direction: FftDirection,
+        _n_length: u64,
+        _q_length: u64,
+        _direction: FftDirection,
     ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>
     where
         f64: AsPrimitive<T>,
     {
+        #[cfg(not(any(
+            all(target_arch = "aarch64", feature = "neon"),
+            all(target_arch = "x86_64", feature = "avx")
+        )))]
+        {
+            Ok(None)
+        }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         if !std::arch::is_x86_feature_detected!("avx2")
             || !std::arch::is_x86_feature_detected!("fma")
         {
             return Ok(None);
         }
-        let min_length = n_length.min(q_length);
-        let max_length = n_length.max(q_length);
-        if min_length == 2 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly2(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
+        #[cfg(any(
+            all(target_arch = "aarch64", feature = "neon"),
+            all(target_arch = "x86_64", feature = "avx")
+        ))]
+        {
+            let min_length = _n_length.min(_q_length);
+            let max_length = _n_length.max(_q_length);
+            if min_length == 2 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly2(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 3 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly3(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 4 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly4(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 5 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly5(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 6 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly6(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 7 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly7(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 8 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly8(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 9 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly9(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 10 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly10(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 11 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly11(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 12 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly12(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 13 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly13(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
+            } else if min_length == 16 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly16(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
             }
-        } else if min_length == 3 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly3(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 4 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly4(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 5 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly5(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 6 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly6(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 7 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly7(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 8 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly8(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 9 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly9(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 10 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly10(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 11 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly11(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 12 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly12(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 13 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly13(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
-        } else if min_length == 16 {
-            let q_fft = Zaft::strategy(max_length as usize, direction)?;
-            let q_fft_opt = T::mixed_radix_butterfly16(q_fft)?;
-            if let Some(q_fft_opt) = q_fft_opt {
-                return Ok(Some(q_fft_opt));
-            }
+            Ok(None)
         }
-        Ok(None)
     }
 
     fn make_mixed_radix<
@@ -272,23 +282,170 @@ impl Zaft {
     where
         f64: AsPrimitive<T>,
     {
-        let factorization = prime_factors.factorization;
+        let factorization = &prime_factors.factorization;
         let product = factorization.iter().map(|&x| x.0.pow(x.1)).product::<u64>();
 
         let (n_length, q_length) = if product <= 529 {
-            match can_be_two_factors(&factorization) {
-                None => match try_greedy_pure_power_split(&factorization) {
-                    None => split_factors_closest(&factorization),
+            match can_be_two_factors(factorization) {
+                None => match try_greedy_pure_power_split(factorization) {
+                    None => split_factors_closest(factorization),
                     Some(values) => values,
                 },
                 Some(factors) => factors,
             }
         } else {
-            match try_greedy_pure_power_split(&factorization) {
-                None => split_factors_closest(&factorization),
+            match try_greedy_pure_power_split(factorization) {
+                None => split_factors_closest(factorization),
                 Some(values) => values,
             }
         };
+
+        macro_rules! try_mixed_radix {
+            ($q: expr, $p: expr) => {{
+                return if let Some(executor) =
+                    Zaft::try_split_mixed_radix_butterflies($q as u64, $p as u64, direction)?
+                {
+                    Ok(executor)
+                } else {
+                    let p_fft = Zaft::strategy($q as usize, direction)?;
+                    let q_fft = Zaft::strategy($p as usize, direction)?;
+                    T::mixed_radix(p_fft, q_fft)
+                };
+            }};
+        }
+
+        if prime_factors.is_power_of_two_and_three() {
+            let product2 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 2)
+                .map(|x| x.0.pow(x.1))
+                .expect("Factor of 2 must present in 2^n*3^m branch");
+            let product3 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 3)
+                .map(|x| x.0.pow(x.1))
+                .expect("Factor of 3 must present in 2^n*3^m branch");
+
+            let factor2 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 2)
+                .map(|x| x.1)
+                .expect("Factor of 2 must present in 2^n*3^m branch");
+            let factor3 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 3)
+                .map(|x| x.1)
+                .expect("Factor of 3 must present in 2^n*3^m branch");
+
+            if factor3 >= 1 && factor2 >= 4 {
+                if product.is_multiple_of(36)
+                    && product / 36 > 1
+                    && product / 36 <= 16
+                    && T::butterfly36(direction).is_some()
+                {
+                    try_mixed_radix!(36, product / 36)
+                }
+                if product.is_multiple_of(48)
+                    && product / 48 > 1
+                    && product / 48 <= 16
+                    && T::butterfly48(direction).is_some()
+                {
+                    try_mixed_radix!(48, product / 48)
+                }
+            }
+
+            return if let Some(executor) =
+                Zaft::try_split_mixed_radix_butterflies(product2, product3, direction)?
+            {
+                Ok(executor)
+            } else {
+                let p_fft = Zaft::strategy(product2 as usize, direction)?;
+                let q_fft = Zaft::strategy(product3 as usize, direction)?;
+                T::mixed_radix(p_fft, q_fft)
+            };
+        } else if prime_factors.is_power_of_two_and_five() {
+            let factor_of_5 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 5)
+                .map(|x| x.1)
+                .expect("Factor of 5 should exist if factor of 2^n*5^m branch");
+            let factor_of_2 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 2)
+                .map(|x| x.1)
+                .expect("Factor of 2 should exist if factor of 2^n*5^m branch");
+            if factor_of_5 == 1 {
+                if factor_of_2 >= 8 && factor_of_2 != 9 {
+                    try_mixed_radix!(5, product / 5)
+                }
+                if (2..=6).contains(&factor_of_2) {
+                    try_mixed_radix!(20, product / 20)
+                }
+            } else if factor_of_5 == 2 {
+                if factor_of_2 >= 3 {
+                    #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                    {
+                        try_mixed_radix!(product / 100, 100)
+                    }
+                    #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                    {
+                        use crate::util::has_valid_avx;
+                        if has_valid_avx() {
+                            try_mixed_radix!(product / 100, 100)
+                        }
+                    }
+                }
+            } else if factor_of_5 == 3 {
+                #[cfg(any(
+                    all(target_arch = "aarch64", feature = "neon"),
+                    all(target_arch = "x86_64", feature = "avx")
+                ))]
+                if product == 500 {
+                    try_mixed_radix!(5, 100)
+                }
+            }
+        } else if prime_factors.is_power_of_three_and_five() {
+            let factor_of_5 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 5)
+                .map(|x| x.1)
+                .expect("Factor of 5 should exist if factor of 3^n*5^m branch");
+            let factor_of_3 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 3)
+                .map(|x| x.1)
+                .expect("Factor of 2 should exist if factor of 3^n*5^m branch");
+            if factor_of_5 == 1 && factor_of_3 > 1 {
+                try_mixed_radix!(5, product / 5)
+            } else if factor_of_5 == 2 && factor_of_5 > 1 && factor_of_3 > 2 && factor_of_3 < 10 {
+                // 225 is more effective with mixed radix [9,25]
+                try_mixed_radix!(25, product / 25)
+            }
+        } else if prime_factors.is_power_of_two_and_seven() {
+            let factor_of_7 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 7)
+                .map(|x| x.1)
+                .expect("Factor of 5 should exist if factor of 2^n*7^m branch");
+            let factor_of_2 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 2)
+                .map(|x| x.1)
+                .expect("Factor of 2 should exist if factor of 2^n*7^m branch");
+            if factor_of_2 > 1 && factor_of_7 == 1 {
+                try_mixed_radix!(14, product / 14)
+            }
+        }
 
         #[cfg(any(
             all(target_arch = "aarch64", feature = "neon"),
@@ -334,10 +491,7 @@ impl Zaft {
     {
         let convolve_prime = PrimeFactors::from_number(n as u64 - 1);
         // n-1 may result in Cunningham chain, and we want to avoid compute multiple prime numbers FFT at once
-        let big_factor = convolve_prime
-            .factorization
-            .iter()
-            .any(|x| x.0 > 31 && x.1 == 1);
+        let big_factor = convolve_prime.factorization.iter().any(|x| x.0 > 31);
         if !big_factor {
             let convolve_fft = Zaft::strategy(n - 1, direction);
             T::raders(convolve_fft?, n, direction)
@@ -438,12 +592,24 @@ impl Zaft {
             if let Some(executor) = T::butterfly36(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
+        } else if n == 48 {
+            if let Some(executor) = T::butterfly48(fft_direction) {
+                return Ok(executor);
+            }
         } else if n == 49 {
             if let Some(executor) = T::butterfly49(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
         } else if n == 64 {
             if let Some(executor) = T::butterfly64(fft_direction) {
+                return Ok(executor.into_fft_executor());
+            }
+        } else if n == 81 {
+            if let Some(executor) = T::butterfly81(fft_direction) {
+                return Ok(executor.into_fft_executor());
+            }
+        } else if n == 100 {
+            if let Some(executor) = T::butterfly100(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
         }

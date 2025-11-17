@@ -35,6 +35,7 @@ use rand::Rng;
 use realfft::RealFftPlanner;
 use rustfft::FftPlanner;
 use rustfft::num_complex::Complex;
+use std::fmt::format;
 use std::time::Instant;
 use zaft::Zaft;
 
@@ -100,7 +101,8 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
                 // Execute FFTs for all sizes
                 for (input, fft) in plans_and_inputs.iter() {
                     let mut c = input.to_vec();
-                    fft.execute(&mut c).unwrap();
+                    fft.execute(&mut c)
+                        .expect(format!("Failed to execute {}", input.len()).as_str());
                 }
             },
             BatchSize::LargeInput,
@@ -109,16 +111,22 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 1201];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 579];
     let mut c = Criterion::default().sample_size(10);
-    // check_power_group(&mut c, 2usize.pow(15), "2^15".to_string());
     // bench_zaft_averages(&mut c);
-    // check_power_groups(&mut c, 7usize.pow(4), "7^4".to_string());
+    // check_power_groups(&mut c, 45, "45".to_string());
+    // for i in 2..11 {
+    //     check_power_group(
+    //         &mut c,
+    //         7 * 2usize.pow(i),
+    //         format!("size {}, power {i}", 7 * 2usize.pow(i)),
+    //     );
+    // }
     // for (k, z) in data.iter_mut().enumerate() {
     //     *z = data0[k % data0.len()];
     // }
     for (i, chunk) in data.iter_mut().enumerate() {
-        *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
+        *chunk = Complex::new(-0.19528865 + i as f64 * 0.1, 0.0019528865 - i as f64 * 0.1);
     }
     // data = [
     //     Complex {
@@ -215,10 +223,10 @@ fn main() {
     //     }
     // }
 
-    let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
-    let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
+    let forward = Zaft::make_forward_fft_f64(cvt.len()).unwrap();
+    let inverse = Zaft::make_inverse_fft_f64(cvt.len()).unwrap();
 
-    let mut planner = FftPlanner::<f32>::new();
+    let mut planner = FftPlanner::<f64>::new();
 
     let planned_fft = planner.plan_fft_forward(data.len());
     let planned_fft_inv = planner.plan_fft_inverse(data.len());
@@ -234,11 +242,11 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
         .collect();
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
         .collect();
 
     println!("Mine inverse -----");
@@ -249,7 +257,7 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
         .collect();
 
     // for (i, val) in data.iter().enumerate() {
@@ -261,7 +269,7 @@ fn main() {
     planned_fft_inv.process(&mut cvt);
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
+        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
         .collect();
 
     // for (i, val) in cvt.iter().enumerate() {

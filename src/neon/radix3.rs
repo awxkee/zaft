@@ -223,7 +223,8 @@ where
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly3(fft_direction)?,
             2 => T::butterfly9(fft_direction)?,
-            _ => T::butterfly27(fft_direction)?,
+            3 => T::butterfly27(fft_direction)?,
+            _ => T::butterfly81(fft_direction).map_or_else(|| T::butterfly27(fft_direction), Ok)?,
         };
 
         let twiddles = create_neon_twiddles::<T, 3>(base_fft.length(), size, fft_direction)?;

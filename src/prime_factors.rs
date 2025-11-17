@@ -182,6 +182,42 @@ impl PrimeFactors {
             && self.factorization[0].0 == self.n
             && self.factorization[0].1 == 1
     }
+
+    pub(crate) fn is_power_of_two_and_three(&self) -> bool {
+        if self.factorization.len() == 2 {
+            let is_any_two = self.factorization.iter().any(|p| p.0 == 2);
+            let is_any_three = self.factorization.iter().any(|p| p.0 == 3);
+            return is_any_two && is_any_three;
+        }
+        false
+    }
+
+    pub(crate) fn is_power_of_two_and_five(&self) -> bool {
+        if self.factorization.len() == 2 {
+            let is_any_two = self.factorization.iter().any(|p| p.0 == 2);
+            let is_any_five = self.factorization.iter().any(|p| p.0 == 5);
+            return is_any_two && is_any_five;
+        }
+        false
+    }
+
+    pub(crate) fn is_power_of_three_and_five(&self) -> bool {
+        if self.factorization.len() == 2 {
+            let is_any_three = self.factorization.iter().any(|p| p.0 == 3);
+            let is_any_five = self.factorization.iter().any(|p| p.0 == 5);
+            return is_any_three && is_any_five;
+        }
+        false
+    }
+
+    pub(crate) fn is_power_of_two_and_seven(&self) -> bool {
+        if self.factorization.len() == 2 {
+            let is_any_two = self.factorization.iter().any(|p| p.0 == 2);
+            let is_any_seven = self.factorization.iter().any(|p| p.0 == 7);
+            return is_any_two && is_any_seven;
+        }
+        false
+    }
 }
 
 pub(crate) fn split_factors_closest(factors: &[(u64, u32)]) -> (u64, u64) {

@@ -233,3 +233,58 @@ impl ColumnFcmaButterfly6f {
         ]
     }
 }
+
+#[cfg(feature = "fcma")]
+pub(crate) struct ColumnFcmaButterfly6d {
+    tw_re: float64x2_t,
+    tw_im: float64x2_t,
+    n_tw_im: float64x2_t,
+}
+
+#[cfg(feature = "fcma")]
+impl ColumnFcmaButterfly6d {
+    #[inline]
+    pub(crate) fn new(direction: FftDirection) -> Self {
+        let twiddle = compute_twiddle::<f64>(1, 3, direction);
+        unsafe {
+            let q = vld1q_f64([-twiddle.im, twiddle.im].as_ptr().cast());
+            Self {
+                tw_re: vdupq_n_f64(twiddle.re),
+                tw_im: q,
+                n_tw_im: vnegq_f64(q),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec(&self, store: [NeonStoreD; 6]) -> [NeonStoreD; 6] {
+        let (t0, t2, t4) = NeonButterfly::butterfly3_f64_fcma(
+            store[0].v,
+            store[2].v,
+            store[4].v,
+            self.tw_re,
+            self.tw_im,
+            self.n_tw_im,
+        );
+        let (t1, t3, t5) = NeonButterfly::butterfly3_f64_fcma(
+            store[3].v,
+            store[5].v,
+            store[1].v,
+            self.tw_re,
+            self.tw_im,
+            self.n_tw_im,
+        );
+        let (y0, y3) = NeonButterfly::butterfly2_f64(t0, t1);
+        let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);
+        let (y2, y5) = NeonButterfly::butterfly2_f64(t4, t5);
+        [
+            NeonStoreD::raw(y0),
+            NeonStoreD::raw(y1),
+            NeonStoreD::raw(y2),
+            NeonStoreD::raw(y3),
+            NeonStoreD::raw(y4),
+            NeonStoreD::raw(y5),
+        ]
+    }
+}
