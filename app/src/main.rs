@@ -118,9 +118,15 @@ fn main() {
         .warm_up_time(Duration::from_millis(135))
         .measurement_time(Duration::from_millis(135));
     // bench_zaft_averages(&mut c);
-    check_power_groups(&mut c, 168, "168".to_string());
-    check_power_groups(&mut c, 240, "240".to_string());
-    check_power_groups(&mut c, 1200, "1200".to_string());
+    check_power_groups(&mut c, 56, "56".to_string());
+    check_power_groups(&mut c, 84, "84".to_string());
+    check_power_groups(&mut c, 112, "112".to_string());
+    check_power_groups(&mut c, 224, "224".to_string());
+    check_power_groups(&mut c, 448, "448".to_string());
+    check_power_groups(&mut c, 584, "584".to_string());
+    check_power_groups(&mut c, 904, "904".to_string());
+    check_power_groups(&mut c, 1696, "1696".to_string());
+    check_power_groups(&mut c, 1784, "1784".to_string());
     // check_power_groups(&mut c, 11usize.pow(4), "11^4".to_string());
     // for i in 2..24 {
     //     check_power_group(

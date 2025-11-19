@@ -897,18 +897,31 @@ impl TransposeExecutor<f32> for NeonDefaultExecutorSingle {
                 TransposeBlockNeon2x12F32x2 {},
             );
             return;
+        } else if width.is_multiple_of(4) && height.is_multiple_of(4) {
+            transpose_fixed_block_executor2d::<f32, 4, 4>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockNeon4x4F32x2 {},
+            );
+            return;
+        } else if width.is_multiple_of(2) && height.is_multiple_of(2) {
+            transpose_fixed_block_executor2d::<f32, 2, 2>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockNeon2x2F32x2 {},
+            );
+            return;
         }
-
-        y = transpose_executor2d::<f32, 6, 4>(
-            input,
-            input_stride,
-            output,
-            output_stride,
-            width,
-            height,
-            y,
-            TransposeBlockNeon6x4F32x2 {},
-        );
 
         y = transpose_executor::<f32, 4>(
             input,
