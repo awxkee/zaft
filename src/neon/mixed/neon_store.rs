@@ -135,7 +135,7 @@ impl NeonStoreF {
             )
         }
     }
-
+    
     #[inline]
     pub(crate) fn lo(self) -> NeonStoreFh {
         unsafe { NeonStoreFh::raw(vget_low_f32(self.v)) }

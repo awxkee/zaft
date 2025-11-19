@@ -53,6 +53,51 @@ impl TransposeFactory<f32> for f32 {
     ) -> Box<dyn TransposeExecutor<f32> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            //TODO: 8x3
+            if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
+                use crate::neon::NeonTranspose7x7F32;
+                return Box::new(NeonTranspose7x7F32::default());
+            }
+            if _width.is_multiple_of(6) && _height.is_multiple_of(4) {
+                use crate::neon::NeonTranspose6x4F32;
+                return Box::new(NeonTranspose6x4F32::default());
+            }
+            if _width.is_multiple_of(6) && _height.is_multiple_of(5) {
+                use crate::neon::NeonTranspose6x5F32;
+                return Box::new(NeonTranspose6x5F32::default());
+            }
+            if _width.is_multiple_of(2) && _height.is_multiple_of(9) {
+                use crate::neon::NeonTranspose2x9F32;
+                return Box::new(NeonTranspose2x9F32::default());
+            }
+            if _width.is_multiple_of(2) && _height.is_multiple_of(10) {
+                use crate::neon::NeonTranspose2x10F32;
+                return Box::new(NeonTranspose2x10F32::default());
+            }
+            if _width.is_multiple_of(2) && _height.is_multiple_of(11) {
+                use crate::neon::NeonTranspose2x11F32;
+                return Box::new(NeonTranspose2x11F32::default());
+            }
+            if _width.is_multiple_of(2) && _height.is_multiple_of(12) {
+                use crate::neon::NeonTranspose2x12F32;
+                return Box::new(NeonTranspose2x12F32::default());
+            }
+            if _width.is_multiple_of(11) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose11x2F32;
+                return Box::new(NeonTranspose11x2F32::default());
+            }
+            if _width.is_multiple_of(7) && _height.is_multiple_of(5) {
+                use crate::neon::NeonTranspose7x5F32;
+                return Box::new(NeonTranspose7x5F32::default());
+            }
+            if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
+                use crate::neon::NeonTranspose4x4F32;
+                return Box::new(NeonTranspose4x4F32::default());
+            }
+            if _width.is_multiple_of(2) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose2x2F32;
+                return Box::new(NeonTranspose2x2F32::default());
+            }
             if _width > 2 && _height > 2 {
                 return Box::new(NeonDefaultExecutorSingle {});
             }
@@ -405,49 +450,6 @@ pub(crate) fn transpose_executor2d<
     y
 }
 
-// assumes that execution block is exactly divisible by executor
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-pub(crate) fn transpose_fixed_block_executor2d<
-    V: Copy + Default,
-    const X_BLOCK_SIZE: usize,
-    const Y_BLOCK_SIZE: usize,
->(
-    input: &[Complex<V>],
-    input_stride: usize,
-    output: &mut [Complex<V>],
-    output_stride: usize,
-    width: usize,
-    height: usize,
-    start_y: usize,
-    exec: impl TransposeBlock<V>,
-) -> usize {
-    let mut y = start_y;
-    unsafe {
-        while y + Y_BLOCK_SIZE <= height {
-            let input_y = y;
-
-            let src = input.get_unchecked(input_stride * input_y..);
-
-            let mut x = 0usize;
-
-            while x + X_BLOCK_SIZE <= width {
-                let output_x = x;
-
-                let src = src.get_unchecked(x..);
-                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
-
-                exec.transpose_block(src, input_stride, dst, output_stride);
-
-                x += X_BLOCK_SIZE;
-            }
-
-            y += Y_BLOCK_SIZE;
-        }
-    }
-
-    y
-}
-
 #[allow(dead_code)]
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 pub(crate) fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
@@ -617,132 +619,6 @@ impl TransposeBlock<f32> for TransposeBlockAvx8x4F32x2 {
 }
 
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-struct TransposeBlockNeon7x7F32x2 {}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-impl TransposeBlock<f32> for TransposeBlockNeon7x7F32x2 {
-    #[inline(always)]
-    unsafe fn transpose_block(
-        &self,
-        src: &[Complex<f32>],
-        src_stride: usize,
-        dst: &mut [Complex<f32>],
-        dst_stride: usize,
-    ) {
-        use crate::neon::block_transpose_f32x2_7x7;
-        block_transpose_f32x2_7x7(src, src_stride, dst, dst_stride);
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-struct TransposeBlockNeon6x4F32x2 {}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-impl TransposeBlock<f32> for TransposeBlockNeon6x4F32x2 {
-    #[inline(always)]
-    unsafe fn transpose_block(
-        &self,
-        src: &[Complex<f32>],
-        src_stride: usize,
-        dst: &mut [Complex<f32>],
-        dst_stride: usize,
-    ) {
-        use crate::neon::neon_transpose_f32x2_6x4;
-        neon_transpose_f32x2_6x4(src, src_stride, dst, dst_stride);
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-struct TransposeBlockNeon6x5F32x2 {}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-impl TransposeBlock<f32> for TransposeBlockNeon6x5F32x2 {
-    #[inline(always)]
-    unsafe fn transpose_block(
-        &self,
-        src: &[Complex<f32>],
-        src_stride: usize,
-        dst: &mut [Complex<f32>],
-        dst_stride: usize,
-    ) {
-        use crate::neon::block_transpose_f32x2_6x5;
-        block_transpose_f32x2_6x5(src, src_stride, dst, dst_stride);
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-struct TransposeBlockNeon2x9F32x2 {}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-impl TransposeBlock<f32> for TransposeBlockNeon2x9F32x2 {
-    #[inline(always)]
-    unsafe fn transpose_block(
-        &self,
-        src: &[Complex<f32>],
-        src_stride: usize,
-        dst: &mut [Complex<f32>],
-        dst_stride: usize,
-    ) {
-        use crate::neon::block_transpose_f32x2_2x9;
-        block_transpose_f32x2_2x9(src, src_stride, dst, dst_stride);
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-struct TransposeBlockNeon2x10F32x2 {}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-impl TransposeBlock<f32> for TransposeBlockNeon2x10F32x2 {
-    #[inline(always)]
-    unsafe fn transpose_block(
-        &self,
-        src: &[Complex<f32>],
-        src_stride: usize,
-        dst: &mut [Complex<f32>],
-        dst_stride: usize,
-    ) {
-        use crate::neon::block_transpose_f32x2_2x10;
-        block_transpose_f32x2_2x10(src, src_stride, dst, dst_stride);
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-struct TransposeBlockNeon2x11F32x2 {}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-impl TransposeBlock<f32> for TransposeBlockNeon2x11F32x2 {
-    #[inline(always)]
-    unsafe fn transpose_block(
-        &self,
-        src: &[Complex<f32>],
-        src_stride: usize,
-        dst: &mut [Complex<f32>],
-        dst_stride: usize,
-    ) {
-        use crate::neon::block_transpose_f32x2_2x11;
-        block_transpose_f32x2_2x11(src, src_stride, dst, dst_stride);
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-struct TransposeBlockNeon2x12F32x2 {}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-impl TransposeBlock<f32> for TransposeBlockNeon2x12F32x2 {
-    #[inline(always)]
-    unsafe fn transpose_block(
-        &self,
-        src: &[Complex<f32>],
-        src_stride: usize,
-        dst: &mut [Complex<f32>],
-        dst_stride: usize,
-    ) {
-        use crate::neon::block_transpose_f32x2_2x12;
-        block_transpose_f32x2_2x12(src, src_stride, dst, dst_stride);
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
 struct TransposeBlockNeon4x4F32x2 {}
 
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -813,116 +689,6 @@ impl TransposeExecutor<f32> for NeonDefaultExecutorSingle {
         let input_stride = width;
         let output_stride = height;
 
-        if width.is_multiple_of(7) && height.is_multiple_of(7) {
-            transpose_fixed_block_executor2d::<f32, 7, 7>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon7x7F32x2 {},
-            );
-            return;
-        } else if width.is_multiple_of(6) && height.is_multiple_of(4) {
-            transpose_fixed_block_executor2d::<f32, 6, 4>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon6x4F32x2 {},
-            );
-            return;
-        } else if width.is_multiple_of(6) && height.is_multiple_of(5) {
-            transpose_fixed_block_executor2d::<f32, 6, 5>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon6x5F32x2 {},
-            );
-            return;
-        } else if height.is_multiple_of(9) && width.is_multiple_of(2) {
-            transpose_fixed_block_executor2d::<f32, 2, 9>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon2x9F32x2 {},
-            );
-            return;
-        } else if height.is_multiple_of(10) && width.is_multiple_of(2) {
-            transpose_fixed_block_executor2d::<f32, 2, 10>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon2x10F32x2 {},
-            );
-            return;
-        } else if height.is_multiple_of(11) && width.is_multiple_of(2) {
-            transpose_fixed_block_executor2d::<f32, 2, 11>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon2x11F32x2 {},
-            );
-            return;
-        } else if height.is_multiple_of(12) && width.is_multiple_of(2) {
-            transpose_fixed_block_executor2d::<f32, 2, 12>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon2x12F32x2 {},
-            );
-            return;
-        } else if width.is_multiple_of(4) && height.is_multiple_of(4) {
-            transpose_fixed_block_executor2d::<f32, 4, 4>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon4x4F32x2 {},
-            );
-            return;
-        } else if width.is_multiple_of(2) && height.is_multiple_of(2) {
-            transpose_fixed_block_executor2d::<f32, 2, 2>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon2x2F32x2 {},
-            );
-            return;
-        }
-
         y = transpose_executor::<f32, 4>(
             input,
             input_stride,
@@ -973,20 +739,6 @@ impl TransposeExecutor<f64> for NeonDefaultExecutorDouble {
 
         let input_stride = width;
         let output_stride = height;
-
-        if width.is_multiple_of(2) && height.is_multiple_of(2) {
-            transpose_fixed_block_executor2d::<f64, 2, 2>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon2x2F64x2 {},
-            );
-            return;
-        }
 
         y = transpose_executor::<f64, 2>(
             input,
