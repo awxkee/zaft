@@ -29,8 +29,8 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::neon::butterflies::gen_butterfly_twiddles_separated_columns_f32;
-use crate::neon::f32x2_2x2::neon_transpose_f32x2_2x2_impl;
 use crate::neon::mixed::{ColumnFcmaButterfly8f, NeonStoreF};
+use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::float32x4x2_t;

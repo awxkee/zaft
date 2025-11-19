@@ -27,8 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::needless_range_loop)]
-use crate::neon::f32x2_6x6::neon_transpose_f32x2_6x6_aos;
 use crate::neon::mixed::{ColumnButterfly6f, NeonStoreF};
+use crate::neon::transpose::neon_transpose_f32x2_6x6_aos;
 use crate::neon::util::vfcmulq_f32;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};

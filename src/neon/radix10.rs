@@ -29,9 +29,8 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::{NeonButterfly, NeonFastButterfly5};
-use crate::neon::f32x2_2x2::neon_transpose_f32x2_2x2_impl;
-use crate::neon::f32x2_4x4::transpose_f32x2_4x4;
 use crate::neon::radix4::{complex4_load_f32, complex4_store_f32};
+use crate::neon::transpose::{neon_transpose_f32x2_2x2_impl, transpose_f32x2_4x4};
 use crate::neon::util::{create_neon_twiddles, vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use crate::radix10::Radix10Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;

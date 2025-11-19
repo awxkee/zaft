@@ -26,8 +26,8 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::f32x2_4x4::transpose_f32x2_4x4;
 use crate::neon::mixed::NeonStoreF;
+use crate::neon::transpose::f32x2_4x4::transpose_f32x2_4x4;
 use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
 
 #[inline]

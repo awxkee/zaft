@@ -30,12 +30,6 @@ mod butterflies;
 mod c2r;
 #[cfg(feature = "fcma")]
 mod c2r_fcma;
-mod f32x2_2x2;
-mod f32x2_4x4;
-mod f32x2_6x4;
-mod f32x2_6x6;
-mod f32x2_7x7;
-mod f64x2_2x2;
 mod mixed;
 mod r2c;
 #[cfg(feature = "fcma")]
@@ -68,6 +62,7 @@ mod radix7_fcma;
 mod spectrum_arithmetic;
 #[cfg(feature = "fcma")]
 mod spectrum_arithmetic_fcma;
+mod transpose;
 mod util;
 
 pub(crate) use butterflies::{
@@ -98,10 +93,6 @@ pub(crate) use butterflies::{
 pub(crate) use c2r::C2RNeonTwiddles;
 #[cfg(feature = "fcma")]
 pub(crate) use c2r_fcma::C2RNeonFcmaTwiddles;
-pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
-pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
-pub(crate) use f32x2_6x4::neon_transpose_f32x2_6x4;
-pub(crate) use f64x2_2x2::neon_transpose_f64x2_2x2;
 #[cfg(feature = "fcma")]
 pub(crate) use mixed::{
     NeonFcmaMixedRadix2, NeonFcmaMixedRadix2f, NeonFcmaMixedRadix3, NeonFcmaMixedRadix3f,
@@ -151,6 +142,10 @@ pub(crate) use radix13_fcma::NeonFcmaRadix13;
 pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
 #[cfg(feature = "fcma")]
 pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
+pub(crate) use transpose::neon_transpose_f32x2_2x2;
+pub(crate) use transpose::neon_transpose_f32x2_4x4;
+pub(crate) use transpose::neon_transpose_f32x2_6x4;
+pub(crate) use transpose::neon_transpose_f64x2_2x2;
 
 #[cfg(test)]
 #[cfg(feature = "fcma")]
