@@ -29,7 +29,7 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::neon::mixed::{ColumnButterfly5f, ColumnButterfly7f, NeonStoreF};
-use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
+use crate::neon::transpose::{neon_transpose_f32x2_2x2_impl, transpose_6x5};
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -83,46 +83,6 @@ impl FftExecutor<f32> for NeonButterfly35f {
     fn length(&self) -> usize {
         35
     }
-}
-
-#[inline(always)]
-pub(crate) fn transpose_6x5(
-    rows0: [NeonStoreF; 5],
-    rows1: [NeonStoreF; 5],
-    rows2: [NeonStoreF; 5],
-) -> [NeonStoreF; 18] {
-    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows0[0].v, rows0[1].v));
-    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows0[2].v, rows0[3].v));
-    let g0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows0[4].v, unsafe { vdupq_n_f32(0.) }));
-
-    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows1[0].v, rows1[1].v));
-    let e0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows1[2].v, rows1[3].v));
-    let h0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows1[4].v, unsafe { vdupq_n_f32(0.) }));
-
-    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows2[0].v, rows2[1].v));
-    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows2[2].v, rows2[3].v));
-    let i0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows2[4].v, unsafe { vdupq_n_f32(0.) }));
-    [
-        // row 0
-        NeonStoreF::raw(a0.0),
-        NeonStoreF::raw(a0.1),
-        NeonStoreF::raw(b0.0),
-        NeonStoreF::raw(b0.1),
-        NeonStoreF::raw(c0.0),
-        NeonStoreF::raw(c0.1),
-        NeonStoreF::raw(d0.0),
-        NeonStoreF::raw(d0.1),
-        NeonStoreF::raw(e0.0),
-        NeonStoreF::raw(e0.1),
-        NeonStoreF::raw(f0.0),
-        NeonStoreF::raw(f0.1),
-        NeonStoreF::raw(g0.0),
-        NeonStoreF::raw(g0.1),
-        NeonStoreF::raw(h0.0),
-        NeonStoreF::raw(h0.1),
-        NeonStoreF::raw(i0.0),
-        NeonStoreF::raw(i0.1),
-    ]
 }
 
 impl NeonButterfly35f {

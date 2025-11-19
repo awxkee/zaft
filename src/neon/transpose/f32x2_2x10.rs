@@ -26,43 +26,49 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
+use crate::neon::mixed::NeonStoreF;
+use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
 use num_complex::Complex;
-use std::arch::aarch64::*;
+use std::arch::aarch64::float32x4x2_t;
 
 #[inline(always)]
-pub(crate) fn neon_transpose_f32x2_2x2_impl(v0: float32x4x2_t) -> float32x4x2_t {
-    unsafe {
-        let l = vreinterpretq_f32_f64(vtrn1q_f64(
-            vreinterpretq_f64_f32(v0.0),
-            vreinterpretq_f64_f32(v0.1),
-        ));
-        let h = vreinterpretq_f32_f64(vtrn2q_f64(
-            vreinterpretq_f64_f32(v0.0),
-            vreinterpretq_f64_f32(v0.1),
-        ));
-
-        float32x4x2_t(l, h)
-    }
+pub(crate) fn transpose_2x10(rows: [NeonStoreF; 10]) -> [NeonStoreF; 10] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
+    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
+    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[8].v, rows[9].v));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+        NeonStoreF::raw(c0.1),
+        NeonStoreF::raw(d0.0),
+        NeonStoreF::raw(d0.1),
+        NeonStoreF::raw(f0.0),
+        NeonStoreF::raw(f0.1),
+    ]
 }
 
 #[inline]
-pub(crate) fn block_transpose_f32x2_2x2(
+pub(crate) fn block_transpose_f32x2_2x10(
     src: &[Complex<f32>],
     src_stride: usize,
     dst: &mut [Complex<f32>],
     dst_stride: usize,
 ) {
     unsafe {
-        let row0 = vld1q_f32(src.as_ptr().cast());
-        let row1 = vld1q_f32(src.get_unchecked(src_stride..).as_ptr().cast());
+        let rows0: [NeonStoreF; 10] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
 
-        let v0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(row0, row1));
+        let t = transpose_2x10(rows0);
 
-        vst1q_f32(dst.as_mut_ptr().cast(), v0.0);
-        vst1q_f32(
-            dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
-            v0.1,
-        );
+        for i in 0..5 {
+            t[i * 2].write(dst.get_unchecked_mut(i * 2..));
+            t[i * 2 + 1].write(dst.get_unchecked_mut(dst_stride + i * 2..));
+        }
     }
 }

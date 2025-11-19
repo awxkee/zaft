@@ -29,11 +29,10 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::neon::mixed::{ColumnButterfly10f, NeonStoreF};
-use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
+use crate::neon::transpose::transpose_2x10;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
-use std::arch::aarch64::float32x4x2_t;
 
 pub(crate) struct NeonButterfly100f {
     direction: FftDirection,
@@ -66,27 +65,6 @@ impl NeonButterfly100f {
             bf10: ColumnButterfly10f::new(fft_direction),
         }
     }
-}
-
-#[inline(always)]
-pub(crate) fn transpose_10x2(rows: [NeonStoreF; 10]) -> [NeonStoreF; 10] {
-    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
-    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
-    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
-    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
-    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[8].v, rows[9].v));
-    [
-        NeonStoreF::raw(a0.0),
-        NeonStoreF::raw(a0.1),
-        NeonStoreF::raw(b0.0),
-        NeonStoreF::raw(b0.1),
-        NeonStoreF::raw(c0.0),
-        NeonStoreF::raw(c0.1),
-        NeonStoreF::raw(d0.0),
-        NeonStoreF::raw(d0.1),
-        NeonStoreF::raw(f0.0),
-        NeonStoreF::raw(f0.1),
-    ]
 }
 
 impl FftExecutor<f32> for NeonButterfly100f {
@@ -131,7 +109,7 @@ impl NeonButterfly100f {
                         rows[i] = NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 9 * k]);
                     }
 
-                    let transposed = transpose_10x2(rows);
+                    let transposed = transpose_2x10(rows);
 
                     for i in 0..5 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 10 + i * 2..));
@@ -197,7 +175,7 @@ impl NeonButterfly100f {
                         rows[i] = NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 9 * k]);
                     }
 
-                    let transposed = transpose_10x2(rows);
+                    let transposed = transpose_2x10(rows);
 
                     for i in 0..5 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 10 + i * 2..));

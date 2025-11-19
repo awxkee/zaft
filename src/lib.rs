@@ -866,7 +866,7 @@ mod tests {
 
     #[test]
     fn test_everything_f32() {
-        for i in 1..1900 {
+        for i in 1..2010 {
             let mut data = vec![Complex::new(0.0019528865, 0.); i];
             for (i, chunk) in data.iter_mut().enumerate() {
                 *chunk = Complex::new(

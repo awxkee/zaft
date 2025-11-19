@@ -142,10 +142,11 @@ pub(crate) use radix13_fcma::NeonFcmaRadix13;
 pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
 #[cfg(feature = "fcma")]
 pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
-pub(crate) use transpose::neon_transpose_f32x2_2x2;
-pub(crate) use transpose::neon_transpose_f32x2_4x4;
-pub(crate) use transpose::neon_transpose_f32x2_6x4;
-pub(crate) use transpose::neon_transpose_f64x2_2x2;
+pub(crate) use transpose::{
+    block_transpose_f32x2_2x2, block_transpose_f32x2_2x9, block_transpose_f32x2_2x10,
+    block_transpose_f32x2_6x5, block_transpose_f32x2_7x7, neon_transpose_f32x2_4x4,
+    neon_transpose_f32x2_6x4, neon_transpose_f64x2_2x2,
+};
 
 #[cfg(test)]
 #[cfg(feature = "fcma")]
