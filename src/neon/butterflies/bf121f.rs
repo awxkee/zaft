@@ -29,11 +29,10 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::neon::mixed::{ColumnButterfly11f, NeonStoreF};
-use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
+use crate::neon::transpose::transpose_2x11;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
-use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
 
 pub(crate) struct NeonButterfly121f {
     direction: FftDirection,
@@ -66,30 +65,6 @@ impl NeonButterfly121f {
             bf11: ColumnButterfly11f::new(fft_direction),
         }
     }
-}
-
-#[inline(always)]
-pub(crate) fn transpose_11x2(rows: [NeonStoreF; 11]) -> [NeonStoreF; 12] {
-    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
-    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
-    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
-    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
-    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[8].v, rows[9].v));
-    let g0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[10].v, unsafe { vdupq_n_f32(0.) }));
-    [
-        NeonStoreF::raw(a0.0),
-        NeonStoreF::raw(a0.1),
-        NeonStoreF::raw(b0.0),
-        NeonStoreF::raw(b0.1),
-        NeonStoreF::raw(c0.0),
-        NeonStoreF::raw(c0.1),
-        NeonStoreF::raw(d0.0),
-        NeonStoreF::raw(d0.1),
-        NeonStoreF::raw(f0.0),
-        NeonStoreF::raw(f0.1),
-        NeonStoreF::raw(g0.0),
-        NeonStoreF::raw(g0.1),
-    ]
 }
 
 impl FftExecutor<f32> for NeonButterfly121f {
@@ -135,7 +110,7 @@ impl NeonButterfly121f {
                             NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
                     }
 
-                    let transposed = transpose_11x2(rows);
+                    let transposed = transpose_2x11(rows);
 
                     for i in 0..5 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
@@ -163,7 +138,7 @@ impl NeonButterfly121f {
                             NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
                     }
 
-                    let transposed = transpose_11x2(rows);
+                    let transposed = transpose_2x11(rows);
 
                     for i in 0..5 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
@@ -242,7 +217,7 @@ impl NeonButterfly121f {
                             NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
                     }
 
-                    let transposed = transpose_11x2(rows);
+                    let transposed = transpose_2x11(rows);
 
                     for i in 0..5 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
@@ -270,7 +245,7 @@ impl NeonButterfly121f {
                             NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
                     }
 
-                    let transposed = transpose_11x2(rows);
+                    let transposed = transpose_2x11(rows);
 
                     for i in 0..5 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));

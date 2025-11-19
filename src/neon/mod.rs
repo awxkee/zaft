@@ -144,8 +144,9 @@ pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
 pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
 pub(crate) use transpose::{
     block_transpose_f32x2_2x2, block_transpose_f32x2_2x9, block_transpose_f32x2_2x10,
-    block_transpose_f32x2_6x5, block_transpose_f32x2_7x7, neon_transpose_f32x2_4x4,
-    neon_transpose_f32x2_6x4, neon_transpose_f64x2_2x2,
+    block_transpose_f32x2_2x11, block_transpose_f32x2_2x12, block_transpose_f32x2_6x5,
+    block_transpose_f32x2_7x7, neon_transpose_f32x2_4x4, neon_transpose_f32x2_6x4,
+    neon_transpose_f64x2_2x2,
 };
 
 #[cfg(test)]

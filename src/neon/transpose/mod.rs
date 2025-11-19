@@ -27,6 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod f32x2_2x10;
+mod f32x2_2x11;
+mod f32x2_2x12;
 mod f32x2_2x2;
 mod f32x2_2x9;
 mod f32x2_4x4;
@@ -40,6 +42,8 @@ mod f64x2_2x2;
 pub(crate) use f32x2_2x2::{block_transpose_f32x2_2x2, neon_transpose_f32x2_2x2_impl};
 pub(crate) use f32x2_2x9::{block_transpose_f32x2_2x9, transpose_2x9};
 pub(crate) use f32x2_2x10::{block_transpose_f32x2_2x10, transpose_2x10};
+pub(crate) use f32x2_2x11::{block_transpose_f32x2_2x11, transpose_2x11};
+pub(crate) use f32x2_2x12::block_transpose_f32x2_2x12;
 pub(crate) use f32x2_4x4::{neon_transpose_f32x2_4x4, transpose_f32x2_4x4};
 pub(crate) use f32x2_6x4::neon_transpose_f32x2_6x4;
 pub(crate) use f32x2_6x5::{block_transpose_f32x2_6x5, transpose_6x5};

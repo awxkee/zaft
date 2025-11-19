@@ -707,6 +707,42 @@ impl TransposeBlock<f32> for TransposeBlockNeon2x10F32x2 {
 }
 
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+struct TransposeBlockNeon2x11F32x2 {}
+
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+impl TransposeBlock<f32> for TransposeBlockNeon2x11F32x2 {
+    #[inline(always)]
+    unsafe fn transpose_block(
+        &self,
+        src: &[Complex<f32>],
+        src_stride: usize,
+        dst: &mut [Complex<f32>],
+        dst_stride: usize,
+    ) {
+        use crate::neon::block_transpose_f32x2_2x11;
+        block_transpose_f32x2_2x11(src, src_stride, dst, dst_stride);
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+struct TransposeBlockNeon2x12F32x2 {}
+
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
+impl TransposeBlock<f32> for TransposeBlockNeon2x12F32x2 {
+    #[inline(always)]
+    unsafe fn transpose_block(
+        &self,
+        src: &[Complex<f32>],
+        src_stride: usize,
+        dst: &mut [Complex<f32>],
+        dst_stride: usize,
+    ) {
+        use crate::neon::block_transpose_f32x2_2x12;
+        block_transpose_f32x2_2x12(src, src_stride, dst, dst_stride);
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", feature = "neon"))]
 struct TransposeBlockNeon4x4F32x2 {}
 
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -835,6 +871,30 @@ impl TransposeExecutor<f32> for NeonDefaultExecutorSingle {
                 height,
                 y,
                 TransposeBlockNeon2x10F32x2 {},
+            );
+            return;
+        } else if height.is_multiple_of(11) && width.is_multiple_of(2) {
+            transpose_fixed_block_executor2d::<f32, 2, 11>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockNeon2x11F32x2 {},
+            );
+            return;
+        } else if height.is_multiple_of(12) && width.is_multiple_of(2) {
+            transpose_fixed_block_executor2d::<f32, 2, 12>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockNeon2x12F32x2 {},
             );
             return;
         }
