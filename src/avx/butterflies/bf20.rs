@@ -97,7 +97,7 @@ impl AvxButterfly20d {
                 shift_store2dd!(chunk, 20, 18, u18, u19);
             }
 
-            let rem = in_place.chunks_exact_mut(36).into_remainder();
+            let rem = in_place.chunks_exact_mut(40).into_remainder();
 
             for chunk in rem.chunks_exact_mut(20) {
                 let u0u5 = _mm256_loadu_pd(chunk.as_ptr().cast());

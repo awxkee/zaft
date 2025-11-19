@@ -31,6 +31,8 @@ mod bf100d;
 mod bf100f;
 mod bf11;
 mod bf12;
+mod bf121d;
+mod bf121f;
 mod bf13;
 mod bf14;
 mod bf15;
@@ -49,6 +51,8 @@ mod bf3;
 mod bf31;
 mod bf32d;
 mod bf32f;
+mod bf35d;
+mod bf35f;
 mod bf36d;
 mod bf36f;
 mod bf4;
@@ -100,6 +104,8 @@ pub(crate) use bf29::AvxButterfly29;
 pub(crate) use bf31::AvxButterfly31;
 pub(crate) use bf32d::AvxButterfly32d;
 pub(crate) use bf32f::AvxButterfly32f;
+pub(crate) use bf35d::AvxButterfly35d;
+pub(crate) use bf35f::AvxButterfly35f;
 pub(crate) use bf36d::AvxButterfly36d;
 pub(crate) use bf36f::AvxButterfly36f;
 pub(crate) use bf48d::AvxButterfly48d;
@@ -111,6 +117,8 @@ pub(crate) use bf81d::AvxButterfly81d;
 pub(crate) use bf81f::AvxButterfly81f;
 pub(crate) use bf100d::AvxButterfly100d;
 pub(crate) use bf100f::AvxButterfly100f;
+pub(crate) use bf121d::AvxButterfly121d;
+pub(crate) use bf121f::AvxButterfly121f;
 pub(crate) use fast_bf3::AvxFastButterfly3;
 pub(crate) use fast_bf4::AvxFastButterfly4;
 pub(crate) use fast_bf5::{AvxFastButterfly5d, AvxFastButterfly5f};
@@ -472,9 +480,9 @@ macro_rules! test_avx_butterfly {
                 return;
             }
             use rand::Rng;
-            for i in 1..4 {
+            for i in 1..20 {
                 let val = $scale as usize;
-                let size = val.pow(i);
+                let size = val * i;
                 let mut input = vec![Complex::<$data_type>::default(); size];
                 for z in input.iter_mut() {
                     *z = Complex {
@@ -544,87 +552,6 @@ macro_rules! test_avx_butterfly {
 pub(crate) use test_avx_butterfly;
 
 #[cfg(test)]
-macro_rules! test_avx_butterfly_small {
-    ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
-        #[test]
-        fn $method_name() {
-            use crate::util::has_valid_avx;
-            if !has_valid_avx() {
-                return;
-            }
-            use rand::Rng;
-            for i in 1..2 {
-                let val = $scale as usize;
-                let size = val.pow(i);
-                let mut input = vec![Complex::<$data_type>::default(); size];
-                for z in input.iter_mut() {
-                    *z = Complex {
-                        re: rand::rng().random(),
-                        im: rand::rng().random(),
-                    };
-                }
-                let src = input.to_vec();
-                use crate::dft::Dft;
-                let reference_forward = Dft::new($scale, FftDirection::Forward).unwrap();
-
-                let mut ref_src = src.to_vec();
-                reference_forward.execute(&mut ref_src).unwrap();
-
-                let radix_forward = $butterfly::new(FftDirection::Forward);
-                let radix_inverse = $butterfly::new(FftDirection::Inverse);
-                radix_forward.execute(&mut input).unwrap();
-
-                input
-                    .iter()
-                    .zip(ref_src.iter())
-                    .enumerate()
-                    .for_each(|(idx, (a, b))| {
-                        assert!(
-                            (a.re - b.re).abs() < $tol,
-                            "a_re {} != b_re {} for size {} at {idx}",
-                            a.re,
-                            b.re,
-                            size
-                        );
-                        assert!(
-                            (a.im - b.im).abs() < $tol,
-                            "a_im {} != b_im {} for size {} at {idx}",
-                            a.im,
-                            b.im,
-                            size
-                        );
-                    });
-
-                radix_inverse.execute(&mut input).unwrap();
-
-                let val = $scale as $data_type;
-                input = input.iter().map(|&x| x * (1.0 / val)).collect();
-
-                input.iter().zip(src.iter()).for_each(|(a, b)| {
-                    assert!(
-                        (a.re - b.re).abs() < $tol,
-                        "a_re {} != b_re {} for size {}",
-                        a.re,
-                        b.re,
-                        size
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < $tol,
-                        "a_im {} != b_im {} for size {}",
-                        a.im,
-                        b.im,
-                        size
-                    );
-                });
-            }
-        }
-    };
-}
-
-#[cfg(test)]
-pub(crate) use test_avx_butterfly_small;
-
-#[cfg(test)]
 macro_rules! test_oof_avx_butterfly {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
@@ -634,9 +561,9 @@ macro_rules! test_oof_avx_butterfly {
                 return;
             }
             use rand::Rng;
-            for i in 1..4 {
+            for i in 1..20 {
                 let kern = $scale;
-                let size = (kern as usize).pow(i);
+                let size = (kern as usize) * i;
                 let mut input = vec![Complex::<$data_type>::default(); size];
                 for z in input.iter_mut() {
                     *z = Complex {
@@ -714,91 +641,3 @@ use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::util::compute_twiddle;
 #[cfg(test)]
 pub(crate) use test_oof_avx_butterfly;
-
-#[cfg(test)]
-macro_rules! test_oof_avx_butterfly_small {
-    ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
-        #[test]
-        fn $method_name() {
-            use crate::util::has_valid_avx;
-            if !has_valid_avx() {
-                return;
-            }
-            use rand::Rng;
-            for i in 1..2 {
-                let kern = $scale;
-                let size = (kern as usize).pow(i);
-                let mut input = vec![Complex::<$data_type>::default(); size];
-                for z in input.iter_mut() {
-                    *z = Complex {
-                        re: rand::rng().random(),
-                        im: rand::rng().random(),
-                    };
-                }
-                let src = input.to_vec();
-                let mut out_of_place = vec![Complex::<$data_type>::default(); size];
-                let mut ref_input = input.to_vec();
-                let radix_forward = $butterfly::new(FftDirection::Forward);
-                let radix_inverse = $butterfly::new(FftDirection::Inverse);
-
-                use crate::dft::Dft;
-                let reference_dft = Dft::new($scale, FftDirection::Forward).unwrap();
-                reference_dft.execute(&mut ref_input).unwrap();
-
-                radix_forward
-                    .execute_out_of_place(&input, &mut out_of_place)
-                    .unwrap();
-
-                out_of_place
-                    .iter()
-                    .zip(ref_input.iter())
-                    .enumerate()
-                    .for_each(|(idx, (a, b))| {
-                        assert!(
-                            (a.re - b.re).abs() < $tol,
-                            "a_re {} != b_re {} for size {} at {idx}",
-                            a.re,
-                            b.re,
-                            size
-                        );
-                        assert!(
-                            (a.im - b.im).abs() < $tol,
-                            "a_im {} != b_im {} for size {} at {idx}",
-                            a.im,
-                            b.im,
-                            size
-                        );
-                    });
-
-                radix_inverse
-                    .execute_out_of_place(&out_of_place, &mut input)
-                    .unwrap();
-
-                input = input
-                    .iter()
-                    .map(|&x| x * (1.0 / (kern as $data_type)))
-                    .collect();
-
-                input.iter().zip(src.iter()).for_each(|(a, b)| {
-                    assert!(
-                        (a.re - b.re).abs() < $tol,
-                        "a_re {} != b_re {} for size {}",
-                        a.re,
-                        b.re,
-                        size
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < $tol,
-                        "a_im {} != b_im {} for size {}",
-                        a.im,
-                        b.im,
-                        size
-                    );
-                });
-            }
-        }
-    };
-}
-
-#[cfg(test)]
-pub(crate) use test_oof_avx_butterfly_small;

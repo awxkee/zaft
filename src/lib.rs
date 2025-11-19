@@ -309,7 +309,11 @@ impl Zaft {
                 } else {
                     let p_fft = Zaft::strategy($q as usize, direction)?;
                     let q_fft = Zaft::strategy($p as usize, direction)?;
-                    T::mixed_radix(p_fft, q_fft)
+                    if $q < $p {
+                        T::mixed_radix(p_fft, q_fft)
+                    } else {
+                        T::mixed_radix(q_fft, p_fft)
+                    }
                 };
             }};
         }
@@ -445,6 +449,67 @@ impl Zaft {
             if factor_of_2 > 1 && factor_of_7 == 1 {
                 try_mixed_radix!(14, product / 14)
             }
+        } else if prime_factors.has_power_of_five_and_seven() {
+            let factor_of_7 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 7)
+                .map(|x| x.1)
+                .expect("Factor of 7 should exist if factor of X*5^n*7^m branch");
+            let factor_of_5 = prime_factors
+                .factorization
+                .iter()
+                .find(|x| x.0 == 5)
+                .map(|x| x.1)
+                .expect("Factor of 5 should exist if factor of X*5^n*7^m branch");
+            #[allow(clippy::collapsible_if)]
+            if factor_of_7 == 1 || factor_of_5 == 1 {
+                if product == 560 || product == 2240 {
+                    if T::butterfly35(direction).is_some() {
+                        try_mixed_radix!(35, product / 35)
+                    }
+                }
+            }
+            if (product == 210
+                || product == 280
+                || product == 315
+                || product == 350
+                || product == 420)
+                && T::butterfly35(direction).is_some()
+            {
+                try_mixed_radix!(35, product / 35)
+            }
+            if prime_factors.is_power_of_five_and_seven() && (factor_of_7 > 2 && factor_of_5 > 2) {
+                let product7 = prime_factors
+                    .factorization
+                    .iter()
+                    .find(|x| x.0 == 7)
+                    .map(|x| x.0.pow(x.1))
+                    .expect("Power of 7 should exist if factor of 5^n*7^m branch");
+                let product5 = prime_factors
+                    .factorization
+                    .iter()
+                    .find(|x| x.0 == 5)
+                    .map(|x| x.0.pow(x.1))
+                    .expect("Power of 5 should exist if factor of 5^n*7^m branch");
+                let p_fft = Zaft::strategy(product5 as usize, direction)?;
+                let q_fft = Zaft::strategy(product7 as usize, direction)?;
+                return if product5 < product7 {
+                    T::mixed_radix(p_fft, q_fft)
+                } else {
+                    T::mixed_radix(q_fft, p_fft)
+                };
+            }
+        }
+
+        let factor_of_11 = prime_factors.factor_of_11();
+        let factor_of_13 = prime_factors.factor_of_13();
+        if factor_of_11 > 0 {
+            let power_of_11 = 11u64.pow(factor_of_11);
+            try_mixed_radix!(power_of_11, product / power_of_11)
+        } else if factor_of_13 > 0 {
+            let power_of_13 = 13u64.pow(factor_of_13);
+            try_mixed_radix!(power_of_13, product / power_of_13)
         }
 
         #[cfg(any(
@@ -588,6 +653,10 @@ impl Zaft {
             return T::butterfly31(fft_direction);
         } else if n == 32 {
             return T::butterfly32(fft_direction).map(|x| x.into_fft_executor());
+        } else if n == 35 {
+            if let Some(executor) = T::butterfly35(fft_direction) {
+                return Ok(executor);
+            }
         } else if n == 36 {
             if let Some(executor) = T::butterfly36(fft_direction) {
                 return Ok(executor.into_fft_executor());
@@ -610,6 +679,10 @@ impl Zaft {
             }
         } else if n == 100 {
             if let Some(executor) = T::butterfly100(fft_direction) {
+                return Ok(executor.into_fft_executor());
+            }
+        } else if n == 121 {
+            if let Some(executor) = T::butterfly121(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
         }
@@ -793,7 +866,7 @@ mod tests {
 
     #[test]
     fn test_everything_f32() {
-        for i in 1..1150 {
+        for i in 1..1900 {
             let mut data = vec![Complex::new(0.0019528865, 0.); i];
             for (i, chunk) in data.iter_mut().enumerate() {
                 *chunk = Complex::new(
@@ -816,13 +889,52 @@ mod tests {
                 .for_each(|(idx, (a, b))| {
                     assert!(
                         (a.re - b.re).abs() < 1e-2,
-                        "a_re {}, b_re {} at {idx}",
+                        "a_re {}, b_re {} at {idx}, for size {i}",
                         a.re,
                         b.re
                     );
                     assert!(
                         (a.im - b.im).abs() < 1e-2,
-                        "a_im {}, b_im {} at {idx}",
+                        "a_re {}, b_re {} at {idx}, for size {i}",
+                        a.im,
+                        b.im
+                    );
+                });
+        }
+    }
+
+    #[test]
+    fn test_everything_f64() {
+        for i in 1..1900 {
+            let mut data = vec![Complex::new(0.0019528865, 0.); i];
+            for (i, chunk) in data.iter_mut().enumerate() {
+                *chunk = Complex::new(
+                    -0.19528865 + i as f64 * 0.001,
+                    0.0019528865 - i as f64 * 0.001,
+                );
+            }
+            let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
+            let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
+            let rust_fft_clone = data.clone();
+            zaft_exec.execute(&mut data).unwrap();
+            zaft_inverse.execute(&mut data).unwrap();
+            let data_len = 1. / data.len() as f64;
+            for i in data.iter_mut() {
+                *i *= data_len;
+            }
+            data.iter()
+                .zip(rust_fft_clone)
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-6,
+                        "a_re {}, b_re {} at {idx}, for size {i}",
+                        a.re,
+                        b.re
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-6,
+                        "a_im {}, b_im {} at {idx}, for size {i}",
                         a.im,
                         b.im
                     );

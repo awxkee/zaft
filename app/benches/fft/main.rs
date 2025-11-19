@@ -8,6 +8,7 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
 use rand::Rng;
 use rustfft::FftPlanner;
+use std::time::Duration;
 use zaft::Zaft;
 
 pub fn bench_rustfft_averages(c: &mut Criterion) {
@@ -168,7 +169,7 @@ fn check_power_group(c: &mut Criterion, n: usize, group: String) {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.benchmark_group("Fft");
+    //     .measurement_time(Duration::from_millis(135));
     bench_rustfft_average(c);
     bench_zaft_average(c);
     bench_rustfft_averages(c);
@@ -272,7 +273,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     // check_power_group(c, 1920, "Full HD".to_string());
     // check_power_group(c, 1000, "power 10".to_string());
-    // check_power_group(c, 11 * 11 * 11, "power 11".to_string());
+    check_power_group(c, 11 * 11 * 11, "power 11".to_string());
     // check_power_group(c, 13 * 13 * 13, "power 13".to_string());
     // check_power_group(c, 3125, "power 5".to_string());
     // check_power_group(c, 19, "bf-19".to_string());

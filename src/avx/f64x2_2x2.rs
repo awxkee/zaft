@@ -49,7 +49,7 @@ pub(crate) fn transpose_f64x2_2x2(v0: __m256d, v1: __m256d) -> (__m256d, __m256d
 
 #[inline]
 #[target_feature(enable = "avx")]
-pub(crate) unsafe fn avx_transpose_f64x2_2x2(
+pub(crate) fn avx_transpose_f64x2_2x2(
     src: &[Complex<f64>],
     src_stride: usize,
     dst: &mut [Complex<f64>],

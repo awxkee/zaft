@@ -155,7 +155,7 @@ impl NeonFcmaButterfly48f {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::neon::butterflies::test_fcma_butterfly_small;
+    use crate::neon::butterflies::test_fcma_butterfly;
 
-    test_fcma_butterfly_small!(test_neon_butterfly48, f32, NeonFcmaButterfly48f, 48, 1e-3);
+    test_fcma_butterfly!(test_neon_butterfly48, f32, NeonFcmaButterfly48f, 48, 1e-3);
 }

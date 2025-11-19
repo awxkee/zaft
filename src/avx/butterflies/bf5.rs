@@ -471,11 +471,11 @@ impl AvxButterfly5<f32> {
                 _mm_storeu_ps(dst.get_unchecked_mut(18..).as_mut_ptr().cast(), zu4h);
             }
 
-            let rem_dst = dst.chunks_exact_mut(10).into_remainder();
-            let rem_src = src.chunks_exact(10).remainder();
+            let rem_dst = dst.chunks_exact_mut(20).into_remainder();
+            let rem_src = src.chunks_exact(20).remainder();
 
             for (dst, src) in rem_dst.chunks_exact_mut(10).zip(rem_src.chunks_exact(10)) {
-                let u0u1u2u3 = _mm256_loadu_ps(src.get_unchecked(0..).as_ptr().cast());
+                let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
                 let u8u9 = _mm_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
 
@@ -540,7 +540,7 @@ impl AvxButterfly5<f32> {
                 let zu0u1 = _mm256_create_ps(zu0, zu1);
                 let zu2u3 = _mm256_create_ps(zu2, zu3);
 
-                _mm256_storeu_ps(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), zu0u1);
+                _mm256_storeu_ps(dst.as_mut_ptr().cast(), zu0u1);
                 _mm256_storeu_ps(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), zu2u3);
                 _mm_storeu_ps(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), zu4);
             }
@@ -549,7 +549,7 @@ impl AvxButterfly5<f32> {
             let rem_src = rem_src.chunks_exact(10).remainder();
 
             for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
-                let u0u1u2u3 = _mm256_loadu_ps(src.get_unchecked(0..).as_ptr().cast());
+                let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
 
                 let u0u1 = _mm256_castps256_ps128(u0u1u2u3);
                 let u2u3 = _mm256_extractf128_ps::<1>(u0u1u2u3);
@@ -805,11 +805,11 @@ impl AvxButterfly5<f64> {
             let rot_sign = _mm256_loadu_pd([-0.0f64, 0.0, -0.0, 0.0].as_ptr());
 
             for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
-                let u0u1 = _mm256_loadu_pd(src.get_unchecked(0..).as_ptr().cast());
+                let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
                 let u6u7 = _mm256_loadu_pd(src.get_unchecked(6..).as_ptr().cast());
-                let u8u10 = _mm256_loadu_pd(src.get_unchecked(8..).as_ptr().cast());
+                let u8u9 = _mm256_loadu_pd(src.get_unchecked(8..).as_ptr().cast());
 
                 const LO_HI: i32 = 0b0011_0000;
                 const HI_LO: i32 = 0b0010_0001;
@@ -819,8 +819,8 @@ impl AvxButterfly5<f64> {
                 let u0 = _mm256_permute2f128_pd::<LO_HI>(u0u1, u4u5);
                 let u1 = _mm256_permute2f128_pd::<HI_LO>(u0u1, u6u7);
                 let u2 = _mm256_permute2f128_pd::<LO_HI>(u2u3, u6u7);
-                let u3 = _mm256_permute2f128_pd::<HI_LO>(u2u3, u8u10);
-                let u4 = _mm256_permute2f128_pd::<LO_HI>(u4u5, u8u10);
+                let u3 = _mm256_permute2f128_pd::<HI_LO>(u2u3, u8u9);
+                let u4 = _mm256_permute2f128_pd::<LO_HI>(u4u5, u8u9);
 
                 // Radix-5 butterfly
 
@@ -853,7 +853,7 @@ impl AvxButterfly5<f64> {
                 let u6u7 = _mm256_permute2f128_pd::<HI_HI>(y1, y2);
                 let u8u9 = _mm256_permute2f128_pd::<HI_HI>(y3, y4);
 
-                _mm256_storeu_pd(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), u0u1);
+                _mm256_storeu_pd(dst.as_mut_ptr().cast(), u0u1);
                 _mm256_storeu_pd(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), u2u3);
                 _mm256_storeu_pd(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), u4u5);
                 _mm256_storeu_pd(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), u6u7);
@@ -870,7 +870,7 @@ impl AvxButterfly5<f64> {
             let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
 
             for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
-                let u0u1 = _mm256_loadu_pd(src.get_unchecked(0..).as_ptr().cast());
+                let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
 
                 let u4 = _mm_loadu_pd(src.get_unchecked(4..).as_ptr().cast());

@@ -28,32 +28,32 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::mixed::{ColumnButterfly10d, NeonStoreD};
+use crate::neon::mixed::{ColumnButterfly11d, NeonStoreD};
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 
-pub(crate) struct NeonButterfly100d {
+pub(crate) struct NeonButterfly121d {
     direction: FftDirection,
-    bf10: ColumnButterfly10d,
-    twiddles: [NeonStoreD; 90],
+    bf11: ColumnButterfly11d,
+    twiddles: [NeonStoreD; 110],
 }
 
-impl NeonButterfly100d {
+impl NeonButterfly121d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        let mut twiddles = [NeonStoreD::default(); 90];
+        let mut twiddles = [NeonStoreD::default(); 110];
         let mut q = 0usize;
-        let len_per_row = 10;
+        let len_per_row = 11;
         const COMPLEX_PER_VECTOR: usize = 1;
         let quotient = len_per_row / COMPLEX_PER_VECTOR;
         let remainder = len_per_row % COMPLEX_PER_VECTOR;
 
         let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
         for x in 0..num_twiddle_columns {
-            for y in 1..10 {
+            for y in 1..11 {
                 twiddles[q] = NeonStoreD::from_complex(&compute_twiddle(
                     y * (x * COMPLEX_PER_VECTOR),
-                    100,
+                    121,
                     fft_direction,
                 ));
                 q += 1;
@@ -62,12 +62,12 @@ impl NeonButterfly100d {
         Self {
             direction: fft_direction,
             twiddles,
-            bf10: ColumnButterfly10d::new(fft_direction),
+            bf11: ColumnButterfly11d::new(fft_direction),
         }
     }
 }
 
-impl FftExecutor<f64> for NeonButterfly100d {
+impl FftExecutor<f64> for NeonButterfly121d {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         self.execute_impl(in_place)
     }
@@ -78,13 +78,13 @@ impl FftExecutor<f64> for NeonButterfly100d {
 
     #[inline]
     fn length(&self) -> usize {
-        100
+        121
     }
 }
 
-impl NeonButterfly100d {
+impl NeonButterfly121d {
     fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 100 != 0 {
+        if in_place.len() % 121 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -92,36 +92,37 @@ impl NeonButterfly100d {
         }
 
         unsafe {
-            let mut rows: [NeonStoreD; 10] = [NeonStoreD::default(); 10];
-            let mut scratch = [Complex::<f64>::default(); 100];
+            let mut rows: [NeonStoreD; 11] = [NeonStoreD::default(); 11];
+            let mut scratch = [Complex::<f64>::default(); 121];
 
-            for chunk in in_place.chunks_exact_mut(100) {
+            for chunk in in_place.chunks_exact_mut(121) {
                 // columns
-                for k in 0..10 {
-                    for i in 0..10 {
-                        rows[i] = NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 10 + k..));
+                for k in 0..11 {
+                    for i in 0..11 {
+                        rows[i] = NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 11 + k..));
                     }
 
-                    rows = self.bf10.exec(rows);
+                    rows = self.bf11.exec(rows);
 
-                    for i in 1..10 {
-                        rows[i] = NeonStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 9 * k]);
+                    for i in 1..11 {
+                        rows[i] =
+                            NeonStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
                     }
 
-                    for i in 0..10 {
-                        rows[i].write(scratch.get_unchecked_mut(k * 10 + i..));
+                    for i in 0..11 {
+                        rows[i].write(scratch.get_unchecked_mut(k * 11 + i..));
                     }
                 }
 
                 // rows
 
-                for k in 0..10 {
-                    for i in 0..10 {
-                        rows[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 10 + k..));
+                for k in 0..11 {
+                    for i in 0..11 {
+                        rows[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 11 + k..));
                     }
-                    rows = self.bf10.exec(rows);
-                    for i in 0..10 {
-                        rows[i].write(chunk.get_unchecked_mut(i * 10 + k..));
+                    rows = self.bf11.exec(rows);
+                    for i in 0..11 {
+                        rows[i].write(chunk.get_unchecked_mut(i * 11 + k..));
                     }
                 }
             }
@@ -129,7 +130,7 @@ impl NeonButterfly100d {
         Ok(())
     }
 }
-impl FftExecutorOutOfPlace<f64> for NeonButterfly100d {
+impl FftExecutorOutOfPlace<f64> for NeonButterfly121d {
     fn execute_out_of_place(
         &self,
         src: &[Complex<f64>],
@@ -139,50 +140,51 @@ impl FftExecutorOutOfPlace<f64> for NeonButterfly100d {
     }
 }
 
-impl NeonButterfly100d {
+impl NeonButterfly121d {
     fn execute_out_of_place_impl(
         &self,
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 100 != 0 {
+        if src.len() % 121 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 100 != 0 {
+        if dst.len() % 121 != 0 {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
+        let mut rows: [NeonStoreD; 11] = [NeonStoreD::default(); 11];
+        let mut scratch = [Complex::<f64>::default(); 121];
+
         unsafe {
-            let mut rows: [NeonStoreD; 10] = [NeonStoreD::default(); 10];
-            let mut scratch = [Complex::<f64>::default(); 100];
-
-            for (dst, src) in dst.chunks_exact_mut(100).zip(src.chunks_exact(100)) {
+            for (dst, src) in dst.chunks_exact_mut(121).zip(src.chunks_exact(121)) {
                 // columns
-                for k in 0..10 {
-                    for i in 0..10 {
-                        rows[i] = NeonStoreD::from_complex_ref(src.get_unchecked(i * 10 + k..));
+                for k in 0..11 {
+                    for i in 0..11 {
+                        rows[i] = NeonStoreD::from_complex_ref(src.get_unchecked(i * 11 + k..));
                     }
 
-                    rows = self.bf10.exec(rows);
+                    rows = self.bf11.exec(rows);
 
-                    for i in 1..10 {
-                        rows[i] = NeonStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 9 * k]);
+                    for i in 1..11 {
+                        rows[i] =
+                            NeonStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
                     }
 
-                    for i in 0..10 {
-                        rows[i].write(scratch.get_unchecked_mut(k * 10 + i..));
+                    for i in 0..11 {
+                        rows[i].write(scratch.get_unchecked_mut(k * 11 + i..));
                     }
                 }
 
                 // rows
 
-                for k in 0..10 {
-                    for i in 0..10 {
-                        rows[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 10 + k..));
+                for k in 0..11 {
+                    for i in 0..11 {
+                        rows[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 11 + k..));
                     }
-                    rows = self.bf10.exec(rows);
-                    for i in 0..10 {
-                        rows[i].write(dst.get_unchecked_mut(i * 10 + k..));
+                    rows = self.bf11.exec(rows);
+                    for i in 0..11 {
+                        rows[i].write(dst.get_unchecked_mut(i * 11 + k..));
                     }
                 }
             }
@@ -191,7 +193,7 @@ impl NeonButterfly100d {
     }
 }
 
-impl CompositeFftExecutor<f64> for NeonButterfly100d {
+impl CompositeFftExecutor<f64> for NeonButterfly121d {
     fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
         self
     }
@@ -202,12 +204,12 @@ mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
 
-    test_butterfly!(test_neon_butterfly100, f64, NeonButterfly100d, 100, 1e-7);
+    test_butterfly!(test_neon_butterfly81_f64, f64, NeonButterfly121d, 121, 1e-7);
     test_oof_butterfly!(
-        test_oof_neon_butterfly100,
+        test_oof_neon_butterfly121_f64,
         f64,
-        NeonButterfly100d,
-        100,
+        NeonButterfly121d,
+        121,
         1e-7
     );
 }

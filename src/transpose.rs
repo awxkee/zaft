@@ -838,9 +838,7 @@ impl TransposeBlock<f64> for TransposeBlockAvx2x2F64x2 {
         dst_stride: usize,
     ) {
         use crate::avx::avx_transpose_f64x2_2x2;
-        unsafe {
-            avx_transpose_f64x2_2x2(src, src_stride, dst, dst_stride);
-        }
+        avx_transpose_f64x2_2x2(src, src_stride, dst, dst_stride);
     }
 }
 

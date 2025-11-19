@@ -213,11 +213,17 @@ impl CompositeFftExecutor<f32> for NeonFcmaButterfly100f {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::neon::butterflies::{test_fcma_butterfly_small, test_oof_fcma_butterfly_small};
+    use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
-    test_fcma_butterfly_small!(test_avx_butterfly100, f32, NeonFcmaButterfly100f, 100, 1e-3);
-    test_oof_fcma_butterfly_small!(
-        test_oof_avx_butterfly100,
+    test_fcma_butterfly!(
+        test_fcma_butterfly100,
+        f32,
+        NeonFcmaButterfly100f,
+        100,
+        1e-3
+    );
+    test_oof_fcma_butterfly!(
+        test_oof_fcma_butterfly100,
         f32,
         NeonFcmaButterfly100f,
         100,

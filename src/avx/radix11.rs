@@ -64,6 +64,7 @@ pub(crate) struct AvxFmaRadix11<T> {
     twiddle5: Complex<T>,
     direction: FftDirection,
     butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 impl<
@@ -91,7 +92,18 @@ where
             "Input length must be a power of 11"
         );
 
-        let twiddles = create_avx4_twiddles::<T, 11>(11, size, fft_direction)?;
+        let log11 = compute_logarithm::<11>(size).unwrap();
+        let butterfly = match log11 {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly11(fft_direction)?,
+            _ => {
+                T::butterfly121(fft_direction).map_or_else(|| T::butterfly11(fft_direction), Ok)?
+            }
+        };
+
+        let butterfly_length = butterfly.length();
+
+        let twiddles = create_avx4_twiddles::<T, 11>(butterfly_length, size, fft_direction)?;
 
         Ok(AvxFmaRadix11 {
             execution_length: size,
@@ -102,7 +114,8 @@ where
             twiddle4: compute_twiddle(4, 11, fft_direction),
             twiddle5: compute_twiddle(5, 11, fft_direction),
             direction: fft_direction,
-            butterfly: T::butterfly11(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
     }
 }
@@ -311,11 +324,11 @@ impl AvxFmaRadix11<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose_f64_radix11(11, chunk, &mut scratch);
+                avx_bitreversed_transpose_f64_radix11(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 11;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -1051,11 +1064,11 @@ impl AvxFmaRadix11<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose_f32_radix11(11, chunk, &mut scratch);
+                avx_bitreversed_transpose_f32_radix11(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 11;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 

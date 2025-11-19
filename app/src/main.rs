@@ -36,7 +36,8 @@ use realfft::RealFftPlanner;
 use rustfft::FftPlanner;
 use rustfft::num_complex::Complex;
 use std::fmt::format;
-use std::time::Instant;
+use std::hint::black_box;
+use std::time::{Duration, Instant};
 use zaft::Zaft;
 
 fn check_power_group(c: &mut Criterion, n: usize, group: String) {
@@ -111,15 +112,33 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 579];
-    let mut c = Criterion::default().sample_size(10);
+    let mut data = vec![Complex::new(0.0019528865, 0.); 1210];
+    let mut c = Criterion::default()
+        .sample_size(10)
+        .warm_up_time(Duration::from_millis(135))
+        .measurement_time(Duration::from_millis(135));
     // bench_zaft_averages(&mut c);
-    // check_power_groups(&mut c, 45, "45".to_string());
-    // for i in 2..11 {
+    // check_power_groups(&mut c, 121, "121".to_string());
+    // check_power_groups(&mut c, 11usize.pow(4), "11^4".to_string());
+    for i in 2..24 {
+        check_power_group(
+            &mut c,
+            13usize.pow(3) * i,
+            format!("size {}, 13^3 mul {i}", 13usize.pow(3) * i),
+        );
+    }
+    // for i in 2..8 {
     //     check_power_group(
     //         &mut c,
-    //         7 * 2usize.pow(i),
-    //         format!("size {}, power {i}", 7 * 2usize.pow(i)),
+    //         5usize.pow(2) * 7usize.pow(i),
+    //         format!("size {}, 7 power {i}", 5usize.pow(2) * 7usize.pow(i)),
+    //     );
+    // }
+    // for i in 2..8 {
+    //     check_power_group(
+    //         &mut c,
+    //         7usize.pow(2) * 5usize.pow(i),
+    //         format!("size {}, 5 power {i}", 7usize.pow(2) * 5usize.pow(i)),
     //     );
     // }
     // for (k, z) in data.iter_mut().enumerate() {

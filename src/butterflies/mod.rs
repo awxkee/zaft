@@ -136,9 +136,9 @@ macro_rules! test_butterfly {
         #[test]
         fn $method_name() {
             use rand::Rng;
-            for i in 1..4 {
+            for i in 1..20 {
                 let val = $scale as usize;
-                let size = val.pow(i);
+                let size = val * i;
                 let mut input = vec![Complex::<$data_type>::default(); size];
                 for z in input.iter_mut() {
                     *z = Complex {
@@ -292,9 +292,9 @@ macro_rules! test_oof_butterfly {
         #[test]
         fn $method_name() {
             use rand::Rng;
-            for i in 1..4 {
+            for i in 1..20 {
                 let kern = $scale;
-                let size = (kern as usize).pow(i);
+                let size = (kern as usize) * i;
                 let mut input = vec![Complex::<$data_type>::default(); size];
                 for z in input.iter_mut() {
                     *z = Complex {
