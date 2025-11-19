@@ -974,6 +974,20 @@ impl TransposeExecutor<f64> for NeonDefaultExecutorDouble {
         let input_stride = width;
         let output_stride = height;
 
+        if width.is_multiple_of(2) && height.is_multiple_of(2) {
+            transpose_fixed_block_executor2d::<f64, 2, 2>(
+                input,
+                input_stride,
+                output,
+                output_stride,
+                width,
+                height,
+                y,
+                TransposeBlockNeon2x2F64x2 {},
+            );
+            return;
+        }
+
         y = transpose_executor::<f64, 2>(
             input,
             input_stride,
