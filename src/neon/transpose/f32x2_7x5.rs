@@ -143,31 +143,119 @@ pub(crate) fn block_transpose_f32x2_7x5(
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use num_complex::Complex;
-//
-//     #[test]
-//     fn test_block_transpose_f32x2_7x5() {
-//
-//         // Create input buffer: 7x7 Complex<f32>
-//         let mut src = vec![Complex::<f32>::new(0.0, 0.0); 7 * 5];
-//         for (i, q) in src.iter_mut().enumerate() {
-//             *q = Complex::<f32>::new(i as f32, 0.);
-//         }
-//         // Output buffer
-//         let mut dst = vec![Complex::<f32>::new(-1.0, -1.0); 7 * 5];
-//
-//         // Call the transpose
-//         block_transpose_f32x2_7x5(&src, 7, &mut dst, 5);
-//
-//         for chunk in src.chunks_exact(7) {
-//             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
-//         }
-//         println!("-----");
-//         for chunk in dst.chunks_exact(5) {
-//             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
-//         }
-//     }
-// }
+#[inline]
+pub(crate) fn block_transpose_f32x2_7x3(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let rows0: [NeonStoreF; 3] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let rows1: [NeonStoreF; 3] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 2..))
+        });
+        let rows2: [NeonStoreF; 3] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 4..))
+        });
+        let rows3: [NeonStoreF; 3] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex(src.get_unchecked(x * src_stride + 6))
+        });
+
+        let (v0, v1, _) = neon_transpose_f32x2_7x5_aos(
+            [
+                rows0[0],
+                rows0[1],
+                rows0[2],
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+            ],
+            [
+                rows1[0],
+                rows1[1],
+                rows1[2],
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+            ],
+            [
+                rows2[0],
+                rows2[1],
+                rows2[2],
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+            ],
+            [
+                rows3[0],
+                rows3[1],
+                rows3[2],
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+            ],
+        );
+
+        for i in 0..7 {
+            v0[i].write(dst.get_unchecked_mut(i * dst_stride..));
+            v1[i].write_lo(dst.get_unchecked_mut(i * dst_stride + 2..));
+        }
+    }
+}
+
+#[inline]
+pub(crate) fn block_transpose_f32x2_7x2(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let rows0: [NeonStoreF; 2] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let rows1: [NeonStoreF; 2] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 2..))
+        });
+        let rows2: [NeonStoreF; 2] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 4..))
+        });
+        let rows3: [NeonStoreF; 2] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex(src.get_unchecked(x * src_stride + 6))
+        });
+
+        let (v0, _, _) = neon_transpose_f32x2_7x5_aos(
+            [
+                rows0[0],
+                rows0[1],
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+            ],
+            [
+                rows1[0],
+                rows1[1],
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+            ],
+            [
+                rows2[0],
+                rows2[1],
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+            ],
+            [
+                rows3[0],
+                rows3[1],
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+                NeonStoreF::default(),
+            ],
+        );
+
+        for i in 0..7 {
+            v0[i].write(dst.get_unchecked_mut(i * dst_stride..));
+        }
+    }
+}

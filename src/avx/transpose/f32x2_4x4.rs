@@ -183,7 +183,9 @@ pub(crate) fn avx2_transpose_f32x2_4x3(
             _mm256_castsi256_si128(v0.3),
         );
         _mm_storeu_si64(
-            dst.get_unchecked_mut(3 * dst_stride + 2..).as_mut_ptr().cast(),
+            dst.get_unchecked_mut(3 * dst_stride + 2..)
+                .as_mut_ptr()
+                .cast(),
             _mm256_extracti128_si256::<1>(v0.3),
         );
     }

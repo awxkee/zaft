@@ -89,6 +89,26 @@ impl TransposeFactory<f32> for f32 {
                 use crate::neon::NeonTranspose7x5F32;
                 return Box::new(NeonTranspose7x5F32::default());
             }
+            if _width.is_multiple_of(7) && _height.is_multiple_of(3) {
+                use crate::neon::NeonTranspose7x3F32;
+                return Box::new(NeonTranspose7x3F32::default());
+            }
+            if _width.is_multiple_of(7) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose7x2F32;
+                return Box::new(NeonTranspose7x2F32::default());
+            }
+            if _width.is_multiple_of(5) && _height.is_multiple_of(4) {
+                use crate::neon::NeonTranspose5x4F32;
+                return Box::new(NeonTranspose5x4F32::default());
+            }
+            if _width.is_multiple_of(5) && _height.is_multiple_of(3) {
+                use crate::neon::NeonTranspose5x3F32;
+                return Box::new(NeonTranspose5x3F32::default());
+            }
+            if _width.is_multiple_of(5) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose5x2F32;
+                return Box::new(NeonTranspose5x2F32::default());
+            }
             if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
                 use crate::neon::NeonTranspose4x4F32;
                 return Box::new(NeonTranspose4x4F32::default());
