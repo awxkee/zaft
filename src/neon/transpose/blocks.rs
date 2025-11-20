@@ -100,6 +100,7 @@ macro_rules! define_transpose {
 }
 
 define_transpose!(NeonTranspose7x7F32, f32, block_transpose_f32x2_7x7, 7, 7);
+define_transpose!(NeonTranspose7x6F32, f32, block_transpose_f32x2_7x6, 7, 6);
 define_transpose!(NeonTranspose7x5F32, f32, block_transpose_f32x2_7x5, 7, 5);
 define_transpose!(NeonTranspose7x3F32, f32, block_transpose_f32x2_7x3, 7, 3);
 define_transpose!(NeonTranspose7x2F32, f32, block_transpose_f32x2_7x2, 7, 2);

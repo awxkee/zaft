@@ -178,6 +178,7 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly36(
         fft_direction: FftDirection,
     ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly42(fft_direction: FftDirection) -> Option<Box<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly48(fft_direction: FftDirection) -> Option<Box<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly49(
         fft_direction: FftDirection,
@@ -689,6 +690,10 @@ impl AlgorithmFactory<f32> for f32 {
         {
             None
         }
+    }
+
+    fn butterfly42(_: FftDirection) -> Option<Box<dyn FftExecutor<f32> + Send + Sync>> {
+        None
     }
 
     fn butterfly48(
