@@ -27,5 +27,17 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod block;
+mod f32x2_7x7;
+mod f64x2_6x6;
+mod transpose_5x5;
 
-pub(crate) use block::{AvxTransposeF324x4, AvxTransposeF642x2, AvxTransposeF644x4};
+pub(crate) use block::{
+    AvxTransposeF322x2, AvxTransposeF324x4, AvxTransposeF327x7, AvxTransposeF642x2,
+    AvxTransposeF644x4, AvxTransposeF647x7,
+};
+pub(crate) use f32x2_7x7::{
+    block_transpose_f32x2_7x7, block_transpose_f64x2_7x7, store_transpose_7x7_f32,
+    transpose_7x7_f32, transpose_7x7_f64,
+};
+pub(crate) use f64x2_6x6::avx_transpose_f64x2_6x6_impl;
+pub(crate) use transpose_5x5::{transpose_5x5_f32, transpose_5x5_f64};

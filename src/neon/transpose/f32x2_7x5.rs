@@ -37,11 +37,7 @@ pub(crate) fn neon_transpose_f32x2_7x5_aos(
     rows2: [NeonStoreF; 5],
     rows3: [NeonStoreF; 5],
     rows4: [NeonStoreF; 5],
-) -> (
-    [NeonStoreF; 7],
-    [NeonStoreF; 7],
-    [NeonStoreF; 7],
-) {
+) -> ([NeonStoreF; 7], [NeonStoreF; 7], [NeonStoreF; 7]) {
     unsafe {
         let tl = transpose_f32x2_4x4(
             float32x4x2_t(rows1[0].v, rows2[0].v),

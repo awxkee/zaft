@@ -110,9 +110,17 @@ impl TransposeFactory<f32> for f32 {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
                 if std::arch::is_x86_feature_detected!("avx2") {
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
+                        use crate::avx::AvxTransposeF327x7;
+                        return Box::new(AvxTransposeF327x7::default());
+                    }
                     if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
                         use crate::avx::AvxTransposeF324x4;
                         return Box::new(AvxTransposeF324x4::default());
+                    }
+                    if _width.is_multiple_of(2) && _height.is_multiple_of(2) {
+                        use crate::avx::AvxTransposeF322x2;
+                        return Box::new(AvxTransposeF322x2::default());
                     }
 
                     return Box::new(AvxDefaultExecutorSingle {});
@@ -139,6 +147,10 @@ impl TransposeFactory<f64> for f64 {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
             if std::arch::is_x86_feature_detected!("avx") {
+                if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
+                    use crate::avx::AvxTransposeF647x7;
+                    return Box::new(AvxTransposeF647x7::default());
+                }
                 if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
                     use crate::avx::AvxTransposeF644x4;
                     return Box::new(AvxTransposeF644x4::default());
@@ -605,9 +617,7 @@ impl TransposeBlock<f32> for TransposeBlockAvx4x4F32x4 {
         dst_stride: usize,
     ) {
         use crate::avx::avx2_transpose_f32x2_4x4;
-        unsafe {
-            avx2_transpose_f32x2_4x4(src, src_stride, dst, dst_stride);
-        }
+        avx2_transpose_f32x2_4x4(src, src_stride, dst, dst_stride);
     }
 }
 
@@ -879,9 +889,7 @@ impl TransposeBlock<f64> for TransposeBlockAvx4x4F64x2 {
         dst_stride: usize,
     ) {
         use crate::avx::avx_transpose_f64x2_4x4;
-        unsafe {
-            avx_transpose_f64x2_4x4(src, src_stride, dst, dst_stride);
-        }
+        avx_transpose_f64x2_4x4(src, src_stride, dst, dst_stride);
     }
 }
 

@@ -86,8 +86,7 @@ pub(crate) fn block_transpose_f32x2_11x2(
         }
 
         // Last partial (11th) pair
-        t[11]
-            .write(dst.get_unchecked_mut(10 * dst_stride..));
+        t[11].write(dst.get_unchecked_mut(10 * dst_stride..));
     }
 }
 

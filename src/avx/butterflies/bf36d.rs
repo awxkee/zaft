@@ -28,7 +28,7 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::avx::f64x2_6x6::avx_transpose_f64x2_6x6_impl;
+use crate::avx::avx_transpose_f64x2_6x6_impl;
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly6d};
 use crate::avx::util::_mm256_fcmul_pd;
 use crate::util::compute_twiddle;
