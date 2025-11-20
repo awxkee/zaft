@@ -43,6 +43,7 @@ mod f32x2_7x5;
 mod f32x2_7x7;
 mod f32x2_8x3;
 mod f32x2_8x8;
+mod f32x2_9x2;
 mod f64x2_2x2;
 mod f64x2_4x3;
 mod f64x2_4x4;
@@ -54,7 +55,7 @@ pub(crate) use blocks::{
     NeonTranspose4x4F64, NeonTranspose4x7F32, NeonTranspose5x2F32, NeonTranspose5x3F32,
     NeonTranspose5x4F32, NeonTranspose5x7F32, NeonTranspose6x4F32, NeonTranspose6x5F32,
     NeonTranspose7x2F32, NeonTranspose7x3F32, NeonTranspose7x5F32, NeonTranspose7x7F32,
-    NeonTranspose8x3F32, NeonTranspose11x2F32,
+    NeonTranspose8x3F32, NeonTranspose9x2F32, NeonTranspose11x2F32,
 };
 pub(crate) use f32x2_2x2::{block_transpose_f32x2_2x2, neon_transpose_f32x2_2x2_impl};
 pub(crate) use f32x2_2x9::{block_transpose_f32x2_2x9, transpose_2x9};
@@ -77,6 +78,7 @@ pub(crate) use f32x2_7x5::{
 pub(crate) use f32x2_7x7::{block_transpose_f32x2_7x7, neon_transpose_f32x2_7x7_aos};
 pub(crate) use f32x2_8x3::{block_transpose_f32x2_3x8, block_transpose_f32x2_8x3};
 pub(crate) use f32x2_8x8::transpose_8x8_f32;
+pub(crate) use f32x2_9x2::block_transpose_f32x2_9x2;
 pub(crate) use f32x2_11x2::block_transpose_f32x2_11x2;
 pub(crate) use f64x2_2x2::{neon_transpose_f64x2_2x2, neon_transpose_f64x2_4x4_impl};
 pub(crate) use f64x2_4x3::block_transpose_f64x2_4x3;

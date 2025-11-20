@@ -118,18 +118,18 @@ fn main() {
         .warm_up_time(Duration::from_millis(135))
         .measurement_time(Duration::from_millis(135));
     // bench_zaft_averages(&mut c);
-    check_power_groups(&mut c, 105, "105".to_string());
-    check_power_groups(&mut c, 95, "95".to_string());
-    check_power_groups(&mut c, 125, "125".to_string());
-    check_power_groups(&mut c, 170, "170".to_string());
-    check_power_groups(&mut c, 510, "510".to_string());
-    check_power_groups(&mut c, 490, "490".to_string());
-    check_power_groups(&mut c, 460, "460".to_string());
-    check_power_groups(&mut c, 510, "510".to_string());
-    check_power_groups(&mut c, 515, "515".to_string());
-    check_power_groups(&mut c, 580, "580".to_string());
-    check_power_groups(&mut c, 665, "665".to_string());
+    check_power_groups(&mut c, 54, "54".to_string());
+    check_power_groups(&mut c, 45, "45".to_string());
+    check_power_groups(&mut c, 108, "108".to_string());
+    check_power_groups(&mut c, 90, "90".to_string());
+    check_power_groups(&mut c, 162, "162".to_string());
     check_power_groups(&mut c, 135, "135".to_string());
+    check_power_groups(&mut c, 117, "117".to_string());
+    check_power_groups(&mut c, 126, "126".to_string());
+    check_power_groups(&mut c, 144, "144".to_string());
+    check_power_groups(&mut c, 279, "279".to_string());
+    check_power_groups(&mut c, 153, "153".to_string());
+    check_power_groups(&mut c, 306, "306".to_string());
     // check_power_groups(&mut c, 11usize.pow(4), "11^4".to_string());
     // for i in 2..24 {
     //     check_power_group(
