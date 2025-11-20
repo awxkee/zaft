@@ -30,7 +30,8 @@ use crate::transpose::TransposeExecutor;
 use num_complex::Complex;
 
 // assumes that execution block is exactly divisible by executor
-pub(crate) fn transpose_fixed_block_executor2d<
+#[target_feature(enable = "avx2")]
+fn transpose_fixed_block_executor2d<
     V: Copy + Default,
     const X_BLOCK_SIZE: usize,
     const Y_BLOCK_SIZE: usize,
@@ -73,9 +74,10 @@ pub(crate) fn transpose_fixed_block_executor2d<
 }
 
 type FunctionF32 = fn(&[Complex<f32>], usize, &mut [Complex<f32>], usize);
+type FunctionF64 = fn(&[Complex<f64>], usize, &mut [Complex<f64>], usize);
 
 macro_rules! define_transpose {
-    ($rule_name: ident, $complex_type: ident, $rot_name: ident, $block_width: expr, $block_height: expr) => {
+    ($rule_name: ident, $complex_type: ident, $rot_name: ident, $block_width: expr, $block_height: expr, $func: ident) => {
         #[derive(Default)]
         pub(crate) struct $rule_name {}
 
@@ -87,26 +89,50 @@ macro_rules! define_transpose {
                 width: usize,
                 height: usize,
             ) {
-                use crate::neon::$rot_name;
-                transpose_fixed_block_executor2d::<
-                    $complex_type,
-                    $block_width,
-                    $block_height,
-                    FunctionF32,
-                >(input, width, output, height, width, height, 0, $rot_name);
+                use crate::avx::$rot_name;
+                unsafe {
+                    transpose_fixed_block_executor2d::<
+                        $complex_type,
+                        $block_width,
+                        $block_height,
+                        $func,
+                    >(
+                        input,
+                        width,
+                        output,
+                        height,
+                        width,
+                        height,
+                        0,
+                        |src, ss, dst, ds| $rot_name(src, ss, dst, ds),
+                    );
+                }
             }
         }
     };
 }
 
-define_transpose!(NeonTranspose7x7F32, f32, block_transpose_f32x2_7x7, 7, 7);
-define_transpose!(NeonTranspose7x5F32, f32, block_transpose_f32x2_7x5, 7, 5);
-define_transpose!(NeonTranspose6x4F32, f32, neon_transpose_f32x2_6x4, 6, 4);
-define_transpose!(NeonTranspose6x5F32, f32, block_transpose_f32x2_6x5, 6, 5);
-define_transpose!(NeonTranspose2x9F32, f32, block_transpose_f32x2_2x9, 2, 9);
-define_transpose!(NeonTranspose2x10F32, f32, block_transpose_f32x2_2x10, 2, 10);
-define_transpose!(NeonTranspose2x11F32, f32, block_transpose_f32x2_2x11, 2, 11);
-define_transpose!(NeonTranspose11x2F32, f32, block_transpose_f32x2_11x2, 11, 2);
-define_transpose!(NeonTranspose2x12F32, f32, block_transpose_f32x2_2x12, 2, 12);
-define_transpose!(NeonTranspose4x4F32, f32, neon_transpose_f32x2_4x4, 4, 4);
-define_transpose!(NeonTranspose2x2F32, f32, block_transpose_f32x2_2x2, 2, 2);
+define_transpose!(
+    AvxTransposeF324x4,
+    f32,
+    avx2_transpose_f32x2_4x4,
+    4,
+    4,
+    FunctionF32
+);
+define_transpose!(
+    AvxTransposeF642x2,
+    f64,
+    avx_transpose_f64x2_2x2,
+    2,
+    2,
+    FunctionF64
+);
+define_transpose!(
+    AvxTransposeF644x4,
+    f64,
+    avx_transpose_f64x2_4x4,
+    4,
+    4,
+    FunctionF64
+);

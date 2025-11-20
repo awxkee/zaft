@@ -51,6 +51,7 @@ mod rotate;
 mod spectrum_arithmetic;
 mod transpose_5x5;
 mod util;
+mod transpose;
 
 pub(crate) use butterflies::{
     AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5, AvxButterfly6, AvxButterfly7,
@@ -91,6 +92,7 @@ pub(crate) use radix10::{AvxFmaRadix10d, AvxFmaRadix10f};
 pub(crate) use radix11::AvxFmaRadix11;
 pub(crate) use radix13::AvxFmaRadix13;
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;
+pub(crate) use transpose::{AvxTransposeF324x4, AvxTransposeF642x2, AvxTransposeF644x4};
 
 #[cfg(test)]
 macro_rules! test_avx_radix {

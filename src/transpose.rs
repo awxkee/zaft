@@ -110,6 +110,11 @@ impl TransposeFactory<f32> for f32 {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
                 if std::arch::is_x86_feature_detected!("avx2") {
+                    if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
+                        use crate::avx::AvxTransposeF324x4;
+                        return Box::new(AvxTransposeF324x4::default());
+                    }
+
                     return Box::new(AvxDefaultExecutorSingle {});
                 }
             }
@@ -134,6 +139,15 @@ impl TransposeFactory<f64> for f64 {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
             if std::arch::is_x86_feature_detected!("avx") {
+                if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
+                    use crate::avx::AvxTransposeF644x4;
+                    return Box::new(AvxTransposeF644x4::default());
+                }
+                if _width.is_multiple_of(2) && _height.is_multiple_of(2) {
+                    use crate::avx::AvxTransposeF642x2;
+                    return Box::new(AvxTransposeF642x2::default());
+                }
+
                 return Box::new(AvxDefaultExecutorDouble {});
             }
         }
