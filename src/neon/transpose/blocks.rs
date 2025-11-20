@@ -112,3 +112,4 @@ define_transpose!(NeonTranspose4x4F32, f32, neon_transpose_f32x2_4x4, 4, 4);
 define_transpose!(NeonTranspose2x2F32, f32, block_transpose_f32x2_2x2, 2, 2);
 define_transpose!(NeonTranspose2x2F64, f64, neon_transpose_f64x2_2x2, 2, 2);
 define_transpose!(NeonTranspose4x4F64, f64, block_transpose_f64x2_4x4, 4, 4);
+define_transpose!(NeonTranspose4x3F64, f64, block_transpose_f64x2_4x3, 4, 3);
