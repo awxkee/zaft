@@ -108,9 +108,7 @@ pub(crate) fn avx_transpose_f32x2_4x4_impl(
 
 #[inline]
 #[target_feature(enable = "avx")]
-pub(crate) fn transpose_f32x2_4x4_aos(
-    v: [AvxStoreF; 4],
-) -> [AvxStoreF; 4] {
+pub(crate) fn transpose_f32x2_4x4_aos(v: [AvxStoreF; 4]) -> [AvxStoreF; 4] {
     // Unpack 32 bit elements. Goes from:
     // in[0]: 00 01 02 03
     // in[1]: 10 11 12 13

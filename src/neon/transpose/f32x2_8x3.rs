@@ -148,6 +148,83 @@ pub(crate) fn block_transpose_f32x2_8x3(
     }
 }
 
+#[inline]
+pub(crate) fn block_transpose_f32x2_3x8(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        macro_rules! block {
+            ($src: expr, $dst: expr, $dst_stride: expr) => {
+                let r0 = vld1q_f32($src.as_ptr().cast());
+                let r1 = vld1_f32($src.get_unchecked(2..).as_ptr().cast());
+
+                let r2 = vld1q_f32($src.get_unchecked(src_stride..).as_ptr().cast());
+                let r3 = vld1_f32($src.get_unchecked(2 + src_stride..).as_ptr().cast());
+
+                let r4 = vld1q_f32($src.get_unchecked(2 * src_stride..).as_ptr().cast());
+                let r5 = vld1_f32($src.get_unchecked(2 + 2 * src_stride..).as_ptr().cast());
+
+                let r6 = vld1q_f32($src.get_unchecked(3 * src_stride..).as_ptr().cast());
+                let r7 = vld1_f32($src.get_unchecked(2 + 3 * src_stride..).as_ptr().cast());
+
+                // Perform an 4 x 4 matrix transpose by building on top of the existing 2 x 2
+                // matrix transpose implementation:
+                // [ A B ]^T => [ A^T C^T ]
+                // [ C D ]      [ B^T D^T ]
+
+                let q0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0, r2));
+                let q1 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(
+                    vcombine_f32(r1, vdup_n_f32(0.)),
+                    vcombine_f32(r3, vdup_n_f32(0.)),
+                ));
+                let q2 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r4, r6));
+                let q3 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(
+                    vcombine_f32(r5, vdup_n_f32(0.)),
+                    vcombine_f32(r7, vdup_n_f32(0.)),
+                ));
+
+                vst1q_f32($dst.as_mut_ptr().cast(), q0.0);
+                vst1q_f32(
+                    $dst.get_unchecked_mut($dst_stride..).as_mut_ptr().cast(),
+                    q0.1,
+                );
+
+                vst1q_f32($dst.get_unchecked_mut(2..).as_mut_ptr().cast(), q2.0);
+                vst1q_f32(
+                    $dst.get_unchecked_mut(2 + $dst_stride..)
+                        .as_mut_ptr()
+                        .cast(),
+                    q2.1,
+                );
+
+                vst1q_f32(
+                    $dst.get_unchecked_mut(2 * $dst_stride..)
+                        .as_mut_ptr()
+                        .cast(),
+                    q1.0,
+                );
+
+                vst1q_f32(
+                    $dst.get_unchecked_mut(2 + 2 * $dst_stride..)
+                        .as_mut_ptr()
+                        .cast(),
+                    q3.0,
+                );
+            };
+        }
+
+        block!(src, dst, dst_stride);
+        block!(
+            src.get_unchecked(src_stride * 4..),
+            dst.get_unchecked_mut(4..),
+            dst_stride
+        );
+    }
+}
+
 // #[cfg(test)]
 // mod tests {
 //     use super::*;
@@ -155,22 +232,22 @@ pub(crate) fn block_transpose_f32x2_8x3(
 //
 //     #[test]
 //     fn test_block_transpose_f32x2_8x3() {
-//         let mut src = vec![Complex::<f32>::new(0.0, 0.0); 8 * 3];
+//         let mut src = vec![Complex::<f32>::new(0.0, 0.0); 3 * 8];
 //         for (i, q) in src.iter_mut().enumerate() {
 //             *q = Complex::<f32>::new(i as f32, 0.);
 //         }
 //         // Output buffer
-//         let mut dst = vec![Complex::<f32>::new(-1.0, -1.0); 8 * 3];
+//         let mut dst = vec![Complex::<f32>::new(-1.0, -1.0); 3 * 8];
 //
 //         // Call the transpose
-//         block_transpose_f32x2_8x3(&src, 8, &mut dst, 3);
+//         block_transpose_f32x2_3x8(&src, 3, &mut dst, 8);
 //
-//         for chunk in src.chunks_exact(8) {
+//         for chunk in src.chunks_exact(3) {
 //             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
 //         }
 //         println!("-----");
 //
-//         for chunk in dst.chunks_exact(3) {
+//         for chunk in dst.chunks_exact(8) {
 //             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
 //         }
 //     }
