@@ -396,14 +396,14 @@ pub(crate) unsafe fn transpose_executor2d<
     let mut dst_buffer = vec![Complex::<V>::default(); X_BLOCK_SIZE * Y_BLOCK_SIZE];
 
     unsafe {
-        while y + Y_BLOCK_SIZE < height {
+        while y + Y_BLOCK_SIZE <= height {
             let input_y = y;
 
             let src = input.get_unchecked(input_stride * input_y..);
 
             let mut x = 0usize;
 
-            while x + X_BLOCK_SIZE < width {
+            while x + X_BLOCK_SIZE <= width {
                 let output_x = x;
 
                 let src = src.get_unchecked(x..);
@@ -479,14 +479,14 @@ pub(crate) fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
     let mut dst_buffer = [Complex::<V>::default(); 16];
 
     unsafe {
-        while y + BLOCK_SIZE < height {
+        while y + BLOCK_SIZE <= height {
             let input_y = y;
 
             let src = input.get_unchecked(input_stride * input_y..);
 
             let mut x = 0usize;
 
-            while x + BLOCK_SIZE < width {
+            while x + BLOCK_SIZE <= width {
                 let output_x = x;
 
                 let src = src.get_unchecked(x..);

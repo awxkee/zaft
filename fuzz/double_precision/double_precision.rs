@@ -13,7 +13,7 @@ struct Target {
 }
 
 fuzz_target!(|data: Target| {
-    if data.size == 0 || data.size > 15000 {
+    if data.size == 0 || data.size > 15100 {
         return;
     }
     let executor = if data.forward {
