@@ -83,13 +83,9 @@ pub(crate) use transpose::{
     AvxTransposeF322x2, AvxTransposeF322x11, AvxTransposeF324x3, AvxTransposeF324x4,
     AvxTransposeF324x11, AvxTransposeF325x2, AvxTransposeF325x3, AvxTransposeF325x5,
     AvxTransposeF327x2, AvxTransposeF327x3, AvxTransposeF327x5, AvxTransposeF327x6,
-    AvxTransposeF327x7, AvxTransposeF642x2, AvxTransposeF644x4, avx_transpose_f32x2_2x2,
-    avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4, avx_transpose_f64x2_6x6_impl,
-    avx2_transpose_f32x2_4x3, avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
-    block_transpose_f32x2_2x11, block_transpose_f32x2_4x11, block_transpose_f32x2_5x2,
-    block_transpose_f32x2_5x3, block_transpose_f32x2_5x5, block_transpose_f32x2_7x2,
-    block_transpose_f32x2_7x3, block_transpose_f32x2_7x5, block_transpose_f32x2_7x6,
-    block_transpose_f32x2_7x7,
+    AvxTransposeF327x7, AvxTransposeF328x3, AvxTransposeF642x2, AvxTransposeF644x4,
+    avx_transpose_f32x2_2x2, avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4,
+    avx_transpose_f64x2_6x6_impl, avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
 };
 
 #[cfg(test)]

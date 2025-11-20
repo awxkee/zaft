@@ -88,7 +88,7 @@ macro_rules! define_transpose {
                 width: usize,
                 height: usize,
             ) {
-                use crate::avx::$rot_name;
+                use crate::avx::transpose::$rot_name;
                 unsafe {
                     transpose_fixed_block_executor2d::<
                         $complex_type,
@@ -126,3 +126,4 @@ define_transpose!(AvxTransposeF327x3, f32, block_transpose_f32x2_7x3, 7, 3);
 define_transpose!(AvxTransposeF327x2, f32, block_transpose_f32x2_7x2, 7, 2);
 define_transpose!(AvxTransposeF324x11, f32, block_transpose_f32x2_4x11, 4, 11);
 define_transpose!(AvxTransposeF322x11, f32, block_transpose_f32x2_2x11, 2, 11);
+define_transpose!(AvxTransposeF328x3, f32, block_transpose_f32x2_8x3, 8, 3);

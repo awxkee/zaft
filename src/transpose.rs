@@ -185,6 +185,10 @@ impl TransposeFactory<f32> for f32 {
                         use crate::avx::AvxTransposeF322x11;
                         return Box::new(AvxTransposeF322x11::default());
                     }
+                    if _width.is_multiple_of(8) && _height.is_multiple_of(3) {
+                        use crate::avx::AvxTransposeF328x3;
+                        return Box::new(AvxTransposeF328x3::default());
+                    }
                     if _width.is_multiple_of(4) && _height.is_multiple_of(3) {
                         use crate::avx::AvxTransposeF324x3;
                         return Box::new(AvxTransposeF324x3::default());
