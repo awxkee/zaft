@@ -136,3 +136,55 @@ pub(crate) fn avx2_transpose_f32x2_4x4(
         );
     }
 }
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn avx2_transpose_f32x2_4x3(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let row0 = _mm256_loadu_si256(src.as_ptr().cast());
+        let row1 = _mm256_loadu_si256(src.get_unchecked(src_stride..).as_ptr().cast());
+        let row2 = _mm256_loadu_si256(src.get_unchecked(2 * src_stride..).as_ptr().cast());
+
+        let v0 = avx_transpose_u64_4x4_impl((row0, row1, row2, _mm256_setzero_si256()));
+
+        _mm_storeu_si128(dst.as_mut_ptr().cast(), _mm256_castsi256_si128(v0.0));
+        _mm_storeu_si64(
+            dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+            _mm256_extracti128_si256::<1>(v0.0),
+        );
+
+        _mm_storeu_si128(
+            dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
+            _mm256_castsi256_si128(v0.1),
+        );
+        _mm_storeu_si64(
+            dst.get_unchecked_mut(dst_stride + 2..).as_mut_ptr().cast(),
+            _mm256_extracti128_si256::<1>(v0.1),
+        );
+
+        _mm_storeu_si128(
+            dst.get_unchecked_mut(2 * dst_stride..).as_mut_ptr().cast(),
+            _mm256_castsi256_si128(v0.2),
+        );
+        _mm_storeu_si64(
+            dst.get_unchecked_mut(2 * dst_stride + 2..)
+                .as_mut_ptr()
+                .cast(),
+            _mm256_extracti128_si256::<1>(v0.2),
+        );
+
+        _mm_storeu_si128(
+            dst.get_unchecked_mut(3 * dst_stride..).as_mut_ptr().cast(),
+            _mm256_castsi256_si128(v0.3),
+        );
+        _mm_storeu_si64(
+            dst.get_unchecked_mut(3 * dst_stride + 2..).as_mut_ptr().cast(),
+            _mm256_extracti128_si256::<1>(v0.3),
+        );
+    }
+}

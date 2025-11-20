@@ -27,13 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-use crate::avx::f32x2_4x4::avx_transpose_u64_4x4_impl;
+use crate::avx::transpose::avx_transpose_u64_4x4_impl;
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn avx2_transpose_f32x2_8x4(
+pub(crate) fn avx2_transpose_f32x2_8x4(
     src: &[Complex<f32>],
     src_stride: usize,
     dst: &mut [Complex<f32>],

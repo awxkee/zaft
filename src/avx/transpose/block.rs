@@ -73,11 +73,10 @@ fn transpose_fixed_block_executor2d<
     y
 }
 
-type FunctionF32 = fn(&[Complex<f32>], usize, &mut [Complex<f32>], usize);
-type FunctionF64 = fn(&[Complex<f64>], usize, &mut [Complex<f64>], usize);
+type Function<V> = fn(&[Complex<V>], usize, &mut [Complex<V>], usize);
 
 macro_rules! define_transpose {
-    ($rule_name: ident, $complex_type: ident, $rot_name: ident, $block_width: expr, $block_height: expr, $func: ident) => {
+    ($rule_name: ident, $complex_type: ident, $rot_name: ident, $block_width: expr, $block_height: expr) => {
         #[derive(Default)]
         pub(crate) struct $rule_name {}
 
@@ -95,7 +94,7 @@ macro_rules! define_transpose {
                         $complex_type,
                         $block_width,
                         $block_height,
-                        $func,
+                        Function<$complex_type>,
                     >(
                         input,
                         width,
@@ -112,43 +111,18 @@ macro_rules! define_transpose {
     };
 }
 
-define_transpose!(
-    AvxTransposeF324x4,
-    f32,
-    avx2_transpose_f32x2_4x4,
-    4,
-    4,
-    FunctionF32
-);
-define_transpose!(
-    AvxTransposeF642x2,
-    f64,
-    avx_transpose_f64x2_2x2,
-    2,
-    2,
-    FunctionF64
-);
-define_transpose!(
-    AvxTransposeF644x4,
-    f64,
-    avx_transpose_f64x2_4x4,
-    4,
-    4,
-    FunctionF64
-);
-define_transpose!(
-    AvxTransposeF327x7,
-    f32,
-    block_transpose_f32x2_7x7,
-    7,
-    7,
-    FunctionF32
-);
-define_transpose!(
-    AvxTransposeF322x2,
-    f32,
-    avx_transpose_f32x2_2x2,
-    2,
-    2,
-    FunctionF32
-);
+define_transpose!(AvxTransposeF324x4, f32, avx2_transpose_f32x2_4x4, 4, 4);
+define_transpose!(AvxTransposeF324x3, f32, avx2_transpose_f32x2_4x3, 4, 3);
+define_transpose!(AvxTransposeF642x2, f64, avx_transpose_f64x2_2x2, 2, 2);
+define_transpose!(AvxTransposeF644x4, f64, avx_transpose_f64x2_4x4, 4, 4);
+define_transpose!(AvxTransposeF327x7, f32, block_transpose_f32x2_7x7, 7, 7);
+define_transpose!(AvxTransposeF322x2, f32, avx_transpose_f32x2_2x2, 2, 2);
+define_transpose!(AvxTransposeF325x5, f32, block_transpose_f32x2_5x5, 5, 5);
+define_transpose!(AvxTransposeF325x3, f32, block_transpose_f32x2_5x3, 5, 3);
+define_transpose!(AvxTransposeF325x2, f32, block_transpose_f32x2_5x2, 5, 2);
+define_transpose!(AvxTransposeF327x6, f32, block_transpose_f32x2_7x6, 7, 6);
+define_transpose!(AvxTransposeF327x5, f32, block_transpose_f32x2_7x5, 7, 5);
+define_transpose!(AvxTransposeF327x3, f32, block_transpose_f32x2_7x3, 7, 3);
+define_transpose!(AvxTransposeF327x2, f32, block_transpose_f32x2_7x2, 7, 2);
+define_transpose!(AvxTransposeF324x11, f32, block_transpose_f32x2_4x11, 4, 11);
+define_transpose!(AvxTransposeF322x11, f32, block_transpose_f32x2_2x11, 2, 11);

@@ -28,8 +28,8 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::avx::f64x2_2x2::transpose_f64x2_2x2;
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly4d, ColumnButterfly12d};
+use crate::avx::transpose::transpose_f64x2_2x2;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;

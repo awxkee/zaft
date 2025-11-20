@@ -155,6 +155,13 @@ impl AvxStoreF {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn unpack_lo(&self, other: Self) -> Self {
+        const LO_LO: i32 = 0b0010_0000;
+        Self::raw(_mm256_permute2f128_ps::<LO_LO>(self.v, other.v))
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn write_lo3(&self, to_ref: &mut [Complex<f32>]) {
         unsafe {
             _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v));

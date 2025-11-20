@@ -29,8 +29,8 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::avx::butterflies::gen_butterfly_twiddles_separated_columns_f32;
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
 use crate::avx::mixed::{AvxStoreF, ColumnButterfly8f};
+use crate::avx::transpose::avx_transpose_f32x2_4x4_impl;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 

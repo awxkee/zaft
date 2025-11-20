@@ -125,6 +125,46 @@ impl TransposeFactory<f32> for f32 {
                         use crate::avx::AvxTransposeF322x2;
                         return Box::new(AvxTransposeF322x2::default());
                     }
+                    if _width.is_multiple_of(5) && _height.is_multiple_of(5) {
+                        use crate::avx::AvxTransposeF325x5;
+                        return Box::new(AvxTransposeF325x5::default());
+                    }
+                    if _width.is_multiple_of(5) && _height.is_multiple_of(3) {
+                        use crate::avx::AvxTransposeF325x3;
+                        return Box::new(AvxTransposeF325x3::default());
+                    }
+                    if _width.is_multiple_of(5) && _height.is_multiple_of(2) {
+                        use crate::avx::AvxTransposeF325x2;
+                        return Box::new(AvxTransposeF325x2::default());
+                    }
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(5) {
+                        use crate::avx::AvxTransposeF327x5;
+                        return Box::new(AvxTransposeF327x5::default());
+                    }
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(6) {
+                        use crate::avx::AvxTransposeF327x6;
+                        return Box::new(AvxTransposeF327x6::default());
+                    }
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(3) {
+                        use crate::avx::AvxTransposeF327x3;
+                        return Box::new(AvxTransposeF327x3::default());
+                    }
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(2) {
+                        use crate::avx::AvxTransposeF327x2;
+                        return Box::new(AvxTransposeF327x2::default());
+                    }
+                    if _width.is_multiple_of(4) && _height.is_multiple_of(11) {
+                        use crate::avx::AvxTransposeF324x11;
+                        return Box::new(AvxTransposeF324x11::default());
+                    }
+                    if _width.is_multiple_of(2) && _height.is_multiple_of(11) {
+                        use crate::avx::AvxTransposeF322x11;
+                        return Box::new(AvxTransposeF322x11::default());
+                    }
+                    if _width.is_multiple_of(4) && _height.is_multiple_of(3) {
+                        use crate::avx::AvxTransposeF324x3;
+                        return Box::new(AvxTransposeF324x3::default());
+                    }
 
                     return Box::new(AvxDefaultExecutorSingle {});
                 }
@@ -559,9 +599,7 @@ impl TransposeBlock<f32> for TransposeBlockAvx8x4F32x2 {
         dst_stride: usize,
     ) {
         use crate::avx::avx2_transpose_f32x2_8x4;
-        unsafe {
-            avx2_transpose_f32x2_8x4(src, src_stride, dst, dst_stride);
-        }
+        avx2_transpose_f32x2_8x4(src, src_stride, dst, dst_stride);
     }
 }
 

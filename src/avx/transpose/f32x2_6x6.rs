@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
+use crate::avx::transpose::avx_transpose_f32x2_4x4_impl;
 use std::arch::x86_64::*;
 
 #[inline]

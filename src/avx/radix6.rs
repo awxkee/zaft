@@ -28,8 +28,8 @@
  */
 use crate::avx::avx_transpose_f64x2_6x6_impl;
 use crate::avx::butterflies::AvxButterfly;
-use crate::avx::f32x2_6x6::transpose_6x6_f32;
 use crate::avx::mixed::AvxStoreD;
+use crate::avx::transpose::transpose_6x6_f32;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
