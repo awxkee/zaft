@@ -149,9 +149,9 @@ pub(crate) use transpose::{
     NeonTranspose2x10F32, NeonTranspose2x11F32, NeonTranspose2x12F32, NeonTranspose3x7F32,
     NeonTranspose3x8F32, NeonTranspose4x3F32, NeonTranspose4x3F64, NeonTranspose4x4F32,
     NeonTranspose4x4F64, NeonTranspose4x7F32, NeonTranspose5x2F32, NeonTranspose5x3F32,
-    NeonTranspose5x4F32, NeonTranspose6x4F32, NeonTranspose6x5F32, NeonTranspose7x2F32,
-    NeonTranspose7x3F32, NeonTranspose7x5F32, NeonTranspose7x7F32, NeonTranspose8x3F32,
-    NeonTranspose11x2F32, block_transpose_f32x2_2x2, neon_transpose_f32x2_4x4,
+    NeonTranspose5x4F32, NeonTranspose5x7F32, NeonTranspose6x4F32, NeonTranspose6x5F32,
+    NeonTranspose7x2F32, NeonTranspose7x3F32, NeonTranspose7x5F32, NeonTranspose7x7F32,
+    NeonTranspose8x3F32, NeonTranspose11x2F32, block_transpose_f32x2_2x2, neon_transpose_f32x2_4x4,
     neon_transpose_f64x2_2x2,
 };
 

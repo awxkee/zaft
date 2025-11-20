@@ -386,3 +386,67 @@ pub(crate) fn block_transpose_f32x2_4x7(
         NeonStoreF::raw(q7.1).write_lo(dst.get_unchecked_mut(6 + dst_stride * 3..));
     }
 }
+
+#[inline]
+pub(crate) fn block_transpose_f32x2_5x7(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let r0: [NeonStoreF; 7] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let r1: [NeonStoreF; 7] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 2..))
+        });
+        let r2: [NeonStoreF; 7] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex(src.get_unchecked(x * src_stride + 4))
+        });
+
+        let q0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0[0].v, r0[1].v));
+        let q1 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0[2].v, r0[3].v));
+        let q2 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0[4].v, r0[5].v));
+        let q3 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0[6].v, vdupq_n_f32(0.)));
+
+        let q4 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r1[0].v, r1[1].v));
+        let q5 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r1[2].v, r1[3].v));
+        let q6 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r1[4].v, r1[5].v));
+        let q7 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r1[6].v, vdupq_n_f32(0.)));
+
+        let q8 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r2[0].v, r2[1].v));
+        let q9 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r2[2].v, r2[3].v));
+        let q10 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r2[4].v, r2[5].v));
+        let q11 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r2[6].v, vdupq_n_f32(0.)));
+
+        NeonStoreF::raw(q0.0).write(dst);
+        NeonStoreF::raw(q0.1).write(dst.get_unchecked_mut(dst_stride..));
+
+        NeonStoreF::raw(q1.0).write(dst.get_unchecked_mut(2..));
+        NeonStoreF::raw(q1.1).write(dst.get_unchecked_mut(2 + dst_stride..));
+
+        NeonStoreF::raw(q2.0).write(dst.get_unchecked_mut(4..));
+        NeonStoreF::raw(q2.1).write(dst.get_unchecked_mut(4 + dst_stride..));
+
+        NeonStoreF::raw(q3.0).write_lo(dst.get_unchecked_mut(6..));
+        NeonStoreF::raw(q3.1).write_lo(dst.get_unchecked_mut(6 + dst_stride..));
+
+        NeonStoreF::raw(q4.0).write(dst.get_unchecked_mut(dst_stride * 2..));
+        NeonStoreF::raw(q4.1).write(dst.get_unchecked_mut(dst_stride * 3..));
+
+        NeonStoreF::raw(q5.0).write(dst.get_unchecked_mut(2 + dst_stride * 2..));
+        NeonStoreF::raw(q5.1).write(dst.get_unchecked_mut(2 + dst_stride * 3..));
+
+        NeonStoreF::raw(q6.0).write(dst.get_unchecked_mut(4 + dst_stride * 2..));
+        NeonStoreF::raw(q6.1).write(dst.get_unchecked_mut(4 + dst_stride * 3..));
+
+        NeonStoreF::raw(q7.0).write_lo(dst.get_unchecked_mut(6 + dst_stride * 2..));
+        NeonStoreF::raw(q7.1).write_lo(dst.get_unchecked_mut(6 + dst_stride * 3..));
+
+        NeonStoreF::raw(q8.0).write(dst.get_unchecked_mut(dst_stride * 4..));
+        NeonStoreF::raw(q9.0).write(dst.get_unchecked_mut(2 + dst_stride * 4..));
+        NeonStoreF::raw(q10.0).write(dst.get_unchecked_mut(4 + dst_stride * 4..));
+        NeonStoreF::raw(q11.0).write_lo(dst.get_unchecked_mut(6 + dst_stride * 4..));
+    }
+}
