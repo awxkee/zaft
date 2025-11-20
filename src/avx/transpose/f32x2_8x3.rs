@@ -61,3 +61,35 @@ pub(crate) fn block_transpose_f32x2_8x3(
         v1[3].write_lo3(dst.get_unchecked_mut(dst_stride * 7..));
     }
 }
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn block_transpose_f32x2_3x8(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let a0 = AvxStoreF::from_complex3(src);
+        let a1 = AvxStoreF::from_complex3(src.get_unchecked(src_stride..));
+        let a2 = AvxStoreF::from_complex3(src.get_unchecked(2 * src_stride..));
+        let a3 = AvxStoreF::from_complex3(src.get_unchecked(3 * src_stride..));
+
+        let b0 = AvxStoreF::from_complex3(src.get_unchecked(4 * src_stride..));
+        let b1 = AvxStoreF::from_complex3(src.get_unchecked(5 * src_stride..));
+        let b2 = AvxStoreF::from_complex3(src.get_unchecked(6 * src_stride..));
+        let b3 = AvxStoreF::from_complex3(src.get_unchecked(7 * src_stride..));
+
+        let v0 = transpose_f32x2_4x4_aos([a0, a1, a2, a3]);
+        let v1 = transpose_f32x2_4x4_aos([b0, b1, b2, b3]);
+
+        v0[0].write(dst);
+        v0[1].write(dst.get_unchecked_mut(dst_stride..));
+        v0[2].write(dst.get_unchecked_mut(dst_stride * 2..));
+
+        v1[0].write(dst.get_unchecked_mut(4..));
+        v1[1].write(dst.get_unchecked_mut(4 + dst_stride..));
+        v1[2].write(dst.get_unchecked_mut(4 + dst_stride * 2..));
+    }
+}
