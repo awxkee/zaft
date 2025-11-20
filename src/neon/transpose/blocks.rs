@@ -87,7 +87,7 @@ macro_rules! define_transpose {
                 width: usize,
                 height: usize,
             ) {
-                use crate::neon::$rot_name;
+                use crate::neon::transpose::$rot_name;
                 transpose_fixed_block_executor2d::<
                     $complex_type,
                     $block_width,
@@ -119,3 +119,4 @@ define_transpose!(NeonTranspose4x3F32, f32, block_transpose_f32x2_4x3, 4, 3);
 define_transpose!(NeonTranspose5x4F32, f32, block_transpose_f32x2_5x4, 5, 4);
 define_transpose!(NeonTranspose5x3F32, f32, block_transpose_f32x2_5x3, 5, 3);
 define_transpose!(NeonTranspose5x2F32, f32, block_transpose_f32x2_5x2, 5, 2);
+define_transpose!(NeonTranspose8x3F32, f32, block_transpose_f32x2_8x3, 8, 3);
