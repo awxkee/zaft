@@ -91,8 +91,7 @@ pub(crate) use radix13::AvxFmaRadix13;
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;
 pub(crate) use transpose::{
     AvxTransposeF322x2, AvxTransposeF324x4, AvxTransposeF327x7, AvxTransposeF642x2,
-    AvxTransposeF644x4, AvxTransposeF647x7, avx_transpose_f64x2_6x6_impl,
-    block_transpose_f32x2_7x7, block_transpose_f64x2_7x7,
+    AvxTransposeF644x4, avx_transpose_f64x2_6x6_impl, block_transpose_f32x2_7x7,
 };
 
 #[cfg(test)]

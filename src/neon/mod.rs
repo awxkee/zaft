@@ -143,12 +143,13 @@ pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
 #[cfg(feature = "fcma")]
 pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
 pub(crate) use transpose::{
-    NeonTranspose2x2F32, NeonTranspose2x9F32, NeonTranspose2x10F32, NeonTranspose2x11F32,
-    NeonTranspose2x12F32, NeonTranspose4x4F32, NeonTranspose6x4F32, NeonTranspose6x5F32,
-    NeonTranspose7x5F32, NeonTranspose7x7F32, NeonTranspose11x2F32, block_transpose_f32x2_2x2,
-    block_transpose_f32x2_2x9, block_transpose_f32x2_2x10, block_transpose_f32x2_2x11,
-    block_transpose_f32x2_2x12, block_transpose_f32x2_6x5, block_transpose_f32x2_7x5,
-    block_transpose_f32x2_7x7, block_transpose_f32x2_11x2, neon_transpose_f32x2_4x4,
+    NeonTranspose2x2F32, NeonTranspose2x2F64, NeonTranspose2x9F32, NeonTranspose2x10F32,
+    NeonTranspose2x11F32, NeonTranspose2x12F32, NeonTranspose4x4F32, NeonTranspose4x4F64,
+    NeonTranspose6x4F32, NeonTranspose6x5F32, NeonTranspose7x5F32, NeonTranspose7x7F32,
+    NeonTranspose11x2F32, block_transpose_f32x2_2x2, block_transpose_f32x2_2x9,
+    block_transpose_f32x2_2x10, block_transpose_f32x2_2x11, block_transpose_f32x2_2x12,
+    block_transpose_f32x2_6x5, block_transpose_f32x2_7x5, block_transpose_f32x2_7x7,
+    block_transpose_f32x2_11x2, block_transpose_f64x2_4x4, neon_transpose_f32x2_4x4,
     neon_transpose_f32x2_6x4, neon_transpose_f64x2_2x2,
 };
 

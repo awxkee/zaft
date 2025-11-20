@@ -137,14 +137,6 @@ define_transpose!(
     FunctionF64
 );
 define_transpose!(
-    AvxTransposeF647x7,
-    f64,
-    block_transpose_f64x2_7x7,
-    7,
-    7,
-    FunctionF64
-);
-define_transpose!(
     AvxTransposeF327x7,
     f32,
     block_transpose_f32x2_7x7,

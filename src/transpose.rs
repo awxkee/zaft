@@ -53,7 +53,6 @@ impl TransposeFactory<f32> for f32 {
     ) -> Box<dyn TransposeExecutor<f32> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
-            //TODO: 8x3
             if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
                 use crate::neon::NeonTranspose7x7F32;
                 return Box::new(NeonTranspose7x7F32::default());
@@ -147,10 +146,6 @@ impl TransposeFactory<f64> for f64 {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
             if std::arch::is_x86_feature_detected!("avx") {
-                if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
-                    use crate::avx::AvxTransposeF647x7;
-                    return Box::new(AvxTransposeF647x7::default());
-                }
                 if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
                     use crate::avx::AvxTransposeF644x4;
                     return Box::new(AvxTransposeF644x4::default());
@@ -165,6 +160,14 @@ impl TransposeFactory<f64> for f64 {
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
+                use crate::neon::NeonTranspose4x4F64;
+                return Box::new(NeonTranspose4x4F64::default());
+            }
+            if _width.is_multiple_of(2) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose2x2F64;
+                return Box::new(NeonTranspose2x2F64::default());
+            }
             if _width > 2 && _height > 2 {
                 return Box::new(NeonDefaultExecutorDouble {});
             }
@@ -390,92 +393,6 @@ pub(crate) unsafe fn transpose_executor2d<
     y
 }
 
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-pub(crate) fn transpose_executor2d<
-    V: Copy + Default,
-    const X_BLOCK_SIZE: usize,
-    const Y_BLOCK_SIZE: usize,
->(
-    input: &[Complex<V>],
-    input_stride: usize,
-    output: &mut [Complex<V>],
-    output_stride: usize,
-    width: usize,
-    height: usize,
-    start_y: usize,
-    exec: impl TransposeBlock<V>,
-) -> usize {
-    let mut y = start_y;
-
-    let mut src_buffer = vec![Complex::<V>::default(); X_BLOCK_SIZE * Y_BLOCK_SIZE];
-    let mut dst_buffer = vec![Complex::<V>::default(); X_BLOCK_SIZE * Y_BLOCK_SIZE];
-
-    unsafe {
-        while y + Y_BLOCK_SIZE < height {
-            let input_y = y;
-
-            let src = input.get_unchecked(input_stride * input_y..);
-
-            let mut x = 0usize;
-
-            while x + X_BLOCK_SIZE < width {
-                let output_x = x;
-
-                let src = src.get_unchecked(x..);
-                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
-
-                exec.transpose_block(src, input_stride, dst, output_stride);
-
-                x += X_BLOCK_SIZE;
-            }
-
-            if x < width {
-                let rem_x = width - x;
-                assert!(
-                    rem_x <= X_BLOCK_SIZE,
-                    "Remainder is expected to be less than {X_BLOCK_SIZE}, but got {rem_x}"
-                );
-
-                let output_x = x;
-                let src = src.get_unchecked(x..);
-
-                for j in 0..Y_BLOCK_SIZE {
-                    std::ptr::copy_nonoverlapping(
-                        src.get_unchecked(j * input_stride..).as_ptr(),
-                        src_buffer
-                            .get_unchecked_mut(j * (X_BLOCK_SIZE)..)
-                            .as_mut_ptr(),
-                        rem_x,
-                    );
-                }
-
-                exec.transpose_block(
-                    src_buffer.as_slice(),
-                    X_BLOCK_SIZE,
-                    dst_buffer.as_mut_slice(),
-                    Y_BLOCK_SIZE,
-                );
-
-                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
-
-                for j in 0..rem_x {
-                    std::ptr::copy_nonoverlapping(
-                        dst_buffer
-                            .get_unchecked_mut(j * (Y_BLOCK_SIZE)..)
-                            .as_mut_ptr(),
-                        dst.get_unchecked_mut(j * output_stride..).as_mut_ptr(),
-                        Y_BLOCK_SIZE,
-                    );
-                }
-            }
-
-            y += Y_BLOCK_SIZE;
-        }
-    }
-
-    y
-}
-
 #[allow(dead_code)]
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
 pub(crate) fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
@@ -596,9 +513,7 @@ impl TransposeBlock<f32> for TransposeBlockAvx2x2F32x2 {
         dst_stride: usize,
     ) {
         use crate::avx::avx_transpose_f32x2_2x2;
-        unsafe {
-            avx_transpose_f32x2_2x2(src, src_stride, dst, dst_stride);
-        }
+        avx_transpose_f32x2_2x2(src, src_stride, dst, dst_stride);
     }
 }
 

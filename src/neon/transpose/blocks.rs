@@ -72,7 +72,7 @@ pub(crate) fn transpose_fixed_block_executor2d<
     y
 }
 
-type FunctionF32 = fn(&[Complex<f32>], usize, &mut [Complex<f32>], usize);
+type Function<V> = fn(&[Complex<V>], usize, &mut [Complex<V>], usize);
 
 macro_rules! define_transpose {
     ($rule_name: ident, $complex_type: ident, $rot_name: ident, $block_width: expr, $block_height: expr) => {
@@ -92,7 +92,7 @@ macro_rules! define_transpose {
                     $complex_type,
                     $block_width,
                     $block_height,
-                    FunctionF32,
+                    Function<$complex_type>,
                 >(input, width, output, height, width, height, 0, $rot_name);
             }
         }
@@ -110,3 +110,5 @@ define_transpose!(NeonTranspose11x2F32, f32, block_transpose_f32x2_11x2, 11, 2);
 define_transpose!(NeonTranspose2x12F32, f32, block_transpose_f32x2_2x12, 2, 12);
 define_transpose!(NeonTranspose4x4F32, f32, neon_transpose_f32x2_4x4, 4, 4);
 define_transpose!(NeonTranspose2x2F32, f32, block_transpose_f32x2_2x2, 2, 2);
+define_transpose!(NeonTranspose2x2F64, f64, neon_transpose_f64x2_2x2, 2, 2);
+define_transpose!(NeonTranspose4x4F64, f64, block_transpose_f64x2_4x4, 4, 4);
