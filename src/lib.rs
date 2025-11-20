@@ -89,9 +89,6 @@ use radix11::Radix11;
 #[allow(unused_imports)]
 use radix13::Radix13;
 
-pub use err::ZaftError;
-use std::fmt::{Display, Formatter};
-
 use crate::factory::AlgorithmFactory;
 use crate::prime_factors::{
     PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
@@ -103,9 +100,12 @@ use crate::r2c::{
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
+pub use err::ZaftError;
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 pub use r2c::{C2RFftExecutor, R2CFftExecutor};
+use std::fmt::{Display, Formatter};
+use std::sync::Arc;
 
 pub trait FftExecutor<T> {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError>;
@@ -123,7 +123,7 @@ pub(crate) trait FftExecutorOutOfPlace<T> {
 }
 
 pub(crate) trait CompositeFftExecutor<T>: FftExecutor<T> + FftExecutorOutOfPlace<T> {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync>;
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync>;
 }
 
 pub struct Zaft {}
@@ -156,7 +156,7 @@ impl Zaft {
         _n_length: u64,
         _q_length: u64,
         _direction: FftDirection,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>
     where
         f64: AsPrimitive<T>,
     {
@@ -278,7 +278,7 @@ impl Zaft {
     >(
         direction: FftDirection,
         prime_factors: PrimeFactors,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>
     where
         f64: AsPrimitive<T>,
     {
@@ -332,18 +332,8 @@ impl Zaft {
                 .map(|x| x.0.pow(x.1))
                 .expect("Factor of 3 must present in 2^n*3^m branch");
 
-            let factor2 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 2)
-                .map(|x| x.1)
-                .expect("Factor of 2 must present in 2^n*3^m branch");
-            let factor3 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 3)
-                .map(|x| x.1)
-                .expect("Factor of 3 must present in 2^n*3^m branch");
+            let factor2 = prime_factors.factor_of_2();
+            let factor3 = prime_factors.factor_of_3();
 
             if factor3 >= 1 && factor2 >= 4 {
                 if product.is_multiple_of(36)
@@ -372,18 +362,8 @@ impl Zaft {
                 T::mixed_radix(p_fft, q_fft)
             };
         } else if prime_factors.is_power_of_two_and_five() {
-            let factor_of_5 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 5)
-                .map(|x| x.1)
-                .expect("Factor of 5 should exist if factor of 2^n*5^m branch");
-            let factor_of_2 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 2)
-                .map(|x| x.1)
-                .expect("Factor of 2 should exist if factor of 2^n*5^m branch");
+            let factor_of_5 = prime_factors.factor_of_5();
+            let factor_of_2 = prime_factors.factor_of_2();
             if factor_of_5 == 1 {
                 if factor_of_2 >= 8 && factor_of_2 != 9 {
                     try_mixed_radix!(5, product / 5)
@@ -415,18 +395,8 @@ impl Zaft {
                 }
             }
         } else if prime_factors.is_power_of_three_and_five() {
-            let factor_of_5 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 5)
-                .map(|x| x.1)
-                .expect("Factor of 5 should exist if factor of 3^n*5^m branch");
-            let factor_of_3 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 3)
-                .map(|x| x.1)
-                .expect("Factor of 2 should exist if factor of 3^n*5^m branch");
+            let factor_of_5 = prime_factors.factor_of_5();
+            let factor_of_3 = prime_factors.factor_of_3();
             if factor_of_5 == 1 && factor_of_3 > 1 {
                 try_mixed_radix!(5, product / 5)
             } else if factor_of_5 == 2 && factor_of_5 > 1 && factor_of_3 > 2 && factor_of_3 < 10 {
@@ -434,34 +404,14 @@ impl Zaft {
                 try_mixed_radix!(25, product / 25)
             }
         } else if prime_factors.is_power_of_two_and_seven() {
-            let factor_of_7 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 7)
-                .map(|x| x.1)
-                .expect("Factor of 5 should exist if factor of 2^n*7^m branch");
-            let factor_of_2 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 2)
-                .map(|x| x.1)
-                .expect("Factor of 2 should exist if factor of 2^n*7^m branch");
+            let factor_of_7 = prime_factors.factor_of_7();
+            let factor_of_2 = prime_factors.factor_of_2();
             if factor_of_2 > 1 && factor_of_7 == 1 {
                 try_mixed_radix!(14, product / 14)
             }
         } else if prime_factors.has_power_of_five_and_seven() {
-            let factor_of_7 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 7)
-                .map(|x| x.1)
-                .expect("Factor of 7 should exist if factor of X*5^n*7^m branch");
-            let factor_of_5 = prime_factors
-                .factorization
-                .iter()
-                .find(|x| x.0 == 5)
-                .map(|x| x.1)
-                .expect("Factor of 5 should exist if factor of X*5^n*7^m branch");
+            let factor_of_7 = prime_factors.factor_of_7();
+            let factor_of_5 = prime_factors.factor_of_5();
             #[allow(clippy::collapsible_if)]
             if factor_of_7 == 1 || factor_of_5 == 1 {
                 if product == 560 || product == 2240 {
@@ -499,6 +449,18 @@ impl Zaft {
                 } else {
                     T::mixed_radix(q_fft, p_fft)
                 };
+            }
+        } else if prime_factors.has_power_of_two_and_three() {
+            #[allow(clippy::collapsible_if)]
+            if product == 84
+                || product == 294
+                || product == 252
+                || product == 378
+                || product == 504
+                || product == 672
+                || product == 756
+            {
+                try_mixed_radix!(42, product / 42)
             }
         }
 
@@ -550,7 +512,7 @@ impl Zaft {
     >(
         n: usize,
         direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>
     where
         f64: AsPrimitive<T>,
     {
@@ -594,7 +556,7 @@ impl Zaft {
     >(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>
     where
         f64: AsPrimitive<T>,
     {
@@ -660,6 +622,10 @@ impl Zaft {
         } else if n == 36 {
             if let Some(executor) = T::butterfly36(fft_direction) {
                 return Ok(executor.into_fft_executor());
+            }
+        } else if n == 42 {
+            if let Some(executor) = T::butterfly42(fft_direction) {
+                return Ok(executor);
             }
         } else if n == 48 {
             if let Some(executor) = T::butterfly48(fft_direction) {
@@ -733,93 +699,93 @@ impl Zaft {
 
     pub fn make_r2c_fft_f32(
         n: usize,
-    ) -> Result<Box<dyn R2CFftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn R2CFftExecutor<f32> + Send + Sync>, ZaftError> {
         if n == 1 {
-            return Ok(Box::new(OneSizedRealFft {
+            return Ok(Arc::new(OneSizedRealFft {
                 phantom_data: Default::default(),
             }));
         }
         if n.is_multiple_of(2) {
             R2CFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Forward)?)
-                .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f32> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<f32> + Send + Sync>)
         } else {
             R2CFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Forward)?)
-                .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f32> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<f32> + Send + Sync>)
         }
     }
 
     pub fn make_c2r_fft_f32(
         n: usize,
-    ) -> Result<Box<dyn C2RFftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn C2RFftExecutor<f32> + Send + Sync>, ZaftError> {
         if n == 1 {
-            return Ok(Box::new(OneSizedRealFft {
+            return Ok(Arc::new(OneSizedRealFft {
                 phantom_data: Default::default(),
             }));
         }
         if n.is_multiple_of(2) {
             C2RFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Inverse)?)
-                .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f32> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<f32> + Send + Sync>)
         } else {
             C2RFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Inverse)?)
-                .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f32> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<f32> + Send + Sync>)
         }
     }
 
     pub fn make_forward_fft_f32(
         n: usize,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Forward)
     }
 
     pub fn make_forward_fft_f64(
         n: usize,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Forward)
     }
 
     pub fn make_c2r_fft_f64(
         n: usize,
-    ) -> Result<Box<dyn C2RFftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn C2RFftExecutor<f64> + Send + Sync>, ZaftError> {
         if n == 1 {
-            return Ok(Box::new(OneSizedRealFft {
+            return Ok(Arc::new(OneSizedRealFft {
                 phantom_data: Default::default(),
             }));
         }
         if n.is_multiple_of(2) {
             C2RFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Inverse)?)
-                .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f64> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<f64> + Send + Sync>)
         } else {
             C2RFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Inverse)?)
-                .map(|x| Box::new(x) as Box<dyn C2RFftExecutor<f64> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<f64> + Send + Sync>)
         }
     }
 
     pub fn make_r2c_fft_f64(
         n: usize,
-    ) -> Result<Box<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
         if n == 1 {
-            return Ok(Box::new(OneSizedRealFft {
+            return Ok(Arc::new(OneSizedRealFft {
                 phantom_data: Default::default(),
             }));
         }
         if n.is_multiple_of(2) {
             R2CFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Forward)?)
-                .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f64> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<f64> + Send + Sync>)
         } else {
             R2CFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Forward)?)
-                .map(|x| Box::new(x) as Box<dyn R2CFftExecutor<f64> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<f64> + Send + Sync>)
         }
     }
 
     pub fn make_inverse_fft_f32(
         n: usize,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Inverse)
     }
 
     pub fn make_inverse_fft_f64(
         n: usize,
-    ) -> Result<Box<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Inverse)
     }
 }

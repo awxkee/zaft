@@ -40,6 +40,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 #[inline]
 pub(crate) fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
@@ -185,7 +186,7 @@ pub(crate) struct NeonRadix3<T> {
     twiddle_re: T,
     twiddle_im: [T; 4],
     direction: FftDirection,
-    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 

@@ -105,6 +105,12 @@ mod bf36f;
 #[cfg(feature = "fcma")]
 mod bf36f_fcma;
 mod bf4;
+mod bf42d;
+#[cfg(feature = "fcma")]
+mod bf42d_fcma;
+mod bf42f;
+#[cfg(feature = "fcma")]
+mod bf42f_fcma;
 mod bf48d;
 #[cfg(feature = "fcma")]
 mod bf48d_fcma;
@@ -241,6 +247,12 @@ pub(crate) use bf36d_fcma::NeonFcmaButterfly36d;
 pub(crate) use bf36f::NeonButterfly36f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf36f_fcma::NeonFcmaButterfly36f;
+pub(crate) use bf42d::NeonButterfly42d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf42d_fcma::NeonFcmaButterfly42d;
+pub(crate) use bf42f::NeonButterfly42f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf42f_fcma::NeonFcmaButterfly42f;
 pub(crate) use bf48d::NeonButterfly48d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf48d_fcma::NeonFcmaButterfly48d;

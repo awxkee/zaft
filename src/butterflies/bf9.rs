@@ -34,6 +34,7 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPla
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) struct Butterfly9<T> {
@@ -225,7 +226,7 @@ impl<
 where
     f64: AsPrimitive<T>,
 {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync> {
         self
     }
 }

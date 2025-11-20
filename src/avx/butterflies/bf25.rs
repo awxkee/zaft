@@ -27,11 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::needless_range_loop)]
+
 use crate::avx::mixed::{AvxStoreD, AvxStoreF, ColumnButterfly5d, ColumnButterfly5f};
 use crate::avx::transpose::{transpose_5x5_f32, transpose_5x5_f64};
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::sync::Arc;
 
 pub(crate) struct AvxButterfly25d {
     direction: FftDirection,
@@ -242,7 +244,7 @@ impl AvxButterfly25d {
 }
 
 impl CompositeFftExecutor<f64> for AvxButterfly25d {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
         self
     }
 }
@@ -417,7 +419,7 @@ impl AvxButterfly25f {
 }
 
 impl CompositeFftExecutor<f32> for AvxButterfly25f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

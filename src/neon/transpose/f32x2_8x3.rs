@@ -31,7 +31,7 @@ use num_complex::Complex;
 use std::arch::aarch64::*;
 
 #[inline]
-pub(crate) fn block_transpose_f32x2_4x3(
+pub(crate) fn block_transpose_f32x2_8x3(
     src: &[Complex<f32>],
     src_stride: usize,
     dst: &mut [Complex<f32>],
@@ -62,14 +62,6 @@ pub(crate) fn block_transpose_f32x2_4x3(
             dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
             q0.1,
         );
-        vst1q_f32(
-            dst.get_unchecked_mut(2 * dst_stride..).as_mut_ptr().cast(),
-            q1.0,
-        );
-        vst1q_f32(
-            dst.get_unchecked_mut(3 * dst_stride..).as_mut_ptr().cast(),
-            q1.1,
-        );
 
         vst1_f32(
             dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
@@ -79,6 +71,16 @@ pub(crate) fn block_transpose_f32x2_4x3(
             dst.get_unchecked_mut(2 + dst_stride..).as_mut_ptr().cast(),
             vget_low_f32(q2.1),
         );
+
+        vst1q_f32(
+            dst.get_unchecked_mut(2 * dst_stride..).as_mut_ptr().cast(),
+            q1.0,
+        );
+        vst1q_f32(
+            dst.get_unchecked_mut(3 * dst_stride..).as_mut_ptr().cast(),
+            q1.1,
+        );
+
         vst1_f32(
             dst.get_unchecked_mut(2 + 2 * dst_stride..)
                 .as_mut_ptr()
@@ -91,5 +93,85 @@ pub(crate) fn block_transpose_f32x2_4x3(
                 .cast(),
             vget_low_f32(q3.1),
         );
+
+        let src1 = src.get_unchecked(4..);
+        let r0 = vld1q_f32(src1.as_ptr().cast());
+        let r1 = vld1q_f32(src1.get_unchecked(2..).as_ptr().cast());
+
+        let r2 = vld1q_f32(src1.get_unchecked(src_stride..).as_ptr().cast());
+        let r3 = vld1q_f32(src1.get_unchecked(2 + src_stride..).as_ptr().cast());
+
+        let r4 = vld1q_f32(src1.get_unchecked(2 * src_stride..).as_ptr().cast());
+        let r5 = vld1q_f32(src1.get_unchecked(2 + 2 * src_stride..).as_ptr().cast());
+
+        let q0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0, r2));
+        let q1 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r1, r3));
+        let q2 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r4, vdupq_n_f32(0.)));
+        let q3 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r5, vdupq_n_f32(0.)));
+
+        let dst1 = dst.get_unchecked_mut(dst_stride * 4..);
+
+        vst1q_f32(dst1.as_mut_ptr().cast(), q0.0);
+        vst1q_f32(
+            dst1.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
+            q0.1,
+        );
+        vst1q_f32(
+            dst1.get_unchecked_mut(2 * dst_stride..).as_mut_ptr().cast(),
+            q1.0,
+        );
+        vst1q_f32(
+            dst1.get_unchecked_mut(3 * dst_stride..).as_mut_ptr().cast(),
+            q1.1,
+        );
+
+        vst1_f32(
+            dst1.get_unchecked_mut(2..).as_mut_ptr().cast(),
+            vget_low_f32(q2.0),
+        );
+        vst1_f32(
+            dst1.get_unchecked_mut(2 + dst_stride..).as_mut_ptr().cast(),
+            vget_low_f32(q2.1),
+        );
+        vst1_f32(
+            dst1.get_unchecked_mut(2 + 2 * dst_stride..)
+                .as_mut_ptr()
+                .cast(),
+            vget_low_f32(q3.0),
+        );
+        vst1_f32(
+            dst1.get_unchecked_mut(2 + 3 * dst_stride..)
+                .as_mut_ptr()
+                .cast(),
+            vget_low_f32(q3.1),
+        );
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use num_complex::Complex;
+//
+//     #[test]
+//     fn test_block_transpose_f32x2_8x3() {
+//         let mut src = vec![Complex::<f32>::new(0.0, 0.0); 3 * 8];
+//         for (i, q) in src.iter_mut().enumerate() {
+//             *q = Complex::<f32>::new(i as f32, 0.);
+//         }
+//         // Output buffer
+//         let mut dst = vec![Complex::<f32>::new(-1.0, -1.0); 3 * 8];
+//
+//         // Call the transpose
+//         block_transpose_f32x2_3x8(&src, 3, &mut dst, 8);
+//
+//         for chunk in src.chunks_exact(3) {
+//             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
+//         }
+//         println!("-----");
+//
+//         for chunk in dst.chunks_exact(8) {
+//             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
+//         }
+//     }
+// }

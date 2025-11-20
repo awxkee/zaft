@@ -41,13 +41,14 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
+use std::sync::Arc;
 
 pub(crate) struct NeonFcmaRadix4<T> {
     twiddles: Vec<Complex<T>>,
     execution_length: usize,
     direction: FftDirection,
     base_len: usize,
-    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + Float + 'static>

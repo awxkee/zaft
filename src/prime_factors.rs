@@ -192,6 +192,12 @@ impl PrimeFactors {
         false
     }
 
+    pub(crate) fn has_power_of_two_and_three(&self) -> bool {
+        let is_any_two = self.factorization.iter().any(|p| p.0 == 2);
+        let is_any_three = self.factorization.iter().any(|p| p.0 == 3);
+        is_any_two && is_any_three
+    }
+
     pub(crate) fn is_power_of_two_and_five(&self) -> bool {
         if self.factorization.len() == 2 {
             let is_any_two = self.factorization.iter().any(|p| p.0 == 2);
@@ -246,6 +252,38 @@ impl PrimeFactors {
         self.factorization
             .iter()
             .find(|p| p.0 == 13)
+            .map(|x| x.1)
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn factor_of_7(&self) -> u32 {
+        self.factorization
+            .iter()
+            .find(|p| p.0 == 7)
+            .map(|x| x.1)
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn factor_of_5(&self) -> u32 {
+        self.factorization
+            .iter()
+            .find(|p| p.0 == 5)
+            .map(|x| x.1)
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn factor_of_2(&self) -> u32 {
+        self.factorization
+            .iter()
+            .find(|p| p.0 == 2)
+            .map(|x| x.1)
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn factor_of_3(&self) -> u32 {
+        self.factorization
+            .iter()
+            .find(|p| p.0 == 3)
             .map(|x| x.1)
             .unwrap_or(0)
     }

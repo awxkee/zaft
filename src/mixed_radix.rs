@@ -42,9 +42,9 @@ pub(crate) struct MixedRadix<T> {
     execution_length: usize,
     direction: FftDirection,
     twiddles: Vec<Complex<T>>,
-    width_executor: Box<dyn FftExecutor<T> + Send + Sync>,
+    width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     width: usize,
-    height_executor: Box<dyn FftExecutor<T> + Send + Sync>,
+    height_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     height: usize,
     spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
     width_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
@@ -57,8 +57,8 @@ where
     f64: AsPrimitive<T>,
 {
     pub fn new(
-        width_executor: Box<dyn FftExecutor<T> + Send + Sync>,
-        height_executor: Box<dyn FftExecutor<T> + Send + Sync>,
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+        height_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Self, ZaftError> {
         assert_eq!(
             width_executor.direction(),

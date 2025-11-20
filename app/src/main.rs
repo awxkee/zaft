@@ -112,33 +112,17 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 450];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 42 * 7];
     let mut c = Criterion::default()
         .sample_size(10)
-        .warm_up_time(Duration::from_millis(135))
-        .measurement_time(Duration::from_millis(135));
+        .warm_up_time(Duration::from_millis(200))
+        .measurement_time(Duration::from_millis(200));
     // bench_zaft_averages(&mut c);
-    check_power_groups(&mut c, 66, "66".to_string());
-    check_power_groups(&mut c, 110, "110".to_string());
-    check_power_groups(&mut c, 22, "22".to_string());
-    check_power_groups(&mut c, 88, "88".to_string());
-    check_power_groups(&mut c, 242, "242".to_string());
-    check_power_groups(&mut c, 220, "220".to_string());
-    check_power_groups(&mut c, 198, "198".to_string());
-    check_power_groups(&mut c, 187, "187".to_string());
-    check_power_groups(&mut c, 154, "154".to_string());
-    check_power_groups(&mut c, 451, "451".to_string());
-    check_power_groups(&mut c, 1166, "1166".to_string());
-    check_power_groups(&mut c, 1617, "1617".to_string());
-    check_power_groups(&mut c, 1936, "1936".to_string());
+    check_power_group(&mut c, 42 * 7, "42 * 7".to_string());
     // check_power_groups(&mut c, 11usize.pow(4), "11^4".to_string());
-    // for i in 2..24 {
-    //     check_power_group(
-    //         &mut c,
-    //         13usize.pow(3) * i,
-    //         format!("size {}, 13^3 mul {i}", 13usize.pow(3) * i),
-    //     );
-    // }
+    for i in 2..24 {
+        check_power_group(&mut c, 42 * i, format!("size {}, 42*{i} mul {i}", 42 * i));
+    }
     // for i in 2..8 {
     //     check_power_group(
     //         &mut c,

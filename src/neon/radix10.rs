@@ -42,13 +42,14 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 pub(crate) struct NeonRadix10<T> {
     twiddles: Vec<Complex<T>>,
     execution_length: usize,
     bf5: NeonFastButterfly5<T>,
     direction: FftDirection,
-    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     butterfly_length: usize,
 }
 

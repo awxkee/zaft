@@ -27,8 +27,6 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::butterflies::AvxButterfly;
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
-use crate::avx::f64x2_4x4::avx_transpose_f64x2_4x4_impl;
 use crate::avx::radix3::{
     complex3_load_f32, complex3_load_f64, complex3_store_f32, complex3_store_f64,
 };
@@ -36,6 +34,7 @@ use crate::avx::radix4::{
     complex4_load_f32, complex4_load_f64, complex4_store_f32, complex4_store_f64,
 };
 use crate::avx::rotate::AvxRotate;
+use crate::avx::transpose::{avx_transpose_f32x2_4x4_impl, avx_transpose_f64x2_4x4_impl};
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_ps, _mm_unpackhi_ps64, _mm_unpacklo_ps64,
     _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps, _mm256_load4_f32x2,
@@ -53,6 +52,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::x86_64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 pub(crate) struct AvxFmaRadix11<T> {
     twiddles: Vec<Complex<T>>,
@@ -63,7 +63,7 @@ pub(crate) struct AvxFmaRadix11<T> {
     twiddle4: Complex<T>,
     twiddle5: Complex<T>,
     direction: FftDirection,
-    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     butterfly_length: usize,
 }
 

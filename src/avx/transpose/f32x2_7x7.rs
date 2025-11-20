@@ -26,9 +26,10 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
-use crate::avx::f64x2_4x4::avx_transpose_f64x2_4x4_impl;
+#![allow(clippy::needless_range_loop)]
 use crate::avx::mixed::{AvxStoreD, AvxStoreF};
+use crate::avx::transpose::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
+use crate::avx::transpose::f64x2_4x4::avx_transpose_f64x2_4x4_impl;
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
@@ -214,6 +215,180 @@ pub(crate) fn block_transpose_f32x2_7x7(
         for i in 0..7 {
             v0[i].write(dst.get_unchecked_mut(i * dst_stride..));
             v1[i].write_lo3(dst.get_unchecked_mut(i * dst_stride + 4..));
+        }
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn block_transpose_f32x2_7x6(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let rows0: [AvxStoreF; 6] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let rows1: [AvxStoreF; 6] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex3(src.get_unchecked(x * src_stride + 4..))
+        });
+
+        let (v0, v1) = store_transpose_7x7_f32(
+            [
+                rows0[0],
+                rows0[1],
+                rows0[2],
+                rows0[3],
+                rows0[4],
+                rows0[5],
+                AvxStoreF::zero(),
+            ],
+            [
+                rows1[0],
+                rows1[1],
+                rows1[2],
+                rows1[3],
+                rows1[4],
+                rows1[5],
+                AvxStoreF::zero(),
+            ],
+        );
+
+        for i in 0..7 {
+            v0[i].write(dst.get_unchecked_mut(i * dst_stride..));
+            v1[i].write_lo2(dst.get_unchecked_mut(i * dst_stride + 4..));
+        }
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn block_transpose_f32x2_7x5(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let rows0: [AvxStoreF; 5] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let rows1: [AvxStoreF; 5] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex3(src.get_unchecked(x * src_stride + 4..))
+        });
+
+        let (v0, v1) = store_transpose_7x7_f32(
+            [
+                rows0[0],
+                rows0[1],
+                rows0[2],
+                rows0[3],
+                rows0[4],
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+            ],
+            [
+                rows1[0],
+                rows1[1],
+                rows1[2],
+                rows1[3],
+                rows1[4],
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+            ],
+        );
+
+        for i in 0..7 {
+            v0[i].write(dst.get_unchecked_mut(i * dst_stride..));
+            v1[i].write_lo1(dst.get_unchecked_mut(i * dst_stride + 4..));
+        }
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn block_transpose_f32x2_7x3(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let rows0: [AvxStoreF; 3] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let rows1: [AvxStoreF; 3] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex3(src.get_unchecked(x * src_stride + 4..))
+        });
+
+        let (v0, _) = store_transpose_7x7_f32(
+            [
+                rows0[0],
+                rows0[1],
+                rows0[2],
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+            ],
+            [
+                rows1[0],
+                rows1[1],
+                rows1[2],
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+            ],
+        );
+
+        for i in 0..7 {
+            v0[i].write_lo3(dst.get_unchecked_mut(i * dst_stride..));
+        }
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn block_transpose_f32x2_7x2(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let rows0: [AvxStoreF; 2] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let rows1: [AvxStoreF; 2] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex3(src.get_unchecked(x * src_stride + 4..))
+        });
+
+        let (v0, _) = store_transpose_7x7_f32(
+            [
+                rows0[0],
+                rows0[1],
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+            ],
+            [
+                rows1[0],
+                rows1[1],
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+                AvxStoreF::zero(),
+            ],
+        );
+
+        for i in 0..7 {
+            v0[i].write_lo2(dst.get_unchecked_mut(i * dst_stride..));
         }
     }
 }

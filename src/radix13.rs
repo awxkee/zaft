@@ -39,6 +39,7 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 #[allow(dead_code)]
 pub(crate) struct Radix13<T> {
@@ -50,7 +51,7 @@ pub(crate) struct Radix13<T> {
     twiddle4: Complex<T>,
     twiddle5: Complex<T>,
     twiddle6: Complex<T>,
-    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     direction: FftDirection,
 }
 

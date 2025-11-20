@@ -36,6 +36,7 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 #[allow(dead_code)]
 pub(crate) struct Radix10<T> {
@@ -43,7 +44,7 @@ pub(crate) struct Radix10<T> {
     execution_length: usize,
     bf5: FastButterfly5<T>,
     direction: FftDirection,
-    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 pub(crate) trait Radix10Twiddles {

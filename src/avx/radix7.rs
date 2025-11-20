@@ -46,6 +46,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::x86_64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 pub(crate) struct AvxFmaRadix7<T> {
     twiddles: Vec<Complex<T>>,
@@ -54,7 +55,7 @@ pub(crate) struct AvxFmaRadix7<T> {
     twiddle2: Complex<T>,
     twiddle3: Complex<T>,
     direction: FftDirection,
-    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     butterfly_length: usize,
 }
 

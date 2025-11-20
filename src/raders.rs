@@ -40,7 +40,7 @@ use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 pub(crate) struct RadersFft<T> {
-    convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: Vec<Complex<T>>,
     execution_length: usize,
     direction: FftDirection,
@@ -65,7 +65,7 @@ where
 {
     pub(crate) fn new(
         size: usize,
-        convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         fft_direction: FftDirection,
     ) -> Result<RadersFft<T>, ZaftError> {
         assert!(

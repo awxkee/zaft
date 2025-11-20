@@ -31,6 +31,7 @@ use crate::neon::transpose::neon_transpose_f32x2_7x7_aos;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::sync::Arc;
 
 pub(crate) struct NeonFcmaButterfly49f {
     direction: FftDirection,
@@ -280,7 +281,7 @@ impl NeonFcmaButterfly49f {
 }
 
 impl CompositeFftExecutor<f32> for NeonFcmaButterfly49f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

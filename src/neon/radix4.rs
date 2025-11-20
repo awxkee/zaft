@@ -37,6 +37,7 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
+use std::sync::Arc;
 
 #[inline]
 pub(crate) fn complex4_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
@@ -178,7 +179,7 @@ pub(crate) struct NeonRadix4<T> {
     execution_length: usize,
     direction: FftDirection,
     base_len: usize,
-    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + 'static + Float>

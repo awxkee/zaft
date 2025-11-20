@@ -28,13 +28,14 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
 use crate::avx::mixed::{AvxStoreF, ColumnButterfly4f, ColumnButterfly9f, SseStoreF};
+use crate::avx::transpose::avx_transpose_f32x2_4x4_impl;
 use crate::avx::util::_mm_unpacklo_ps64;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::*;
+use std::sync::Arc;
 
 #[inline]
 #[target_feature(enable = "avx2")]
@@ -261,7 +262,7 @@ impl AvxButterfly36f {
 }
 
 impl CompositeFftExecutor<f32> for AvxButterfly36f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

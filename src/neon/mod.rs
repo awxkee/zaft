@@ -72,9 +72,10 @@ pub(crate) use butterflies::{
     NeonButterfly18d, NeonButterfly18f, NeonButterfly19, NeonButterfly20, NeonButterfly23,
     NeonButterfly25d, NeonButterfly25f, NeonButterfly27d, NeonButterfly27f, NeonButterfly29,
     NeonButterfly31d, NeonButterfly31f, NeonButterfly32d, NeonButterfly32f, NeonButterfly35d,
-    NeonButterfly35f, NeonButterfly36d, NeonButterfly36f, NeonButterfly48d, NeonButterfly48f,
-    NeonButterfly49d, NeonButterfly49f, NeonButterfly64d, NeonButterfly64f, NeonButterfly81d,
-    NeonButterfly81f, NeonButterfly100d, NeonButterfly100f, NeonButterfly121d, NeonButterfly121f,
+    NeonButterfly35f, NeonButterfly36d, NeonButterfly36f, NeonButterfly42d, NeonButterfly42f,
+    NeonButterfly48d, NeonButterfly48f, NeonButterfly49d, NeonButterfly49f, NeonButterfly64d,
+    NeonButterfly64f, NeonButterfly81d, NeonButterfly81f, NeonButterfly100d, NeonButterfly100f,
+    NeonButterfly121d, NeonButterfly121f,
 };
 #[cfg(feature = "fcma")]
 pub(crate) use butterflies::{
@@ -86,9 +87,10 @@ pub(crate) use butterflies::{
     NeonFcmaButterfly25f, NeonFcmaButterfly27d, NeonFcmaButterfly27f, NeonFcmaButterfly29,
     NeonFcmaButterfly31d, NeonFcmaButterfly31f, NeonFcmaButterfly32d, NeonFcmaButterfly32f,
     NeonFcmaButterfly35d, NeonFcmaButterfly35f, NeonFcmaButterfly36d, NeonFcmaButterfly36f,
-    NeonFcmaButterfly48d, NeonFcmaButterfly48f, NeonFcmaButterfly49d, NeonFcmaButterfly49f,
-    NeonFcmaButterfly64d, NeonFcmaButterfly64f, NeonFcmaButterfly81d, NeonFcmaButterfly81f,
-    NeonFcmaButterfly100d, NeonFcmaButterfly100f, NeonFcmaButterfly121d, NeonFcmaButterfly121f,
+    NeonFcmaButterfly42d, NeonFcmaButterfly42f, NeonFcmaButterfly48d, NeonFcmaButterfly48f,
+    NeonFcmaButterfly49d, NeonFcmaButterfly49f, NeonFcmaButterfly64d, NeonFcmaButterfly64f,
+    NeonFcmaButterfly81d, NeonFcmaButterfly81f, NeonFcmaButterfly100d, NeonFcmaButterfly100f,
+    NeonFcmaButterfly121d, NeonFcmaButterfly121f,
 };
 pub(crate) use c2r::C2RNeonTwiddles;
 #[cfg(feature = "fcma")]
@@ -139,19 +141,27 @@ pub(crate) use radix11_fcma::NeonFcmaRadix11;
 pub(crate) use radix13::NeonRadix13;
 #[cfg(feature = "fcma")]
 pub(crate) use radix13_fcma::NeonFcmaRadix13;
+#[allow(unused)]
 pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
+#[allow(unused)]
 #[cfg(feature = "fcma")]
 pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
 pub(crate) use transpose::{
-    NeonTranspose2x2F32, NeonTranspose2x2F64, NeonTranspose2x9F32, NeonTranspose2x10F32,
-    NeonTranspose2x11F32, NeonTranspose2x12F32, NeonTranspose4x3F32, NeonTranspose4x3F64,
-    NeonTranspose4x4F32, NeonTranspose4x4F64, NeonTranspose6x4F32, NeonTranspose6x5F32,
-    NeonTranspose7x5F32, NeonTranspose7x7F32, NeonTranspose11x2F32, block_transpose_f32x2_2x2,
-    block_transpose_f32x2_2x9, block_transpose_f32x2_2x10, block_transpose_f32x2_2x11,
-    block_transpose_f32x2_2x12, block_transpose_f32x2_4x3, block_transpose_f32x2_6x5,
-    block_transpose_f32x2_7x5, block_transpose_f32x2_7x7, block_transpose_f32x2_11x2,
-    block_transpose_f64x2_4x3, block_transpose_f64x2_4x4, neon_transpose_f32x2_4x4,
-    neon_transpose_f32x2_6x4, neon_transpose_f64x2_2x2,
+    NeonTranspose2x2F32, NeonTranspose2x2F64, NeonTranspose4x3F64, NeonTranspose4x4F32,
+    NeonTranspose4x4F64, NeonTranspose4x7F32, NeonTranspose5x7F32, NeonTranspose6x4F32,
+    NeonTranspose6x5F32, NeonTranspose7x2F32, NeonTranspose7x3F32, NeonTranspose7x5F32,
+    NeonTranspose7x6F32, NeonTranspose7x7F32, NeonTranspose8x3F32, NeonTranspose9x2F32,
+    NeonTranspose11x2F32, NeonTransposeNx2F32, NeonTransposeNx2F64, NeonTransposeNx3F32,
+    NeonTransposeNx3F64, NeonTransposeNx4F32, NeonTransposeNx4F64, NeonTransposeNx5F32,
+    NeonTransposeNx5F64, NeonTransposeNx6F32, NeonTransposeNx6F64, NeonTransposeNx7F32,
+    NeonTransposeNx7F64, NeonTransposeNx8F32, NeonTransposeNx8F64, NeonTransposeNx9F32,
+    NeonTransposeNx9F64, NeonTransposeNx10F32, NeonTransposeNx10F64, NeonTransposeNx11F32,
+    NeonTransposeNx11F64, NeonTransposeNx12F32, NeonTransposeNx12F64, NeonTransposeNx13F32,
+    NeonTransposeNx13F64, NeonTransposeNx14F32, NeonTransposeNx14F64, NeonTransposeNx15F32,
+    NeonTransposeNx15F64, NeonTransposeNx16F32, NeonTransposeNx16F64, NeonTransposeNx17F32,
+    NeonTransposeNx17F64, NeonTransposeNx18F32, NeonTransposeNx18F64, NeonTransposeNx19F32,
+    NeonTransposeNx19F64, NeonTransposeNx20F32, block_transpose_f32x2_2x2,
+    neon_transpose_f32x2_4x4, neon_transpose_f64x2_2x2,
 };
 
 #[cfg(test)]

@@ -35,6 +35,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::fmt::Debug;
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 pub trait R2CFftExecutor<T> {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError>;
@@ -43,11 +44,11 @@ pub trait R2CFftExecutor<T> {
 }
 
 pub(crate) struct R2CFftEvenInterceptor<T> {
-    intercept: Box<dyn FftExecutor<T> + Send + Sync>,
+    intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     twiddles: Vec<Complex<T>>,
     length: usize,
     complex_length: usize,
-    twiddles_handler: Box<dyn R2CTwiddlesHandler<T> + Send + Sync>,
+    twiddles_handler: Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>,
 }
 
 impl<
@@ -66,7 +67,7 @@ where
 {
     pub(crate) fn install(
         length: usize,
-        intercept: Box<dyn FftExecutor<T> + Send + Sync>,
+        intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Self, ZaftError> {
         assert_eq!(
             intercept.direction(),
@@ -186,7 +187,7 @@ where
 }
 
 pub(crate) struct R2CFftOddInterceptor<T> {
-    intercept: Box<dyn FftExecutor<T> + Send + Sync>,
+    intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     length: usize,
     complex_length: usize,
 }
@@ -198,7 +199,7 @@ where
 {
     pub(crate) fn install(
         length: usize,
-        intercept: Box<dyn FftExecutor<T> + Send + Sync>,
+        intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Self, ZaftError> {
         assert_eq!(
             intercept.direction(),

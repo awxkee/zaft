@@ -30,6 +30,21 @@ use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::f32x2_2x2::neon_transpose_f32x2_2x2_impl;
 use std::arch::aarch64::*;
 
+#[inline(always)]
+pub(crate) fn transpose_2x6(rows: [NeonStoreF; 6]) -> [NeonStoreF; 6] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+        NeonStoreF::raw(c0.1),
+    ]
+}
+
 #[inline]
 pub(crate) fn neon_transpose_f32x2_6x6(
     r0: float32x4x3_t,

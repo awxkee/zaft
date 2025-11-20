@@ -26,8 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
-use crate::avx::f64x2_4x4::avx_transpose_f64x2_4x4_impl;
+use crate::avx::transpose::{avx_transpose_f32x2_4x4_impl, avx_transpose_f64x2_4x4_impl};
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_fcmul_ps, shuffle,
@@ -45,6 +44,7 @@ use num_traits::{AsPrimitive, Float, MulAdd};
 use std::any::TypeId;
 use std::arch::x86_64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 #[inline]
 #[target_feature(enable = "avx2")]
@@ -199,7 +199,7 @@ pub(crate) struct AvxFmaRadix3<T> {
     twiddle_re: T,
     twiddle_im: [T; 8],
     direction: FftDirection,
-    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 

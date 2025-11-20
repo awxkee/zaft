@@ -32,6 +32,21 @@ use num_complex::Complex;
 use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
 
 #[inline(always)]
+pub(crate) fn transpose_2x5(rows: [NeonStoreF; 5]) -> [NeonStoreF; 6] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, unsafe { vdupq_n_f32(0.) }));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+        NeonStoreF::raw(c0.1),
+    ]
+}
+
+#[inline(always)]
 pub(crate) fn transpose_6x5(
     rows0: [NeonStoreF; 5],
     rows1: [NeonStoreF; 5],

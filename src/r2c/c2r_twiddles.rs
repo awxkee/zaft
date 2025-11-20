@@ -31,9 +31,10 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, MulAdd, Num};
 use std::marker::PhantomData;
 use std::ops::{Add, Neg, Sub};
+use std::sync::{Arc, OnceLock};
 
 pub(crate) trait C2RTwiddlesFactory<T> {
-    fn make_c2r_twiddles_handler() -> Box<dyn R2CTwiddlesHandler<T> + Send + Sync>;
+    fn make_c2r_twiddles_handler() -> Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>;
 }
 
 #[allow(unused)]
@@ -42,60 +43,68 @@ pub(crate) struct C2RHandler<T> {
 }
 
 impl C2RTwiddlesFactory<f32> for f32 {
-    fn make_c2r_twiddles_handler() -> Box<dyn R2CTwiddlesHandler<f32> + Send + Sync> {
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::C2RNeonFcmaTwiddles;
-                return Box::new(C2RNeonFcmaTwiddles {});
+    fn make_c2r_twiddles_handler() -> Arc<dyn R2CTwiddlesHandler<f32> + Send + Sync> {
+        static Q: OnceLock<Arc<dyn R2CTwiddlesHandler<f32> + Send + Sync>> = OnceLock::new();
+        Q.get_or_init(|| {
+            #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+            {
+                #[cfg(feature = "fcma")]
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::C2RNeonFcmaTwiddles;
+                    return Arc::new(C2RNeonFcmaTwiddles {});
+                }
+                use crate::neon::C2RNeonTwiddles;
+                Arc::new(C2RNeonTwiddles {})
             }
-            use crate::neon::C2RNeonTwiddles;
-            Box::new(C2RNeonTwiddles {})
-        }
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        {
-            use crate::util::has_valid_avx;
-            if has_valid_avx() {
-                use crate::avx::C2RAvxTwiddles;
-                return Box::new(C2RAvxTwiddles {});
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                use crate::util::has_valid_avx;
+                if has_valid_avx() {
+                    use crate::avx::C2RAvxTwiddles;
+                    return Arc::new(C2RAvxTwiddles {});
+                }
             }
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            Box::new(C2RHandler {
-                phantom_data: PhantomData::<f32>,
-            })
-        }
+            #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+            {
+                Arc::new(C2RHandler {
+                    phantom_data: PhantomData::<f32>,
+                })
+            }
+        })
+        .clone()
     }
 }
 
 impl C2RTwiddlesFactory<f64> for f64 {
-    fn make_c2r_twiddles_handler() -> Box<dyn R2CTwiddlesHandler<f64> + Send + Sync> {
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::C2RNeonFcmaTwiddles;
-                return Box::new(C2RNeonFcmaTwiddles {});
+    fn make_c2r_twiddles_handler() -> Arc<dyn R2CTwiddlesHandler<f64> + Send + Sync> {
+        static Q: OnceLock<Arc<dyn R2CTwiddlesHandler<f64> + Send + Sync>> = OnceLock::new();
+        Q.get_or_init(|| {
+            #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+            {
+                #[cfg(feature = "fcma")]
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::C2RNeonFcmaTwiddles;
+                    return Arc::new(C2RNeonFcmaTwiddles {});
+                }
+                use crate::neon::C2RNeonTwiddles;
+                Arc::new(C2RNeonTwiddles {})
             }
-            use crate::neon::C2RNeonTwiddles;
-            Box::new(C2RNeonTwiddles {})
-        }
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        {
-            use crate::util::has_valid_avx;
-            if has_valid_avx() {
-                use crate::avx::C2RAvxTwiddles;
-                return Box::new(C2RAvxTwiddles {});
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                use crate::util::has_valid_avx;
+                if has_valid_avx() {
+                    use crate::avx::C2RAvxTwiddles;
+                    return Arc::new(C2RAvxTwiddles {});
+                }
             }
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            Box::new(C2RHandler {
-                phantom_data: PhantomData::<f64>,
-            })
-        }
+            #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+            {
+                Arc::new(C2RHandler {
+                    phantom_data: PhantomData::<f64>,
+                })
+            }
+        })
+        .clone()
     }
 }
 

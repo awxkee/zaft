@@ -36,6 +36,7 @@ use crate::avx::util::{
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::*;
+use std::sync::Arc;
 
 pub(crate) struct AvxButterfly10d {
     direction: FftDirection,
@@ -383,7 +384,7 @@ impl FftExecutorOutOfPlace<f64> for AvxButterfly10d {
 }
 
 impl CompositeFftExecutor<f64> for AvxButterfly10d {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
         self
     }
 }
@@ -793,7 +794,7 @@ impl FftExecutorOutOfPlace<f32> for AvxButterfly10f {
 }
 
 impl CompositeFftExecutor<f32> for AvxButterfly10f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }
