@@ -30,12 +30,6 @@ mod butterflies;
 mod c2r;
 #[cfg(feature = "fcma")]
 mod c2r_fcma;
-mod f32x2_2x2;
-mod f32x2_4x4;
-mod f32x2_6x4;
-mod f32x2_6x6;
-mod f32x2_7x7;
-mod f64x2_2x2;
 mod mixed;
 mod r2c;
 #[cfg(feature = "fcma")]
@@ -68,6 +62,7 @@ mod radix7_fcma;
 mod spectrum_arithmetic;
 #[cfg(feature = "fcma")]
 mod spectrum_arithmetic_fcma;
+mod transpose;
 mod util;
 
 pub(crate) use butterflies::{
@@ -76,10 +71,10 @@ pub(crate) use butterflies::{
     NeonButterfly13, NeonButterfly14, NeonButterfly15, NeonButterfly16, NeonButterfly17,
     NeonButterfly18d, NeonButterfly18f, NeonButterfly19, NeonButterfly20, NeonButterfly23,
     NeonButterfly25d, NeonButterfly25f, NeonButterfly27d, NeonButterfly27f, NeonButterfly29,
-    NeonButterfly31d, NeonButterfly31f, NeonButterfly32d, NeonButterfly32f, NeonButterfly36d,
-    NeonButterfly36f, NeonButterfly48d, NeonButterfly48f, NeonButterfly49d, NeonButterfly49f,
-    NeonButterfly64d, NeonButterfly64f, NeonButterfly81d, NeonButterfly81f, NeonButterfly100d,
-    NeonButterfly100f,
+    NeonButterfly31d, NeonButterfly31f, NeonButterfly32d, NeonButterfly32f, NeonButterfly35d,
+    NeonButterfly35f, NeonButterfly36d, NeonButterfly36f, NeonButterfly48d, NeonButterfly48f,
+    NeonButterfly49d, NeonButterfly49f, NeonButterfly64d, NeonButterfly64f, NeonButterfly81d,
+    NeonButterfly81f, NeonButterfly100d, NeonButterfly100f, NeonButterfly121d, NeonButterfly121f,
 };
 #[cfg(feature = "fcma")]
 pub(crate) use butterflies::{
@@ -90,17 +85,14 @@ pub(crate) use butterflies::{
     NeonFcmaButterfly19, NeonFcmaButterfly20, NeonFcmaButterfly23, NeonFcmaButterfly25d,
     NeonFcmaButterfly25f, NeonFcmaButterfly27d, NeonFcmaButterfly27f, NeonFcmaButterfly29,
     NeonFcmaButterfly31d, NeonFcmaButterfly31f, NeonFcmaButterfly32d, NeonFcmaButterfly32f,
-    NeonFcmaButterfly36d, NeonFcmaButterfly36f, NeonFcmaButterfly48d, NeonFcmaButterfly48f,
-    NeonFcmaButterfly49d, NeonFcmaButterfly49f, NeonFcmaButterfly64d, NeonFcmaButterfly64f,
-    NeonFcmaButterfly81d, NeonFcmaButterfly81f, NeonFcmaButterfly100d, NeonFcmaButterfly100f,
+    NeonFcmaButterfly35d, NeonFcmaButterfly35f, NeonFcmaButterfly36d, NeonFcmaButterfly36f,
+    NeonFcmaButterfly48d, NeonFcmaButterfly48f, NeonFcmaButterfly49d, NeonFcmaButterfly49f,
+    NeonFcmaButterfly64d, NeonFcmaButterfly64f, NeonFcmaButterfly81d, NeonFcmaButterfly81f,
+    NeonFcmaButterfly100d, NeonFcmaButterfly100f, NeonFcmaButterfly121d, NeonFcmaButterfly121f,
 };
 pub(crate) use c2r::C2RNeonTwiddles;
 #[cfg(feature = "fcma")]
 pub(crate) use c2r_fcma::C2RNeonFcmaTwiddles;
-pub(crate) use f32x2_2x2::neon_transpose_f32x2_2x2;
-pub(crate) use f32x2_4x4::neon_transpose_f32x2_4x4;
-pub(crate) use f32x2_6x4::neon_transpose_f32x2_6x4;
-pub(crate) use f64x2_2x2::neon_transpose_f64x2_2x2;
 #[cfg(feature = "fcma")]
 pub(crate) use mixed::{
     NeonFcmaMixedRadix2, NeonFcmaMixedRadix2f, NeonFcmaMixedRadix3, NeonFcmaMixedRadix3f,
@@ -150,6 +142,17 @@ pub(crate) use radix13_fcma::NeonFcmaRadix13;
 pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
 #[cfg(feature = "fcma")]
 pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
+pub(crate) use transpose::{
+    NeonTranspose2x2F32, NeonTranspose2x2F64, NeonTranspose2x9F32, NeonTranspose2x10F32,
+    NeonTranspose2x11F32, NeonTranspose2x12F32, NeonTranspose4x3F32, NeonTranspose4x3F64,
+    NeonTranspose4x4F32, NeonTranspose4x4F64, NeonTranspose6x4F32, NeonTranspose6x5F32,
+    NeonTranspose7x5F32, NeonTranspose7x7F32, NeonTranspose11x2F32, block_transpose_f32x2_2x2,
+    block_transpose_f32x2_2x9, block_transpose_f32x2_2x10, block_transpose_f32x2_2x11,
+    block_transpose_f32x2_2x12, block_transpose_f32x2_4x3, block_transpose_f32x2_6x5,
+    block_transpose_f32x2_7x5, block_transpose_f32x2_7x7, block_transpose_f32x2_11x2,
+    block_transpose_f64x2_4x3, block_transpose_f64x2_4x4, neon_transpose_f32x2_4x4,
+    neon_transpose_f32x2_6x4, neon_transpose_f64x2_2x2,
+};
 
 #[cfg(test)]
 #[cfg(feature = "fcma")]

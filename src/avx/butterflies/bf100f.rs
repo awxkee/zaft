@@ -338,8 +338,8 @@ impl CompositeFftExecutor<f32> for AvxButterfly100f {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::avx::butterflies::{test_avx_butterfly_small, test_oof_avx_butterfly_small};
+    use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
 
-    test_avx_butterfly_small!(test_avx_butterfly100, f32, AvxButterfly100f, 100, 1e-3);
-    test_oof_avx_butterfly_small!(test_oof_avx_butterfly100, f32, AvxButterfly100f, 100, 1e-3);
+    test_avx_butterfly!(test_avx_butterfly100, f32, AvxButterfly100f, 100, 1e-3);
+    test_oof_avx_butterfly!(test_oof_avx_butterfly100, f32, AvxButterfly100f, 100, 1e-3);
 }

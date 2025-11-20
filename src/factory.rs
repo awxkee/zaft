@@ -174,6 +174,7 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly32(
         fft_direction: FftDirection,
     ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly35(fft_direction: FftDirection) -> Option<Box<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly36(
         fft_direction: FftDirection,
     ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
@@ -188,6 +189,9 @@ pub(crate) trait AlgorithmFactory<T> {
         fft_direction: FftDirection,
     ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn butterfly100(
+        fft_direction: FftDirection,
+    ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly121(
         fft_direction: FftDirection,
     ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn radix3(
@@ -641,6 +645,28 @@ impl AlgorithmFactory<f32> for f32 {
         )
     }
 
+    fn butterfly35(_direction: FftDirection) -> Option<Box<dyn FftExecutor<f32> + Send + Sync>> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly35f;
+                return Some(Box::new(NeonFcmaButterfly35f::new(_direction)));
+            }
+            use crate::neon::NeonButterfly35f;
+            Some(Box::new(NeonButterfly35f::new(_direction)))
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if has_valid_avx() {
+            use crate::avx::AvxButterfly35f;
+            return Some(Box::new(AvxButterfly35f::new(_direction)));
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            None
+        }
+    }
+
     fn butterfly36(
         _fft_direction: FftDirection,
     ) -> Option<Box<dyn CompositeFftExecutor<f32> + Send + Sync>> {
@@ -778,6 +804,30 @@ impl AlgorithmFactory<f32> for f32 {
             }
             use crate::neon::NeonButterfly100f;
             Some(Box::new(NeonButterfly100f::new(_fft_direction)))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            None
+        }
+    }
+
+    fn butterfly121(
+        _fft_direction: FftDirection,
+    ) -> Option<Box<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        if has_valid_avx() {
+            use crate::avx::AvxButterfly121f;
+            return Some(Box::new(AvxButterfly121f::new(_fft_direction)));
+        }
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly121f;
+                return Some(Box::new(NeonFcmaButterfly121f::new(_fft_direction)));
+            }
+            use crate::neon::NeonButterfly121f;
+            Some(Box::new(NeonButterfly121f::new(_fft_direction)))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {

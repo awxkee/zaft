@@ -107,7 +107,7 @@ pub(crate) fn avx_transpose_f32x2_4x4_impl(
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn avx2_transpose_f32x2_4x4(
+pub(crate) fn avx2_transpose_f32x2_4x4(
     src: &[Complex<f32>],
     src_stride: usize,
     dst: &mut [Complex<f32>],

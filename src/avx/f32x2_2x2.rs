@@ -41,7 +41,7 @@ pub(crate) unsafe fn transpose_u64_2x2_impl(v0: (__m128i, __m128i)) -> (__m128i,
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn avx_transpose_f32x2_2x2(
+pub(crate) fn avx_transpose_f32x2_2x2(
     src: &[Complex<f32>],
     src_stride: usize,
     dst: &mut [Complex<f32>],

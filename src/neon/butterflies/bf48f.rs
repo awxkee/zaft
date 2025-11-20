@@ -28,8 +28,8 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::f32x2_2x2::neon_transpose_f32x2_2x2_impl;
 use crate::neon::mixed::{ColumnButterfly4f, ColumnButterfly12f, NeonStoreF};
+use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -185,7 +185,7 @@ impl NeonButterfly48f {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::test_butterfly_small;
+    use crate::butterflies::test_butterfly;
 
-    test_butterfly_small!(test_neon_butterfly48, f32, NeonButterfly48f, 48, 1e-3);
+    test_butterfly!(test_neon_butterfly48, f32, NeonButterfly48f, 48, 1e-3);
 }

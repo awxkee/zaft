@@ -159,7 +159,7 @@ impl AvxButterfly48f {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::avx::butterflies::test_avx_butterfly_small;
+    use crate::avx::butterflies::test_avx_butterfly;
 
-    test_avx_butterfly_small!(test_avx_butterfly48, f32, AvxButterfly48f, 48, 1e-3);
+    test_avx_butterfly!(test_avx_butterfly48, f32, AvxButterfly48f, 48, 1e-3);
 }

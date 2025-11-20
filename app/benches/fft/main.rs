@@ -8,6 +8,7 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
 use rand::Rng;
 use rustfft::FftPlanner;
+use std::time::Duration;
 use zaft::Zaft;
 
 pub fn bench_rustfft_averages(c: &mut Criterion) {
@@ -168,7 +169,7 @@ fn check_power_group(c: &mut Criterion, n: usize, group: String) {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    c.benchmark_group("Fft");
+    //     .measurement_time(Duration::from_millis(135));
     bench_rustfft_average(c);
     bench_zaft_average(c);
     bench_rustfft_averages(c);
@@ -270,7 +271,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    // check_power_group(c, 1920, "Full HD".to_string());
+    check_power_group(c, 1920, "Full HD".to_string());
     // check_power_group(c, 1000, "power 10".to_string());
     // check_power_group(c, 11 * 11 * 11, "power 11".to_string());
     // check_power_group(c, 13 * 13 * 13, "power 13".to_string());
@@ -279,7 +280,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // check_power_group(c, 7 * 7 * 7 * 7, "power 7".to_string());
     // check_power_group(c, 3usize.pow(9), "3^9".to_string());
 
-    /* c.bench_function("rustfft prime 1201", |b| {
+    c.bench_function("rustfft prime 1201", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_1201.len());
         let mut working = input_1201.to_vec();
         b.iter(|| {
@@ -373,7 +374,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| {
             plan.execute(&mut working).unwrap();
         })
-    });*/
+    });
 
     c.bench_function("rustfft power2", |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power2.len());

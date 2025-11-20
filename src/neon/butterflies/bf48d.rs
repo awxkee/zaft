@@ -153,7 +153,7 @@ impl NeonButterfly48d {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::test_butterfly_small;
+    use crate::butterflies::test_butterfly;
 
-    test_butterfly_small!(test_neon_butterfly48_f64, f64, NeonButterfly48d, 48, 1e-7);
+    test_butterfly!(test_neon_butterfly48_f64, f64, NeonButterfly48d, 48, 1e-7);
 }

@@ -28,8 +28,8 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::butterflies::bf100::transpose_10x2;
 use crate::neon::mixed::{ColumnFcmaButterfly10f, NeonStoreF};
+use crate::neon::transpose::transpose_2x10;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
@@ -110,7 +110,7 @@ impl NeonFcmaButterfly100f {
                         rows[i] = NeonStoreF::fcmul_fcma(rows[i], self.twiddles[i - 1 + 9 * k]);
                     }
 
-                    let transposed = transpose_10x2(rows);
+                    let transposed = transpose_2x10(rows);
 
                     for i in 0..5 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 10 + i * 2..));
@@ -177,7 +177,7 @@ impl NeonFcmaButterfly100f {
                         rows[i] = NeonStoreF::fcmul_fcma(rows[i], self.twiddles[i - 1 + 9 * k]);
                     }
 
-                    let transposed = transpose_10x2(rows);
+                    let transposed = transpose_2x10(rows);
 
                     for i in 0..5 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 10 + i * 2..));
@@ -213,11 +213,17 @@ impl CompositeFftExecutor<f32> for NeonFcmaButterfly100f {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::neon::butterflies::{test_fcma_butterfly_small, test_oof_fcma_butterfly_small};
+    use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
-    test_fcma_butterfly_small!(test_avx_butterfly100, f32, NeonFcmaButterfly100f, 100, 1e-3);
-    test_oof_fcma_butterfly_small!(
-        test_oof_avx_butterfly100,
+    test_fcma_butterfly!(
+        test_fcma_butterfly100,
+        f32,
+        NeonFcmaButterfly100f,
+        100,
+        1e-3
+    );
+    test_oof_fcma_butterfly!(
+        test_oof_fcma_butterfly100,
         f32,
         NeonFcmaButterfly100f,
         100,

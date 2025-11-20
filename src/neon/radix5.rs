@@ -28,7 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
-use crate::neon::f32x2_6x6::neon_transpose_f32x2_6x6;
+use crate::neon::transpose::neon_transpose_f32x2_6x6;
 use crate::neon::util::{
     create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64,
 };

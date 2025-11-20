@@ -28,7 +28,7 @@
  */
 #![allow(clippy::needless_range_loop)]
 use crate::avx::mixed::{AvxStoreD, AvxStoreF, ColumnButterfly5d, ColumnButterfly5f};
-use crate::avx::transpose_5x5::{transpose_5x5_f32, transpose_5x5_f64};
+use crate::avx::transpose::{transpose_5x5_f32, transpose_5x5_f64};
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
