@@ -65,14 +65,6 @@ impl TransposeFactory<f32> for f32 {
                 use crate::neon::NeonTranspose6x5F32;
                 return Box::new(NeonTranspose6x5F32::default());
             }
-            if _width.is_multiple_of(2) && _height.is_multiple_of(9) {
-                use crate::neon::NeonTranspose2x9F32;
-                return Box::new(NeonTranspose2x9F32::default());
-            }
-            if _width.is_multiple_of(2) && _height.is_multiple_of(10) {
-                use crate::neon::NeonTranspose2x10F32;
-                return Box::new(NeonTranspose2x10F32::default());
-            }
             if _width.is_multiple_of(2) && _height.is_multiple_of(11) {
                 use crate::neon::NeonTranspose2x11F32;
                 return Box::new(NeonTranspose2x11F32::default());
@@ -145,13 +137,22 @@ impl TransposeFactory<f32> for f32 {
                 use crate::neon::NeonTranspose3x7F32;
                 return Box::new(NeonTranspose3x7F32::default());
             }
-            if _width.is_multiple_of(2) && _height.is_multiple_of(7) {
-                use crate::neon::NeonTranspose2x7F32;
-                return Box::new(NeonTranspose2x7F32::default());
-            }
             if _width.is_multiple_of(9) && _height.is_multiple_of(2) {
                 use crate::neon::NeonTranspose9x2F32;
                 return Box::new(NeonTranspose9x2F32::default());
+            }
+            // generic N height multiplies
+            if _height.is_multiple_of(10) {
+                use crate::neon::NeonTransposeNx10F32;
+                return Box::new(NeonTransposeNx10F32::default());
+            }
+            if _height.is_multiple_of(9) {
+                use crate::neon::NeonTransposeNx9F32;
+                return Box::new(NeonTransposeNx9F32::default());
+            }
+            if _height.is_multiple_of(7) {
+                use crate::neon::NeonTransposeNx7F32;
+                return Box::new(NeonTransposeNx7F32::default());
             }
             if _width > 2 && _height > 2 {
                 return Box::new(NeonDefaultExecutorSingle {});
