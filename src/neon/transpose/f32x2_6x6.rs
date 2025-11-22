@@ -34,7 +34,7 @@ use std::arch::aarch64::*;
 pub(crate) fn transpose_2x6(rows: [NeonStoreF; 6]) -> [NeonStoreF; 6] {
     let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
     let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
-    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[6].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
     [
         NeonStoreF::raw(a0.0),
         NeonStoreF::raw(a0.1),

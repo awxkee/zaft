@@ -311,6 +311,7 @@ define_transpose!(NeonTranspose6x5F32, f32, block_transpose_f32x2_6x5, 6, 5);
 define_transpose_evenf!(NeonTransposeNx10F32, f32, transpose_2x10, 2, 10);
 define_transpose_oddf!(NeonTransposeNx9F32, f32, transpose_2x9, 2, 9);
 define_transpose_oddf!(NeonTransposeNx7F32, f32, transpose_2x7, 2, 7);
+define_transpose_evenf!(NeonTransposeNx8F32, f32, transpose_2x8, 2, 8);
 define_transpose_evenf!(NeonTransposeNx6F32, f32, transpose_2x6, 2, 6);
 define_transpose_oddf!(NeonTransposeNx5F32, f32, transpose_2x5, 2, 5);
 define_transpose!(NeonTranspose2x11F32, f32, block_transpose_f32x2_2x11, 2, 11);

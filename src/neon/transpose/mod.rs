@@ -55,11 +55,11 @@ pub(crate) use blocks::{
     NeonTranspose5x3F32, NeonTranspose5x4F32, NeonTranspose5x7F32, NeonTranspose6x4F32,
     NeonTranspose6x5F32, NeonTranspose7x2F32, NeonTranspose7x3F32, NeonTranspose7x5F32,
     NeonTranspose7x6F32, NeonTranspose7x7F32, NeonTranspose8x3F32, NeonTranspose9x2F32,
-    NeonTranspose11x2F32, NeonTransposeNx5F32, NeonTransposeNx7F32, NeonTransposeNx9F32,
-    NeonTransposeNx10F32,NeonTransposeNx6F32
+    NeonTranspose11x2F32, NeonTransposeNx5F32, NeonTransposeNx6F32, NeonTransposeNx7F32,
+    NeonTransposeNx9F32, NeonTransposeNx10F32,NeonTransposeNx8F32
 };
 pub(crate) use f32x2_2x2::{block_transpose_f32x2_2x2, neon_transpose_f32x2_2x2_impl};
-pub(crate) use f32x2_2x9::transpose_2x9;
+pub(crate) use f32x2_2x9::{transpose_2x8, transpose_2x9};
 pub(crate) use f32x2_2x10::transpose_2x10;
 pub(crate) use f32x2_2x11::{block_transpose_f32x2_2x11, transpose_2x11};
 pub(crate) use f32x2_2x12::block_transpose_f32x2_2x12;

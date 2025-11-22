@@ -50,3 +50,21 @@ pub(crate) fn transpose_2x9(rows: [NeonStoreF; 9]) -> [NeonStoreF; 10] {
         NeonStoreF::raw(f0.1),
     ]
 }
+
+#[inline(always)]
+pub(crate) fn transpose_2x8(rows: [NeonStoreF; 8]) -> [NeonStoreF; 8] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
+    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+        NeonStoreF::raw(c0.1),
+        NeonStoreF::raw(d0.0),
+        NeonStoreF::raw(d0.1),
+    ]
+}

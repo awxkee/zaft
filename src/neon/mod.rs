@@ -154,8 +154,8 @@ pub(crate) use transpose::{
     NeonTranspose6x5F32, NeonTranspose7x2F32, NeonTranspose7x3F32, NeonTranspose7x5F32,
     NeonTranspose7x6F32, NeonTranspose7x7F32, NeonTranspose8x3F32, NeonTranspose9x2F32,
     NeonTranspose11x2F32, NeonTransposeNx5F32, NeonTransposeNx6F32, NeonTransposeNx7F32,
-    NeonTransposeNx9F32, NeonTransposeNx10F32, block_transpose_f32x2_2x2, neon_transpose_f32x2_4x4,
-    neon_transpose_f64x2_2x2,
+    NeonTransposeNx8F32, NeonTransposeNx9F32, NeonTransposeNx10F32, block_transpose_f32x2_2x2,
+    neon_transpose_f32x2_4x4, neon_transpose_f64x2_2x2,
 };
 
 #[cfg(test)]

@@ -150,6 +150,10 @@ impl TransposeFactory<f32> for f32 {
                 use crate::neon::NeonTransposeNx9F32;
                 return Box::new(NeonTransposeNx9F32::default());
             }
+            if _height.is_multiple_of(8) {
+                use crate::neon::NeonTransposeNx8F32;
+                return Box::new(NeonTransposeNx8F32::default());
+            }
             if _height.is_multiple_of(7) {
                 use crate::neon::NeonTransposeNx7F32;
                 return Box::new(NeonTransposeNx7F32::default());
