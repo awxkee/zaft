@@ -28,8 +28,7 @@
  */
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
-use num_complex::Complex;
-use std::arch::aarch64::float32x4x2_t;
+use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
 
 #[inline(always)]
 pub(crate) fn transpose_2x12(rows: [NeonStoreF; 12]) -> [NeonStoreF; 12] {
@@ -55,23 +54,116 @@ pub(crate) fn transpose_2x12(rows: [NeonStoreF; 12]) -> [NeonStoreF; 12] {
     ]
 }
 
-#[inline]
-pub(crate) fn block_transpose_f32x2_2x12(
-    src: &[Complex<f32>],
-    src_stride: usize,
-    dst: &mut [Complex<f32>],
-    dst_stride: usize,
-) {
-    unsafe {
-        let rows0: [NeonStoreF; 12] = std::array::from_fn(|x| {
-            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
-        });
+#[inline(always)]
+pub(crate) fn transpose_2x13(rows: [NeonStoreF; 13]) -> [NeonStoreF; 14] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
+    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
+    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[8].v, rows[9].v));
+    let g0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[10].v, rows[11].v));
+    let h0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[12].v, unsafe { vdupq_n_f32(0.) }));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+        NeonStoreF::raw(c0.1),
+        NeonStoreF::raw(d0.0),
+        NeonStoreF::raw(d0.1),
+        NeonStoreF::raw(f0.0),
+        NeonStoreF::raw(f0.1),
+        NeonStoreF::raw(g0.0),
+        NeonStoreF::raw(g0.1),
+        NeonStoreF::raw(h0.0),
+        NeonStoreF::raw(h0.1),
+    ]
+}
 
-        let t = transpose_2x12(rows0);
+#[inline(always)]
+pub(crate) fn transpose_2x14(rows: [NeonStoreF; 14]) -> [NeonStoreF; 14] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
+    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
+    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[8].v, rows[9].v));
+    let g0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[10].v, rows[11].v));
+    let h0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[12].v, rows[13].v));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+        NeonStoreF::raw(c0.1),
+        NeonStoreF::raw(d0.0),
+        NeonStoreF::raw(d0.1),
+        NeonStoreF::raw(f0.0),
+        NeonStoreF::raw(f0.1),
+        NeonStoreF::raw(g0.0),
+        NeonStoreF::raw(g0.1),
+        NeonStoreF::raw(h0.0),
+        NeonStoreF::raw(h0.1),
+    ]
+}
 
-        for i in 0..6 {
-            t[i * 2].write(dst.get_unchecked_mut(i * 2..));
-            t[i * 2 + 1].write(dst.get_unchecked_mut(dst_stride + i * 2..));
-        }
-    }
+#[inline(always)]
+pub(crate) fn transpose_2x15(rows: [NeonStoreF; 15]) -> [NeonStoreF; 16] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
+    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
+    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[8].v, rows[9].v));
+    let g0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[10].v, rows[11].v));
+    let h0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[12].v, rows[13].v));
+    let i0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[14].v, unsafe { vdupq_n_f32(0.) }));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+        NeonStoreF::raw(c0.1),
+        NeonStoreF::raw(d0.0),
+        NeonStoreF::raw(d0.1),
+        NeonStoreF::raw(f0.0),
+        NeonStoreF::raw(f0.1),
+        NeonStoreF::raw(g0.0),
+        NeonStoreF::raw(g0.1),
+        NeonStoreF::raw(h0.0),
+        NeonStoreF::raw(h0.1),
+        NeonStoreF::raw(i0.0),
+        NeonStoreF::raw(i0.1),
+    ]
+}
+
+#[inline(always)]
+pub(crate) fn transpose_2x16(rows: [NeonStoreF; 16]) -> [NeonStoreF; 16] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
+    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
+    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[8].v, rows[9].v));
+    let g0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[10].v, rows[11].v));
+    let h0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[12].v, rows[13].v));
+    let i0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[14].v, rows[15].v));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+        NeonStoreF::raw(c0.1),
+        NeonStoreF::raw(d0.0),
+        NeonStoreF::raw(d0.1),
+        NeonStoreF::raw(f0.0),
+        NeonStoreF::raw(f0.1),
+        NeonStoreF::raw(g0.0),
+        NeonStoreF::raw(g0.1),
+        NeonStoreF::raw(h0.0),
+        NeonStoreF::raw(h0.1),
+        NeonStoreF::raw(i0.0),
+        NeonStoreF::raw(i0.1),
+    ]
 }

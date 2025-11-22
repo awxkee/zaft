@@ -65,14 +65,6 @@ impl TransposeFactory<f32> for f32 {
                 use crate::neon::NeonTranspose6x5F32;
                 return Box::new(NeonTranspose6x5F32::default());
             }
-            if _width.is_multiple_of(2) && _height.is_multiple_of(11) {
-                use crate::neon::NeonTranspose2x11F32;
-                return Box::new(NeonTranspose2x11F32::default());
-            }
-            if _width.is_multiple_of(2) && _height.is_multiple_of(12) {
-                use crate::neon::NeonTranspose2x12F32;
-                return Box::new(NeonTranspose2x12F32::default());
-            }
             if _width.is_multiple_of(11) && _height.is_multiple_of(2) {
                 use crate::neon::NeonTranspose11x2F32;
                 return Box::new(NeonTranspose11x2F32::default());
@@ -133,15 +125,35 @@ impl TransposeFactory<f32> for f32 {
                 use crate::neon::NeonTranspose4x7F32;
                 return Box::new(NeonTranspose4x7F32::default());
             }
-            if _width.is_multiple_of(3) && _height.is_multiple_of(7) {
-                use crate::neon::NeonTranspose3x7F32;
-                return Box::new(NeonTranspose3x7F32::default());
-            }
             if _width.is_multiple_of(9) && _height.is_multiple_of(2) {
                 use crate::neon::NeonTranspose9x2F32;
                 return Box::new(NeonTranspose9x2F32::default());
             }
             // generic N height multiplies
+            if _height.is_multiple_of(16) {
+                use crate::neon::NeonTransposeNx16F32;
+                return Box::new(NeonTransposeNx16F32::default());
+            }
+            if _height.is_multiple_of(15) {
+                use crate::neon::NeonTransposeNx15F32;
+                return Box::new(NeonTransposeNx15F32::default());
+            }
+            if _height.is_multiple_of(14) {
+                use crate::neon::NeonTransposeNx14F32;
+                return Box::new(NeonTransposeNx14F32::default());
+            }
+            if _height.is_multiple_of(13) {
+                use crate::neon::NeonTransposeNx13F32;
+                return Box::new(NeonTransposeNx13F32::default());
+            }
+            if _height.is_multiple_of(12) {
+                use crate::neon::NeonTransposeNx12F32;
+                return Box::new(NeonTransposeNx12F32::default());
+            }
+            if _height.is_multiple_of(11) {
+                use crate::neon::NeonTransposeNx11F32;
+                return Box::new(NeonTransposeNx11F32::default());
+            }
             if _height.is_multiple_of(10) {
                 use crate::neon::NeonTransposeNx10F32;
                 return Box::new(NeonTransposeNx10F32::default());
