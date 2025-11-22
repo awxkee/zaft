@@ -49,14 +49,14 @@ mod f64x2_4x3;
 mod f64x2_4x4;
 
 pub(crate) use blocks::{
-    NeonTranspose2x2F32, NeonTranspose2x2F64, NeonTranspose2x11F32,
-    NeonTranspose2x12F32, NeonTranspose3x7F32, NeonTranspose3x8F32, NeonTranspose4x3F32,
-    NeonTranspose4x3F64, NeonTranspose4x4F32, NeonTranspose4x4F64, NeonTranspose4x7F32,
-    NeonTranspose5x2F32, NeonTranspose5x3F32, NeonTranspose5x4F32, NeonTranspose5x7F32,
-    NeonTranspose6x4F32, NeonTranspose6x5F32, NeonTranspose7x2F32, NeonTranspose7x3F32,
-    NeonTranspose7x5F32, NeonTranspose7x6F32, NeonTranspose7x7F32, NeonTranspose8x3F32,
-    NeonTranspose9x2F32, NeonTranspose11x2F32, NeonTransposeNx9F32, NeonTransposeNx10F32,
-    NeonTransposeNx7F32
+    NeonTranspose2x2F32, NeonTranspose2x2F64, NeonTranspose2x11F32, NeonTranspose2x12F32,
+    NeonTranspose3x7F32, NeonTranspose3x8F32, NeonTranspose4x3F32, NeonTranspose4x3F64,
+    NeonTranspose4x4F32, NeonTranspose4x4F64, NeonTranspose4x7F32, NeonTranspose5x2F32,
+    NeonTranspose5x3F32, NeonTranspose5x4F32, NeonTranspose5x7F32, NeonTranspose6x4F32,
+    NeonTranspose6x5F32, NeonTranspose7x2F32, NeonTranspose7x3F32, NeonTranspose7x5F32,
+    NeonTranspose7x6F32, NeonTranspose7x7F32, NeonTranspose8x3F32, NeonTranspose9x2F32,
+    NeonTranspose11x2F32, NeonTransposeNx5F32, NeonTransposeNx7F32, NeonTransposeNx9F32,
+    NeonTransposeNx10F32,NeonTransposeNx6F32
 };
 pub(crate) use f32x2_2x2::{block_transpose_f32x2_2x2, neon_transpose_f32x2_2x2_impl};
 pub(crate) use f32x2_2x9::transpose_2x9;
@@ -69,13 +69,12 @@ pub(crate) use f32x2_5x4::{
     block_transpose_f32x2_5x2, block_transpose_f32x2_5x3, block_transpose_f32x2_5x4,
 };
 pub(crate) use f32x2_6x4::neon_transpose_f32x2_6x4;
-pub(crate) use f32x2_6x5::{block_transpose_f32x2_6x5, transpose_6x5};
-pub(crate) use f32x2_6x6::{neon_transpose_f32x2_6x6, neon_transpose_f32x2_6x6_aos};
+pub(crate) use f32x2_6x5::{block_transpose_f32x2_6x5, transpose_2x5, transpose_6x5};
+pub(crate) use f32x2_6x6::{neon_transpose_f32x2_6x6, neon_transpose_f32x2_6x6_aos, transpose_2x6};
 pub(crate) use f32x2_7x5::{
-     block_transpose_f32x2_3x7, block_transpose_f32x2_4x7,
-    block_transpose_f32x2_5x7, block_transpose_f32x2_7x2, block_transpose_f32x2_7x3,
-    block_transpose_f32x2_7x5, block_transpose_f32x2_7x6, neon_transpose_f32x2_7x6_aos,
-    transpose_2x7,
+    block_transpose_f32x2_3x7, block_transpose_f32x2_4x7, block_transpose_f32x2_5x7,
+    block_transpose_f32x2_7x2, block_transpose_f32x2_7x3, block_transpose_f32x2_7x5,
+    block_transpose_f32x2_7x6, neon_transpose_f32x2_7x6_aos, transpose_2x7,
 };
 pub(crate) use f32x2_7x7::{block_transpose_f32x2_7x7, neon_transpose_f32x2_7x7_aos};
 pub(crate) use f32x2_8x3::{block_transpose_f32x2_3x8, block_transpose_f32x2_8x3};

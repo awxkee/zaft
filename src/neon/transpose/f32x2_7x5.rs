@@ -243,7 +243,6 @@ pub(crate) fn transpose_2x7(rows: [NeonStoreF; 7]) -> [NeonStoreF; 8] {
     ]
 }
 
-
 #[inline]
 pub(crate) fn block_transpose_f32x2_7x6(
     src: &[Complex<f32>],

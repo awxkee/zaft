@@ -28,7 +28,6 @@
  */
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
-use num_complex::Complex;
 use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
 
 #[inline(always)]
