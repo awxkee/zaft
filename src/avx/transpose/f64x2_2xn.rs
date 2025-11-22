@@ -28,7 +28,7 @@
  */
 use crate::avx::mixed::AvxStoreD;
 use crate::avx::transpose::transpose_f64x2_2x2;
-use std::arch::x86_64::_mm256_setzero_pd;
+use std::arch::x86_64::{_mm256_permute2f128_pd, _mm256_setzero_pd};
 
 #[inline(always)]
 pub(crate) fn transpose_2x5d(rows: [AvxStoreD; 5]) -> [AvxStoreD; 6] {
@@ -43,6 +43,34 @@ pub(crate) fn transpose_2x5d(rows: [AvxStoreD; 5]) -> [AvxStoreD; 6] {
             AvxStoreD::raw(b0.1),
             AvxStoreD::raw(c0.0),
             AvxStoreD::raw(c0.1),
+        ]
+    }
+}
+
+#[inline(always)]
+pub(crate) fn transpose_2x4d(rows: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
+    unsafe {
+        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
+        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
+        [
+            AvxStoreD::raw(a0.0),
+            AvxStoreD::raw(a0.1),
+            AvxStoreD::raw(b0.0),
+            AvxStoreD::raw(b0.1),
+        ]
+    }
+}
+
+#[inline(always)]
+pub(crate) fn transpose_2x3d(rows: [AvxStoreD; 3]) -> [AvxStoreD; 4] {
+    unsafe {
+        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
+        let b0 = transpose_f64x2_2x2(rows[2].v, _mm256_setzero_pd());
+        [
+            AvxStoreD::raw(a0.0),
+            AvxStoreD::raw(a0.1),
+            AvxStoreD::raw(b0.0),
+            AvxStoreD::raw(b0.1),
         ]
     }
 }
@@ -321,5 +349,22 @@ pub(crate) fn transpose_f64x2_2x16(rows: [AvxStoreD; 16]) -> [AvxStoreD; 16] {
             AvxStoreD::raw(h0.0),
             AvxStoreD::raw(h0.1),
         ]
+    }
+}
+
+#[inline(always)]
+pub(crate) fn transpose_f64x2_2x2d(v: [AvxStoreD; 2]) -> [AvxStoreD; 2] {
+    const HI_HI: i32 = 0b0011_0001;
+    const LO_LO: i32 = 0b0010_0000;
+    unsafe {
+        // a0 a1
+        // a2 a3
+        // --->
+        // a1 a3
+        // a0 a2
+
+        let q0 = _mm256_permute2f128_pd::<LO_LO>(v[0].v, v[1].v);
+        let q1 = _mm256_permute2f128_pd::<HI_HI>(v[0].v, v[1].v);
+        [AvxStoreD::raw(q0), AvxStoreD::raw(q1)]
     }
 }

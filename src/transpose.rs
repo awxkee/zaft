@@ -327,9 +327,17 @@ impl TransposeFactory<f64> for f64 {
                     use crate::avx::AvxTransposeF644x4;
                     return Box::new(AvxTransposeF644x4::default());
                 }
-                if _width.is_multiple_of(2) && _height.is_multiple_of(2) {
-                    use crate::avx::AvxTransposeF642x2;
-                    return Box::new(AvxTransposeF642x2::default());
+                if _height.is_multiple_of(4) {
+                    use crate::avx::AvxTransposeNx4F64;
+                    return Box::new(AvxTransposeNx4F64::default());
+                }
+                if _height.is_multiple_of(3) {
+                    use crate::avx::AvxTransposeNx3F64;
+                    return Box::new(AvxTransposeNx3F64::default());
+                }
+                if _height.is_multiple_of(2) {
+                    use crate::avx::AvxTransposeNx2F64;
+                    return Box::new(AvxTransposeNx2F64::default());
                 }
 
                 return Box::new(AvxDefaultExecutorDouble {});
