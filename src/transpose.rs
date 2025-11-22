@@ -250,6 +250,10 @@ impl TransposeFactory<f64> for f64 {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
             if std::arch::is_x86_feature_detected!("avx") {
+                if _width.is_multiple_of(2) && _height.is_multiple_of(6) {
+                    use crate::avx::AvxTransposeF642x6;
+                    return Box::new(AvxTransposeF642x6::default());
+                }
                 if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
                     use crate::avx::AvxTransposeF644x4;
                     return Box::new(AvxTransposeF644x4::default());

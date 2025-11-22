@@ -115,6 +115,7 @@ define_transpose!(AvxTransposeF324x4, f32, avx2_transpose_f32x2_4x4, 4, 4);
 define_transpose!(AvxTransposeF324x3, f32, avx2_transpose_f32x2_4x3, 4, 3);
 define_transpose!(AvxTransposeF642x2, f64, avx_transpose_f64x2_2x2, 2, 2);
 define_transpose!(AvxTransposeF644x4, f64, avx_transpose_f64x2_4x4, 4, 4);
+define_transpose!(AvxTransposeF642x6, f64, block_transpose_f64x2_2x6, 2, 6);
 define_transpose!(AvxTransposeF327x7, f32, block_transpose_f32x2_7x7, 7, 7);
 define_transpose!(AvxTransposeF322x2, f32, avx_transpose_f32x2_2x2, 2, 2);
 define_transpose!(AvxTransposeF325x5, f32, block_transpose_f32x2_5x5, 5, 5);

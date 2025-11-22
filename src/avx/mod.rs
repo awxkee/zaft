@@ -51,10 +51,10 @@ pub(crate) use butterflies::{
     AvxButterfly17, AvxButterfly18d, AvxButterfly18f, AvxButterfly19, AvxButterfly20d,
     AvxButterfly20f, AvxButterfly23, AvxButterfly25d, AvxButterfly25f, AvxButterfly27d,
     AvxButterfly27f, AvxButterfly29, AvxButterfly31, AvxButterfly32d, AvxButterfly32f,
-    AvxButterfly35d, AvxButterfly35f, AvxButterfly36d, AvxButterfly36f, AvxButterfly48d,
-    AvxButterfly48f, AvxButterfly49d, AvxButterfly49f, AvxButterfly64d, AvxButterfly64f,
-    AvxButterfly81d, AvxButterfly81f, AvxButterfly100d, AvxButterfly100f, AvxButterfly121d,
-    AvxButterfly121f,
+    AvxButterfly35d, AvxButterfly35f, AvxButterfly36d, AvxButterfly36f, AvxButterfly42d,
+    AvxButterfly48d, AvxButterfly48f, AvxButterfly49d, AvxButterfly49f, AvxButterfly64d,
+    AvxButterfly64f, AvxButterfly81d, AvxButterfly81f, AvxButterfly100d, AvxButterfly100f,
+    AvxButterfly121d, AvxButterfly121f,
 };
 pub(crate) use c2r::C2RAvxTwiddles;
 pub(crate) use mixed::{
@@ -84,8 +84,9 @@ pub(crate) use transpose::{
     AvxTransposeF324x4, AvxTransposeF324x11, AvxTransposeF325x2, AvxTransposeF325x3,
     AvxTransposeF325x5, AvxTransposeF327x2, AvxTransposeF327x3, AvxTransposeF327x5,
     AvxTransposeF327x6, AvxTransposeF327x7, AvxTransposeF328x3, AvxTransposeF642x2,
-    AvxTransposeF644x4, avx_transpose_f32x2_2x2, avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4,
-    avx_transpose_f64x2_6x6_impl, avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
+    AvxTransposeF642x6, AvxTransposeF644x4, avx_transpose_f32x2_2x2, avx_transpose_f64x2_2x2,
+    avx_transpose_f64x2_4x4, avx_transpose_f64x2_6x6_impl, avx2_transpose_f32x2_4x4,
+    avx2_transpose_f32x2_8x4,
 };
 
 #[cfg(test)]
