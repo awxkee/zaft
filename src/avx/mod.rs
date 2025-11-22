@@ -84,9 +84,11 @@ pub(crate) use transpose::{
     AvxTransposeF324x4, AvxTransposeF324x11, AvxTransposeF325x2, AvxTransposeF325x3,
     AvxTransposeF325x5, AvxTransposeF327x2, AvxTransposeF327x3, AvxTransposeF327x5,
     AvxTransposeF327x6, AvxTransposeF327x7, AvxTransposeF328x3, AvxTransposeF642x2,
-    AvxTransposeF642x6, AvxTransposeF644x4, avx_transpose_f32x2_2x2, avx_transpose_f64x2_2x2,
-    avx_transpose_f64x2_4x4, avx_transpose_f64x2_6x6_impl, avx2_transpose_f32x2_4x4,
-    avx2_transpose_f32x2_8x4,
+    AvxTransposeF644x4, AvxTransposeNx5F64, AvxTransposeNx6F64, AvxTransposeNx7F64,
+    AvxTransposeNx8F64, AvxTransposeNx9F64, AvxTransposeNx10F64, AvxTransposeNx11F64,
+    AvxTransposeNx12F64, AvxTransposeNx13F64, AvxTransposeNx14F64, AvxTransposeNx15F64,
+    AvxTransposeNx16F64, avx_transpose_f32x2_2x2, avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4,
+    avx_transpose_f64x2_6x6_impl, avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
 };
 
 #[cfg(test)]

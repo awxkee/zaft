@@ -275,9 +275,53 @@ impl TransposeFactory<f64> for f64 {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
             if std::arch::is_x86_feature_detected!("avx") {
-                if _width.is_multiple_of(2) && _height.is_multiple_of(6) {
-                    use crate::avx::AvxTransposeF642x6;
-                    return Box::new(AvxTransposeF642x6::default());
+                if _height.is_multiple_of(16) {
+                    use crate::avx::AvxTransposeNx16F64;
+                    return Box::new(AvxTransposeNx16F64::default());
+                }
+                if _height.is_multiple_of(15) {
+                    use crate::avx::AvxTransposeNx15F64;
+                    return Box::new(AvxTransposeNx15F64::default());
+                }
+                if _height.is_multiple_of(14) {
+                    use crate::avx::AvxTransposeNx14F64;
+                    return Box::new(AvxTransposeNx14F64::default());
+                }
+                if _height.is_multiple_of(13) {
+                    use crate::avx::AvxTransposeNx13F64;
+                    return Box::new(AvxTransposeNx13F64::default());
+                }
+                if _height.is_multiple_of(12) {
+                    use crate::avx::AvxTransposeNx12F64;
+                    return Box::new(AvxTransposeNx12F64::default());
+                }
+                if _height.is_multiple_of(11) {
+                    use crate::avx::AvxTransposeNx11F64;
+                    return Box::new(AvxTransposeNx11F64::default());
+                }
+                if _height.is_multiple_of(10) {
+                    use crate::avx::AvxTransposeNx10F64;
+                    return Box::new(AvxTransposeNx10F64::default());
+                }
+                if _height.is_multiple_of(9) {
+                    use crate::avx::AvxTransposeNx9F64;
+                    return Box::new(AvxTransposeNx9F64::default());
+                }
+                if _height.is_multiple_of(8) {
+                    use crate::avx::AvxTransposeNx8F64;
+                    return Box::new(AvxTransposeNx8F64::default());
+                }
+                if _height.is_multiple_of(7) {
+                    use crate::avx::AvxTransposeNx7F64;
+                    return Box::new(AvxTransposeNx7F64::default());
+                }
+                if _height.is_multiple_of(6) {
+                    use crate::avx::AvxTransposeNx6F64;
+                    return Box::new(AvxTransposeNx6F64::default());
+                }
+                if _height.is_multiple_of(5) {
+                    use crate::avx::AvxTransposeNx5F64;
+                    return Box::new(AvxTransposeNx5F64::default());
                 }
                 if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
                     use crate::avx::AvxTransposeF644x4;
