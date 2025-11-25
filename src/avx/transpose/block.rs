@@ -169,7 +169,7 @@ pub(crate) fn transpose_height_block_executor2_f64<
                 let dst = output.get_unchecked_mut(y + output_stride * output_x..);
 
                 for i in 0..Y_BLOCK_SIZE {
-                    store[i] = AvxStoreD::from_complex_ref(src.get_unchecked(i * input_stride..));
+                    store[i] = AvxStoreD::from_complex(src.get_unchecked(i * input_stride));
                 }
 
                 let q = exec(store);
@@ -244,7 +244,7 @@ pub(crate) fn transpose_height_block_executor2_f64_odd<
                 let dst = output.get_unchecked_mut(y + output_stride * output_x..);
 
                 for i in 0..Y_BLOCK_SIZE {
-                    store[i] = AvxStoreD::from_complex_ref(src.get_unchecked(i * input_stride..));
+                    store[i] = AvxStoreD::from_complex(src.get_unchecked(i * input_stride));
                 }
 
                 let q = exec(store);
