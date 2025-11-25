@@ -27,7 +27,9 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::butterflies::AvxButterfly;
+use crate::avx::mixed::AvxStoreF;
 use crate::avx::rotate::AvxRotate;
+use crate::avx::transpose::transpose_4x13;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_unpackhi_ps64, _mm256_create_pd, _mm256_fcmul_pd,
     _mm256_fcmul_ps, _mm256_load4_f32x2, avx_bitreversed_transpose, create_avx4_1_twiddles,
@@ -38,7 +40,7 @@ use crate::radix13::Radix13Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{compute_twiddle, is_power_of_thirteen};
+use crate::util::{compute_logarithm, compute_twiddle, is_power_of_thirteen, reverse_bits};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -812,6 +814,129 @@ impl FftExecutor<f64> for AvxFmaRadix13<f64> {
     }
 }
 
+#[target_feature(enable = "avx2")]
+fn avx_bitreversed_transpose_f32_radix13(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 13;
+    const HEIGHT: usize = 13;
+
+    let rev_digits = compute_logarithm::<13>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 5, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 6, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 7, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 8, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 9, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 10, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 11, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 12, rev_digits) * height,
+        ];
+
+        let mut cols = [AvxStoreF::zero(); 13];
+
+        // Transposing 13×13 using 4×13 blocks
+        //
+        // The 13×13 matrix is partitioned into 4-row groups:
+        //
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 A0      | 4×4 A1      | 4×4 A2      | 4×4 A3      | 4×4 A4      | 4×4 A5      | 4×1 A6      |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 B0      | 4×4 B1      | 4×4 B2      | 4×4 B3      | 4×4 B4      | 4×4 B5      | 4×1 B6      |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 C0      | 4×4 C1      | 4×4 C2      | 4×4 C3      | 4×4 C4      | 4×4 C5      | 4×1 C6      |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 1×4 D0      | 1×4 D1      | 1×4 D2      | 1×4 D3      | 1×4 D4      | 1×4 D5      | 1×1 D6      |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        //
+        // After transposition:
+        //
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 A0ᵀ     | 4×4 B0ᵀ     | 4×4 C0ᵀ     | 1×4 D0ᵀ     |             |             |             |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 A1ᵀ     | 4×4 B1ᵀ     | 4×4 C1ᵀ     | 1×4 D1ᵀ     |             |             |             |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 A2ᵀ     | 4×4 B2ᵀ     | 4×4 C2ᵀ     | 1×4 D2ᵀ     |             |             |             |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 A3ᵀ     | 4×4 B3ᵀ     | 4×4 C3ᵀ     | 1×4 D3ᵀ     |             |             |             |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 A4ᵀ     | 4×4 B4ᵀ     | 4×4 C4ᵀ     | 1×4 D4ᵀ     |             |             |             |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 4×4 A5ᵀ     | 4×4 B5ᵀ     | 4×4 C5ᵀ     | 1×4 D5ᵀ     |             |             |             |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+        // | 1×4 A6ᵀ     | 1×4 B6ᵀ     | 1×4 C6ᵀ     | 1×1 D6ᵀ     |             |             |             |
+        // +-------------+-------------+-------------+-------------+-------------+-------------+-------------+
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            unsafe {
+                for k in 0..4 {
+                    for i in 0..13 {
+                        cols[i] = AvxStoreF::from_complex_ref(
+                            input.get_unchecked(base_input_idx + k * 4 + width * i..),
+                        );
+                    }
+                    let x0 = x_rev[k * 4];
+                    let x1 = x_rev[k * 4 + 1];
+                    let x2 = x_rev[k * 4 + 2];
+                    let x3 = x_rev[k * 4 + 3];
+                    let transposed = transpose_4x13(cols);
+                    for i in 0..3 {
+                        transposed[i * 4]
+                            .write(output.get_unchecked_mut(HEIGHT * y + x0 + i * 4..));
+                        transposed[i * 4 + 1]
+                            .write(output.get_unchecked_mut(HEIGHT * y + x1 + i * 4..));
+                        transposed[i * 4 + 2]
+                            .write(output.get_unchecked_mut(HEIGHT * y + x2 + i * 4..));
+                        transposed[i * 4 + 3]
+                            .write(output.get_unchecked_mut(HEIGHT * y + x3 + i * 4..));
+                    }
+
+                    transposed[12].write_lo1(output.get_unchecked_mut(HEIGHT * y + x0 + 12..));
+                    transposed[13].write_lo1(output.get_unchecked_mut(HEIGHT * y + x1 + 12..));
+                    transposed[14].write_lo1(output.get_unchecked_mut(HEIGHT * y + x2 + 12..));
+                    transposed[15].write_lo1(output.get_unchecked_mut(HEIGHT * y + x3 + 12..));
+                }
+
+                {
+                    let k = 3;
+                    for i in 0..13 {
+                        cols[i] = AvxStoreF::from_complex(
+                            input.get_unchecked(base_input_idx + k * 4 + width * i),
+                        );
+                    }
+                    let x0 = x_rev[k * 4];
+                    let transposed = transpose_4x13(cols);
+                    for i in 0..3 {
+                        transposed[i * 4]
+                            .write(output.get_unchecked_mut(HEIGHT * y + x0 + i * 4..));
+                    }
+
+                    transposed[12].write_lo1(output.get_unchecked_mut(HEIGHT * y + x0 + 12..));
+                }
+            }
+        }
+    }
+}
+
 impl AvxFmaRadix13<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
@@ -828,7 +953,7 @@ impl AvxFmaRadix13<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                avx_bitreversed_transpose::<Complex<f32>, 13>(13, chunk, &mut scratch);
+                avx_bitreversed_transpose_f32_radix13(13, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
