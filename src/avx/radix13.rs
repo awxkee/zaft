@@ -888,7 +888,7 @@ fn avx_bitreversed_transpose_f32_radix13(
         for y in 0..strided_height {
             let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
             unsafe {
-                for k in 0..4 {
+                for k in 0..3 {
                     for i in 0..13 {
                         cols[i] = AvxStoreF::from_complex_ref(
                             input.get_unchecked(base_input_idx + k * 4 + width * i..),
