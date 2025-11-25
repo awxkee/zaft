@@ -41,6 +41,7 @@ use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
 use std::fmt::Display;
 use std::sync::Arc;
+use crate::neon::radix13::neon_bitreversed_transpose_f32_radix13;
 
 pub(crate) struct NeonFcmaRadix13<T> {
     twiddles: Vec<Complex<T>>,
@@ -436,7 +437,7 @@ impl NeonFcmaRadix13<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 13>(13, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix13(13, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
