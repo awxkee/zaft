@@ -2,7 +2,7 @@ workspace = { members = ["app"], exclude = ["fuzz"] }
 
 [package]
 name = "zaft"
-version = "0.1.11"
+version = "0.2.0"
 edition = "2024"
 description = "Fast fourier transform"
 readme = "README.md"
@@ -18,7 +18,7 @@ rust-version = "1.87.0"
 
 [dependencies]
 num-complex = "0.4"
-num-traits = "0.2"
+num-traits = "0.2.3"
 pxfm = "^0.1.25"
 num-integer = "0.1.46"
 

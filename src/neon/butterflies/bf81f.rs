@@ -28,12 +28,12 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::f32x2_2x2::neon_transpose_f32x2_2x2_impl;
 use crate::neon::mixed::{ColumnButterfly9f, NeonStoreF};
+use crate::neon::transpose::transpose_2x9;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
-use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
+use std::sync::Arc;
 
 pub(crate) struct NeonButterfly81f {
     direction: FftDirection,
@@ -66,27 +66,6 @@ impl NeonButterfly81f {
             bf9: ColumnButterfly9f::new(fft_direction),
         }
     }
-}
-
-#[inline(always)]
-pub(crate) fn transpose_9x2(rows: [NeonStoreF; 9]) -> [NeonStoreF; 10] {
-    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[0].v, rows[1].v));
-    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[2].v, rows[3].v));
-    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[4].v, rows[5].v));
-    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[6].v, rows[7].v));
-    let f0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows[8].v, unsafe { vdupq_n_f32(0.) }));
-    [
-        NeonStoreF::raw(a0.0),
-        NeonStoreF::raw(a0.1),
-        NeonStoreF::raw(b0.0),
-        NeonStoreF::raw(b0.1),
-        NeonStoreF::raw(c0.0),
-        NeonStoreF::raw(c0.1),
-        NeonStoreF::raw(d0.0),
-        NeonStoreF::raw(d0.1),
-        NeonStoreF::raw(f0.0),
-        NeonStoreF::raw(f0.1),
-    ]
 }
 
 impl FftExecutor<f32> for NeonButterfly81f {
@@ -131,7 +110,7 @@ impl NeonButterfly81f {
                         rows[i] = NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 8 * k]);
                     }
 
-                    let transposed = transpose_9x2(rows);
+                    let transposed = transpose_2x9(rows);
 
                     for i in 0..4 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 9 + i * 2..));
@@ -156,7 +135,7 @@ impl NeonButterfly81f {
                         rows[i] = NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 32]);
                     }
 
-                    let transposed = transpose_9x2(rows);
+                    let transposed = transpose_2x9(rows);
 
                     for i in 0..4 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(8 * 9 + i * 2..));
@@ -233,7 +212,7 @@ impl NeonButterfly81f {
                         rows[i] = NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 8 * k]);
                     }
 
-                    let transposed = transpose_9x2(rows);
+                    let transposed = transpose_2x9(rows);
 
                     for i in 0..4 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 9 + i * 2..));
@@ -258,7 +237,7 @@ impl NeonButterfly81f {
                         rows[i] = NeonStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 32]);
                     }
 
-                    let transposed = transpose_9x2(rows);
+                    let transposed = transpose_2x9(rows);
 
                     for i in 0..4 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(8 * 9 + i * 2..));
@@ -297,7 +276,7 @@ impl NeonButterfly81f {
 }
 
 impl CompositeFftExecutor<f32> for NeonButterfly81f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

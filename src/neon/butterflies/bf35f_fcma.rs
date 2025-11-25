@@ -28,9 +28,8 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::butterflies::bf35f::transpose_6x5;
-use crate::neon::f32x2_2x2::neon_transpose_f32x2_2x2_impl;
 use crate::neon::mixed::{ColumnFcmaButterfly5f, ColumnFcmaButterfly7f, NeonStoreF};
+use crate::neon::transpose::{neon_transpose_f32x2_2x2_impl, transpose_6x5};
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;

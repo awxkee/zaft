@@ -31,6 +31,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, MulAdd, Num};
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 pub(crate) struct Butterfly1<T> {
     pub(crate) phantom_data: PhantomData<T>,
@@ -103,7 +104,7 @@ impl<
 where
     f64: AsPrimitive<T>,
 {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<T> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync> {
         self
     }
 }

@@ -26,9 +26,10 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
-use crate::avx::f64x2_4x4::avx_transpose_f64x2_4x4_impl;
 use crate::avx::mixed::{AvxStoreD, AvxStoreF};
+use crate::avx::transpose::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
+use crate::avx::transpose::f64x2_4x4::avx_transpose_f64x2_4x4_impl;
+use num_complex::Complex;
 use std::arch::x86_64::*;
 
 #[inline]
@@ -157,4 +158,28 @@ pub(crate) fn transpose_5x5_f32(
             AvxStoreF::raw(output_right[4]),
         ],
     )
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn block_transpose_f32x2_5x5(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let rows0: [AvxStoreF; 5] = std::array::from_fn(|x| {
+            AvxStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let rows1: [AvxStoreF; 5] =
+            std::array::from_fn(|x| AvxStoreF::from_complex(src.get_unchecked(x * src_stride + 4)));
+
+        let (v0, v1) = transpose_5x5_f32(rows0, rows1);
+
+        for i in 0..5 {
+            v0[i].write(dst.get_unchecked_mut(i * dst_stride..));
+            v1[i].write_lo1(dst.get_unchecked_mut(i * dst_stride + 4..));
+        }
+    }
 }

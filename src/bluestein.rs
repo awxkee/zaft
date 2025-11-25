@@ -38,7 +38,7 @@ use std::ops::{Add, Mul, Neg, Rem, Sub};
 use std::sync::Arc;
 
 pub(crate) struct BluesteinFft<T> {
-    convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: Vec<Complex<T>>,
     twiddles: Vec<Complex<T>>,
     execution_length: usize,
@@ -98,7 +98,7 @@ where
 {
     pub fn new(
         size: usize,
-        convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         fft_direction: FftDirection,
     ) -> Result<BluesteinFft<T>, ZaftError> {
         let convolve_fft_len = convolve_fft.length();

@@ -37,6 +37,7 @@ use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
+use std::sync::Arc;
 
 macro_rules! define_mixed_radix_neon_d {
     ($radix_name: ident, $bf_name: ident, $row_count: expr) => {
@@ -44,7 +45,7 @@ macro_rules! define_mixed_radix_neon_d {
             execution_length: usize,
             direction: FftDirection,
             twiddles: Vec<Complex<f64>>,
-            width_executor: Box<dyn FftExecutor<f64> + Send + Sync>,
+            width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             width: usize,
             height: usize,
             transpose_executor: Box<dyn TransposeExecutor<f64> + Send + Sync>,
@@ -53,7 +54,7 @@ macro_rules! define_mixed_radix_neon_d {
 
         impl $radix_name {
             pub(crate) fn new(
-                width_executor: Box<dyn FftExecutor<f64> + Send + Sync>,
+                width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
                 let direction = width_executor.direction();
 
@@ -182,7 +183,7 @@ macro_rules! define_mixed_radix_neon_d_fcma {
             execution_length: usize,
             direction: FftDirection,
             twiddles: Vec<Complex<f64>>,
-            width_executor: Box<dyn FftExecutor<f64> + Send + Sync>,
+            width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             width: usize,
             height: usize,
             transpose_executor: Box<dyn TransposeExecutor<f64> + Send + Sync>,
@@ -191,7 +192,7 @@ macro_rules! define_mixed_radix_neon_d_fcma {
 
         impl $radix_name {
             pub(crate) fn new(
-                width_executor: Box<dyn FftExecutor<f64> + Send + Sync>,
+                width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
                 let direction = width_executor.direction();
 
@@ -330,7 +331,7 @@ macro_rules! define_mixed_radix_neon_f {
             execution_length: usize,
             direction: FftDirection,
             twiddles: Vec<Complex<f32>>,
-            width_executor: Box<dyn FftExecutor<f32> + Send + Sync>,
+            width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             width: usize,
             height: usize,
             transpose_executor: Box<dyn TransposeExecutor<f32> + Send + Sync>,
@@ -339,7 +340,7 @@ macro_rules! define_mixed_radix_neon_f {
 
         impl $radix_name {
             pub(crate) fn new(
-                width_executor: Box<dyn FftExecutor<f32> + Send + Sync>,
+                width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
                 let direction = width_executor.direction();
 
@@ -517,7 +518,7 @@ macro_rules! define_mixed_radix_neon_f_fcma {
             execution_length: usize,
             direction: FftDirection,
             twiddles: Vec<Complex<f32>>,
-            width_executor: Box<dyn FftExecutor<f32> + Send + Sync>,
+            width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             width: usize,
             height: usize,
             transpose_executor: Box<dyn TransposeExecutor<f32> + Send + Sync>,
@@ -526,7 +527,7 @@ macro_rules! define_mixed_radix_neon_f_fcma {
 
         impl $radix_name {
             pub(crate) fn new(
-                width_executor: Box<dyn FftExecutor<f32> + Send + Sync>,
+                width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
                 let direction = width_executor.direction();
 
@@ -803,10 +804,10 @@ define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix16f, ColumnFcmaButterfly16f, 1
 //     execution_length: usize,
 //     direction: FftDirection,
 //     twiddles: Vec<Complex<T>>,
-//     width_executor: Box<dyn FftExecutor<T> + Send + Sync>,
+//     width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
 //     width: usize,
 //     height: usize,
-//     transpose_executor: Box<dyn TransposeExecutor<T> + Send + Sync>,
+//     transpose_executor: Arc<dyn TransposeExecutor<T> + Send + Sync>,
 //     inner_bf: ColumnButterfly2<T>,
 // }
 //
@@ -814,7 +815,7 @@ define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix16f, ColumnFcmaButterfly16f, 1
 // where
 //     f64: AsPrimitive<T>,
 // {
-//     pub fn new(width_executor: Box<dyn FftExecutor<T> + Send + Sync>) -> Result<Self, ZaftError> {
+//     pub fn new(width_executor: Arc<dyn FftExecutor<T> + Send + Sync>) -> Result<Self, ZaftError> {
 //         let direction = width_executor.direction();
 //
 //         let width = width_executor.length();

@@ -27,10 +27,11 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::butterflies::{AvxButterfly, gen_butterfly_twiddles_interleaved_columns_f64};
-use crate::avx::f64x2_2x2::transpose_f64x2_2x2;
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly8d};
+use crate::avx::transpose::transpose_f64x2_2x2;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::sync::Arc;
 
 pub(crate) struct AvxButterfly32d {
     direction: FftDirection,
@@ -235,7 +236,7 @@ impl FftExecutorOutOfPlace<f64> for AvxButterfly32d {
 }
 
 impl CompositeFftExecutor<f64> for AvxButterfly32d {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
         self
     }
 }

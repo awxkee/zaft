@@ -34,6 +34,7 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) struct Radix4<T> {
@@ -41,7 +42,7 @@ pub(crate) struct Radix4<T> {
     execution_length: usize,
     direction: FftDirection,
     base_len: usize,
-    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
 pub(crate) trait Radix4Twiddles {

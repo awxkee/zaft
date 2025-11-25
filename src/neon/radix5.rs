@@ -28,7 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
-use crate::neon::f32x2_6x6::neon_transpose_f32x2_6x6;
+use crate::neon::transpose::neon_transpose_f32x2_6x6;
 use crate::neon::util::{
     create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64,
 };
@@ -44,6 +44,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 pub(crate) struct NeonRadix5<T> {
     twiddles: Vec<Complex<T>>,
@@ -51,7 +52,7 @@ pub(crate) struct NeonRadix5<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     direction: FftDirection,
-    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     butterfly_length: usize,
 }
 

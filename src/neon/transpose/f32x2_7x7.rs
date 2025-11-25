@@ -26,8 +26,9 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::f32x2_4x4::transpose_f32x2_4x4;
 use crate::neon::mixed::NeonStoreF;
+use crate::neon::transpose::f32x2_4x4::transpose_f32x2_4x4;
+use num_complex::Complex;
 use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
 
 #[inline]
@@ -122,5 +123,80 @@ pub(crate) fn neon_transpose_f32x2_7x7_aos(
                 NeonStoreF::raw(output_right[6].1),
             ],
         )
+    }
+}
+
+#[inline]
+pub(crate) fn block_transpose_f32x2_7x7(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let rows0: [NeonStoreF; 7] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride..))
+        });
+        let rows1: [NeonStoreF; 7] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 2..))
+        });
+        let rows2: [NeonStoreF; 7] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 4..))
+        });
+        let rows3: [NeonStoreF; 7] = std::array::from_fn(|x| {
+            NeonStoreF::from_complex(src.get_unchecked(x * src_stride + 6))
+        });
+
+        let (v0, v1, v2, v3) = neon_transpose_f32x2_7x7_aos(rows0, rows1, rows2, rows3);
+
+        for i in 0..7 {
+            v0[i].write(dst.get_unchecked_mut(i * dst_stride..));
+            v1[i].write(dst.get_unchecked_mut(i * dst_stride + 2..));
+            v2[i].write(dst.get_unchecked_mut(i * dst_stride + 4..));
+            v3[i].write_lo(dst.get_unchecked_mut(i * dst_stride + 6..));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use num_complex::Complex;
+
+    #[test]
+    fn test_block_transpose_f32x2_7x7() {
+        const STRIDE: usize = 14; // arbitrary stride >= 7*2
+        const BLOCK_SIZE: usize = 7;
+
+        // Create input buffer: 7x7 Complex<f32>
+        let mut src = vec![Complex::<f32>::new(0.0, 0.0); STRIDE * BLOCK_SIZE];
+        let mut q = 0f32;
+        for y in 0..BLOCK_SIZE {
+            for x in 0..BLOCK_SIZE {
+                let idx = y * STRIDE + x;
+                src[idx] = Complex::new(x as f32 + y as f32 + q, y as f32); // unique values
+                q += 0.5;
+            }
+        }
+
+        // Output buffer
+        let mut dst = vec![Complex::<f32>::new(-1.0, -1.0); STRIDE * BLOCK_SIZE];
+
+        // Call the transpose
+        block_transpose_f32x2_7x7(&src, STRIDE, &mut dst, STRIDE);
+
+        // Validate the transpose
+        for y in 0..BLOCK_SIZE {
+            for x in 0..BLOCK_SIZE {
+                let src_idx = y * STRIDE + x;
+                let dst_idx = x * STRIDE + y;
+
+                assert_eq!(
+                    dst[dst_idx], src[src_idx],
+                    "Mismatch at src ({}, {}) -> dst ({}, {})",
+                    x, y, y, x
+                );
+            }
+        }
     }
 }

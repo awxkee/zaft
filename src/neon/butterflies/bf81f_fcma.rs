@@ -28,11 +28,12 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::butterflies::bf81f::transpose_9x2;
 use crate::neon::mixed::{ColumnFcmaButterfly9f, NeonStoreF};
+use crate::neon::transpose::transpose_2x9;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::sync::Arc;
 
 pub(crate) struct NeonFcmaButterfly81f {
     direction: FftDirection,
@@ -110,7 +111,7 @@ impl NeonFcmaButterfly81f {
                         rows[i] = NeonStoreF::fcmul_fcma(rows[i], self.twiddles[i - 1 + 8 * k]);
                     }
 
-                    let transposed = transpose_9x2(rows);
+                    let transposed = transpose_2x9(rows);
 
                     for i in 0..4 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 9 + i * 2..));
@@ -135,7 +136,7 @@ impl NeonFcmaButterfly81f {
                         rows[i] = NeonStoreF::fcmul_fcma(rows[i], self.twiddles[i - 1 + 32]);
                     }
 
-                    let transposed = transpose_9x2(rows);
+                    let transposed = transpose_2x9(rows);
 
                     for i in 0..4 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(8 * 9 + i * 2..));
@@ -213,7 +214,7 @@ impl NeonFcmaButterfly81f {
                         rows[i] = NeonStoreF::fcmul_fcma(rows[i], self.twiddles[i - 1 + 8 * k]);
                     }
 
-                    let transposed = transpose_9x2(rows);
+                    let transposed = transpose_2x9(rows);
 
                     for i in 0..4 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 9 + i * 2..));
@@ -238,7 +239,7 @@ impl NeonFcmaButterfly81f {
                         rows[i] = NeonStoreF::fcmul_fcma(rows[i], self.twiddles[i - 1 + 32]);
                     }
 
-                    let transposed = transpose_9x2(rows);
+                    let transposed = transpose_2x9(rows);
 
                     for i in 0..4 {
                         transposed[i * 2].write(scratch.get_unchecked_mut(8 * 9 + i * 2..));
@@ -277,7 +278,7 @@ impl NeonFcmaButterfly81f {
 }
 
 impl CompositeFftExecutor<f32> for NeonFcmaButterfly81f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

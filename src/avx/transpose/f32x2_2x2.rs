@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 11/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -26,37 +26,55 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
+
+use num_complex::Complex;
 use std::arch::x86_64::*;
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) fn transpose_6x6_f32(
-    left: [__m256; 6],
-    right: [__m256; 6],
-) -> ([__m256; 6], [__m256; 6]) {
-    let tl = avx_transpose_f32x2_4x4_impl(left[0], left[1], left[2], left[3]);
-    // Bottom-left 2x4 complex block (pad 2 rows with zeros)
-    let bl =
-        avx_transpose_f32x2_4x4_impl(left[4], left[5], _mm256_setzero_ps(), _mm256_setzero_ps());
+pub(crate) unsafe fn transpose_u64_2x2_impl(v0: (__m128i, __m128i)) -> (__m128i, __m128i) {
+    let l = _mm_unpacklo_epi64(v0.0, v0.1);
+    let h = _mm_unpackhi_epi64(v0.0, v0.1);
 
-    // Top-right 4x2 complex block (pad 2 columns with zeros to form 4x4)
-    let tr = avx_transpose_f32x2_4x4_impl(right[0], right[1], right[2], right[3]);
-    // Bottom-right 2x2 complex block
-    let br =
-        avx_transpose_f32x2_4x4_impl(right[4], right[5], _mm256_setzero_ps(), _mm256_setzero_ps());
+    (l, h)
+}
 
-    // Reassemble left 6 rows (first 4 columns)
-    let output_left = [
-        tl.0, tl.1, tl.2, tl.3, // top 4 rows
-        tr.0, tr.1, // bottom 2 rows
-    ];
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn avx_transpose_f32x2_2x2(
+    src: &[Complex<f32>],
+    src_stride: usize,
+    dst: &mut [Complex<f32>],
+    dst_stride: usize,
+) {
+    unsafe {
+        let row0 = _mm_loadu_si128(src.as_ptr().cast());
+        let row1 = _mm_loadu_si128(src.get_unchecked(src_stride..).as_ptr().cast());
 
-    // Reassemble right 6 rows (last 2 columns)
-    let output_right = [
-        bl.0, bl.1, bl.2, bl.3, // top 4 rows
-        br.0, br.1, // bottom 2 rows
-    ];
+        let v0 = transpose_u64_2x2_impl((row0, row1));
 
-    (output_left, output_right)
+        _mm_storeu_si128(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), v0.0);
+        _mm_storeu_si128(
+            dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
+            v0.1,
+        );
+    }
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn transpose_f32_2x2_impl(v0: (__m256, __m256)) -> (__m256, __m256) {
+    let l = _mm_unpacklo_pd(
+        _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
+        _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
+    );
+    let h = _mm_unpackhi_pd(
+        _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
+        _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
+    );
+
+    (
+        _mm256_castps128_ps256(_mm_castpd_ps(l)),
+        _mm256_castps128_ps256(_mm_castpd_ps(h)),
+    )
 }

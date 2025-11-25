@@ -27,13 +27,14 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::needless_range_loop)]
-use crate::neon::f32x2_6x6::neon_transpose_f32x2_6x6_aos;
 use crate::neon::mixed::{ColumnButterfly6f, NeonStoreF};
+use crate::neon::transpose::neon_transpose_f32x2_6x6_aos;
 use crate::neon::util::vfcmulq_f32;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::{vld1q_f32, vst1q_f32};
+use std::sync::Arc;
 
 pub(crate) struct NeonButterfly36f {
     direction: FftDirection,
@@ -263,7 +264,7 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly36f {
 }
 
 impl CompositeFftExecutor<f32> for NeonButterfly36f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

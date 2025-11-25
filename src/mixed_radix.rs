@@ -42,12 +42,13 @@ pub(crate) struct MixedRadix<T> {
     execution_length: usize,
     direction: FftDirection,
     twiddles: Vec<Complex<T>>,
-    width_executor: Box<dyn FftExecutor<T> + Send + Sync>,
+    width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     width: usize,
-    height_executor: Box<dyn FftExecutor<T> + Send + Sync>,
+    height_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     height: usize,
     spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
-    transpose_executor: Box<dyn TransposeExecutor<T> + Send + Sync>,
+    width_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
+    height_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
 }
 
 impl<T: Copy + 'static + FftTrigonometry + Float + SpectrumOpsFactory<T> + TransposeFactory<T>>
@@ -56,8 +57,8 @@ where
     f64: AsPrimitive<T>,
 {
     pub fn new(
-        width_executor: Box<dyn FftExecutor<T> + Send + Sync>,
-        height_executor: Box<dyn FftExecutor<T> + Send + Sync>,
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+        height_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Self, ZaftError> {
         assert_eq!(
             width_executor.direction(),
@@ -90,7 +91,8 @@ where
             direction,
             twiddles,
             spectrum_ops: T::make_spectrum_arithmetic(),
-            transpose_executor: T::transpose_strategy(width, height),
+            width_transpose: T::transpose_strategy(width, height),
+            height_transpose: T::transpose_strategy(height, width),
         })
     }
 }
@@ -121,7 +123,7 @@ where
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // STEP 1: transpose
-            self.transpose_executor
+            self.width_transpose
                 .transpose(chunk, &mut scratch, self.width, self.height);
 
             // STEP 2: perform FFTs of size `height`
@@ -131,14 +133,14 @@ where
             self.spectrum_ops.mul(&scratch, &self.twiddles, chunk);
 
             // STEP 4: transpose again
-            self.transpose_executor
+            self.height_transpose
                 .transpose(chunk, &mut scratch, self.height, self.width);
 
             // STEP 5: perform FFTs of size `width`
             self.width_executor.execute(&mut scratch)?;
 
             // STEP 6: transpose again
-            self.transpose_executor
+            self.width_transpose
                 .transpose(&scratch, chunk, self.width, self.height);
         }
         Ok(())

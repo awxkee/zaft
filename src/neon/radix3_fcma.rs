@@ -42,6 +42,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 pub(crate) struct NeonFcmaRadix3<T> {
     twiddles: Vec<Complex<T>>,
@@ -49,7 +50,7 @@ pub(crate) struct NeonFcmaRadix3<T> {
     twiddle_re: T,
     twiddle_im: [T; 4],
     direction: FftDirection,
-    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 

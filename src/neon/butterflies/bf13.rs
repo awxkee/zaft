@@ -34,6 +34,7 @@ use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPla
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
+use std::sync::Arc;
 
 pub(crate) struct NeonButterfly13<T> {
     direction: FftDirection,
@@ -378,7 +379,7 @@ impl FftExecutorOutOfPlace<f64> for NeonButterfly13<f64> {
 }
 
 impl CompositeFftExecutor<f64> for NeonButterfly13<f64> {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
         self
     }
 }
@@ -1060,7 +1061,7 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly13<f32> {
 }
 
 impl CompositeFftExecutor<f32> for NeonButterfly13<f32> {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

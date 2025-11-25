@@ -27,11 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::needless_range_loop)]
-use crate::avx::f32x2_7x7::{transpose_7x7_f32, transpose_7x7_f64};
+
 use crate::avx::mixed::{AvxStoreD, AvxStoreF, ColumnButterfly7d, ColumnButterfly7f};
+use crate::avx::transpose::{store_transpose_7x7_f32, transpose_7x7_f64};
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::sync::Arc;
 
 pub(crate) struct AvxButterfly49d {
     direction: FftDirection,
@@ -292,7 +294,7 @@ impl AvxButterfly49d {
 }
 
 impl CompositeFftExecutor<f64> for AvxButterfly49d {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f64> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
         self
     }
 }
@@ -332,42 +334,6 @@ impl AvxButterfly49f {
             }
         }
     }
-}
-
-#[inline]
-#[target_feature(enable = "avx2")]
-pub(crate) fn store_transpose_7x7_f32(
-    left: [AvxStoreF; 7],
-    right: [AvxStoreF; 7],
-) -> ([AvxStoreF; 7], [AvxStoreF; 7]) {
-    let (q0, q1) = transpose_7x7_f32(
-        [
-            left[0].v, left[1].v, left[2].v, left[3].v, left[4].v, left[5].v, left[6].v,
-        ],
-        [
-            right[0].v, right[1].v, right[2].v, right[3].v, right[4].v, right[5].v, right[6].v,
-        ],
-    );
-    (
-        [
-            AvxStoreF::raw(q0[0]),
-            AvxStoreF::raw(q0[1]),
-            AvxStoreF::raw(q0[2]),
-            AvxStoreF::raw(q0[3]),
-            AvxStoreF::raw(q0[4]),
-            AvxStoreF::raw(q0[5]),
-            AvxStoreF::raw(q0[6]),
-        ],
-        [
-            AvxStoreF::raw(q1[0]),
-            AvxStoreF::raw(q1[1]),
-            AvxStoreF::raw(q1[2]),
-            AvxStoreF::raw(q1[3]),
-            AvxStoreF::raw(q1[4]),
-            AvxStoreF::raw(q1[5]),
-            AvxStoreF::raw(q1[6]),
-        ],
-    )
 }
 
 impl FftExecutor<f32> for AvxButterfly49f {
@@ -511,7 +477,7 @@ impl AvxButterfly49f {
 }
 
 impl CompositeFftExecutor<f32> for AvxButterfly49f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

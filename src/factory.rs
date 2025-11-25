@@ -35,33 +35,111 @@ use crate::mixed_radix::MixedRadix;
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 use crate::util::has_valid_avx;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use std::sync::{Arc, OnceLock};
 
 macro_rules! make_default_butterfly {
     ($fft_direction: expr, $scalar_name: ident, $avx_name: ident, $neon_name: ident, $fcma_name: ident) => {{
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::$fcma_name;
-                return Ok(Box::new($fcma_name::new($fft_direction)));
-            }
-            use crate::neon::$neon_name;
-            Ok(Box::new($neon_name::new($fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            if has_valid_avx() {
-                use crate::avx::$avx_name;
-                return Ok(Box::new($avx_name::new($fft_direction)));
-            }
-            use crate::butterflies::$scalar_name;
-            Ok(Box::new($scalar_name::new($fft_direction)))
-        }
+        static Q: OnceLock<Arc<dyn FftExecutor<f32> + Send + Sync>> = OnceLock::new();
+        static B: OnceLock<Arc<dyn FftExecutor<f32> + Send + Sync>> = OnceLock::new();
+        let selector = match $fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        Ok(selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                {
+                    #[cfg(feature = "fcma")]
+                    if std::arch::is_aarch64_feature_detected!("fcma") {
+                        use crate::neon::$fcma_name;
+                        return Arc::new($fcma_name::new($fft_direction));
+                    }
+                    use crate::neon::$neon_name;
+                    Arc::new($neon_name::new($fft_direction))
+                }
+                #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+                {
+                    #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                    if has_valid_avx() {
+                        use crate::avx::$avx_name;
+                        return Arc::new($avx_name::new($fft_direction));
+                    }
+                    use crate::butterflies::$scalar_name;
+                    Arc::new($scalar_name::new($fft_direction))
+                }
+            })
+            .clone())
     }};
 }
 
-pub(crate) use make_default_butterfly;
+macro_rules! make_composite_butterfly {
+    ($fft_direction: expr, $scalar_name: ident, $avx_name: ident, $neon_name: ident, $fcma_name: ident) => {{
+        static Q: OnceLock<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> = OnceLock::new();
+        static B: OnceLock<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> = OnceLock::new();
+        let selector = match $fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        Ok(selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                {
+                    #[cfg(feature = "fcma")]
+                    if std::arch::is_aarch64_feature_detected!("fcma") {
+                        use crate::neon::$fcma_name;
+                        return Arc::new($fcma_name::new($fft_direction));
+                    }
+                    use crate::neon::$neon_name;
+                    Arc::new($neon_name::new($fft_direction))
+                }
+                #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+                {
+                    #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                    if has_valid_avx() {
+                        use crate::avx::$avx_name;
+                        return Arc::new($avx_name::new($fft_direction));
+                    }
+                    use crate::butterflies::$scalar_name;
+                    Arc::new($scalar_name::new($fft_direction))
+                }
+            })
+            .clone())
+    }};
+}
+
+macro_rules! make_optional_butterfly {
+    ($ftype: ident, $fft_direction: expr, $avx_name: ident, $neon_name: ident, $fcma_name: ident) => {{
+        static Q: OnceLock<Option<Arc<dyn $ftype<f32> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn $ftype<f32> + Send + Sync>>> = OnceLock::new();
+        let selector = match $fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if has_valid_avx() {
+                    use crate::avx::$avx_name;
+                    return Some(Arc::new($avx_name::new($fft_direction)));
+                }
+                #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                {
+                    #[cfg(feature = "fcma")]
+                    if std::arch::is_aarch64_feature_detected!("fcma") {
+                        use crate::neon::$fcma_name;
+                        return Some(Arc::new($fcma_name::new($fft_direction)));
+                    }
+                    use crate::neon::$neon_name;
+                    Some(Arc::new($neon_name::new($fft_direction)))
+                }
+                #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+                {
+                    None
+                }
+            })
+            .clone()
+    }};
+}
 
 macro_rules! make_default_radix {
     ($n: expr, $fft_direction: expr, $scalar_name: ident, $avx_name: ident, $neon_name: ident, $fcma_name: ident) => {{
@@ -71,11 +149,11 @@ macro_rules! make_default_radix {
             if std::arch::is_aarch64_feature_detected!("fcma") {
                 use crate::neon::$fcma_name;
                 return $fcma_name::new($n, $fft_direction)
-                    .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                    .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>);
             }
             use crate::neon::$neon_name;
             $neon_name::new($n, $fft_direction)
-                .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -84,12 +162,12 @@ macro_rules! make_default_radix {
                 if has_valid_avx() {
                     use crate::avx::$avx_name;
                     return $avx_name::new($n, $fft_direction)
-                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                        .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>);
                 }
             }
             use crate::$scalar_name;
             $scalar_name::new($n, $fft_direction)
-                .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
         }
     }};
 }
@@ -97,233 +175,234 @@ macro_rules! make_default_radix {
 pub(crate) trait AlgorithmFactory<T> {
     fn butterfly1(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly2(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly3(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly4(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly5(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly6(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly7(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly8(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly9(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly10(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly11(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly12(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly13(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly14(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly15(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly16(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly17(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly18(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly19(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly20(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly23(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     // used only on NEON, or scalar
     fn butterfly25(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly27(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly29(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly31(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly32(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
-    fn butterfly35(fft_direction: FftDirection) -> Option<Box<dyn FftExecutor<T> + Send + Sync>>;
+    ) -> Result<Arc<dyn CompositeFftExecutor<T> + Send + Sync>, ZaftError>;
+    fn butterfly35(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly36(
         fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
-    fn butterfly48(fft_direction: FftDirection) -> Option<Box<dyn FftExecutor<T> + Send + Sync>>;
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly42(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly48(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly49(
         fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn butterfly64(
         fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn butterfly81(
         fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn butterfly100(
         fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn butterfly121(
         fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn radix3(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix4(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix5(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix6(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix7(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix10(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix11(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn radix13(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn dft(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
 
     fn raders(
-        convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
 
     fn bluestein(
-        convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
 
     fn mixed_radix(
-        left_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+        left_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly2(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly3(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly4(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly5(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly6(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly7(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly8(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly9(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly10(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly11(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly12(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly13(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     #[allow(unused)]
     fn mixed_radix_butterfly16(
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
     fn good_thomas(
-        left_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-        right_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Box<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
+        left_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
 }
 
 impl AlgorithmFactory<f32> for f32 {
     fn butterfly1(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        Ok(Box::new(Butterfly1 {
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        Ok(Arc::new(Butterfly1 {
             phantom_data: Default::default(),
             direction: fft_direction,
         }))
@@ -331,48 +410,48 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly2(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             use crate::neon::NeonButterfly2;
-            Ok(Box::new(NeonButterfly2::new(fft_direction)))
+            Ok(Arc::new(NeonButterfly2::new(fft_direction)))
         }
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         if std::arch::is_x86_feature_detected!("avx2") {
             use crate::avx::AvxButterfly2;
-            return Ok(Box::new(AvxButterfly2::new(fft_direction)));
+            return Ok(Arc::new(AvxButterfly2::new(fft_direction)));
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             use crate::butterflies::Butterfly2;
-            Ok(Box::new(Butterfly2::new(fft_direction)))
+            Ok(Arc::new(Butterfly2::new(fft_direction)))
         }
     }
 
     fn butterfly3(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         if has_valid_avx() {
             use crate::avx::AvxButterfly3;
-            return Ok(Box::new(AvxButterfly3::new(fft_direction)));
+            return Ok(Arc::new(AvxButterfly3::new(fft_direction)));
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             use crate::neon::NeonButterfly3;
-            Ok(Box::new(NeonButterfly3::new(fft_direction)))
+            Ok(Arc::new(NeonButterfly3::new(fft_direction)))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
             use crate::butterflies::Butterfly3;
-            Ok(Box::new(Butterfly3::new(fft_direction)))
+            Ok(Arc::new(Butterfly3::new(fft_direction)))
         }
     }
 
     fn butterfly4(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly4,
             AvxButterfly4,
@@ -383,8 +462,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly5(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly5,
             AvxButterfly5,
@@ -395,8 +474,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly6(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly6,
             AvxButterfly6,
@@ -407,8 +486,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly7(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly7,
             AvxButterfly7,
@@ -419,8 +498,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly8(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly8,
             AvxButterfly8,
@@ -431,8 +510,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly9(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly9,
             AvxButterfly9,
@@ -443,8 +522,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly10(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly10,
             AvxButterfly10f,
@@ -455,8 +534,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly11(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly11,
             AvxButterfly11,
@@ -467,7 +546,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly12(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly12,
@@ -479,8 +558,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly13(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly13,
             AvxButterfly13,
@@ -491,7 +570,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly14(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly14,
@@ -503,7 +582,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly15(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly15,
@@ -515,8 +594,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly16(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly16,
             AvxButterfly16,
@@ -527,7 +606,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly17(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly17,
@@ -539,7 +618,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly18(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly18,
@@ -551,7 +630,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly19(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly19,
@@ -563,7 +642,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly20(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly20,
@@ -575,7 +654,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly23(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly23,
@@ -587,8 +666,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly25(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly25,
             AvxButterfly25f,
@@ -599,8 +678,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly27(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly27,
             AvxButterfly27f,
@@ -611,7 +690,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly29(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly29,
@@ -623,7 +702,7 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly31(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_butterfly!(
             fft_direction,
             Butterfly31,
@@ -635,8 +714,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly32(
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Result<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_composite_butterfly!(
             fft_direction,
             Butterfly32,
             AvxButterfly32f,
@@ -645,200 +724,116 @@ impl AlgorithmFactory<f32> for f32 {
         )
     }
 
-    fn butterfly35(_direction: FftDirection) -> Option<Box<dyn FftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly35f;
-                return Some(Box::new(NeonFcmaButterfly35f::new(_direction)));
-            }
-            use crate::neon::NeonButterfly35f;
-            Some(Box::new(NeonButterfly35f::new(_direction)))
-        }
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if has_valid_avx() {
-            use crate::avx::AvxButterfly35f;
-            return Some(Box::new(AvxButterfly35f::new(_direction)));
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+    fn butterfly35(_direction: FftDirection) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _direction,
+            AvxButterfly35f,
+            NeonButterfly35f,
+            NeonFcmaButterfly35f
+        )
     }
 
     fn butterfly36(
         _fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly36f;
-                return Some(Box::new(NeonFcmaButterfly36f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly36f;
-            Some(Box::new(NeonButterfly36f::new(_fft_direction)))
-        }
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if has_valid_avx() {
-            use crate::avx::AvxButterfly36f;
-            return Some(Box::new(AvxButterfly36f::new(_fft_direction)));
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+    ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly36f,
+            NeonButterfly36f,
+            NeonFcmaButterfly36f
+        )
+    }
+
+    fn butterfly42(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly42f,
+            NeonButterfly42f,
+            NeonFcmaButterfly42f
+        )
     }
 
     fn butterfly48(
         _fft_direction: FftDirection,
-    ) -> Option<Box<dyn FftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if has_valid_avx() {
-            use crate::avx::AvxButterfly48f;
-            return Some(Box::new(AvxButterfly48f::new(_fft_direction)));
-        }
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly48f;
-                return Some(Box::new(NeonFcmaButterfly48f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly48f;
-            Some(Box::new(NeonButterfly48f::new(_fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly48f,
+            NeonButterfly48f,
+            NeonFcmaButterfly48f
+        )
     }
 
     fn butterfly49(
         _fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if has_valid_avx() {
-            use crate::avx::AvxButterfly49f;
-            return Some(Box::new(AvxButterfly49f::new(_fft_direction)));
-        }
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly49f;
-                return Some(Box::new(NeonFcmaButterfly49f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly49f;
-            Some(Box::new(NeonButterfly49f::new(_fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+    ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly49f,
+            NeonButterfly49f,
+            NeonFcmaButterfly49f
+        )
     }
 
     fn butterfly64(
         _fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if has_valid_avx() {
-            use crate::avx::AvxButterfly64f;
-            return Some(Box::new(AvxButterfly64f::new(_fft_direction)));
-        }
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly64f;
-                return Some(Box::new(NeonFcmaButterfly64f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly64f;
-            Some(Box::new(NeonButterfly64f::new(_fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+    ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly64f,
+            NeonButterfly64f,
+            NeonFcmaButterfly64f
+        )
     }
 
     fn butterfly81(
         _fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if has_valid_avx() {
-            use crate::avx::AvxButterfly81f;
-            return Some(Box::new(AvxButterfly81f::new(_fft_direction)));
-        }
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly81f;
-                return Some(Box::new(NeonFcmaButterfly81f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly81f;
-            Some(Box::new(NeonButterfly81f::new(_fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+    ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly81f,
+            NeonButterfly81f,
+            NeonFcmaButterfly81f
+        )
     }
 
     fn butterfly100(
         _fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if has_valid_avx() {
-            use crate::avx::AvxButterfly100f;
-            return Some(Box::new(AvxButterfly100f::new(_fft_direction)));
-        }
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly100f;
-                return Some(Box::new(NeonFcmaButterfly100f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly100f;
-            Some(Box::new(NeonButterfly100f::new(_fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+    ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly100f,
+            NeonButterfly100f,
+            NeonFcmaButterfly100f
+        )
     }
 
     fn butterfly121(
         _fft_direction: FftDirection,
-    ) -> Option<Box<dyn CompositeFftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if has_valid_avx() {
-            use crate::avx::AvxButterfly121f;
-            return Some(Box::new(AvxButterfly121f::new(_fft_direction)));
-        }
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly121f;
-                return Some(Box::new(NeonFcmaButterfly121f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly121f;
-            Some(Box::new(NeonButterfly121f::new(_fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+    ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly121f,
+            NeonButterfly121f,
+            NeonFcmaButterfly121f
+        )
     }
 
     fn radix3(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         if n == 3 {
             return Self::butterfly3(fft_direction).map(|x| x.into_fft_executor());
         }
@@ -856,7 +851,7 @@ impl AlgorithmFactory<f32> for f32 {
     fn radix4(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         if n == 4 {
             return Self::butterfly4(fft_direction).map(|x| x.into_fft_executor());
         }
@@ -873,7 +868,7 @@ impl AlgorithmFactory<f32> for f32 {
     fn radix5(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         if n == 5 {
             return Self::butterfly5(fft_direction).map(|x| x.into_fft_executor());
         }
@@ -890,7 +885,7 @@ impl AlgorithmFactory<f32> for f32 {
     fn radix6(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_radix!(
             n,
             fft_direction,
@@ -904,7 +899,7 @@ impl AlgorithmFactory<f32> for f32 {
     fn radix7(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_radix!(
             n,
             fft_direction,
@@ -918,7 +913,7 @@ impl AlgorithmFactory<f32> for f32 {
     fn radix10(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_radix!(
             n,
             fft_direction,
@@ -932,7 +927,7 @@ impl AlgorithmFactory<f32> for f32 {
     fn radix11(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_radix!(
             n,
             fft_direction,
@@ -946,7 +941,7 @@ impl AlgorithmFactory<f32> for f32 {
     fn radix13(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         make_default_radix!(
             n,
             fft_direction,
@@ -960,22 +955,22 @@ impl AlgorithmFactory<f32> for f32 {
     fn dft(
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
-        Dft::new(n, fft_direction).map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        Dft::new(n, fft_direction).map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
     }
 
     fn raders(
-        convolve_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+        convolve_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
             if has_valid_avx() && n < (u32::MAX - 100_000u32) as usize {
                 use crate::avx::AvxRadersFft;
                 unsafe {
                     return AvxRadersFft::new(n, convolve_fft, fft_direction)
-                        .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                        .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>);
                 }
             }
         }
@@ -984,35 +979,35 @@ impl AlgorithmFactory<f32> for f32 {
             if n < (u32::MAX - 100_000u32) as usize {
                 use crate::neon::NeonRadersFft;
                 return NeonRadersFft::new(n, convolve_fft, fft_direction)
-                    .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                    .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>);
             }
         }
         use crate::raders::RadersFft;
         RadersFft::new(n, convolve_fft, fft_direction)
-            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+            .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
     }
 
     fn bluestein(
-        convolve_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
+        convolve_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
         n: usize,
         fft_direction: FftDirection,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         BluesteinFft::new(n, convolve_fft, fft_direction)
-            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+            .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
     }
 
     fn mixed_radix(
-        left_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        left_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         MixedRadix::new(left_fft, right_fft)
-            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+            .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
     }
 
     #[allow(unused)]
     fn mixed_radix_butterfly2(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1020,12 +1015,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix2f;
                     return NeonFcmaMixedRadix2f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix2f;
             NeonMixedRadix2f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1034,7 +1029,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix2f;
                     return AvxMixedRadix2f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1043,8 +1038,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly3(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1052,12 +1047,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix3f;
                     return NeonFcmaMixedRadix3f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix3f;
             NeonMixedRadix3f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1066,7 +1061,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix3f;
                     return AvxMixedRadix3f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1075,8 +1070,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly4(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1084,12 +1079,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix4f;
                     return NeonFcmaMixedRadix4f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix4f;
             NeonMixedRadix4f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1098,7 +1093,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix4f;
                     return AvxMixedRadix4f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1107,8 +1102,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly5(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1116,12 +1111,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix5f;
                     return NeonFcmaMixedRadix5f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix5f;
             NeonMixedRadix5f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1130,7 +1125,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix5f;
                     return AvxMixedRadix5f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1139,8 +1134,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly6(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1148,12 +1143,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix6f;
                     return NeonFcmaMixedRadix6f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix6f;
             NeonMixedRadix6f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1162,7 +1157,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix6f;
                     return AvxMixedRadix6f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1171,8 +1166,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly7(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1180,12 +1175,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix7f;
                     return NeonFcmaMixedRadix7f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix7f;
             NeonMixedRadix7f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1194,7 +1189,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix7f;
                     return AvxMixedRadix7f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1203,8 +1198,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly8(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1212,12 +1207,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix8f;
                     return NeonFcmaMixedRadix8f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix8f;
             NeonMixedRadix8f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1226,7 +1221,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix8f;
                     return AvxMixedRadix8f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1235,8 +1230,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly9(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1244,12 +1239,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix9f;
                     return NeonFcmaMixedRadix9f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix9f;
             NeonMixedRadix9f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1258,7 +1253,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix9f;
                     return AvxMixedRadix9f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1267,8 +1262,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly10(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1276,12 +1271,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix10f;
                     return NeonFcmaMixedRadix10f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix10f;
             NeonMixedRadix10f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1290,7 +1285,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix10f;
                     return AvxMixedRadix10f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1299,8 +1294,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly11(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1308,12 +1303,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix11f;
                     return NeonFcmaMixedRadix11f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix11f;
             NeonMixedRadix11f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1322,7 +1317,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix11f;
                     return AvxMixedRadix11f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1331,8 +1326,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly12(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1340,12 +1335,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix12f;
                     return NeonFcmaMixedRadix12f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix12f;
             NeonMixedRadix12f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1354,7 +1349,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix12f;
                     return AvxMixedRadix12f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1363,8 +1358,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly13(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1372,12 +1367,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix13f;
                     return NeonFcmaMixedRadix13f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix13f;
             NeonMixedRadix13f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1386,7 +1381,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix13f;
                     return AvxMixedRadix13f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1395,8 +1390,8 @@ impl AlgorithmFactory<f32> for f32 {
 
     #[allow(unused)]
     fn mixed_radix_butterfly16(
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Box<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]
@@ -1404,12 +1399,12 @@ impl AlgorithmFactory<f32> for f32 {
                 if std::arch::is_aarch64_feature_detected!("fcma") {
                     use crate::neon::NeonFcmaMixedRadix16f;
                     return NeonFcmaMixedRadix16f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             use crate::neon::NeonMixedRadix16f;
             NeonMixedRadix16f::new(right_fft)
-                .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>))
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>))
         }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
@@ -1418,7 +1413,7 @@ impl AlgorithmFactory<f32> for f32 {
                 if has_valid_avx() {
                     use crate::avx::AvxMixedRadix16f;
                     return AvxMixedRadix16f::new(right_fft)
-                        .map(|x| Some(Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>));
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>));
                 }
             }
             Ok(None)
@@ -1426,15 +1421,15 @@ impl AlgorithmFactory<f32> for f32 {
     }
 
     fn good_thomas(
-        left_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-        right_fft: Box<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Box<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        left_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         let length = left_fft.length() * right_fft.length();
         if length < (u16::MAX - 100) as usize {
             return GoodThomasSmallFft::new(left_fft, right_fft)
-                .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>);
+                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>);
         }
         GoodThomasFft::new(left_fft, right_fft)
-            .map(|x| Box::new(x) as Box<dyn FftExecutor<f32> + Send + Sync>)
+            .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
     }
 }

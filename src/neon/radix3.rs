@@ -28,8 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
-use crate::neon::f32x2_4x4::transpose_f32x2_4x4;
-use crate::neon::f64x2_2x2::neon_transpose_f64x2_4x4_impl;
+use crate::neon::transpose::{neon_transpose_f64x2_4x4_impl, transpose_f32x2_4x4};
 use crate::neon::util::{create_neon_twiddles, vfcmulq_f32, vfcmulq_f64};
 use crate::radix3::Radix3Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
@@ -41,6 +40,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 #[inline]
 pub(crate) fn complex3_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4x2_t {
@@ -186,7 +186,7 @@ pub(crate) struct NeonRadix3<T> {
     twiddle_re: T,
     twiddle_im: [T; 4],
     direction: FftDirection,
-    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 

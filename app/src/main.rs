@@ -41,7 +41,7 @@ use std::time::{Duration, Instant};
 use zaft::Zaft;
 
 fn check_power_group(c: &mut Criterion, n: usize, group: String) {
-    let mut input_power = vec![Complex::<f64>::default(); n];
+    let mut input_power = vec![Complex::<f32>::default(); n];
     for z in input_power.iter_mut() {
         *z = Complex {
             re: rand::rng().random(),
@@ -50,10 +50,10 @@ fn check_power_group(c: &mut Criterion, n: usize, group: String) {
     }
 
     c.bench_function(format!("zaft {group}s").as_str(), |b| {
-        let plan = Zaft::make_inverse_fft_f64(input_power.len()).unwrap();
+        let plan = Zaft::make_inverse_fft_f32(input_power.len()).unwrap();
         let s = input_power
             .iter()
-            .map(|&x| Complex::new(x.re as f64, x.im as f64))
+            .map(|&x| Complex::new(x.re as f32, x.im as f32))
             .collect::<Vec<_>>();
         let mut working = s.to_vec();
         b.iter(|| {
@@ -112,21 +112,17 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 1210];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 2686];
     let mut c = Criterion::default()
         .sample_size(10)
-        .warm_up_time(Duration::from_millis(135))
-        .measurement_time(Duration::from_millis(135));
+        .warm_up_time(Duration::from_millis(200))
+        .measurement_time(Duration::from_millis(200));
     // bench_zaft_averages(&mut c);
-    // check_power_groups(&mut c, 121, "121".to_string());
-    // check_power_groups(&mut c, 11usize.pow(4), "11^4".to_string());
-    for i in 2..24 {
-        check_power_group(
-            &mut c,
-            13usize.pow(3) * i,
-            format!("size {}, 13^3 mul {i}", 13usize.pow(3) * i),
-        );
-    }
+    // check_power_group(&mut c, 42 * 7, "42 * 7".to_string());
+    // // check_power_groups(&mut c, 11usize.pow(4), "11^4".to_string());
+    // for i in 2..24 {
+    //     check_power_group(&mut c, 42 * i, format!("size {}, 42*{i} mul {i}", 42 * i));
+    // }
     // for i in 2..8 {
     //     check_power_group(
     //         &mut c,
@@ -145,7 +141,7 @@ fn main() {
     //     *z = data0[k % data0.len()];
     // }
     for (i, chunk) in data.iter_mut().enumerate() {
-        *chunk = Complex::new(-0.19528865 + i as f64 * 0.1, 0.0019528865 - i as f64 * 0.1);
+        *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
     }
     // data = [
     //     Complex {
@@ -181,17 +177,17 @@ fn main() {
     //
     // println!("real data {:?}", real_data);
     //
-    // let forward_r2c = Zaft::make_r2c_fft_f64(data.len()).unwrap();
-    // let inverse_r2c = Zaft::make_c2r_fft_f64(data.len()).unwrap();
+    // let forward_r2c = Zaft::make_r2c_fft_f32(data.len()).unwrap();
+    // let inverse_r2c = Zaft::make_c2r_fft_f32(data.len()).unwrap();
     //
-    // let mut complex_data = vec![Complex::<f64>::default(); data.len() / 2 + 1];
+    // let mut complex_data = vec![Complex::<f32>::default(); data.len() / 2 + 1];
     // forward_r2c.execute(&real_data, &mut complex_data).unwrap();
     // // println!("r2c {:?}", complex_data);
     // inverse_r2c.execute(&complex_data, &mut real_data).unwrap();
     //
     // real_data = real_data
     //     .iter()
-    //     .map(|&x| x * (1.0 / real_data.len() as f64))
+    //     .map(|&x| x * (1.0 / real_data.len() as f32))
     //     .collect();
     //
     // println!("c2r {:?}", real_data);
@@ -205,7 +201,7 @@ fn main() {
     //
     // real_data = real_data
     //     .iter()
-    //     .map(|&x| x * (1.0 / real_data.len() as f64))
+    //     .map(|&x| x * (1.0 / real_data.len() as f32))
     //     .collect();
     //
     // real_data
@@ -220,14 +216,14 @@ fn main() {
     //
     let mut cvt = data.clone();
     //
-    // let mut planner = FftPlanner::<f64>::new();
+    // let mut planner = FftPlanner::<f32>::new();
     //
     // for i in 1..1500 {
-    //     let mut data = vec![Complex::<f64>::default(); i];
+    //     let mut data = vec![Complex::<f32>::default(); i];
     //     for (k, z) in data.iter_mut().enumerate() {
     //         *z = data0[k % data0.len()];
     //     }
-    //     let forward = Zaft::make_forward_fft_f64(data.len()).unwrap();
+    //     let forward = Zaft::make_forward_fft_f32(data.len()).unwrap();
     //     let new_plan = planner.plan_fft_forward(data.len());
     //     let s0 = Instant::now();
     //     forward.execute(&mut data).unwrap();
@@ -236,16 +232,16 @@ fn main() {
     //     let s1 = Instant::now();
     //     new_plan.process(&mut data);
     //     let elapsed2 = s1.elapsed();
-    //     let diff = elapsed1.as_millis_f64() / elapsed2.as_millis_f64();
+    //     let diff = elapsed1.as_millis_f32() / elapsed2.as_millis_f32();
     //     if diff > 1.6 {
     //         println!("Timescale was {diff} on {i}");
     //     }
     // }
 
-    let forward = Zaft::make_forward_fft_f64(cvt.len()).unwrap();
-    let inverse = Zaft::make_inverse_fft_f64(cvt.len()).unwrap();
+    let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
+    let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
 
-    let mut planner = FftPlanner::<f64>::new();
+    let mut planner = FftPlanner::<f32>::new();
 
     let planned_fft = planner.plan_fft_forward(data.len());
     let planned_fft_inv = planner.plan_fft_inverse(data.len());
@@ -261,11 +257,11 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
     println!("Mine inverse -----");
@@ -276,7 +272,7 @@ fn main() {
 
     data = data
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(data.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(data.len() as f32)))
         .collect();
 
     // for (i, val) in data.iter().enumerate() {
@@ -288,7 +284,7 @@ fn main() {
     planned_fft_inv.process(&mut cvt);
     cvt = cvt
         .iter()
-        .map(|&x| x * (1.0 / f64::sqrt(cvt.len() as f64)))
+        .map(|&x| x * (1.0 / f32::sqrt(cvt.len() as f32)))
         .collect();
 
     // for (i, val) in cvt.iter().enumerate() {

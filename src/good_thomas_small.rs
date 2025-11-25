@@ -34,13 +34,14 @@ use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 pub(crate) struct GoodThomasSmallFft<T> {
     width: usize,
-    width_size_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    width_size_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
 
     height: usize,
-    height_size_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    height_size_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
 
     width_divisor: DividerU16,
     width_divisor_plus_one: DividerU16,
@@ -64,8 +65,8 @@ where
     f64: AsPrimitive<T>,
 {
     pub fn new(
-        mut width_fft: Box<dyn FftExecutor<T> + Send + Sync>,
-        mut height_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        mut width_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+        mut height_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<GoodThomasSmallFft<T>, ZaftError> {
         assert_eq!(
             width_fft.direction(),

@@ -35,6 +35,7 @@ use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 pub trait C2RFftExecutor<T> {
     fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError>;
@@ -43,11 +44,11 @@ pub trait C2RFftExecutor<T> {
 }
 
 pub(crate) struct C2RFftEvenInterceptor<T> {
-    intercept: Box<dyn FftExecutor<T> + Send + Sync>,
+    intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     twiddles: Vec<Complex<T>>,
     length: usize,
     complex_length: usize,
-    twiddles_handler: Box<dyn R2CTwiddlesHandler<T> + Send + Sync>,
+    twiddles_handler: Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>,
 }
 
 impl<
@@ -66,7 +67,7 @@ where
 {
     pub(crate) fn install(
         length: usize,
-        intercept: Box<dyn FftExecutor<T> + Send + Sync>,
+        intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Self, ZaftError> {
         assert_eq!(length % 2, 0, "R2C must be even in even interceptor");
         assert_eq!(
@@ -185,7 +186,7 @@ where
 }
 
 pub(crate) struct C2RFftOddInterceptor<T> {
-    intercept: Box<dyn FftExecutor<T> + Send + Sync>,
+    intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     length: usize,
     complex_length: usize,
 }
@@ -197,7 +198,7 @@ where
 {
     pub(crate) fn install(
         length: usize,
-        intercept: Box<dyn FftExecutor<T> + Send + Sync>,
+        intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Self, ZaftError> {
         assert_ne!(length % 2, 0, "R2C must be even in even interceptor");
         assert_eq!(

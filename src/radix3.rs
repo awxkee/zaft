@@ -42,6 +42,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::fmt::Display;
 use std::ops::{Add, Mul, Neg, Sub};
+use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) struct Radix3<T> {
@@ -49,7 +50,7 @@ pub(crate) struct Radix3<T> {
     execution_length: usize,
     twiddle: Complex<T>,
     direction: FftDirection,
-    base_fft: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 

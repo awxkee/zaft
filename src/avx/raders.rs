@@ -41,7 +41,7 @@ use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 pub(crate) struct AvxRadersFft<T> {
-    convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+    convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: Vec<Complex<T>>,
     execution_length: usize,
     direction: FftDirection,
@@ -240,7 +240,7 @@ where
     #[target_feature(enable = "avx2", enable = "fma")]
     pub unsafe fn new(
         size: usize,
-        convolve_fft: Box<dyn FftExecutor<T> + Send + Sync>,
+        convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         fft_direction: FftDirection,
     ) -> Result<AvxRadersFft<T>, ZaftError> {
         assert!(

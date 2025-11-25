@@ -26,10 +26,10 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::avx::avx_transpose_f64x2_6x6_impl;
 use crate::avx::butterflies::AvxButterfly;
-use crate::avx::f32x2_6x6::transpose_6x6_f32;
-use crate::avx::f64x2_6x6::avx_transpose_f64x2_6x6_impl;
 use crate::avx::mixed::AvxStoreD;
+use crate::avx::transpose::transpose_6x6_f32;
 use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
@@ -47,6 +47,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::x86_64::*;
 use std::fmt::Display;
+use std::sync::Arc;
 
 pub(crate) struct AvxFmaRadix6<T> {
     twiddles: Vec<Complex<T>>,
@@ -54,7 +55,7 @@ pub(crate) struct AvxFmaRadix6<T> {
     twiddle_re: T,
     twiddle_im: [T; 8],
     direction: FftDirection,
-    butterfly: Box<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
     butterfly_length: usize,
 }
 

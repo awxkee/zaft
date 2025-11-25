@@ -28,12 +28,12 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::avx::f32x2_4x4::avx_transpose_f32x2_4x4_impl;
 use crate::avx::mixed::{AvxStoreF, ColumnButterfly11f};
+use crate::avx::transpose::transpose_4x11;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
-use std::arch::x86_64::_mm256_setzero_ps;
+use std::sync::Arc;
 
 pub(crate) struct AvxButterfly121f {
     direction: FftDirection,
@@ -73,28 +73,6 @@ impl AvxButterfly121f {
             bf11: ColumnButterfly11f::new(fft_direction),
         }
     }
-}
-
-#[inline]
-#[target_feature(enable = "avx2")]
-pub(crate) fn transpose_11x4(rows: [AvxStoreF; 11]) -> [AvxStoreF; 12] {
-    let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
-    let b0 = avx_transpose_f32x2_4x4_impl(rows[4].v, rows[5].v, rows[6].v, rows[7].v);
-    let c0 = avx_transpose_f32x2_4x4_impl(rows[8].v, rows[9].v, rows[10].v, _mm256_setzero_ps());
-    [
-        AvxStoreF::raw(a0.0),
-        AvxStoreF::raw(a0.1),
-        AvxStoreF::raw(a0.2),
-        AvxStoreF::raw(a0.3),
-        AvxStoreF::raw(b0.0),
-        AvxStoreF::raw(b0.1),
-        AvxStoreF::raw(b0.2),
-        AvxStoreF::raw(b0.3),
-        AvxStoreF::raw(c0.0),
-        AvxStoreF::raw(c0.1),
-        AvxStoreF::raw(c0.2),
-        AvxStoreF::raw(c0.3),
-    ]
 }
 
 impl FftExecutor<f32> for AvxButterfly121f {
@@ -140,7 +118,7 @@ impl AvxButterfly121f {
                         rows[i] = AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
                     }
 
-                    let transposed = transpose_11x4(rows);
+                    let transposed = transpose_4x11(rows);
 
                     for i in 0..2 {
                         transposed[i * 4].write(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
@@ -172,7 +150,7 @@ impl AvxButterfly121f {
                         rows[i] = AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * 2]);
                     }
 
-                    let transposed = transpose_11x4(rows);
+                    let transposed = transpose_4x11(rows);
 
                     for i in 0..2 {
                         transposed[i * 4].write(scratch.get_unchecked_mut(8 * 11 + i * 4..));
@@ -255,7 +233,7 @@ impl AvxButterfly121f {
                         rows[i] = AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
                     }
 
-                    let transposed = transpose_11x4(rows);
+                    let transposed = transpose_4x11(rows);
 
                     for i in 0..2 {
                         transposed[i * 4].write(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
@@ -287,7 +265,7 @@ impl AvxButterfly121f {
                         rows[i] = AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * 2]);
                     }
 
-                    let transposed = transpose_11x4(rows);
+                    let transposed = transpose_4x11(rows);
 
                     for i in 0..2 {
                         transposed[i * 4].write(scratch.get_unchecked_mut(8 * 11 + i * 4..));
@@ -331,7 +309,7 @@ impl AvxButterfly121f {
 }
 
 impl CompositeFftExecutor<f32> for AvxButterfly121f {
-    fn into_fft_executor(self: Box<Self>) -> Box<dyn FftExecutor<f32> + Send + Sync> {
+    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
         self
     }
 }

@@ -28,14 +28,6 @@
  */
 mod butterflies;
 mod c2r;
-mod f32x2_2x2;
-mod f32x2_4x4;
-mod f32x2_6x6;
-mod f32x2_7x7;
-mod f32x2_8x4;
-mod f64x2_2x2;
-mod f64x2_4x4;
-mod f64x2_6x6;
 mod mixed;
 mod r2c;
 mod raders;
@@ -49,7 +41,7 @@ mod radix6;
 mod radix7;
 mod rotate;
 mod spectrum_arithmetic;
-mod transpose_5x5;
+mod transpose;
 mod util;
 
 pub(crate) use butterflies::{
@@ -59,17 +51,12 @@ pub(crate) use butterflies::{
     AvxButterfly17, AvxButterfly18d, AvxButterfly18f, AvxButterfly19, AvxButterfly20d,
     AvxButterfly20f, AvxButterfly23, AvxButterfly25d, AvxButterfly25f, AvxButterfly27d,
     AvxButterfly27f, AvxButterfly29, AvxButterfly31, AvxButterfly32d, AvxButterfly32f,
-    AvxButterfly35d, AvxButterfly35f, AvxButterfly36d, AvxButterfly36f, AvxButterfly48d,
-    AvxButterfly48f, AvxButterfly49d, AvxButterfly49f, AvxButterfly64d, AvxButterfly64f,
-    AvxButterfly81d, AvxButterfly81f, AvxButterfly100d, AvxButterfly100f, AvxButterfly121d,
-    AvxButterfly121f,
+    AvxButterfly35d, AvxButterfly35f, AvxButterfly36d, AvxButterfly36f, AvxButterfly42d,
+    AvxButterfly42f, AvxButterfly48d, AvxButterfly48f, AvxButterfly49d, AvxButterfly49f,
+    AvxButterfly64d, AvxButterfly64f, AvxButterfly81d, AvxButterfly81f, AvxButterfly100d,
+    AvxButterfly100f, AvxButterfly121d, AvxButterfly121f,
 };
 pub(crate) use c2r::C2RAvxTwiddles;
-pub(crate) use f32x2_2x2::avx_transpose_f32x2_2x2;
-pub(crate) use f32x2_4x4::avx2_transpose_f32x2_4x4;
-pub(crate) use f32x2_8x4::avx2_transpose_f32x2_8x4;
-pub(crate) use f64x2_2x2::avx_transpose_f64x2_2x2;
-pub(crate) use f64x2_4x4::avx_transpose_f64x2_4x4;
 pub(crate) use mixed::{
     AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,
     AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d, AvxMixedRadix10d, AvxMixedRadix11d,
@@ -90,7 +77,22 @@ pub(crate) use radix7::AvxFmaRadix7;
 pub(crate) use radix10::{AvxFmaRadix10d, AvxFmaRadix10f};
 pub(crate) use radix11::AvxFmaRadix11;
 pub(crate) use radix13::AvxFmaRadix13;
+#[allow(unused)]
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;
+pub(crate) use transpose::{
+    AvxTransposeF323x8, AvxTransposeF325x5, AvxTransposeF327x2, AvxTransposeF327x3,
+    AvxTransposeF327x5, AvxTransposeF327x6, AvxTransposeF327x7, AvxTransposeF328x3,
+    AvxTransposeF644x4, AvxTransposeNx2F32, AvxTransposeNx2F64, AvxTransposeNx3F32,
+    AvxTransposeNx3F64, AvxTransposeNx4F32, AvxTransposeNx4F64, AvxTransposeNx5F32,
+    AvxTransposeNx5F64, AvxTransposeNx6F32, AvxTransposeNx6F64, AvxTransposeNx7F32,
+    AvxTransposeNx7F64, AvxTransposeNx8F32, AvxTransposeNx8F64, AvxTransposeNx9F32,
+    AvxTransposeNx9F64, AvxTransposeNx10F32, AvxTransposeNx10F64, AvxTransposeNx11F32,
+    AvxTransposeNx11F64, AvxTransposeNx12F32, AvxTransposeNx12F64, AvxTransposeNx13F32,
+    AvxTransposeNx13F64, AvxTransposeNx14F32, AvxTransposeNx14F64, AvxTransposeNx15F32,
+    AvxTransposeNx15F64, AvxTransposeNx16F32, AvxTransposeNx16F64, avx_transpose_f32x2_2x2,
+    avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4, avx_transpose_f64x2_6x6_impl,
+    avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
+};
 
 #[cfg(test)]
 macro_rules! test_avx_radix {

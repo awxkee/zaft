@@ -53,6 +53,139 @@ impl TransposeFactory<f32> for f32 {
     ) -> Box<dyn TransposeExecutor<f32> + Send + Sync> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
+                use crate::neon::NeonTranspose7x7F32;
+                return Box::new(NeonTranspose7x7F32::default());
+            }
+            if _width.is_multiple_of(6) && _height.is_multiple_of(4) {
+                use crate::neon::NeonTranspose6x4F32;
+                return Box::new(NeonTranspose6x4F32::default());
+            }
+            if _width.is_multiple_of(6) && _height.is_multiple_of(5) {
+                use crate::neon::NeonTranspose6x5F32;
+                return Box::new(NeonTranspose6x5F32::default());
+            }
+            if _width.is_multiple_of(11) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose11x2F32;
+                return Box::new(NeonTranspose11x2F32::default());
+            }
+            if _width.is_multiple_of(7) && _height.is_multiple_of(6) {
+                use crate::neon::NeonTranspose7x6F32;
+                return Box::new(NeonTranspose7x6F32::default());
+            }
+            if _width.is_multiple_of(7) && _height.is_multiple_of(5) {
+                use crate::neon::NeonTranspose7x5F32;
+                return Box::new(NeonTranspose7x5F32::default());
+            }
+            if _width.is_multiple_of(7) && _height.is_multiple_of(3) {
+                use crate::neon::NeonTranspose7x3F32;
+                return Box::new(NeonTranspose7x3F32::default());
+            }
+            if _width.is_multiple_of(7) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose7x2F32;
+                return Box::new(NeonTranspose7x2F32::default());
+            }
+            if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
+                use crate::neon::NeonTranspose4x4F32;
+                return Box::new(NeonTranspose4x4F32::default());
+            }
+            if _width.is_multiple_of(2) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose2x2F32;
+                return Box::new(NeonTranspose2x2F32::default());
+            }
+            if _width.is_multiple_of(8) && _height.is_multiple_of(3) {
+                use crate::neon::NeonTranspose8x3F32;
+                return Box::new(NeonTranspose8x3F32::default());
+            }
+            if _width.is_multiple_of(5) && _height.is_multiple_of(7) {
+                use crate::neon::NeonTranspose5x7F32;
+                return Box::new(NeonTranspose5x7F32::default());
+            }
+            if _width.is_multiple_of(4) && _height.is_multiple_of(7) {
+                use crate::neon::NeonTranspose4x7F32;
+                return Box::new(NeonTranspose4x7F32::default());
+            }
+            if _width.is_multiple_of(9) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose9x2F32;
+                return Box::new(NeonTranspose9x2F32::default());
+            }
+            // generic N height multiplies
+            if _height.is_multiple_of(20) {
+                use crate::neon::NeonTransposeNx20F32;
+                return Box::new(NeonTransposeNx20F32::default());
+            }
+            if _height.is_multiple_of(19) {
+                use crate::neon::NeonTransposeNx19F32;
+                return Box::new(NeonTransposeNx19F32::default());
+            }
+            if _height.is_multiple_of(18) {
+                use crate::neon::NeonTransposeNx18F32;
+                return Box::new(NeonTransposeNx18F32::default());
+            }
+            if _height.is_multiple_of(17) {
+                use crate::neon::NeonTransposeNx17F32;
+                return Box::new(NeonTransposeNx17F32::default());
+            }
+            if _height.is_multiple_of(16) {
+                use crate::neon::NeonTransposeNx16F32;
+                return Box::new(NeonTransposeNx16F32::default());
+            }
+            if _height.is_multiple_of(15) {
+                use crate::neon::NeonTransposeNx15F32;
+                return Box::new(NeonTransposeNx15F32::default());
+            }
+            if _height.is_multiple_of(14) {
+                use crate::neon::NeonTransposeNx14F32;
+                return Box::new(NeonTransposeNx14F32::default());
+            }
+            if _height.is_multiple_of(13) {
+                use crate::neon::NeonTransposeNx13F32;
+                return Box::new(NeonTransposeNx13F32::default());
+            }
+            if _height.is_multiple_of(12) {
+                use crate::neon::NeonTransposeNx12F32;
+                return Box::new(NeonTransposeNx12F32::default());
+            }
+            if _height.is_multiple_of(11) {
+                use crate::neon::NeonTransposeNx11F32;
+                return Box::new(NeonTransposeNx11F32::default());
+            }
+            if _height.is_multiple_of(10) {
+                use crate::neon::NeonTransposeNx10F32;
+                return Box::new(NeonTransposeNx10F32::default());
+            }
+            if _height.is_multiple_of(9) {
+                use crate::neon::NeonTransposeNx9F32;
+                return Box::new(NeonTransposeNx9F32::default());
+            }
+            if _height.is_multiple_of(8) {
+                use crate::neon::NeonTransposeNx8F32;
+                return Box::new(NeonTransposeNx8F32::default());
+            }
+            if _height.is_multiple_of(7) {
+                use crate::neon::NeonTransposeNx7F32;
+                return Box::new(NeonTransposeNx7F32::default());
+            }
+            if _height.is_multiple_of(6) {
+                use crate::neon::NeonTransposeNx6F32;
+                return Box::new(NeonTransposeNx6F32::default());
+            }
+            if _height.is_multiple_of(5) {
+                use crate::neon::NeonTransposeNx5F32;
+                return Box::new(NeonTransposeNx5F32::default());
+            }
+            if _height.is_multiple_of(4) {
+                use crate::neon::NeonTransposeNx4F32;
+                return Box::new(NeonTransposeNx4F32::default());
+            }
+            if _height.is_multiple_of(3) {
+                use crate::neon::NeonTransposeNx3F32;
+                return Box::new(NeonTransposeNx3F32::default());
+            }
+            if _height.is_multiple_of(2) {
+                use crate::neon::NeonTransposeNx2F32;
+                return Box::new(NeonTransposeNx2F32::default());
+            }
             if _width > 2 && _height > 2 {
                 return Box::new(NeonDefaultExecutorSingle {});
             }
@@ -65,6 +198,101 @@ impl TransposeFactory<f32> for f32 {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
                 if std::arch::is_x86_feature_detected!("avx2") {
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
+                        use crate::avx::AvxTransposeF327x7;
+                        return Box::new(AvxTransposeF327x7::default());
+                    }
+                    if _width.is_multiple_of(5) && _height.is_multiple_of(5) {
+                        use crate::avx::AvxTransposeF325x5;
+                        return Box::new(AvxTransposeF325x5::default());
+                    }
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(5) {
+                        use crate::avx::AvxTransposeF327x5;
+                        return Box::new(AvxTransposeF327x5::default());
+                    }
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(6) {
+                        use crate::avx::AvxTransposeF327x6;
+                        return Box::new(AvxTransposeF327x6::default());
+                    }
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(3) {
+                        use crate::avx::AvxTransposeF327x3;
+                        return Box::new(AvxTransposeF327x3::default());
+                    }
+                    if _width.is_multiple_of(7) && _height.is_multiple_of(2) {
+                        use crate::avx::AvxTransposeF327x2;
+                        return Box::new(AvxTransposeF327x2::default());
+                    }
+                    if _width.is_multiple_of(8) && _height.is_multiple_of(3) {
+                        use crate::avx::AvxTransposeF328x3;
+                        return Box::new(AvxTransposeF328x3::default());
+                    }
+                    if _width.is_multiple_of(3) && _height.is_multiple_of(8) {
+                        use crate::avx::AvxTransposeF323x8;
+                        return Box::new(AvxTransposeF323x8::default());
+                    }
+
+                    // generic multiple of N
+                    if _height.is_multiple_of(16) {
+                        use crate::avx::AvxTransposeNx16F32;
+                        return Box::new(AvxTransposeNx16F32::default());
+                    }
+                    if _height.is_multiple_of(15) {
+                        use crate::avx::AvxTransposeNx15F32;
+                        return Box::new(AvxTransposeNx15F32::default());
+                    }
+                    if _height.is_multiple_of(14) {
+                        use crate::avx::AvxTransposeNx14F32;
+                        return Box::new(AvxTransposeNx14F32::default());
+                    }
+                    if _height.is_multiple_of(13) {
+                        use crate::avx::AvxTransposeNx13F32;
+                        return Box::new(AvxTransposeNx13F32::default());
+                    }
+                    if _height.is_multiple_of(12) {
+                        use crate::avx::AvxTransposeNx12F32;
+                        return Box::new(AvxTransposeNx12F32::default());
+                    }
+                    if _height.is_multiple_of(11) {
+                        use crate::avx::AvxTransposeNx11F32;
+                        return Box::new(AvxTransposeNx11F32::default());
+                    }
+                    if _height.is_multiple_of(10) {
+                        use crate::avx::AvxTransposeNx10F32;
+                        return Box::new(AvxTransposeNx10F32::default());
+                    }
+                    if _height.is_multiple_of(9) {
+                        use crate::avx::AvxTransposeNx9F32;
+                        return Box::new(AvxTransposeNx9F32::default());
+                    }
+                    if _height.is_multiple_of(8) {
+                        use crate::avx::AvxTransposeNx8F32;
+                        return Box::new(AvxTransposeNx8F32::default());
+                    }
+                    if _height.is_multiple_of(7) {
+                        use crate::avx::AvxTransposeNx7F32;
+                        return Box::new(AvxTransposeNx7F32::default());
+                    }
+                    if _height.is_multiple_of(6) {
+                        use crate::avx::AvxTransposeNx6F32;
+                        return Box::new(AvxTransposeNx6F32::default());
+                    }
+                    if _height.is_multiple_of(5) {
+                        use crate::avx::AvxTransposeNx5F32;
+                        return Box::new(AvxTransposeNx5F32::default());
+                    }
+                    if _height.is_multiple_of(4) {
+                        use crate::avx::AvxTransposeNx4F32;
+                        return Box::new(AvxTransposeNx4F32::default());
+                    }
+                    if _height.is_multiple_of(3) {
+                        use crate::avx::AvxTransposeNx3F32;
+                        return Box::new(AvxTransposeNx3F32::default());
+                    }
+                    if _height.is_multiple_of(2) {
+                        use crate::avx::AvxTransposeNx2F32;
+                        return Box::new(AvxTransposeNx2F32::default());
+                    }
+
                     return Box::new(AvxDefaultExecutorSingle {});
                 }
             }
@@ -89,11 +317,161 @@ impl TransposeFactory<f64> for f64 {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
             if std::arch::is_x86_feature_detected!("avx") {
+                if _height.is_multiple_of(16) {
+                    use crate::avx::AvxTransposeNx16F64;
+                    return Box::new(AvxTransposeNx16F64::default());
+                }
+                if _height.is_multiple_of(15) {
+                    use crate::avx::AvxTransposeNx15F64;
+                    return Box::new(AvxTransposeNx15F64::default());
+                }
+                if _height.is_multiple_of(14) {
+                    use crate::avx::AvxTransposeNx14F64;
+                    return Box::new(AvxTransposeNx14F64::default());
+                }
+                if _height.is_multiple_of(13) {
+                    use crate::avx::AvxTransposeNx13F64;
+                    return Box::new(AvxTransposeNx13F64::default());
+                }
+                if _height.is_multiple_of(12) {
+                    use crate::avx::AvxTransposeNx12F64;
+                    return Box::new(AvxTransposeNx12F64::default());
+                }
+                if _height.is_multiple_of(11) {
+                    use crate::avx::AvxTransposeNx11F64;
+                    return Box::new(AvxTransposeNx11F64::default());
+                }
+                if _height.is_multiple_of(10) {
+                    use crate::avx::AvxTransposeNx10F64;
+                    return Box::new(AvxTransposeNx10F64::default());
+                }
+                if _height.is_multiple_of(9) {
+                    use crate::avx::AvxTransposeNx9F64;
+                    return Box::new(AvxTransposeNx9F64::default());
+                }
+                if _height.is_multiple_of(8) {
+                    use crate::avx::AvxTransposeNx8F64;
+                    return Box::new(AvxTransposeNx8F64::default());
+                }
+                if _height.is_multiple_of(7) {
+                    use crate::avx::AvxTransposeNx7F64;
+                    return Box::new(AvxTransposeNx7F64::default());
+                }
+                if _height.is_multiple_of(6) {
+                    use crate::avx::AvxTransposeNx6F64;
+                    return Box::new(AvxTransposeNx6F64::default());
+                }
+                if _height.is_multiple_of(5) {
+                    use crate::avx::AvxTransposeNx5F64;
+                    return Box::new(AvxTransposeNx5F64::default());
+                }
+                if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
+                    use crate::avx::AvxTransposeF644x4;
+                    return Box::new(AvxTransposeF644x4::default());
+                }
+                if _height.is_multiple_of(4) {
+                    use crate::avx::AvxTransposeNx4F64;
+                    return Box::new(AvxTransposeNx4F64::default());
+                }
+                if _height.is_multiple_of(3) {
+                    use crate::avx::AvxTransposeNx3F64;
+                    return Box::new(AvxTransposeNx3F64::default());
+                }
+                if _height.is_multiple_of(2) {
+                    use crate::avx::AvxTransposeNx2F64;
+                    return Box::new(AvxTransposeNx2F64::default());
+                }
+
                 return Box::new(AvxDefaultExecutorDouble {});
             }
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
+            if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
+                use crate::neon::NeonTranspose4x4F64;
+                return Box::new(NeonTranspose4x4F64::default());
+            }
+            if _width.is_multiple_of(2) && _height.is_multiple_of(2) {
+                use crate::neon::NeonTranspose2x2F64;
+                return Box::new(NeonTranspose2x2F64::default());
+            }
+            if _width.is_multiple_of(4) && _height.is_multiple_of(3) {
+                use crate::neon::NeonTranspose4x3F64;
+                return Box::new(NeonTranspose4x3F64::default());
+            }
+            // generic N height multiplies
+            if _height.is_multiple_of(19) {
+                use crate::neon::NeonTransposeNx19F64;
+                return Box::new(NeonTransposeNx19F64::default());
+            }
+            if _height.is_multiple_of(18) {
+                use crate::neon::NeonTransposeNx18F64;
+                return Box::new(NeonTransposeNx18F64::default());
+            }
+            if _height.is_multiple_of(17) {
+                use crate::neon::NeonTransposeNx17F64;
+                return Box::new(NeonTransposeNx17F64::default());
+            }
+            if _height.is_multiple_of(16) {
+                use crate::neon::NeonTransposeNx16F64;
+                return Box::new(NeonTransposeNx16F64::default());
+            }
+            if _height.is_multiple_of(15) {
+                use crate::neon::NeonTransposeNx15F64;
+                return Box::new(NeonTransposeNx15F64::default());
+            }
+            if _height.is_multiple_of(14) {
+                use crate::neon::NeonTransposeNx14F64;
+                return Box::new(NeonTransposeNx14F64::default());
+            }
+            if _height.is_multiple_of(13) {
+                use crate::neon::NeonTransposeNx13F64;
+                return Box::new(NeonTransposeNx13F64::default());
+            }
+            if _height.is_multiple_of(12) {
+                use crate::neon::NeonTransposeNx12F64;
+                return Box::new(NeonTransposeNx12F64::default());
+            }
+            if _height.is_multiple_of(11) {
+                use crate::neon::NeonTransposeNx11F64;
+                return Box::new(NeonTransposeNx11F64::default());
+            }
+            if _height.is_multiple_of(10) {
+                use crate::neon::NeonTransposeNx10F64;
+                return Box::new(NeonTransposeNx10F64::default());
+            }
+            if _height.is_multiple_of(9) {
+                use crate::neon::NeonTransposeNx9F64;
+                return Box::new(NeonTransposeNx9F64::default());
+            }
+            if _height.is_multiple_of(8) {
+                use crate::neon::NeonTransposeNx8F64;
+                return Box::new(NeonTransposeNx8F64::default());
+            }
+            if _height.is_multiple_of(7) {
+                use crate::neon::NeonTransposeNx7F64;
+                return Box::new(NeonTransposeNx7F64::default());
+            }
+            if _height.is_multiple_of(6) {
+                use crate::neon::NeonTransposeNx6F64;
+                return Box::new(NeonTransposeNx6F64::default());
+            }
+            if _height.is_multiple_of(5) {
+                use crate::neon::NeonTransposeNx5F64;
+                return Box::new(NeonTransposeNx5F64::default());
+            }
+            if _height.is_multiple_of(4) {
+                use crate::neon::NeonTransposeNx4F64;
+                return Box::new(NeonTransposeNx4F64::default());
+            }
+            if _height.is_multiple_of(3) {
+                use crate::neon::NeonTransposeNx3F64;
+                return Box::new(NeonTransposeNx3F64::default());
+            }
+            if _height.is_multiple_of(2) {
+                use crate::neon::NeonTransposeNx2F64;
+                return Box::new(NeonTransposeNx2F64::default());
+            }
             if _width > 2 && _height > 2 {
                 return Box::new(NeonDefaultExecutorDouble {});
             }
@@ -254,100 +632,14 @@ pub(crate) unsafe fn transpose_executor2d<
     let mut dst_buffer = vec![Complex::<V>::default(); X_BLOCK_SIZE * Y_BLOCK_SIZE];
 
     unsafe {
-        while y + Y_BLOCK_SIZE < height {
+        while y + Y_BLOCK_SIZE <= height {
             let input_y = y;
 
             let src = input.get_unchecked(input_stride * input_y..);
 
             let mut x = 0usize;
 
-            while x + X_BLOCK_SIZE < width {
-                let output_x = x;
-
-                let src = src.get_unchecked(x..);
-                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
-
-                exec.transpose_block(src, input_stride, dst, output_stride);
-
-                x += X_BLOCK_SIZE;
-            }
-
-            if x < width {
-                let rem_x = width - x;
-                assert!(
-                    rem_x <= X_BLOCK_SIZE,
-                    "Remainder is expected to be less than {X_BLOCK_SIZE}, but got {rem_x}"
-                );
-
-                let output_x = x;
-                let src = src.get_unchecked(x..);
-
-                for j in 0..Y_BLOCK_SIZE {
-                    std::ptr::copy_nonoverlapping(
-                        src.get_unchecked(j * input_stride..).as_ptr(),
-                        src_buffer
-                            .get_unchecked_mut(j * (X_BLOCK_SIZE)..)
-                            .as_mut_ptr(),
-                        rem_x,
-                    );
-                }
-
-                exec.transpose_block(
-                    src_buffer.as_slice(),
-                    X_BLOCK_SIZE,
-                    dst_buffer.as_mut_slice(),
-                    Y_BLOCK_SIZE,
-                );
-
-                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
-
-                for j in 0..rem_x {
-                    std::ptr::copy_nonoverlapping(
-                        dst_buffer
-                            .get_unchecked_mut(j * (Y_BLOCK_SIZE)..)
-                            .as_mut_ptr(),
-                        dst.get_unchecked_mut(j * output_stride..).as_mut_ptr(),
-                        Y_BLOCK_SIZE,
-                    );
-                }
-            }
-
-            y += Y_BLOCK_SIZE;
-        }
-    }
-
-    y
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-pub(crate) unsafe fn transpose_executor2d<
-    V: Copy + Default,
-    const X_BLOCK_SIZE: usize,
-    const Y_BLOCK_SIZE: usize,
->(
-    input: &[Complex<V>],
-    input_stride: usize,
-    output: &mut [Complex<V>],
-    output_stride: usize,
-    width: usize,
-    height: usize,
-    start_y: usize,
-    exec: impl TransposeBlock<V>,
-) -> usize {
-    let mut y = start_y;
-
-    let mut src_buffer = vec![Complex::<V>::default(); X_BLOCK_SIZE * Y_BLOCK_SIZE];
-    let mut dst_buffer = vec![Complex::<V>::default(); X_BLOCK_SIZE * Y_BLOCK_SIZE];
-
-    unsafe {
-        while y + Y_BLOCK_SIZE < height {
-            let input_y = y;
-
-            let src = input.get_unchecked(input_stride * input_y..);
-
-            let mut x = 0usize;
-
-            while x + X_BLOCK_SIZE < width {
+            while x + X_BLOCK_SIZE <= width {
                 let output_x = x;
 
                 let src = src.get_unchecked(x..);
@@ -407,7 +699,7 @@ pub(crate) unsafe fn transpose_executor2d<
 
 #[allow(dead_code)]
 #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
-pub(crate) unsafe fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
+pub(crate) fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
     input: &[Complex<V>],
     input_stride: usize,
     output: &mut [Complex<V>],
@@ -423,14 +715,14 @@ pub(crate) unsafe fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usi
     let mut dst_buffer = [Complex::<V>::default(); 16];
 
     unsafe {
-        while y + BLOCK_SIZE < height {
+        while y + BLOCK_SIZE <= height {
             let input_y = y;
 
             let src = input.get_unchecked(input_stride * input_y..);
 
             let mut x = 0usize;
 
-            while x + BLOCK_SIZE < width {
+            while x + BLOCK_SIZE <= width {
                 let output_x = x;
 
                 let src = src.get_unchecked(x..);
@@ -525,9 +817,7 @@ impl TransposeBlock<f32> for TransposeBlockAvx2x2F32x2 {
         dst_stride: usize,
     ) {
         use crate::avx::avx_transpose_f32x2_2x2;
-        unsafe {
-            avx_transpose_f32x2_2x2(src, src_stride, dst, dst_stride);
-        }
+        avx_transpose_f32x2_2x2(src, src_stride, dst, dst_stride);
     }
 }
 
@@ -546,9 +836,7 @@ impl TransposeBlock<f32> for TransposeBlockAvx4x4F32x4 {
         dst_stride: usize,
     ) {
         use crate::avx::avx2_transpose_f32x2_4x4;
-        unsafe {
-            avx2_transpose_f32x2_4x4(src, src_stride, dst, dst_stride);
-        }
+        avx2_transpose_f32x2_4x4(src, src_stride, dst, dst_stride);
     }
 }
 
@@ -567,27 +855,7 @@ impl TransposeBlock<f32> for TransposeBlockAvx8x4F32x2 {
         dst_stride: usize,
     ) {
         use crate::avx::avx2_transpose_f32x2_8x4;
-        unsafe {
-            avx2_transpose_f32x2_8x4(src, src_stride, dst, dst_stride);
-        }
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-struct TransposeBlockNeon6x4F32x2 {}
-
-#[cfg(all(target_arch = "aarch64", feature = "neon"))]
-impl TransposeBlock<f32> for TransposeBlockNeon6x4F32x2 {
-    #[inline(always)]
-    unsafe fn transpose_block(
-        &self,
-        src: &[Complex<f32>],
-        src_stride: usize,
-        dst: &mut [Complex<f32>],
-        dst_stride: usize,
-    ) {
-        use crate::neon::neon_transpose_f32x2_6x4;
-        neon_transpose_f32x2_6x4(src, src_stride, dst, dst_stride);
+        avx2_transpose_f32x2_8x4(src, src_stride, dst, dst_stride);
     }
 }
 
@@ -622,8 +890,8 @@ impl TransposeBlock<f32> for TransposeBlockNeon2x2F32x2 {
         dst: &mut [Complex<f32>],
         dst_stride: usize,
     ) {
-        use crate::neon::neon_transpose_f32x2_2x2;
-        neon_transpose_f32x2_2x2(src, src_stride, dst, dst_stride);
+        use crate::neon::block_transpose_f32x2_2x2;
+        block_transpose_f32x2_2x2(src, src_stride, dst, dst_stride);
     }
 }
 
@@ -662,44 +930,27 @@ impl TransposeExecutor<f32> for NeonDefaultExecutorSingle {
         let input_stride = width;
         let output_stride = height;
 
-        unsafe {
-            y = transpose_executor2d::<f32, 6, 4>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon6x4F32x2 {},
-            );
-        }
+        y = transpose_executor::<f32, 4>(
+            input,
+            input_stride,
+            output,
+            output_stride,
+            width,
+            height,
+            y,
+            TransposeBlockNeon4x4F32x2 {},
+        );
 
-        unsafe {
-            y = transpose_executor::<f32, 4>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon4x4F32x2 {},
-            );
-        }
-
-        unsafe {
-            y = transpose_executor::<f32, 2>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon2x2F32x2 {},
-            );
-        }
+        y = transpose_executor::<f32, 2>(
+            input,
+            input_stride,
+            output,
+            output_stride,
+            width,
+            height,
+            y,
+            TransposeBlockNeon2x2F32x2 {},
+        );
 
         transpose_section::<Complex<f32>>(
             input,
@@ -730,18 +981,16 @@ impl TransposeExecutor<f64> for NeonDefaultExecutorDouble {
         let input_stride = width;
         let output_stride = height;
 
-        unsafe {
-            y = transpose_executor::<f64, 2>(
-                input,
-                input_stride,
-                output,
-                output_stride,
-                width,
-                height,
-                y,
-                TransposeBlockNeon2x2F64x2 {},
-            );
-        }
+        y = transpose_executor::<f64, 2>(
+            input,
+            input_stride,
+            output,
+            output_stride,
+            width,
+            height,
+            y,
+            TransposeBlockNeon2x2F64x2 {},
+        );
 
         transpose_section::<Complex<f64>>(
             input,
@@ -857,9 +1106,7 @@ impl TransposeBlock<f64> for TransposeBlockAvx4x4F64x2 {
         dst_stride: usize,
     ) {
         use crate::avx::avx_transpose_f64x2_4x4;
-        unsafe {
-            avx_transpose_f64x2_4x4(src, src_stride, dst, dst_stride);
-        }
+        avx_transpose_f64x2_4x4(src, src_stride, dst, dst_stride);
     }
 }
 
