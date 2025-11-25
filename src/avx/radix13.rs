@@ -123,6 +123,8 @@ fn avx_bitreversed_transpose_f64_radix13(
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
+    let mut cols = [AvxStoreD::zero(); 13];
+
     for x in 0..strided_width {
         let x_rev = [
             reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
@@ -139,8 +141,6 @@ fn avx_bitreversed_transpose_f64_radix13(
             reverse_bits::<WIDTH>(WIDTH * x + 11, rev_digits) * height,
             reverse_bits::<WIDTH>(WIDTH * x + 12, rev_digits) * height,
         ];
-
-        let mut cols = [AvxStoreD::zero(); 13];
 
         // Transposing 13×13 using 2×13 blocks
         //
@@ -955,6 +955,8 @@ fn avx_bitreversed_transpose_f32_radix13(
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
+    let mut cols = [AvxStoreF::zero(); 13];
+
     for x in 0..strided_width {
         let x_rev = [
             reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
@@ -971,8 +973,6 @@ fn avx_bitreversed_transpose_f32_radix13(
             reverse_bits::<WIDTH>(WIDTH * x + 11, rev_digits) * height,
             reverse_bits::<WIDTH>(WIDTH * x + 12, rev_digits) * height,
         ];
-
-        let mut cols = [AvxStoreF::zero(); 13];
 
         // Transposing 13×13 using 4×13 blocks
         //
