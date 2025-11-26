@@ -224,14 +224,14 @@ mod tests {
     use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
     test_fcma_butterfly!(
-        test_neon_butterfly128,
+        test_fcma_butterfly128,
         f32,
         NeonFcmaButterfly128f,
         128,
         1e-3
     );
     test_oof_fcma_butterfly!(
-        test_oof_neon_butterfly128,
+        test_oof_fcma_butterfly128,
         f32,
         NeonFcmaButterfly128f,
         128,
