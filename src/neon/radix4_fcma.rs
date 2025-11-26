@@ -272,7 +272,7 @@ impl NeonFcmaRadix4<f32> {
             ));
         }
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
