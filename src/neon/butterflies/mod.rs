@@ -134,8 +134,6 @@ mod bf64d;
 mod bf64d_fcma;
 mod bf64f;
 #[cfg(feature = "fcma")]
-mod bf64f_fcma;
-#[cfg(feature = "fcma")]
 mod bf6_fcma;
 mod bf7;
 #[cfg(feature = "fcma")]
@@ -266,7 +264,7 @@ pub(crate) use bf64d::NeonButterfly64d;
 pub(crate) use bf64d_fcma::NeonFcmaButterfly64d;
 pub(crate) use bf64f::NeonButterfly64f;
 #[cfg(feature = "fcma")]
-pub(crate) use bf64f_fcma::NeonFcmaButterfly64f;
+pub(crate) use bf64f::NeonFcmaButterfly64f;
 pub(crate) use bf81d::NeonButterfly81d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf81d::NeonFcmaButterfly81d;
