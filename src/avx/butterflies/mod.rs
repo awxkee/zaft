@@ -34,6 +34,7 @@ mod bf12;
 mod bf121d;
 mod bf121f;
 mod bf128d;
+mod bf128f;
 mod bf13;
 mod bf14;
 mod bf15;
@@ -79,7 +80,6 @@ mod fast_bf8;
 mod fast_bf9;
 mod fast_bf9d;
 mod shared;
-mod bf128f;
 
 pub(crate) use bf2::AvxButterfly2;
 pub(crate) use bf3::AvxButterfly3;

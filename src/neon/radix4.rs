@@ -207,8 +207,18 @@ where
                         T::butterfly32(fft_direction)?
                     }
                 } else {
-                    T::butterfly64(fft_direction)
-                        .map_or_else(|| T::butterfly16(fft_direction), Ok)?
+                    if exponent >= 8 {
+                        T::butterfly256(fft_direction).map_or_else(
+                            || {
+                                T::butterfly64(fft_direction)
+                                    .map_or_else(|| T::butterfly16(fft_direction), Ok)
+                            },
+                            Ok,
+                        )?
+                    } else {
+                        T::butterfly64(fft_direction)
+                            .map_or_else(|| T::butterfly16(fft_direction), Ok)?
+                    }
                 }
             }
         };

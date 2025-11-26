@@ -28,7 +28,7 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::avx::mixed::{AvxStoreD, ColumnButterfly16d, ColumnButterfly8d};
+use crate::avx::mixed::{AvxStoreD, ColumnButterfly8d, ColumnButterfly16d};
 use crate::avx::transpose::transpose_f64x2_2x8;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};

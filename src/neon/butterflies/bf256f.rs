@@ -29,26 +29,25 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::neon::mixed::NeonStoreF;
-use crate::neon::transpose::transpose_2x8;
+use crate::neon::transpose::transpose_2x16;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-macro_rules! gen_bf128f {
-    ($name: ident, $feature: literal, $internal_bf16: ident, $internal_bf8: ident, $mul: ident) => {
-        use crate::neon::mixed::{$internal_bf8, $internal_bf16};
+macro_rules! gen_bf256f {
+    ($name: ident, $feature: literal, $internal_bf: ident, $mul: ident) => {
+        use crate::neon::mixed::$internal_bf;
         pub(crate) struct $name {
             direction: FftDirection,
-            bf16: $internal_bf16,
-            bf8: $internal_bf8,
-            twiddles: [NeonStoreF; 56],
+            bf16: $internal_bf,
+            twiddles: [NeonStoreF; 120],
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
-                let mut twiddles = [NeonStoreF::default(); 56];
+                let mut twiddles = [NeonStoreF::default(); 120];
                 let mut q = 0usize;
                 let len_per_row = 16;
                 const COMPLEX_PER_VECTOR: usize = 2;
@@ -57,10 +56,10 @@ macro_rules! gen_bf128f {
 
                 let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
                 for x in 0..num_twiddle_columns {
-                    for y in 1..8 {
+                    for y in 1..16 {
                         twiddles[q] = NeonStoreF::from_complex2(
-                            compute_twiddle(y * (x * COMPLEX_PER_VECTOR), 128, fft_direction),
-                            compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), 128, fft_direction),
+                            compute_twiddle(y * (x * COMPLEX_PER_VECTOR), 256, fft_direction),
+                            compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), 256, fft_direction),
                         );
                         q += 1;
                     }
@@ -68,8 +67,7 @@ macro_rules! gen_bf128f {
                 Self {
                     direction: fft_direction,
                     twiddles,
-                    bf16: $internal_bf16::new(fft_direction),
-                    bf8: $internal_bf8::new(fft_direction),
+                    bf16: $internal_bf::new(fft_direction),
                 }
             }
         }
@@ -85,14 +83,14 @@ macro_rules! gen_bf128f {
 
             #[inline]
             fn length(&self) -> usize {
-                128
+                256
             }
         }
 
         impl $name {
             #[target_feature(enable = $feature)]
             fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if in_place.len() % 128 != 0 {
+                if in_place.len() % 256 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -100,47 +98,46 @@ macro_rules! gen_bf128f {
                 }
 
                 unsafe {
-                    let mut rows: [NeonStoreF; 8] = [NeonStoreF::default(); 8];
-                    let mut rows16: [NeonStoreF; 16] = [NeonStoreF::default(); 16];
-                    let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 128];
+                    let mut rows: [NeonStoreF; 16] = [NeonStoreF::default(); 16];
+                    let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 256];
 
-                    for chunk in in_place.chunks_exact_mut(128) {
+                    for chunk in in_place.chunks_exact_mut(256) {
                         // columns
                         for k in 0..8 {
-                            for i in 0..8 {
+                            for i in 0..16 {
                                 rows[i] = NeonStoreF::from_complex_ref(
                                     chunk.get_unchecked(i * 16 + k * 2..),
                                 );
                             }
 
-                            rows = self.bf8.exec(rows);
+                            rows = self.bf16.exec(rows);
 
-                            for i in 1..8 {
-                                rows[i] = NeonStoreF::$mul(rows[i], self.twiddles[i - 1 + 7 * k]);
+                            for i in 1..16 {
+                                rows[i] = NeonStoreF::$mul(rows[i], self.twiddles[i - 1 + 15 * k]);
                             }
 
-                            let transposed = transpose_2x8(rows);
+                            let transposed = transpose_2x16(rows);
 
-                            for i in 0..4 {
+                            for i in 0..8 {
                                 transposed[i * 2]
-                                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
+                                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 16 + i * 2..));
                                 transposed[i * 2 + 1].write_uninit(
-                                    scratch.get_unchecked_mut((k * 2 + 1) * 8 + i * 2..),
+                                    scratch.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..),
                                 );
                             }
                         }
 
                         // rows
 
-                        for k in 0..4 {
+                        for k in 0..8 {
                             for i in 0..16 {
-                                rows16[i] = NeonStoreF::from_complex_refu(
-                                    scratch.get_unchecked(i * 8 + k * 2..),
+                                rows[i] = NeonStoreF::from_complex_refu(
+                                    scratch.get_unchecked(i * 16 + k * 2..),
                                 );
                             }
-                            rows16 = self.bf16.exec(rows16);
+                            rows = self.bf16.exec(rows);
                             for i in 0..16 {
-                                rows16[i].write(chunk.get_unchecked_mut(i * 8 + k * 2..));
+                                rows[i].write(chunk.get_unchecked_mut(i * 16 + k * 2..));
                             }
                         }
                     }
@@ -165,55 +162,54 @@ macro_rules! gen_bf128f {
                 src: &[Complex<f32>],
                 dst: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-                if src.len() % 128 != 0 {
+                if src.len() % 256 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
                 }
-                if dst.len() % 128 != 0 {
+                if dst.len() % 256 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
                 }
 
                 unsafe {
-                    let mut rows: [NeonStoreF; 8] = [NeonStoreF::default(); 8];
-                    let mut rows16: [NeonStoreF; 16] = [NeonStoreF::default(); 16];
-                    let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 128];
+                    let mut rows: [NeonStoreF; 16] = [NeonStoreF::default(); 16];
+                    let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 256];
 
-                    for (dst, src) in dst.chunks_exact_mut(128).zip(src.chunks_exact(128)) {
+                    for (dst, src) in dst.chunks_exact_mut(256).zip(src.chunks_exact(256)) {
                         // columns
                         for k in 0..8 {
-                            for i in 0..8 {
+                            for i in 0..16 {
                                 rows[i] = NeonStoreF::from_complex_ref(
                                     src.get_unchecked(i * 16 + k * 2..),
                                 );
                             }
 
-                            rows = self.bf8.exec(rows);
+                            rows = self.bf16.exec(rows);
 
-                            for i in 1..8 {
-                                rows[i] = NeonStoreF::$mul(rows[i], self.twiddles[i - 1 + 7 * k]);
+                            for i in 1..16 {
+                                rows[i] = NeonStoreF::$mul(rows[i], self.twiddles[i - 1 + 15 * k]);
                             }
 
-                            let transposed = transpose_2x8(rows);
+                            let transposed = transpose_2x16(rows);
 
-                            for i in 0..4 {
+                            for i in 0..8 {
                                 transposed[i * 2]
-                                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
+                                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 16 + i * 2..));
                                 transposed[i * 2 + 1].write_uninit(
-                                    scratch.get_unchecked_mut((k * 2 + 1) * 8 + i * 2..),
+                                    scratch.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..),
                                 );
                             }
                         }
 
                         // rows
 
-                        for k in 0..4 {
+                        for k in 0..8 {
                             for i in 0..16 {
-                                rows16[i] = NeonStoreF::from_complex_refu(
-                                    scratch.get_unchecked(i * 8 + k * 2..),
+                                rows[i] = NeonStoreF::from_complex_refu(
+                                    scratch.get_unchecked(i * 16 + k * 2..),
                                 );
                             }
-                            rows16 = self.bf16.exec(rows16);
+                            rows = self.bf16.exec(rows);
                             for i in 0..16 {
-                                rows16[i].write(dst.get_unchecked_mut(i * 8 + k * 2..));
+                                rows[i].write(dst.get_unchecked_mut(i * 16 + k * 2..));
                             }
                         }
                     }
@@ -230,19 +226,17 @@ macro_rules! gen_bf128f {
     };
 }
 
-gen_bf128f!(
-    NeonButterfly128f,
+gen_bf256f!(
+    NeonButterfly256f,
     "neon",
     ColumnButterfly16f,
-    ColumnButterfly8f,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-gen_bf128f!(
-    NeonFcmaButterfly128f,
-    "fcma",
+gen_bf256f!(
+    NeonFcmaButterfly256f,
+    "neon",
     ColumnFcmaButterfly16f,
-    ColumnFcmaButterfly8f,
     fcmul_fcma
 );
 
@@ -253,29 +247,29 @@ mod tests {
     #[cfg(feature = "fcma")]
     use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
-    test_butterfly!(test_neon_butterfly128, f32, NeonButterfly128f, 128, 1e-3);
+    test_butterfly!(test_neon_butterfly256, f32, NeonButterfly256f, 256, 1e-3);
     test_oof_butterfly!(
-        test_oof_neon_butterfly128,
+        test_oof_neon_butterfly256,
         f32,
-        NeonButterfly128f,
-        128,
+        NeonButterfly256f,
+        256,
         1e-3
     );
 
     #[cfg(feature = "fcma")]
     test_fcma_butterfly!(
-        test_fcma_butterfly128,
+        test_fcma_butterfly256,
         f32,
-        NeonFcmaButterfly128f,
-        128,
+        NeonFcmaButterfly256f,
+        256,
         1e-3
     );
     #[cfg(feature = "fcma")]
     test_oof_fcma_butterfly!(
-        test_oof_fcma_butterfly128,
+        test_oof_fcma_butterfly256,
         f32,
-        NeonFcmaButterfly128f,
-        128,
+        NeonFcmaButterfly256f,
+        256,
         1e-3
     );
 }
