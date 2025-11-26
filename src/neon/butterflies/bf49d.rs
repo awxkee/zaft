@@ -32,6 +32,7 @@ use crate::neon::mixed::{ColumnButterfly7d, NeonStoreD};
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 pub(crate) struct NeonButterfly49d {
@@ -94,7 +95,7 @@ impl NeonButterfly49d {
 
         unsafe {
             let mut rows: [NeonStoreD; 7] = [NeonStoreD::default(); 7];
-            let mut scratch = [Complex::<f64>::default(); 49];
+            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 49];
 
             for chunk in in_place.chunks_exact_mut(49) {
                 // columns
@@ -110,7 +111,7 @@ impl NeonButterfly49d {
                     }
 
                     for i in 0..7 {
-                        rows[i].write(scratch.get_unchecked_mut(k * 7 + i..));
+                        rows[i].write_uninit(scratch.get_unchecked_mut(k * 7 + i..));
                     }
                 }
 
@@ -118,7 +119,7 @@ impl NeonButterfly49d {
 
                 for k in 0..7 {
                     for i in 0..7 {
-                        rows[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 7 + k..));
+                        rows[i] = NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 7 + k..));
                     }
                     rows = self.bf7.exec(rows);
                     for i in 0..7 {
@@ -154,7 +155,7 @@ impl NeonButterfly49d {
         }
 
         let mut rows: [NeonStoreD; 7] = [NeonStoreD::default(); 7];
-        let mut scratch = [Complex::<f64>::default(); 49];
+        let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 49];
 
         unsafe {
             for (dst, src) in dst.chunks_exact_mut(49).zip(src.chunks_exact(49)) {
@@ -171,7 +172,7 @@ impl NeonButterfly49d {
                     }
 
                     for i in 0..7 {
-                        rows[i].write(scratch.get_unchecked_mut(k * 7 + i..));
+                        rows[i].write_uninit(scratch.get_unchecked_mut(k * 7 + i..));
                     }
                 }
 
@@ -179,7 +180,7 @@ impl NeonButterfly49d {
 
                 for k in 0..7 {
                     for i in 0..7 {
-                        rows[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 7 + k..));
+                        rows[i] = NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 7 + k..));
                     }
                     rows = self.bf7.exec(rows);
                     for i in 0..7 {

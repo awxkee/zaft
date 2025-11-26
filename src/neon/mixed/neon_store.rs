@@ -29,6 +29,7 @@
 use crate::neon::util::{vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use num_complex::Complex;
 use std::arch::aarch64::*;
+use std::mem::MaybeUninit;
 
 #[derive(Clone, Copy)]
 pub(crate) struct NeonStoreD {
@@ -51,13 +52,17 @@ impl NeonStoreD {
         NeonStoreD { v: r }
     }
 
-    // #[inline]
-    // pub(crate) fn load(ptr: *const f64) -> Self {
-    //     unsafe { NeonStoreD { v: vld1q_f64(ptr) } }
-    // }
-
     #[inline]
     pub(crate) fn from_complex_ref(complex: &[Complex<f64>]) -> Self {
+        unsafe {
+            NeonStoreD {
+                v: vld1q_f64(complex.as_ptr().cast()),
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_complex_refu(complex: &[MaybeUninit<Complex<f64>>]) -> Self {
         unsafe {
             NeonStoreD {
                 v: vld1q_f64(complex.as_ptr().cast()),
@@ -76,6 +81,11 @@ impl NeonStoreD {
 
     #[inline]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f64>]) {
+        unsafe { vst1q_f64(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline]
+    pub(crate) fn write_uninit(&self, to_ref: &mut [MaybeUninit<Complex<f64>>]) {
         unsafe { vst1q_f64(to_ref.as_mut_ptr().cast(), self.v) }
     }
 
@@ -113,6 +123,15 @@ impl NeonStoreF {
 
     #[inline]
     pub(crate) fn from_complex_ref(complex: &[Complex<f32>]) -> Self {
+        unsafe {
+            NeonStoreF {
+                v: vld1q_f32(complex.as_ptr().cast()),
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_complex_refu(complex: &[MaybeUninit<Complex<f32>>]) -> Self {
         unsafe {
             NeonStoreF {
                 v: vld1q_f32(complex.as_ptr().cast()),
@@ -160,6 +179,25 @@ impl NeonStoreF {
     }
 
     #[inline]
+    pub(crate) fn from_complexu(complex: &MaybeUninit<Complex<f32>>) -> Self {
+        unsafe {
+            let complex_ref: &Complex<f32> = complex.assume_init_ref();
+            NeonStoreF {
+                v: vld1q_f32(
+                    [
+                        complex_ref.re,
+                        complex_ref.im,
+                        complex_ref.re,
+                        complex_ref.im,
+                    ]
+                    .as_ptr()
+                    .cast(),
+                ),
+            }
+        }
+    }
+
+    #[inline]
     pub(crate) fn from_complex2(v0: Complex<f32>, v1: Complex<f32>) -> Self {
         unsafe {
             NeonStoreF {
@@ -174,7 +212,17 @@ impl NeonStoreF {
     }
 
     #[inline]
+    pub(crate) fn write_uninit(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
+        unsafe { vst1q_f32(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline]
     pub(crate) fn write_lo(&self, to_ref: &mut [Complex<f32>]) {
+        unsafe { vst1_f32(to_ref.as_mut_ptr().cast(), vget_low_f32(self.v)) }
+    }
+
+    #[inline]
+    pub(crate) fn write_lo_u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
         unsafe { vst1_f32(to_ref.as_mut_ptr().cast(), vget_low_f32(self.v)) }
     }
 

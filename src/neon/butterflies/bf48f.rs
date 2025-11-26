@@ -34,6 +34,7 @@ use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::float32x4x2_t;
+use std::mem::MaybeUninit;
 
 pub(crate) struct NeonButterfly48f {
     direction: FftDirection,
@@ -129,7 +130,7 @@ impl NeonButterfly48f {
             let mut rows2: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
             let mut rows12: [NeonStoreF; 12] = [NeonStoreF::default(); 12];
 
-            let mut scratch = [Complex::<f32>::default(); 48];
+            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 48];
 
             for chunk in in_place.chunks_exact_mut(48) {
                 // columns
@@ -159,8 +160,9 @@ impl NeonButterfly48f {
                     let transposed = transpose_6x4(rows0, rows1, rows2);
 
                     for i in 0..6 {
-                        transposed[i].write(scratch.get_unchecked_mut(i * 4 + k * 24..));
-                        transposed[i + 6].write(scratch.get_unchecked_mut(i * 4 + k * 24 + 2..));
+                        transposed[i].write_uninit(scratch.get_unchecked_mut(i * 4 + k * 24..));
+                        transposed[i + 6]
+                            .write_uninit(scratch.get_unchecked_mut(i * 4 + k * 24 + 2..));
                     }
                 }
 
@@ -169,7 +171,7 @@ impl NeonButterfly48f {
                 for k in 0..2 {
                     for i in 0..12 {
                         rows12[i] =
-                            NeonStoreF::from_complex_ref(scratch.get_unchecked(i * 4 + k * 2..));
+                            NeonStoreF::from_complex_refu(scratch.get_unchecked(i * 4 + k * 2..));
                     }
                     rows12 = self.bf12.exec(rows12);
                     for i in 0..12 {

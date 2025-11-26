@@ -32,6 +32,7 @@ use crate::neon::mixed::{ColumnButterfly8d, NeonStoreD};
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 pub(crate) struct NeonButterfly64d {
@@ -94,7 +95,7 @@ impl NeonButterfly64d {
 
         unsafe {
             let mut rows: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
-            let mut scratch = [Complex::<f64>::default(); 64];
+            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 64];
 
             for chunk in in_place.chunks_exact_mut(64) {
                 // columns
@@ -110,7 +111,7 @@ impl NeonButterfly64d {
                     }
 
                     for i in 0..8 {
-                        rows[i].write(scratch.get_unchecked_mut(k * 8 + i..));
+                        rows[i].write_uninit(scratch.get_unchecked_mut(k * 8 + i..));
                     }
                 }
 
@@ -118,7 +119,7 @@ impl NeonButterfly64d {
 
                 for k in 0..8 {
                     for i in 0..8 {
-                        rows[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 8 + k..));
+                        rows[i] = NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 8 + k..));
                     }
                     rows = self.bf8.exec(rows);
                     for i in 0..8 {
@@ -154,7 +155,7 @@ impl NeonButterfly64d {
         }
 
         let mut rows: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
-        let mut scratch = [Complex::<f64>::default(); 64];
+        let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 64];
 
         unsafe {
             for (dst, src) in dst.chunks_exact_mut(64).zip(src.chunks_exact(64)) {
@@ -171,7 +172,7 @@ impl NeonButterfly64d {
                     }
 
                     for i in 0..8 {
-                        rows[i].write(scratch.get_unchecked_mut(k * 8 + i..));
+                        rows[i].write_uninit(scratch.get_unchecked_mut(k * 8 + i..));
                     }
                 }
 
@@ -179,7 +180,7 @@ impl NeonButterfly64d {
 
                 for k in 0..8 {
                     for i in 0..8 {
-                        rows[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 8 + k..));
+                        rows[i] = NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 8 + k..));
                     }
                     rows = self.bf8.exec(rows);
                     for i in 0..8 {

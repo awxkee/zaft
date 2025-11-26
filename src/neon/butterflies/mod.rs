@@ -160,6 +160,12 @@ mod fast_bf8;
 mod fast_bf9d;
 mod fast_bf9f;
 mod shared;
+mod bf128d;
+#[cfg(feature = "fcma")]
+mod bf128d_fcma;
+mod bf128f;
+#[cfg(feature = "fcma")]
+mod bf128f_fcma;
 
 pub(crate) use bf2::NeonButterfly2;
 pub(crate) use bf3::NeonButterfly3;
@@ -289,6 +295,12 @@ pub(crate) use bf121d_fcma::NeonFcmaButterfly121d;
 pub(crate) use bf121f::NeonButterfly121f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf121f_fcma::NeonFcmaButterfly121f;
+pub(crate) use bf128d::NeonButterfly128d;
+pub(crate) use bf128f::NeonButterfly128f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf128f_fcma::NeonFcmaButterfly128f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf128d_fcma::NeonFcmaButterfly128d;
 pub(crate) use fast_bf5::NeonFastButterfly5;
 pub(crate) use fast_bf8::NeonFastButterfly8;
 use num_complex::Complex;
