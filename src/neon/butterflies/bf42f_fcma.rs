@@ -33,6 +33,7 @@ use crate::neon::transpose::neon_transpose_f32x2_7x6_aos;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 
 pub(crate) struct NeonFcmaButterfly42f {
     direction: FftDirection,
@@ -102,7 +103,7 @@ impl NeonFcmaButterfly42f {
 
             let mut rows7: [NeonStoreF; 7] = [NeonStoreF::default(); 7];
 
-            let mut scratch = [Complex::<f32>::default(); 42];
+            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 42];
 
             for chunk in in_place.chunks_exact_mut(42) {
                 // columns
@@ -128,9 +129,9 @@ impl NeonFcmaButterfly42f {
                 let (v0, v1, v2) = neon_transpose_f32x2_7x6_aos(rows0, rows1, rows2, rows3);
 
                 for i in 0..7 {
-                    v0[i].write(scratch.get_unchecked_mut(i * 6..));
-                    v1[i].write(scratch.get_unchecked_mut(i * 6 + 2..));
-                    v2[i].write(scratch.get_unchecked_mut(i * 6 + 4..));
+                    v0[i].write_uninit(scratch.get_unchecked_mut(i * 6..));
+                    v1[i].write_uninit(scratch.get_unchecked_mut(i * 6 + 2..));
+                    v2[i].write_uninit(scratch.get_unchecked_mut(i * 6 + 4..));
                 }
 
                 // rows
@@ -138,7 +139,7 @@ impl NeonFcmaButterfly42f {
                 for k in 0..3 {
                     for i in 0..7 {
                         rows7[i] =
-                            NeonStoreF::from_complex_ref(scratch.get_unchecked(i * 6 + k * 2..));
+                            NeonStoreF::from_complex_refu(scratch.get_unchecked(i * 6 + k * 2..));
                     }
                     rows7 = self.bf7.exec(rows7);
                     for i in 0..7 {

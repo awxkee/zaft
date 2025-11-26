@@ -33,6 +33,7 @@ use crate::neon::transpose::transpose_2x11;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 pub(crate) struct NeonFcmaButterfly121f {
@@ -95,7 +96,7 @@ impl NeonFcmaButterfly121f {
 
         unsafe {
             let mut rows: [NeonStoreF; 11] = [NeonStoreF::default(); 11];
-            let mut scratch = [Complex::<f32>::default(); 121];
+            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 121];
 
             for chunk in in_place.chunks_exact_mut(121) {
                 // columns
@@ -114,15 +115,17 @@ impl NeonFcmaButterfly121f {
                     let transposed = transpose_2x11(rows);
 
                     for i in 0..5 {
-                        transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
+                        transposed[i * 2]
+                            .write_uninit(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
                         transposed[i * 2 + 1]
-                            .write(scratch.get_unchecked_mut((k * 2 + 1) * 11 + i * 2..));
+                            .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 11 + i * 2..));
                     }
                     {
                         let i = 5;
-                        transposed[i * 2].write_lo(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
+                        transposed[i * 2]
+                            .write_lo_u(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
                         transposed[i * 2 + 1]
-                            .write_lo(scratch.get_unchecked_mut((k * 2 + 1) * 11 + i * 2..));
+                            .write_lo_u(scratch.get_unchecked_mut((k * 2 + 1) * 11 + i * 2..));
                     }
                 }
 
@@ -141,11 +144,13 @@ impl NeonFcmaButterfly121f {
                     let transposed = transpose_2x11(rows);
 
                     for i in 0..5 {
-                        transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
+                        transposed[i * 2]
+                            .write_uninit(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
                     }
                     {
                         let i = 5;
-                        transposed[i * 2].write_lo(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
+                        transposed[i * 2]
+                            .write_lo_u(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
                     }
                 }
 
@@ -154,7 +159,7 @@ impl NeonFcmaButterfly121f {
                 for k in 0..5 {
                     for i in 0..11 {
                         rows[i] =
-                            NeonStoreF::from_complex_ref(scratch.get_unchecked(i * 11 + k * 2..));
+                            NeonStoreF::from_complex_refu(scratch.get_unchecked(i * 11 + k * 2..));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {
@@ -164,7 +169,7 @@ impl NeonFcmaButterfly121f {
                 {
                     let k = 5;
                     for i in 0..11 {
-                        rows[i] = NeonStoreF::from_complex(scratch.get_unchecked(i * 11 + k * 2));
+                        rows[i] = NeonStoreF::from_complexu(scratch.get_unchecked(i * 11 + k * 2));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {
@@ -202,7 +207,7 @@ impl NeonFcmaButterfly121f {
 
         unsafe {
             let mut rows: [NeonStoreF; 11] = [NeonStoreF::default(); 11];
-            let mut scratch = [Complex::<f32>::default(); 121];
+            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 121];
 
             for (dst, src) in dst.chunks_exact_mut(121).zip(src.chunks_exact(121)) {
                 // columns
@@ -220,15 +225,17 @@ impl NeonFcmaButterfly121f {
                     let transposed = transpose_2x11(rows);
 
                     for i in 0..5 {
-                        transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
+                        transposed[i * 2]
+                            .write_uninit(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
                         transposed[i * 2 + 1]
-                            .write(scratch.get_unchecked_mut((k * 2 + 1) * 11 + i * 2..));
+                            .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 11 + i * 2..));
                     }
                     {
                         let i = 5;
-                        transposed[i * 2].write_lo(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
+                        transposed[i * 2]
+                            .write_lo_u(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
                         transposed[i * 2 + 1]
-                            .write_lo(scratch.get_unchecked_mut((k * 2 + 1) * 11 + i * 2..));
+                            .write_lo_u(scratch.get_unchecked_mut((k * 2 + 1) * 11 + i * 2..));
                     }
                 }
 
@@ -247,11 +254,13 @@ impl NeonFcmaButterfly121f {
                     let transposed = transpose_2x11(rows);
 
                     for i in 0..5 {
-                        transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
+                        transposed[i * 2]
+                            .write_uninit(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
                     }
                     {
                         let i = 5;
-                        transposed[i * 2].write_lo(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
+                        transposed[i * 2]
+                            .write_lo_u(scratch.get_unchecked_mut(k * 2 * 11 + i * 2..));
                     }
                 }
 
@@ -260,7 +269,7 @@ impl NeonFcmaButterfly121f {
                 for k in 0..5 {
                     for i in 0..11 {
                         rows[i] =
-                            NeonStoreF::from_complex_ref(scratch.get_unchecked(i * 11 + k * 2..));
+                            NeonStoreF::from_complex_refu(scratch.get_unchecked(i * 11 + k * 2..));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {
@@ -270,7 +279,7 @@ impl NeonFcmaButterfly121f {
                 {
                     let k = 5;
                     for i in 0..11 {
-                        rows[i] = NeonStoreF::from_complex(scratch.get_unchecked(i * 11 + k * 2));
+                        rows[i] = NeonStoreF::from_complexu(scratch.get_unchecked(i * 11 + k * 2));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {

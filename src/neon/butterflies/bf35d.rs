@@ -32,6 +32,7 @@ use crate::neon::mixed::{ColumnButterfly5d, ColumnButterfly7d, NeonStoreD};
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 
 pub(crate) struct NeonButterfly35d {
     direction: FftDirection,
@@ -97,7 +98,7 @@ impl NeonButterfly35d {
             let mut rows0: [NeonStoreD; 5] = [NeonStoreD::default(); 5];
             let mut rows7: [NeonStoreD; 7] = [NeonStoreD::default(); 7];
 
-            let mut scratch = [Complex::<f64>::default(); 35];
+            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 42];
 
             for chunk in in_place.chunks_exact_mut(35) {
                 // columns
@@ -115,18 +116,19 @@ impl NeonButterfly35d {
                             NeonStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 4 * k]);
                     }
 
-                    rows0[0].write(scratch.get_unchecked_mut(k * 5..));
-                    rows0[1].write(scratch.get_unchecked_mut(k * 5 + 1..));
-                    rows0[2].write(scratch.get_unchecked_mut(k * 5 + 2..));
-                    rows0[3].write(scratch.get_unchecked_mut(k * 5 + 3..));
-                    rows0[4].write(scratch.get_unchecked_mut(k * 5 + 4..));
+                    rows0[0].write_uninit(scratch.get_unchecked_mut(k * 5..));
+                    rows0[1].write_uninit(scratch.get_unchecked_mut(k * 5 + 1..));
+                    rows0[2].write_uninit(scratch.get_unchecked_mut(k * 5 + 2..));
+                    rows0[3].write_uninit(scratch.get_unchecked_mut(k * 5 + 3..));
+                    rows0[4].write_uninit(scratch.get_unchecked_mut(k * 5 + 4..));
                 }
 
                 // rows
 
                 for k in 0..5 {
                     for i in 0..7 {
-                        rows7[i] = NeonStoreD::from_complex_ref(scratch.get_unchecked(i * 5 + k..));
+                        rows7[i] =
+                            NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 5 + k..));
                     }
                     rows7 = self.bf7.exec(rows7);
                     for i in 0..7 {

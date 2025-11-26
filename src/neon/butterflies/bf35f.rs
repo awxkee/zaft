@@ -34,6 +34,7 @@ use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
+use std::mem::MaybeUninit;
 
 pub(crate) struct NeonButterfly35f {
     direction: FftDirection,
@@ -100,7 +101,7 @@ impl NeonButterfly35f {
             let mut rows2: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
             let mut rows7: [NeonStoreF; 7] = [NeonStoreF::default(); 7];
 
-            let mut scratch = [Complex::<f32>::default(); 35];
+            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 35];
 
             for chunk in in_place.chunks_exact_mut(35) {
                 // columns
@@ -128,9 +129,9 @@ impl NeonButterfly35f {
                     let transposed = transpose_6x5(rows0, rows1, rows2);
 
                     for i in 0..6 {
-                        transposed[i].write(scratch.get_unchecked_mut(i * 5..));
-                        transposed[i + 6].write(scratch.get_unchecked_mut(i * 5 + 2..));
-                        transposed[i + 12].write_lo(scratch.get_unchecked_mut(i * 5 + 4..));
+                        transposed[i].write_uninit(scratch.get_unchecked_mut(i * 5..));
+                        transposed[i + 6].write_uninit(scratch.get_unchecked_mut(i * 5 + 2..));
+                        transposed[i + 12].write_lo_u(scratch.get_unchecked_mut(i * 5 + 4..));
                     }
                 }
 
@@ -150,9 +151,9 @@ impl NeonButterfly35f {
                     let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows0[2].v, rows0[3].v));
                     let g0 =
                         neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows0[4].v, vdupq_n_f32(0.)));
-                    NeonStoreF::raw(a0.0).write(scratch.get_unchecked_mut(6 * 5..));
-                    NeonStoreF::raw(d0.0).write(scratch.get_unchecked_mut(6 * 5 + 2..));
-                    NeonStoreF::raw(g0.0).write_lo(scratch.get_unchecked_mut(6 * 5 + 4..));
+                    NeonStoreF::raw(a0.0).write_uninit(scratch.get_unchecked_mut(6 * 5..));
+                    NeonStoreF::raw(d0.0).write_uninit(scratch.get_unchecked_mut(6 * 5 + 2..));
+                    NeonStoreF::raw(g0.0).write_lo_u(scratch.get_unchecked_mut(6 * 5 + 4..));
                 }
 
                 // rows
@@ -160,7 +161,7 @@ impl NeonButterfly35f {
                 for k in 0..2 {
                     for i in 0..7 {
                         rows7[i] =
-                            NeonStoreF::from_complex_ref(scratch.get_unchecked(i * 5 + k * 2..));
+                            NeonStoreF::from_complex_refu(scratch.get_unchecked(i * 5 + k * 2..));
                     }
                     rows7 = self.bf7.exec(rows7);
                     for i in 0..7 {
@@ -170,7 +171,7 @@ impl NeonButterfly35f {
                 {
                     let k = 2;
                     for i in 0..7 {
-                        rows7[i] = NeonStoreF::from_complex(scratch.get_unchecked(i * 5 + k * 2));
+                        rows7[i] = NeonStoreF::from_complexu(scratch.get_unchecked(i * 5 + k * 2));
                     }
                     rows7 = self.bf7.exec(rows7);
                     for i in 0..7 {

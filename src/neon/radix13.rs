@@ -29,6 +29,8 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
+use crate::neon::mixed::NeonStoreF;
+use crate::neon::transpose::transpose_2x13;
 use crate::neon::util::{
     create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64, vh_rotate90_f32,
 };
@@ -36,7 +38,9 @@ use crate::radix13::Radix13Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_twiddle, is_power_of_thirteen};
+use crate::util::{
+    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_thirteen, reverse_bits,
+};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
@@ -406,6 +410,126 @@ impl FftExecutor<f64> for NeonRadix13<f64> {
     }
 }
 
+pub(crate) fn neon_bitreversed_transpose_f32_radix13(
+    height: usize,
+    input: &[Complex<f32>],
+    output: &mut [Complex<f32>],
+) {
+    let width = input.len() / height;
+
+    if width <= 1 {
+        output.copy_from_slice(input);
+        return;
+    }
+
+    const WIDTH: usize = 13;
+    const HEIGHT: usize = 13;
+
+    let rev_digits = compute_logarithm::<13>(width).unwrap();
+    let strided_width = width / WIDTH;
+    let strided_height = height / HEIGHT;
+
+    let mut cols = [NeonStoreF::default(); 13];
+
+    for x in 0..strided_width {
+        let x_rev = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 4, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 5, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 6, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 7, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 8, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 9, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 10, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 11, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 12, rev_digits) * height,
+        ];
+
+        // Transposing 13×13 using 2×13 blocks
+        //
+        // Graphically, the 13×13 matrix is partitioned as:
+        //
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 A0  | 2×2 A1  | 2×2 A2  | 2×2 A3  | 2×2 A4  | 2×2 A5  | 2×1 A6  |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 B0  | 2×2 B1  | 2×2 B2  | 2×2 B3  | 2×2 B4  | 2×2 B5  | 2×1 B6  |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 C0  | 2×2 C1  | 2×2 C2  | 2×2 C3  | 2×2 C4  | 2×2 C5  | 2×1 C6  |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 D0  | 2×2 D1  | 2×2 D2  | 2×2 D3  | 2×2 D4  | 2×2 D5  | 2×1 D6  |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 E0  | 2×2 E1  | 2×2 E2  | 2×2 E3  | 2×2 E4  | 2×2 E5  | 2×1 E6  |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 F0  | 2×2 F1  | 2×2 F2  | 2×2 F3  | 2×2 F4  | 2×2 F5  | 2×1 F6  |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 1×2 G0  | 1×2 G1  | 1×2 G2  | 1×2 G3  | 1×2 G4  | 1×2 G5  | 1×1 G6  |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        //
+        // After transposition:
+        //
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 A0ᵀ | 2×2 B0ᵀ | 2×2 C0ᵀ | 2×2 D0ᵀ | 2×2 E0ᵀ | 2×2 F0ᵀ | 1×2 G0ᵀ |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 A1ᵀ | 2×2 B1ᵀ | 2×2 C1ᵀ | 2×2 D1ᵀ | 2×2 E1ᵀ | 2×2 F1ᵀ | 1×2 G1ᵀ |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 A2ᵀ | 2×2 B2ᵀ | 2×2 C2ᵀ | 2×2 D2ᵀ | 2×2 E2ᵀ | 2×2 F2ᵀ | 1×2 G2ᵀ |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 A3ᵀ | 2×2 B3ᵀ | 2×2 C3ᵀ | 2×2 D3ᵀ | 2×2 E3ᵀ | 2×2 F3ᵀ | 1×2 G3ᵀ |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 A4ᵀ | 2×2 B4ᵀ | 2×2 C4ᵀ | 2×2 D4ᵀ | 2×2 E4ᵀ | 2×2 F4ᵀ | 1×2 G4ᵀ |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×2 A5ᵀ | 2×2 B5ᵀ | 2×2 C5ᵀ | 2×2 D5ᵀ | 2×2 E5ᵀ | 2×2 F5ᵀ | 1×2 G5ᵀ |
+        // +---------+---------+---------+---------+---------+---------+---------+
+        // | 2×1 A6ᵀ | 2×1 B6ᵀ | 2×1 C6ᵀ | 2×1 D6ᵀ | 2×1 E6ᵀ | 2×1 F6ᵀ | 1×1 G6ᵀ |
+        // +---------+---------+---------+---------+---------+---------+---------+
+
+        for y in 0..strided_height {
+            let base_input_idx = (WIDTH * x) + y * HEIGHT * width;
+            unsafe {
+                for k in 0..6 {
+                    for i in 0..13 {
+                        cols[i] = NeonStoreF::from_complex_ref(
+                            input.get_unchecked(base_input_idx + k * 2 + width * i..),
+                        );
+                    }
+                    let x0 = x_rev[k * 2];
+                    let x1 = x_rev[k * 2 + 1];
+                    let transposed = transpose_2x13(cols);
+                    for i in 0..6 {
+                        transposed[i * 2]
+                            .write(output.get_unchecked_mut(HEIGHT * y + x0 + i * 2..));
+                        transposed[i * 2 + 1]
+                            .write(output.get_unchecked_mut(HEIGHT * y + x1 + i * 2..));
+                    }
+
+                    transposed[12].write_lo(output.get_unchecked_mut(HEIGHT * y + x0 + 12..));
+                    transposed[13].write_lo(output.get_unchecked_mut(HEIGHT * y + x1 + 12..));
+                }
+
+                {
+                    let k = 6;
+                    for i in 0..13 {
+                        cols[i] = NeonStoreF::from_complex(
+                            input.get_unchecked(base_input_idx + k * 2 + width * i),
+                        );
+                    }
+                    let x0 = x_rev[k * 2];
+                    let transposed = transpose_2x13(cols);
+                    for i in 0..6 {
+                        transposed[i * 2]
+                            .write(output.get_unchecked_mut(HEIGHT * y + x0 + i * 2..));
+                    }
+
+                    transposed[12].write_lo(output.get_unchecked_mut(HEIGHT * y + x0 + 12..));
+                }
+            }
+        }
+    }
+}
+
 impl FftExecutor<f32> for NeonRadix13<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if in_place.len() % self.execution_length != 0 {
@@ -422,7 +546,7 @@ impl FftExecutor<f32> for NeonRadix13<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f32>, 13>(13, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix13(13, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 

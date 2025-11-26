@@ -29,6 +29,7 @@
 use crate::avx::util::_mm256_fcmul_pd;
 use num_complex::Complex;
 use std::arch::x86_64::*;
+use std::mem::MaybeUninit;
 
 #[derive(Copy, Clone)]
 pub(crate) struct AvxStoreD {
@@ -54,11 +55,33 @@ impl AvxStoreD {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn from_complex_refu(complex: &[MaybeUninit<Complex<f64>>]) -> Self {
+        unsafe {
+            AvxStoreD {
+                v: _mm256_loadu_pd(complex.as_ptr().cast()),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn from_complex(complex: &Complex<f64>) -> Self {
         unsafe {
             AvxStoreD {
                 v: _mm256_castpd128_pd256(_mm_loadu_pd(
                     complex as *const Complex<f64> as *const f64,
+                )),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn from_complexu(complex: &MaybeUninit<Complex<f64>>) -> Self {
+        unsafe {
+            AvxStoreD {
+                v: _mm256_castpd128_pd256(_mm_loadu_pd(
+                    complex as *const MaybeUninit<Complex<f64>> as *const f64,
                 )),
             }
         }
@@ -78,7 +101,19 @@ impl AvxStoreD {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn write_u(&self, to_ref: &mut [MaybeUninit<Complex<f64>>]) {
+        unsafe { _mm256_storeu_pd(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn write_lo(&self, to_ref: &mut [Complex<f64>]) {
+        unsafe { _mm_storeu_pd(to_ref.as_mut_ptr().cast(), _mm256_castpd256_pd128(self.v)) }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn write_lou(&self, to_ref: &mut [MaybeUninit<Complex<f64>>]) {
         unsafe { _mm_storeu_pd(to_ref.as_mut_ptr().cast(), _mm256_castpd256_pd128(self.v)) }
     }
 

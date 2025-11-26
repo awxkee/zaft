@@ -85,7 +85,7 @@ pub(crate) struct ColumnButterfly8f {
 
 impl ColumnButterfly8f {
     #[target_feature(enable = "avx")]
-    pub(crate) unsafe fn new(direction: FftDirection) -> ColumnButterfly8f {
+    pub(crate) fn new(direction: FftDirection) -> ColumnButterfly8f {
         Self {
             rotate: AvxRotate::new(direction),
             root2: _mm256_set1_ps(0.5f32.sqrt()),

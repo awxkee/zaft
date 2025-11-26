@@ -35,31 +35,30 @@ use num_complex::Complex;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-macro_rules! gen_bf81d {
+macro_rules! gen_bf256 {
     ($name: ident, $feature: literal, $internal_bf: ident, $mul: ident) => {
         use crate::neon::mixed::$internal_bf;
-
         pub(crate) struct $name {
             direction: FftDirection,
-            bf9: $internal_bf,
-            twiddles: [NeonStoreD; 80],
+            bf16: $internal_bf,
+            twiddles: [NeonStoreD; 240],
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
-                let mut twiddles = [NeonStoreD::default(); 80];
+                let mut twiddles = [NeonStoreD::default(); 240];
                 let mut q = 0usize;
-                let len_per_row = 9;
+                let len_per_row = 16;
                 const COMPLEX_PER_VECTOR: usize = 1;
                 let quotient = len_per_row / COMPLEX_PER_VECTOR;
                 let remainder = len_per_row % COMPLEX_PER_VECTOR;
 
                 let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
                 for x in 0..num_twiddle_columns {
-                    for y in 1..9 {
+                    for y in 1..16 {
                         twiddles[q] = NeonStoreD::from_complex(&compute_twiddle(
                             y * (x * COMPLEX_PER_VECTOR),
-                            81,
+                            256,
                             fft_direction,
                         ));
                         q += 1;
@@ -68,7 +67,7 @@ macro_rules! gen_bf81d {
                 Self {
                     direction: fft_direction,
                     twiddles,
-                    bf9: $internal_bf::new(fft_direction),
+                    bf16: $internal_bf::new(fft_direction),
                 }
             }
         }
@@ -84,14 +83,14 @@ macro_rules! gen_bf81d {
 
             #[inline]
             fn length(&self) -> usize {
-                81
+                256
             }
         }
 
         impl $name {
             #[target_feature(enable = $feature)]
             fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if in_place.len() % 81 != 0 {
+                if in_place.len() % 256 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -99,39 +98,39 @@ macro_rules! gen_bf81d {
                 }
 
                 unsafe {
-                    let mut rows: [NeonStoreD; 9] = [NeonStoreD::default(); 9];
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 81];
+                    let mut rows: [NeonStoreD; 16] = [NeonStoreD::default(); 16];
+                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 256];
 
-                    for chunk in in_place.chunks_exact_mut(81) {
+                    for chunk in in_place.chunks_exact_mut(256) {
                         // columns
-                        for k in 0..9 {
-                            for i in 0..9 {
+                        for k in 0..16 {
+                            for i in 0..16 {
                                 rows[i] =
-                                    NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 9 + k..));
+                                    NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 16 + k..));
                             }
 
-                            rows = self.bf9.exec(rows);
+                            rows = self.bf16.exec(rows);
 
-                            for i in 1..9 {
-                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 8 * k]);
+                            for i in 1..16 {
+                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 15 * k]);
                             }
 
-                            for i in 0..9 {
-                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 9 + i..));
+                            for i in 0..16 {
+                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 16 + i..));
                             }
                         }
 
                         // rows
 
-                        for k in 0..9 {
-                            for i in 0..9 {
+                        for k in 0..16 {
+                            for i in 0..16 {
                                 rows[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 9 + k..),
+                                    scratch.get_unchecked(i * 16 + k..),
                                 );
                             }
-                            rows = self.bf9.exec(rows);
-                            for i in 0..9 {
-                                rows[i].write(chunk.get_unchecked_mut(i * 9 + k..));
+                            rows = self.bf16.exec(rows);
+                            for i in 0..16 {
+                                rows[i].write(chunk.get_unchecked_mut(i * 16 + k..));
                             }
                         }
                     }
@@ -156,47 +155,49 @@ macro_rules! gen_bf81d {
                 src: &[Complex<f64>],
                 dst: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                if src.len() % 81 != 0 {
+                if src.len() % 256 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
                 }
-                if dst.len() % 81 != 0 {
+                if dst.len() % 256 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
                 }
 
-                let mut rows: [NeonStoreD; 9] = [NeonStoreD::default(); 9];
-                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 81];
+                let mut rows: [NeonStoreD; 16] = [NeonStoreD::default(); 16];
+                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 256];
 
                 unsafe {
-                    for (dst, src) in dst.chunks_exact_mut(81).zip(src.chunks_exact(81)) {
-                        // columns
-                        for k in 0..9 {
-                            for i in 0..9 {
+                    for (dst, src) in dst.chunks_exact_mut(256).zip(src.chunks_exact(256)) {
+                        for k in 0..16 {
+                            for i in 0..16 {
                                 rows[i] =
-                                    NeonStoreD::from_complex_ref(src.get_unchecked(i * 9 + k..));
+                                    NeonStoreD::from_complex_ref(src.get_unchecked(i * 16 + k..));
                             }
 
-                            rows = self.bf9.exec(rows);
+                            rows = self.bf16.exec(rows);
 
-                            for i in 1..9 {
-                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 8 * k]);
+                            for i in 1..16 {
+                                rows[i] = NeonStoreD::mul_by_complex(
+                                    rows[i],
+                                    self.twiddles[i - 1 + 15 * k],
+                                );
                             }
 
-                            for i in 0..9 {
-                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 9 + i..));
+                            for i in 0..16 {
+                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 16 + i..));
                             }
                         }
 
                         // rows
 
-                        for k in 0..9 {
-                            for i in 0..9 {
+                        for k in 0..16 {
+                            for i in 0..16 {
                                 rows[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 9 + k..),
+                                    scratch.get_unchecked(i * 16 + k..),
                                 );
                             }
-                            rows = self.bf9.exec(rows);
-                            for i in 0..9 {
-                                rows[i].write(dst.get_unchecked_mut(i * 9 + k..));
+                            rows = self.bf16.exec(rows);
+                            for i in 0..16 {
+                                rows[i].write(dst.get_unchecked_mut(i * 16 + k..));
                             }
                         }
                     }
@@ -213,12 +214,17 @@ macro_rules! gen_bf81d {
     };
 }
 
-gen_bf81d!(NeonButterfly81d, "neon", ColumnButterfly9d, mul_by_complex);
+gen_bf256!(
+    NeonButterfly256d,
+    "neon",
+    ColumnButterfly16d,
+    mul_by_complex
+);
 #[cfg(feature = "fcma")]
-gen_bf81d!(
-    NeonFcmaButterfly81d,
+gen_bf256!(
+    NeonFcmaButterfly256d,
     "fcma",
-    ColumnFcmaButterfly9d,
+    ColumnFcmaButterfly16d,
     fcmul_fcma
 );
 
@@ -229,29 +235,35 @@ mod tests {
     #[cfg(feature = "fcma")]
     use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
-    test_butterfly!(test_neon_butterfly81_f64, f64, NeonButterfly81d, 81, 1e-7);
-    test_oof_butterfly!(
-        test_oof_neon_butterfly81_f64,
+    test_butterfly!(
+        test_neon_butterfly256_f64,
         f64,
-        NeonButterfly81d,
-        81,
+        NeonButterfly256d,
+        256,
+        1e-7
+    );
+    test_oof_butterfly!(
+        test_oof_neon_butterfly128_f64,
+        f64,
+        NeonButterfly256d,
+        256,
         1e-7
     );
 
     #[cfg(feature = "fcma")]
     test_fcma_butterfly!(
-        test_fcma_butterfly81_f64,
+        test_fcma_butterfly256_f64,
         f64,
-        NeonFcmaButterfly81d,
-        81,
+        NeonButterfly256d,
+        256,
         1e-7
     );
     #[cfg(feature = "fcma")]
     test_oof_fcma_butterfly!(
-        test_oof_fcma_butterfly81_f64,
+        test_oof_fcma_butterfly128_f64,
         f64,
-        NeonFcmaButterfly81d,
-        81,
+        NeonButterfly256d,
+        256,
         1e-7
     );
 }
