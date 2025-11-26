@@ -836,20 +836,13 @@ impl AlgorithmFactory<f32> for f32 {
     fn butterfly128(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly128f;
-                return Some(Arc::new(NeonFcmaButterfly128f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly128f;
-            Some(Arc::new(NeonButterfly128f::new(_fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly128f,
+            NeonButterfly128f,
+            NeonFcmaButterfly128f
+        )
     }
 
     fn radix3(
