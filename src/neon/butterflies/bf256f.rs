@@ -235,7 +235,7 @@ gen_bf256f!(
 #[cfg(feature = "fcma")]
 gen_bf256f!(
     NeonFcmaButterfly256f,
-    "neon",
+    "fcma",
     ColumnFcmaButterfly16f,
     fcmul_fcma
 );

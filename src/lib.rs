@@ -655,11 +655,11 @@ impl Zaft {
             if let Some(executor) = T::butterfly128(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
-        } else if n == 256 {
+        } /*else if n == 256 {
             if let Some(executor) = T::butterfly256(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
-        }
+        }*/
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {
             // Use Radix-3 if divisible by 3
@@ -669,6 +669,12 @@ impl Zaft {
             T::radix5(n, fft_direction)
         } else if prime_factors.is_power_of_two {
             // Use Radix-4 if a power of 2
+            // let exponent = n.trailing_zeros();
+            // if exponent % 2 == 1 {
+            //     if let Some(e) =  Zaft::try_split_mixed_radix_butterflies(8, n as u64 / 8, fft_direction)? {
+            //         return Ok(e);
+            //     }
+            // } // if not power of four we'll try to factorize it to power of 4
             T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_six {
             T::radix6(n, fft_direction)
