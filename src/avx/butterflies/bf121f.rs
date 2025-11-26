@@ -33,6 +33,7 @@ use crate::avx::transpose::transpose_4x11;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 pub(crate) struct AvxButterfly121f {
@@ -102,7 +103,7 @@ impl AvxButterfly121f {
 
         unsafe {
             let mut rows: [AvxStoreF; 11] = [AvxStoreF::zero(); 11];
-            let mut scratch = [Complex::<f32>::default(); 121];
+            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 121];
 
             for chunk in in_place.chunks_exact_mut(121) {
                 // columns
@@ -121,22 +122,22 @@ impl AvxButterfly121f {
                     let transposed = transpose_4x11(rows);
 
                     for i in 0..2 {
-                        transposed[i * 4].write(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        transposed[i * 4].write_u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
                         transposed[i * 4 + 1]
-                            .write(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
                         transposed[i * 4 + 2]
-                            .write(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
                         transposed[i * 4 + 3]
-                            .write(scratch.get_unchecked_mut((k * 4 + 3) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + i * 4..));
                     }
 
-                    transposed[4 * 2].write_lo3(scratch.get_unchecked_mut(k * 4 * 11 + 8..));
+                    transposed[4 * 2].write_lo3u(scratch.get_unchecked_mut(k * 4 * 11 + 8..));
                     transposed[4 * 2 + 1]
-                        .write_lo3(scratch.get_unchecked_mut((k * 4 + 1) * 11 + 8..));
+                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + 8..));
                     transposed[4 * 2 + 2]
-                        .write_lo3(scratch.get_unchecked_mut((k * 4 + 2) * 11 + 8..));
+                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + 8..));
                     transposed[4 * 2 + 3]
-                        .write_lo3(scratch.get_unchecked_mut((k * 4 + 3) * 11 + 8..));
+                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + 8..));
                 }
 
                 {
@@ -153,16 +154,16 @@ impl AvxButterfly121f {
                     let transposed = transpose_4x11(rows);
 
                     for i in 0..2 {
-                        transposed[i * 4].write(scratch.get_unchecked_mut(8 * 11 + i * 4..));
+                        transposed[i * 4].write_u(scratch.get_unchecked_mut(8 * 11 + i * 4..));
                         transposed[i * 4 + 1]
-                            .write(scratch.get_unchecked_mut((8 + 1) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((8 + 1) * 11 + i * 4..));
                         transposed[i * 4 + 2]
-                            .write(scratch.get_unchecked_mut((8 + 2) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((8 + 2) * 11 + i * 4..));
                     }
 
-                    transposed[4 * 2].write_lo3(scratch.get_unchecked_mut(8 * 11 + 8..));
-                    transposed[4 * 2 + 1].write_lo3(scratch.get_unchecked_mut((8 + 1) * 11 + 8..));
-                    transposed[4 * 2 + 2].write_lo3(scratch.get_unchecked_mut((8 + 2) * 11 + 8..));
+                    transposed[4 * 2].write_lo3u(scratch.get_unchecked_mut(8 * 11 + 8..));
+                    transposed[4 * 2 + 1].write_lo3u(scratch.get_unchecked_mut((8 + 1) * 11 + 8..));
+                    transposed[4 * 2 + 2].write_lo3u(scratch.get_unchecked_mut((8 + 2) * 11 + 8..));
                 }
 
                 // rows
@@ -170,7 +171,7 @@ impl AvxButterfly121f {
                 for k in 0..2 {
                     for i in 0..11 {
                         rows[i] =
-                            AvxStoreF::from_complex_ref(scratch.get_unchecked(i * 11 + k * 4..));
+                            AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 11 + k * 4..));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {
@@ -180,7 +181,7 @@ impl AvxButterfly121f {
 
                 {
                     for i in 0..11 {
-                        rows[i] = AvxStoreF::from_complex3(scratch.get_unchecked(i * 11 + 8..));
+                        rows[i] = AvxStoreF::from_complex3u(scratch.get_unchecked(i * 11 + 8..));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {
@@ -218,7 +219,7 @@ impl AvxButterfly121f {
 
         unsafe {
             let mut rows: [AvxStoreF; 11] = [AvxStoreF::zero(); 11];
-            let mut scratch = [Complex::<f32>::default(); 121];
+            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 121];
 
             for (dst, src) in dst.chunks_exact_mut(121).zip(src.chunks_exact(121)) {
                 // columns
@@ -236,22 +237,22 @@ impl AvxButterfly121f {
                     let transposed = transpose_4x11(rows);
 
                     for i in 0..2 {
-                        transposed[i * 4].write(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        transposed[i * 4].write_u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
                         transposed[i * 4 + 1]
-                            .write(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
                         transposed[i * 4 + 2]
-                            .write(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
                         transposed[i * 4 + 3]
-                            .write(scratch.get_unchecked_mut((k * 4 + 3) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + i * 4..));
                     }
 
-                    transposed[4 * 2].write_lo3(scratch.get_unchecked_mut(k * 4 * 11 + 8..));
+                    transposed[4 * 2].write_lo3u(scratch.get_unchecked_mut(k * 4 * 11 + 8..));
                     transposed[4 * 2 + 1]
-                        .write_lo3(scratch.get_unchecked_mut((k * 4 + 1) * 11 + 8..));
+                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + 8..));
                     transposed[4 * 2 + 2]
-                        .write_lo3(scratch.get_unchecked_mut((k * 4 + 2) * 11 + 8..));
+                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + 8..));
                     transposed[4 * 2 + 3]
-                        .write_lo3(scratch.get_unchecked_mut((k * 4 + 3) * 11 + 8..));
+                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + 8..));
                 }
 
                 {
@@ -268,16 +269,16 @@ impl AvxButterfly121f {
                     let transposed = transpose_4x11(rows);
 
                     for i in 0..2 {
-                        transposed[i * 4].write(scratch.get_unchecked_mut(8 * 11 + i * 4..));
+                        transposed[i * 4].write_u(scratch.get_unchecked_mut(8 * 11 + i * 4..));
                         transposed[i * 4 + 1]
-                            .write(scratch.get_unchecked_mut((8 + 1) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((8 + 1) * 11 + i * 4..));
                         transposed[i * 4 + 2]
-                            .write(scratch.get_unchecked_mut((8 + 2) * 11 + i * 4..));
+                            .write_u(scratch.get_unchecked_mut((8 + 2) * 11 + i * 4..));
                     }
 
-                    transposed[4 * 2].write_lo3(scratch.get_unchecked_mut(8 * 11 + 8..));
-                    transposed[4 * 2 + 1].write_lo3(scratch.get_unchecked_mut((8 + 1) * 11 + 8..));
-                    transposed[4 * 2 + 2].write_lo3(scratch.get_unchecked_mut((8 + 2) * 11 + 8..));
+                    transposed[4 * 2].write_lo3u(scratch.get_unchecked_mut(8 * 11 + 8..));
+                    transposed[4 * 2 + 1].write_lo3u(scratch.get_unchecked_mut((8 + 1) * 11 + 8..));
+                    transposed[4 * 2 + 2].write_lo3u(scratch.get_unchecked_mut((8 + 2) * 11 + 8..));
                 }
 
                 // rows
@@ -285,7 +286,7 @@ impl AvxButterfly121f {
                 for k in 0..2 {
                     for i in 0..11 {
                         rows[i] =
-                            AvxStoreF::from_complex_ref(scratch.get_unchecked(i * 11 + k * 4..));
+                            AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 11 + k * 4..));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {
@@ -295,7 +296,7 @@ impl AvxButterfly121f {
 
                 {
                     for i in 0..11 {
-                        rows[i] = AvxStoreF::from_complex3(scratch.get_unchecked(i * 11 + 8..));
+                        rows[i] = AvxStoreF::from_complex3u(scratch.get_unchecked(i * 11 + 8..));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {

@@ -102,8 +102,6 @@ impl AvxButterfly42f {
             let mut rows1: [AvxStoreF; 6] = [AvxStoreF::zero(); 6];
             let mut rows2: [AvxStoreF; 6] = [AvxStoreF::zero(); 6];
 
-            let mut scratch = vec![Complex::<f32>::default(); 42];
-
             for chunk in in_place.chunks_exact_mut(42) {
                 for i in 0..6 {
                     rows1[i] = AvxStoreF::from_complex_ref(chunk.get_unchecked(i * 7..));
@@ -140,11 +138,6 @@ impl AvxButterfly42f {
                         AvxStoreF::zero(),
                     ],
                 );
-
-                for i in 0..7 {
-                    transposed0[i].write(scratch.get_unchecked_mut(i * 6..));
-                    transposed1[i].write_lo2(scratch.get_unchecked_mut(i * 6 + 4..));
-                }
 
                 transposed0 = self.bf7.exec(transposed0);
                 transposed1 = self.bf7.exec(transposed1);

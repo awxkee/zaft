@@ -102,7 +102,7 @@ impl NeonButterfly35f {
             let mut rows7: [NeonStoreF; 7] = [NeonStoreF::default(); 7];
 
             let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 35];
-            
+
             for chunk in in_place.chunks_exact_mut(35) {
                 // columns
                 {

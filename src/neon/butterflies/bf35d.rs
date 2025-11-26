@@ -28,11 +28,11 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use std::mem::MaybeUninit;
 use crate::neon::mixed::{ColumnButterfly5d, ColumnButterfly7d, NeonStoreD};
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 
 pub(crate) struct NeonButterfly35d {
     direction: FftDirection,
@@ -127,7 +127,8 @@ impl NeonButterfly35d {
 
                 for k in 0..5 {
                     for i in 0..7 {
-                        rows7[i] = NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 5 + k..));
+                        rows7[i] =
+                            NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 5 + k..));
                     }
                     rows7 = self.bf7.exec(rows7);
                     for i in 0..7 {

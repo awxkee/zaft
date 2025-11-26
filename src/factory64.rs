@@ -606,7 +606,9 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
-    fn butterfly128(_fft_direction: FftDirection) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+    fn butterfly128(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             #[cfg(feature = "fcma")]

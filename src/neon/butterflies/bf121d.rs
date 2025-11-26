@@ -28,11 +28,11 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use std::mem::MaybeUninit;
 use crate::neon::mixed::{ColumnButterfly11d, NeonStoreD};
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 pub(crate) struct NeonButterfly121d {
@@ -120,7 +120,8 @@ impl NeonButterfly121d {
 
                 for k in 0..11 {
                     for i in 0..11 {
-                        rows[i] = NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 11 + k..));
+                        rows[i] =
+                            NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 11 + k..));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {
@@ -182,7 +183,8 @@ impl NeonButterfly121d {
 
                 for k in 0..11 {
                     for i in 0..11 {
-                        rows[i] = NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 11 + k..));
+                        rows[i] =
+                            NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 11 + k..));
                     }
                     rows = self.bf11.exec(rows);
                     for i in 0..11 {
@@ -206,7 +208,13 @@ mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
 
-    test_butterfly!(test_neon_butterfly121_f64, f64, NeonButterfly121d, 121, 1e-7);
+    test_butterfly!(
+        test_neon_butterfly121_f64,
+        f64,
+        NeonButterfly121d,
+        121,
+        1e-7
+    );
     test_oof_butterfly!(
         test_oof_neon_butterfly121_f64,
         f64,

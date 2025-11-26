@@ -29,6 +29,7 @@
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
+use crate::neon::radix13::neon_bitreversed_transpose_f32_radix13;
 use crate::neon::util::{create_neon_twiddles, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix13::Radix13Twiddles;
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
@@ -41,7 +42,6 @@ use num_traits::{AsPrimitive, Float, MulAdd};
 use std::arch::aarch64::*;
 use std::fmt::Display;
 use std::sync::Arc;
-use crate::neon::radix13::neon_bitreversed_transpose_f32_radix13;
 
 pub(crate) struct NeonFcmaRadix13<T> {
     twiddles: Vec<Complex<T>>,

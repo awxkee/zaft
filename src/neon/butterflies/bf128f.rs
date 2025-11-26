@@ -28,12 +28,12 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use std::mem::MaybeUninit;
-use crate::neon::mixed::{ColumnButterfly16f, ColumnButterfly8f, NeonStoreF};
+use crate::neon::mixed::{ColumnButterfly8f, ColumnButterfly16f, NeonStoreF};
 use crate::neon::transpose::transpose_2x8;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 pub(crate) struct NeonButterfly128f {
@@ -117,7 +117,8 @@ impl NeonButterfly128f {
                     let transposed = transpose_2x8(rows);
 
                     for i in 0..4 {
-                        transposed[i * 2].write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
+                        transposed[i * 2]
+                            .write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
                         transposed[i * 2 + 1]
                             .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 8 + i * 2..));
                     }
@@ -184,7 +185,8 @@ impl NeonButterfly128f {
                     let transposed = transpose_2x8(rows);
 
                     for i in 0..4 {
-                        transposed[i * 2].write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
+                        transposed[i * 2]
+                            .write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
                         transposed[i * 2 + 1]
                             .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 8 + i * 2..));
                     }
