@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(clippy::needless_range_loop)]
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
@@ -59,6 +60,7 @@ pub(crate) struct NeonRadix13<T> {
     twiddle6: Complex<T>,
     direction: FftDirection,
     butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly_length: usize,
 }
 
 impl<
@@ -86,7 +88,18 @@ where
             "Input length must be a power of 13"
         );
 
-        let twiddles = create_neon_twiddles::<T, 13>(13, size, fft_direction)?;
+        let log13 = compute_logarithm::<13>(size).unwrap();
+        let butterfly = match log13 {
+            0 => T::butterfly1(fft_direction)?,
+            1 => T::butterfly13(fft_direction)?,
+            _ => {
+                T::butterfly169(fft_direction).map_or_else(|| T::butterfly13(fft_direction), Ok)?
+            }
+        };
+
+        let butterfly_length = butterfly.length();
+
+        let twiddles = create_neon_twiddles::<T, 13>(butterfly_length, size, fft_direction)?;
 
         Ok(NeonRadix13 {
             execution_length: size,
@@ -98,7 +111,8 @@ where
             twiddle5: compute_twiddle(5, 13, fft_direction),
             twiddle6: compute_twiddle(6, 13, fft_direction),
             direction: fft_direction,
-            butterfly: T::butterfly13(fft_direction)?,
+            butterfly,
+            butterfly_length,
         })
     }
 }
@@ -118,11 +132,15 @@ impl FftExecutor<f64> for NeonRadix13<f64> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 13>(13, chunk, &mut scratch);
+                bitreversed_transpose::<Complex<f64>, 13>(
+                    self.butterfly_length,
+                    chunk,
+                    &mut scratch,
+                );
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 13;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 
@@ -546,11 +564,11 @@ impl FftExecutor<f32> for NeonRadix13<f32> {
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 // Digit-reversal permutation
-                neon_bitreversed_transpose_f32_radix13(13, chunk, &mut scratch);
+                neon_bitreversed_transpose_f32_radix13(self.butterfly_length, chunk, &mut scratch);
 
                 self.butterfly.execute_out_of_place(&scratch, chunk)?;
 
-                let mut len = 13;
+                let mut len = self.butterfly_length;
 
                 let mut m_twiddles = self.twiddles.as_slice();
 

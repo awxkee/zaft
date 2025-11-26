@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(clippy::needless_range_loop)]
 mod bf10;
 mod bf100;
 mod bf100d;
@@ -36,11 +37,7 @@ mod bf11;
 mod bf11_fcma;
 mod bf12;
 mod bf121d;
-#[cfg(feature = "fcma")]
-mod bf121d_fcma;
 mod bf121f;
-#[cfg(feature = "fcma")]
-mod bf121f_fcma;
 mod bf128d;
 mod bf128f;
 #[cfg(feature = "fcma")]
@@ -55,6 +52,8 @@ mod bf15;
 #[cfg(feature = "fcma")]
 mod bf15_fcma;
 mod bf16;
+mod bf169d;
+mod bf169f;
 #[cfg(feature = "fcma")]
 mod bf16_fcma;
 mod bf17;
@@ -93,36 +92,16 @@ mod bf32;
 #[cfg(feature = "fcma")]
 mod bf32_fcma;
 mod bf35d;
-#[cfg(feature = "fcma")]
-mod bf35d_fcma;
 mod bf35f;
-#[cfg(feature = "fcma")]
-mod bf35f_fcma;
 mod bf36d;
-#[cfg(feature = "fcma")]
-mod bf36d_fcma;
 mod bf36f;
-#[cfg(feature = "fcma")]
-mod bf36f_fcma;
 mod bf4;
 mod bf42d;
-#[cfg(feature = "fcma")]
-mod bf42d_fcma;
 mod bf42f;
-#[cfg(feature = "fcma")]
-mod bf42f_fcma;
 mod bf48d;
-#[cfg(feature = "fcma")]
-mod bf48d_fcma;
 mod bf48f;
-#[cfg(feature = "fcma")]
-mod bf48f_fcma;
 mod bf49;
-#[cfg(feature = "fcma")]
-mod bf49_fcma;
 mod bf49d;
-#[cfg(feature = "fcma")]
-mod bf49d_fcma;
 #[cfg(feature = "fcma")]
 mod bf4_fcma;
 mod bf5;
@@ -130,8 +109,6 @@ mod bf5;
 mod bf5_fcma;
 mod bf6;
 mod bf64d;
-#[cfg(feature = "fcma")]
-mod bf64d_fcma;
 mod bf64f;
 #[cfg(feature = "fcma")]
 mod bf6_fcma;
@@ -231,37 +208,37 @@ pub(crate) use bf32::{NeonButterfly32d, NeonButterfly32f};
 pub(crate) use bf32_fcma::{NeonFcmaButterfly32d, NeonFcmaButterfly32f};
 pub(crate) use bf35d::NeonButterfly35d;
 #[cfg(feature = "fcma")]
-pub(crate) use bf35d_fcma::NeonFcmaButterfly35d;
+pub(crate) use bf35d::NeonFcmaButterfly35d;
 pub(crate) use bf35f::NeonButterfly35f;
 #[cfg(feature = "fcma")]
-pub(crate) use bf35f_fcma::NeonFcmaButterfly35f;
+pub(crate) use bf35f::NeonFcmaButterfly35f;
 pub(crate) use bf36d::NeonButterfly36d;
 #[cfg(feature = "fcma")]
-pub(crate) use bf36d_fcma::NeonFcmaButterfly36d;
+pub(crate) use bf36d::NeonFcmaButterfly36d;
 pub(crate) use bf36f::NeonButterfly36f;
 #[cfg(feature = "fcma")]
-pub(crate) use bf36f_fcma::NeonFcmaButterfly36f;
+pub(crate) use bf36f::NeonFcmaButterfly36f;
 pub(crate) use bf42d::NeonButterfly42d;
 #[cfg(feature = "fcma")]
-pub(crate) use bf42d_fcma::NeonFcmaButterfly42d;
+pub(crate) use bf42d::NeonFcmaButterfly42d;
 pub(crate) use bf42f::NeonButterfly42f;
 #[cfg(feature = "fcma")]
-pub(crate) use bf42f_fcma::NeonFcmaButterfly42f;
+pub(crate) use bf42f::NeonFcmaButterfly42f;
 pub(crate) use bf48d::NeonButterfly48d;
 #[cfg(feature = "fcma")]
-pub(crate) use bf48d_fcma::NeonFcmaButterfly48d;
+pub(crate) use bf48d::NeonFcmaButterfly48d;
 pub(crate) use bf48f::NeonButterfly48f;
 #[cfg(feature = "fcma")]
-pub(crate) use bf48f_fcma::NeonFcmaButterfly48f;
+pub(crate) use bf48f::NeonFcmaButterfly48f;
 pub(crate) use bf49::NeonButterfly49f;
 #[cfg(feature = "fcma")]
-pub(crate) use bf49_fcma::NeonFcmaButterfly49f;
+pub(crate) use bf49::NeonFcmaButterfly49f;
 pub(crate) use bf49d::NeonButterfly49d;
 #[cfg(feature = "fcma")]
-pub(crate) use bf49d_fcma::NeonFcmaButterfly49d;
+pub(crate) use bf49d::NeonFcmaButterfly49d;
 pub(crate) use bf64d::NeonButterfly64d;
 #[cfg(feature = "fcma")]
-pub(crate) use bf64d_fcma::NeonFcmaButterfly64d;
+pub(crate) use bf64d::NeonFcmaButterfly64d;
 pub(crate) use bf64f::NeonButterfly64f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf64f::NeonFcmaButterfly64f;
@@ -279,16 +256,22 @@ pub(crate) use bf100d::NeonButterfly100d;
 pub(crate) use bf100d::NeonFcmaButterfly100d;
 pub(crate) use bf121d::NeonButterfly121d;
 #[cfg(feature = "fcma")]
-pub(crate) use bf121d_fcma::NeonFcmaButterfly121d;
+pub(crate) use bf121d::NeonFcmaButterfly121d;
 pub(crate) use bf121f::NeonButterfly121f;
 #[cfg(feature = "fcma")]
-pub(crate) use bf121f_fcma::NeonFcmaButterfly121f;
+pub(crate) use bf121f::NeonFcmaButterfly121f;
 pub(crate) use bf128d::NeonButterfly128d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf128d::NeonFcmaButterfly128d;
 pub(crate) use bf128f::NeonButterfly128f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf128f::NeonFcmaButterfly128f;
+pub(crate) use bf169d::NeonButterfly169d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf169d::NeonFcmaButterfly169d;
+pub(crate) use bf169f::NeonButterfly169f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf169f::NeonFcmaButterfly169f;
 pub(crate) use bf256d::NeonButterfly256d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf256d::NeonFcmaButterfly256d;

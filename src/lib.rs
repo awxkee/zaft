@@ -655,6 +655,10 @@ impl Zaft {
             if let Some(executor) = T::butterfly128(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
+        } else if n == 169 {
+            if let Some(executor) = T::butterfly169(fft_direction) {
+                return Ok(executor.into_fft_executor());
+            }
         } else if n == 256 {
             if let Some(executor) = T::butterfly256(fft_direction) {
                 return Ok(executor.into_fft_executor());

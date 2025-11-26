@@ -28,119 +28,153 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::mixed::{ColumnButterfly6d, ColumnButterfly7d, NeonStoreD};
+use crate::neon::mixed::NeonStoreD;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
-pub(crate) struct NeonButterfly42d {
-    direction: FftDirection,
-    bf6: ColumnButterfly6d,
-    bf7: ColumnButterfly7d,
-    twiddles: [NeonStoreD; 35],
-}
-
-impl NeonButterfly42d {
-    pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        let mut twiddles = [NeonStoreD::default(); 35];
-        let mut q = 0usize;
-        let len_per_row = 7;
-        const COMPLEX_PER_VECTOR: usize = 1;
-        let quotient = len_per_row / COMPLEX_PER_VECTOR;
-        let remainder = len_per_row % COMPLEX_PER_VECTOR;
-
-        let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-        for x in 0..num_twiddle_columns {
-            for y in 1..6 {
-                twiddles[q] = NeonStoreD::from_complex(&compute_twiddle(
-                    y * (x * COMPLEX_PER_VECTOR),
-                    42,
-                    fft_direction,
-                ));
-                q += 1;
-            }
-        }
-        Self {
-            direction: fft_direction,
-            twiddles,
-            bf7: ColumnButterfly7d::new(fft_direction),
-            bf6: ColumnButterfly6d::new(fft_direction),
-        }
-    }
-}
-
-impl FftExecutor<f64> for NeonButterfly42d {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        self.execute_impl(in_place)
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        42
-    }
-}
-
-impl NeonButterfly42d {
-    fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 42 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
+macro_rules! gen_bf42d {
+    ($name: ident, $feature: literal, $internal_bf6: ident, $internal_bf7: ident, $mul: ident) => {
+        use crate::neon::mixed::{$internal_bf6, $internal_bf7};
+        pub(crate) struct $name {
+            direction: FftDirection,
+            bf6: $internal_bf6,
+            bf7: $internal_bf7,
+            twiddles: [NeonStoreD; 35],
         }
 
-        unsafe {
-            let mut rows0: [NeonStoreD; 6] = [NeonStoreD::default(); 6];
-            let mut rows7: [NeonStoreD; 7] = [NeonStoreD::default(); 7];
+        impl $name {
+            pub(crate) fn new(fft_direction: FftDirection) -> Self {
+                let mut twiddles = [NeonStoreD::default(); 35];
+                let mut q = 0usize;
+                let len_per_row = 7;
+                const COMPLEX_PER_VECTOR: usize = 1;
+                let quotient = len_per_row / COMPLEX_PER_VECTOR;
+                let remainder = len_per_row % COMPLEX_PER_VECTOR;
 
-            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 42];
-
-            for chunk in in_place.chunks_exact_mut(42) {
-                // columns
-                for k in 0..7 {
-                    for i in 0..6 {
-                        rows0[i] = NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + k..));
-                    }
-
-                    rows0 = self.bf6.exec(rows0);
-
-                    for i in 1..6 {
-                        rows0[i] =
-                            NeonStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 5 * k]);
-                    }
-
-                    for i in 0..6 {
-                        rows0[i].write_uninit(scratch.get_unchecked_mut(k * 6 + i..));
+                let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
+                for x in 0..num_twiddle_columns {
+                    for y in 1..6 {
+                        twiddles[q] = NeonStoreD::from_complex(&compute_twiddle(
+                            y * (x * COMPLEX_PER_VECTOR),
+                            42,
+                            fft_direction,
+                        ));
+                        q += 1;
                     }
                 }
-
-                // rows
-
-                for k in 0..6 {
-                    for i in 0..7 {
-                        rows7[i] =
-                            NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 6 + k..));
-                    }
-                    rows7 = self.bf7.exec(rows7);
-                    for i in 0..7 {
-                        rows7[i].write(chunk.get_unchecked_mut(i * 6 + k..));
-                    }
+                Self {
+                    direction: fft_direction,
+                    twiddles,
+                    bf7: $internal_bf7::new(fft_direction),
+                    bf6: $internal_bf6::new(fft_direction),
                 }
             }
         }
-        Ok(())
-    }
+
+        impl FftExecutor<f64> for $name {
+            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            #[inline]
+            fn length(&self) -> usize {
+                42
+            }
+        }
+
+        impl $name {
+            #[target_feature(enable = $feature)]
+            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                if in_place.len() % 42 != 0 {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        in_place.len(),
+                        self.length(),
+                    ));
+                }
+
+                unsafe {
+                    let mut rows0: [NeonStoreD; 6] = [NeonStoreD::default(); 6];
+                    let mut rows7: [NeonStoreD; 7] = [NeonStoreD::default(); 7];
+
+                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 42];
+
+                    for chunk in in_place.chunks_exact_mut(42) {
+                        // columns
+                        for k in 0..7 {
+                            for i in 0..6 {
+                                rows0[i] =
+                                    NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + k..));
+                            }
+
+                            rows0 = self.bf6.exec(rows0);
+
+                            for i in 1..6 {
+                                rows0[i] = NeonStoreD::$mul(rows0[i], self.twiddles[i - 1 + 5 * k]);
+                            }
+
+                            for i in 0..6 {
+                                rows0[i].write_uninit(scratch.get_unchecked_mut(k * 6 + i..));
+                            }
+                        }
+
+                        // rows
+
+                        for k in 0..6 {
+                            for i in 0..7 {
+                                rows7[i] = NeonStoreD::from_complex_refu(
+                                    scratch.get_unchecked(i * 6 + k..),
+                                );
+                            }
+                            rows7 = self.bf7.exec(rows7);
+                            for i in 0..7 {
+                                rows7[i].write(chunk.get_unchecked_mut(i * 6 + k..));
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+    };
 }
+
+gen_bf42d!(
+    NeonButterfly42d,
+    "neon",
+    ColumnButterfly6d,
+    ColumnButterfly7d,
+    mul_by_complex
+);
+#[cfg(feature = "fcma")]
+gen_bf42d!(
+    NeonFcmaButterfly42d,
+    "fcma",
+    ColumnFcmaButterfly6d,
+    ColumnFcmaButterfly7d,
+    fcmul_fcma
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
+    #[cfg(feature = "fcma")]
+    use crate::neon::butterflies::test_fcma_butterfly;
 
     test_butterfly!(test_neon_butterfly48_f64, f64, NeonButterfly42d, 42, 1e-7);
+
+    #[cfg(feature = "fcma")]
+    test_fcma_butterfly!(
+        test_fcma_butterfly48_f64,
+        f64,
+        NeonFcmaButterfly42d,
+        42,
+        1e-7
+    );
 }

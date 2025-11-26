@@ -39,6 +39,7 @@ use std::sync::Arc;
 macro_rules! gen_bf128f {
     ($name: ident, $feature: literal, $internal_bf16: ident, $internal_bf8: ident, $mul: ident) => {
         use crate::neon::mixed::{$internal_bf8, $internal_bf16};
+
         pub(crate) struct $name {
             direction: FftDirection,
             bf16: $internal_bf16,

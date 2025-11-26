@@ -276,6 +276,9 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly128(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly169(
+        fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn butterfly256(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
@@ -848,23 +851,28 @@ impl AlgorithmFactory<f32> for f32 {
         )
     }
 
+    fn butterfly169(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly169f,
+            NeonButterfly169f,
+            NeonFcmaButterfly169f
+        )
+    }
+
     fn butterfly256(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
-        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
-        {
-            #[cfg(feature = "fcma")]
-            if std::arch::is_aarch64_feature_detected!("fcma") {
-                use crate::neon::NeonFcmaButterfly256f;
-                return Some(Arc::new(NeonFcmaButterfly256f::new(_fft_direction)));
-            }
-            use crate::neon::NeonButterfly256f;
-            Some(Arc::new(NeonButterfly256f::new(_fft_direction)))
-        }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-        {
-            None
-        }
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly256f,
+            NeonButterfly256f,
+            NeonFcmaButterfly256f
+        )
     }
 
     fn radix3(

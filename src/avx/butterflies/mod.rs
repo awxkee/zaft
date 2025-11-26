@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(clippy::needless_range_loop)]
 mod bf10;
 mod bf100d;
 mod bf100f;
@@ -39,6 +40,8 @@ mod bf13;
 mod bf14;
 mod bf15;
 mod bf16;
+mod bf169d;
+mod bf169f;
 mod bf17;
 mod bf18;
 mod bf19;
@@ -46,6 +49,8 @@ mod bf2;
 mod bf20;
 mod bf23;
 mod bf25;
+mod bf256d;
+mod bf256f;
 mod bf27d;
 mod bf27f;
 mod bf29;
@@ -127,6 +132,10 @@ pub(crate) use bf121d::AvxButterfly121d;
 pub(crate) use bf121f::AvxButterfly121f;
 pub(crate) use bf128d::AvxButterfly128d;
 pub(crate) use bf128f::AvxButterfly128f;
+pub(crate) use bf169d::AvxButterfly169d;
+pub(crate) use bf169f::AvxButterfly169f;
+pub(crate) use bf256d::AvxButterfly256d;
+pub(crate) use bf256f::AvxButterfly256f;
 pub(crate) use fast_bf3::AvxFastButterfly3;
 pub(crate) use fast_bf4::AvxFastButterfly4;
 pub(crate) use fast_bf5::{AvxFastButterfly5d, AvxFastButterfly5f};

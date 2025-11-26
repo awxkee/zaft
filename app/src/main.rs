@@ -118,8 +118,8 @@ fn main() {
         .warm_up_time(Duration::from_millis(200))
         .measurement_time(Duration::from_millis(200));
     // bench_zaft_averages(&mut c);
-    // check_power_groups(&mut c, 256, "256f".to_string());
-    // check_power_group(&mut c, 256, "256d".to_string());
+    check_power_groups(&mut c, 169, "169f".to_string());
+    check_power_group(&mut c, 169, "169d".to_string());
 
     // // check_power_groups(&mut c, 11usize.pow(4), "11^4".to_string());
     // for i in 2..8 {
