@@ -217,12 +217,15 @@ where
             4 => T::butterfly16(fft_direction)?,
             _ => {
                 if exponent % 2 == 1 {
-                    T::butterfly32(fft_direction)?
-                } else {
-                    match T::butterfly64(fft_direction) {
-                        None => T::butterfly16(fft_direction)?,
-                        Some(v) => v,
+                    if exponent >= 7 {
+                        T::butterfly128(fft_direction)
+                            .map_or_else(|| T::butterfly32(fft_direction), Ok)?
+                    } else {
+                        T::butterfly32(fft_direction)?
                     }
+                } else {
+                    T::butterfly64(fft_direction)
+                        .map_or_else(|| T::butterfly16(fft_direction), Ok)?
                 }
             }
         };
