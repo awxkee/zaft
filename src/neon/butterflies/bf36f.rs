@@ -27,253 +27,284 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::needless_range_loop)]
-use crate::neon::mixed::{ColumnButterfly6f, NeonStoreF};
+use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::neon_transpose_f32x2_6x6_aos;
-use crate::neon::util::vfcmulq_f32;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
-use std::arch::aarch64::{vld1q_f32, vst1q_f32};
+use std::arch::aarch64::vst1q_f32;
 use std::sync::Arc;
 
-pub(crate) struct NeonButterfly36f {
-    direction: FftDirection,
-    twiddles: [Complex<f32>; 30],
-    bf6_column: ColumnButterfly6f,
-}
+macro_rules! gen_bf36f {
+    ($name: ident, $feature: literal, $internal_bf: ident, $mul: ident) => {
+        use crate::neon::mixed::$internal_bf;
+        pub(crate) struct $name {
+            direction: FftDirection,
+            twiddles: [NeonStoreF; 15],
+            bf6_column: $internal_bf,
+        }
 
-impl NeonButterfly36f {
-    pub fn new(direction: FftDirection) -> Self {
-        let mut twiddles = [Complex::<f32>::default(); 30];
-        const ENTRIES: usize = 2;
-        let num_twiddle_columns = 3;
-        let len = 36;
-        let mut k = 0usize;
-        for x in 0..num_twiddle_columns {
-            for y in 1..6 {
-                for i in 0..ENTRIES {
-                    twiddles[k] = compute_twiddle(y * (x * ENTRIES + i), len, direction);
-                    k += 1;
+        impl $name {
+            pub fn new(direction: FftDirection) -> Self {
+                let mut twiddles = [NeonStoreF::default(); 15];
+                const ENTRIES: usize = 2;
+                let num_twiddle_columns = 3;
+                let mut k = 0usize;
+                for x in 0..num_twiddle_columns {
+                    for y in 1..6 {
+                        twiddles[k] = NeonStoreF::from_complex2(
+                            compute_twiddle(y * (x * ENTRIES), 36, direction),
+                            compute_twiddle(y * (x * ENTRIES + 1), 36, direction),
+                        );
+                        k += 1;
+                    }
+                }
+                Self {
+                    direction,
+                    twiddles,
+                    bf6_column: $internal_bf::new(direction),
                 }
             }
         }
-        NeonButterfly36f {
-            direction,
-            twiddles,
-            bf6_column: ColumnButterfly6f::new(direction),
-        }
-    }
-}
 
-impl FftExecutor<f32> for NeonButterfly36f {
-    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 36 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
+        impl FftExecutor<f32> for $name {
+            fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
+            }
 
-        unsafe {
-            let mut rows0 = [NeonStoreF::default(); 6];
-            let mut rows1 = [NeonStoreF::default(); 6];
-            let mut rows2 = [NeonStoreF::default(); 6];
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
 
-            for chunk in in_place.chunks_exact_mut(36) {
-                // Mixed Radix 6x6
-                for i in 0..6 {
-                    rows0[i] = NeonStoreF::load(chunk.get_unchecked(i * 6..).as_ptr().cast());
-                }
-                rows0 = self.bf6_column.exec(rows0);
-                for i in 1..6 {
-                    rows0[i] = NeonStoreF::raw(vfcmulq_f32(
-                        rows0[i].v,
-                        vld1q_f32(self.twiddles[i * 2 - 2..].as_ptr().cast()),
-                    ));
-                }
-
-                for i in 0..6 {
-                    rows1[i] = NeonStoreF::load(chunk.get_unchecked(i * 6 + 2..).as_ptr().cast());
-                }
-                rows1 = self.bf6_column.exec(rows1);
-                for i in 1..6 {
-                    rows1[i] = NeonStoreF::raw(vfcmulq_f32(
-                        rows1[i].v,
-                        vld1q_f32(self.twiddles[i * 2 + 4 * 2..].as_ptr().cast()),
-                    ));
-                }
-
-                for i in 0..6 {
-                    rows2[i] = NeonStoreF::load(chunk.get_unchecked(i * 6 + 4..).as_ptr().cast());
-                }
-                rows2 = self.bf6_column.exec(rows2);
-                for i in 1..6 {
-                    rows2[i] = NeonStoreF::raw(vfcmulq_f32(
-                        rows2[i].v,
-                        vld1q_f32(self.twiddles[i * 2 + 9 * 2..].as_ptr().cast()),
-                    ));
-                }
-
-                let (transposed0, transposed1, transposed2) =
-                    neon_transpose_f32x2_6x6_aos(rows0, rows1, rows2);
-
-                let output0 = self.bf6_column.exec(transposed0);
-                for r in 0..3 {
-                    vst1q_f32(
-                        chunk.get_unchecked_mut(12 * r..).as_mut_ptr().cast(),
-                        output0[r * 2].v,
-                    );
-                    vst1q_f32(
-                        chunk.get_unchecked_mut(12 * r + 6..).as_mut_ptr().cast(),
-                        output0[r * 2 + 1].v,
-                    );
-                }
-
-                let output1 = self.bf6_column.exec(transposed1);
-                for r in 0..3 {
-                    vst1q_f32(
-                        chunk.get_unchecked_mut(12 * r + 2..).as_mut_ptr().cast(),
-                        output1[r * 2].v,
-                    );
-                    vst1q_f32(
-                        chunk.get_unchecked_mut(12 * r + 8..).as_mut_ptr().cast(),
-                        output1[r * 2 + 1].v,
-                    );
-                }
-
-                let output2 = self.bf6_column.exec(transposed2);
-                for r in 0..3 {
-                    vst1q_f32(
-                        chunk.get_unchecked_mut(12 * r + 4..).as_mut_ptr().cast(),
-                        output2[r * 2].v,
-                    );
-                    vst1q_f32(
-                        chunk.get_unchecked_mut(12 * r + 10..).as_mut_ptr().cast(),
-                        output2[r * 2 + 1].v,
-                    );
-                }
+            fn length(&self) -> usize {
+                36
             }
         }
-        Ok(())
-    }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    fn length(&self) -> usize {
-        36
-    }
-}
-
-impl FftExecutorOutOfPlace<f32> for NeonButterfly36f {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-    ) -> Result<(), ZaftError> {
-        if src.len() % 36 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if dst.len() % 36 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
-
-        unsafe {
-            let mut rows0 = [NeonStoreF::default(); 6];
-            let mut rows1 = [NeonStoreF::default(); 6];
-            let mut rows2 = [NeonStoreF::default(); 6];
-
-            for (dst, src) in dst.chunks_exact_mut(36).zip(src.chunks_exact(36)) {
-                // Mixed Radix 6x6
-                for i in 0..6 {
-                    rows0[i] = NeonStoreF::load(src.get_unchecked(i * 6..).as_ptr().cast());
-                }
-                rows0 = self.bf6_column.exec(rows0);
-                for i in 1..6 {
-                    rows0[i] = NeonStoreF::raw(vfcmulq_f32(
-                        rows0[i].v,
-                        vld1q_f32(self.twiddles[i * 2 - 2..].as_ptr().cast()),
+        impl $name {
+            #[target_feature(enable = $feature)]
+            fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                if in_place.len() % 36 != 0 {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        in_place.len(),
+                        self.length(),
                     ));
                 }
 
-                for i in 0..6 {
-                    rows1[i] = NeonStoreF::load(src.get_unchecked(i * 6 + 2..).as_ptr().cast());
-                }
-                rows1 = self.bf6_column.exec(rows1);
-                for i in 1..6 {
-                    rows1[i] = NeonStoreF::raw(vfcmulq_f32(
-                        rows1[i].v,
-                        vld1q_f32(self.twiddles[i * 2 + 4 * 2..].as_ptr().cast()),
-                    ));
-                }
+                unsafe {
+                    let mut rows0 = [NeonStoreF::default(); 6];
+                    let mut rows1 = [NeonStoreF::default(); 6];
+                    let mut rows2 = [NeonStoreF::default(); 6];
 
-                for i in 0..6 {
-                    rows2[i] = NeonStoreF::load(src.get_unchecked(i * 6 + 4..).as_ptr().cast());
-                }
-                rows2 = self.bf6_column.exec(rows2);
-                for i in 1..6 {
-                    rows2[i] = NeonStoreF::raw(vfcmulq_f32(
-                        rows2[i].v,
-                        vld1q_f32(self.twiddles[i * 2 + 9 * 2..].as_ptr().cast()),
-                    ));
-                }
+                    for chunk in in_place.chunks_exact_mut(36) {
+                        // Mixed Radix 6x6
+                        for i in 0..6 {
+                            rows0[i] =
+                                NeonStoreF::load(chunk.get_unchecked(i * 6..).as_ptr().cast());
+                        }
+                        rows0 = self.bf6_column.exec(rows0);
+                        for i in 1..6 {
+                            rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
+                        }
 
-                let (transposed0, transposed1, transposed2) =
-                    neon_transpose_f32x2_6x6_aos(rows0, rows1, rows2);
+                        for i in 0..6 {
+                            rows1[i] =
+                                NeonStoreF::load(chunk.get_unchecked(i * 6 + 2..).as_ptr().cast());
+                        }
+                        rows1 = self.bf6_column.exec(rows1);
+                        for i in 1..6 {
+                            rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i + 4]);
+                        }
 
-                let output0 = self.bf6_column.exec(transposed0);
-                for r in 0..3 {
-                    vst1q_f32(
-                        dst.get_unchecked_mut(12 * r..).as_mut_ptr().cast(),
-                        output0[r * 2].v,
-                    );
-                    vst1q_f32(
-                        dst.get_unchecked_mut(12 * r + 6..).as_mut_ptr().cast(),
-                        output0[r * 2 + 1].v,
-                    );
-                }
+                        for i in 0..6 {
+                            rows2[i] =
+                                NeonStoreF::load(chunk.get_unchecked(i * 6 + 4..).as_ptr().cast());
+                        }
+                        rows2 = self.bf6_column.exec(rows2);
+                        for i in 1..6 {
+                            rows2[i] = NeonStoreF::$mul(rows2[i], self.twiddles[i + 9]);
+                        }
 
-                let output1 = self.bf6_column.exec(transposed1);
-                for r in 0..3 {
-                    vst1q_f32(
-                        dst.get_unchecked_mut(12 * r + 2..).as_mut_ptr().cast(),
-                        output1[r * 2].v,
-                    );
-                    vst1q_f32(
-                        dst.get_unchecked_mut(12 * r + 8..).as_mut_ptr().cast(),
-                        output1[r * 2 + 1].v,
-                    );
-                }
+                        let (transposed0, transposed1, transposed2) =
+                            neon_transpose_f32x2_6x6_aos(rows0, rows1, rows2);
 
-                let output2 = self.bf6_column.exec(transposed2);
-                for r in 0..3 {
-                    vst1q_f32(
-                        dst.get_unchecked_mut(12 * r + 4..).as_mut_ptr().cast(),
-                        output2[r * 2].v,
-                    );
-                    vst1q_f32(
-                        dst.get_unchecked_mut(12 * r + 10..).as_mut_ptr().cast(),
-                        output2[r * 2 + 1].v,
-                    );
+                        let output0 = self.bf6_column.exec(transposed0);
+                        for r in 0..3 {
+                            vst1q_f32(
+                                chunk.get_unchecked_mut(12 * r..).as_mut_ptr().cast(),
+                                output0[r * 2].v,
+                            );
+                            vst1q_f32(
+                                chunk.get_unchecked_mut(12 * r + 6..).as_mut_ptr().cast(),
+                                output0[r * 2 + 1].v,
+                            );
+                        }
+
+                        let output1 = self.bf6_column.exec(transposed1);
+                        for r in 0..3 {
+                            vst1q_f32(
+                                chunk.get_unchecked_mut(12 * r + 2..).as_mut_ptr().cast(),
+                                output1[r * 2].v,
+                            );
+                            vst1q_f32(
+                                chunk.get_unchecked_mut(12 * r + 8..).as_mut_ptr().cast(),
+                                output1[r * 2 + 1].v,
+                            );
+                        }
+
+                        let output2 = self.bf6_column.exec(transposed2);
+                        for r in 0..3 {
+                            vst1q_f32(
+                                chunk.get_unchecked_mut(12 * r + 4..).as_mut_ptr().cast(),
+                                output2[r * 2].v,
+                            );
+                            vst1q_f32(
+                                chunk.get_unchecked_mut(12 * r + 10..).as_mut_ptr().cast(),
+                                output2[r * 2 + 1].v,
+                            );
+                        }
+                    }
                 }
+                Ok(())
             }
         }
-        Ok(())
-    }
+
+        impl FftExecutorOutOfPlace<f32> for $name {
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<f32>],
+                dst: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_out_of_place_impl(src, dst) }
+            }
+        }
+
+        impl $name {
+            #[target_feature(enable = $feature)]
+            fn execute_out_of_place_impl(
+                &self,
+                src: &[Complex<f32>],
+                dst: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                if src.len() % 36 != 0 {
+                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+                }
+                if dst.len() % 36 != 0 {
+                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+                }
+
+                unsafe {
+                    let mut rows0 = [NeonStoreF::default(); 6];
+                    let mut rows1 = [NeonStoreF::default(); 6];
+                    let mut rows2 = [NeonStoreF::default(); 6];
+
+                    for (dst, src) in dst.chunks_exact_mut(36).zip(src.chunks_exact(36)) {
+                        // Mixed Radix 6x6
+                        for i in 0..6 {
+                            rows0[i] = NeonStoreF::load(src.get_unchecked(i * 6..).as_ptr().cast());
+                        }
+                        rows0 = self.bf6_column.exec(rows0);
+                        for i in 1..6 {
+                            rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
+                        }
+
+                        for i in 0..6 {
+                            rows1[i] =
+                                NeonStoreF::load(src.get_unchecked(i * 6 + 2..).as_ptr().cast());
+                        }
+                        rows1 = self.bf6_column.exec(rows1);
+                        for i in 1..6 {
+                            rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i + 4]);
+                        }
+
+                        for i in 0..6 {
+                            rows2[i] =
+                                NeonStoreF::load(src.get_unchecked(i * 6 + 4..).as_ptr().cast());
+                        }
+                        rows2 = self.bf6_column.exec(rows2);
+                        for i in 1..6 {
+                            rows2[i] = NeonStoreF::$mul(rows2[i], self.twiddles[i + 9]);
+                        }
+
+                        let (transposed0, transposed1, transposed2) =
+                            neon_transpose_f32x2_6x6_aos(rows0, rows1, rows2);
+
+                        let output0 = self.bf6_column.exec(transposed0);
+                        for r in 0..3 {
+                            vst1q_f32(
+                                dst.get_unchecked_mut(12 * r..).as_mut_ptr().cast(),
+                                output0[r * 2].v,
+                            );
+                            vst1q_f32(
+                                dst.get_unchecked_mut(12 * r + 6..).as_mut_ptr().cast(),
+                                output0[r * 2 + 1].v,
+                            );
+                        }
+
+                        let output1 = self.bf6_column.exec(transposed1);
+                        for r in 0..3 {
+                            vst1q_f32(
+                                dst.get_unchecked_mut(12 * r + 2..).as_mut_ptr().cast(),
+                                output1[r * 2].v,
+                            );
+                            vst1q_f32(
+                                dst.get_unchecked_mut(12 * r + 8..).as_mut_ptr().cast(),
+                                output1[r * 2 + 1].v,
+                            );
+                        }
+
+                        let output2 = self.bf6_column.exec(transposed2);
+                        for r in 0..3 {
+                            vst1q_f32(
+                                dst.get_unchecked_mut(12 * r + 4..).as_mut_ptr().cast(),
+                                output2[r * 2].v,
+                            );
+                            vst1q_f32(
+                                dst.get_unchecked_mut(12 * r + 10..).as_mut_ptr().cast(),
+                                output2[r * 2 + 1].v,
+                            );
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl CompositeFftExecutor<f32> for $name {
+            fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
+                self
+            }
+        }
+    };
 }
 
-impl CompositeFftExecutor<f32> for NeonButterfly36f {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-        self
-    }
-}
+gen_bf36f!(NeonButterfly36f, "neon", ColumnButterfly6f, mul_by_complex);
+#[cfg(feature = "fcma")]
+gen_bf36f!(
+    NeonFcmaButterfly36f,
+    "fcma",
+    ColumnFcmaButterfly6f,
+    fcmul_fcma
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    #[cfg(feature = "fcma")]
+    use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
     test_butterfly!(test_neon_butterfly36, f32, NeonButterfly36f, 36, 1e-4);
     test_oof_butterfly!(test_oof_neon_butterfly36, f32, NeonButterfly36f, 36, 1e-4);
+
+    #[cfg(feature = "fcma")]
+    test_fcma_butterfly!(test_fcma_butterfly36, f32, NeonFcmaButterfly36f, 36, 1e-4);
+    #[cfg(feature = "fcma")]
+    test_oof_fcma_butterfly!(
+        test_oof_fcma_butterfly36,
+        f32,
+        NeonFcmaButterfly36f,
+        36,
+        1e-4
+    );
 }

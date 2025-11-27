@@ -86,7 +86,7 @@ impl AvxButterfly64f {
         AvxButterfly64f {
             direction,
             twiddles: unsafe { gen_butterfly_twiddles_separated_columns_f32!(8, 8, 0, direction) },
-            bf8_column: unsafe { ColumnButterfly8f::new(direction) },
+            bf8_column: ColumnButterfly8f::new(direction),
         }
     }
 }

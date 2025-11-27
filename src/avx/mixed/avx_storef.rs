@@ -29,6 +29,7 @@
 use crate::avx::util::_mm256_fcmul_ps;
 use num_complex::Complex;
 use std::arch::x86_64::*;
+use std::mem::MaybeUninit;
 
 #[derive(Copy, Clone)]
 pub(crate) struct AvxStoreF {
@@ -85,11 +86,33 @@ impl AvxStoreF {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn from_complex_refu(complex: &[MaybeUninit<Complex<f32>>]) -> Self {
+        unsafe {
+            AvxStoreF {
+                v: _mm256_loadu_ps(complex.as_ptr().cast()),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn from_complex(complex: &Complex<f32>) -> Self {
         unsafe {
             AvxStoreF {
                 v: _mm256_castps128_ps256(_mm_castsi128_ps(_mm_loadu_si64(
                     complex as *const Complex<f32> as *const u8,
+                ))),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn from_complexu(complex: &MaybeUninit<Complex<f32>>) -> Self {
+        unsafe {
+            AvxStoreF {
+                v: _mm256_castps128_ps256(_mm_castsi128_ps(_mm_loadu_si64(
+                    complex as *const MaybeUninit<Complex<f32>> as *const u8,
                 ))),
             }
         }
@@ -120,7 +143,29 @@ impl AvxStoreF {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn from_complex2u(complex: &[MaybeUninit<Complex<f32>>]) -> Self {
+        unsafe {
+            AvxStoreF {
+                v: _mm256_castps128_ps256(_mm_loadu_ps(complex.as_ptr().cast())),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn from_complex3(complex: &[Complex<f32>]) -> Self {
+        unsafe {
+            let lo = _mm256_castps128_ps256(_mm_loadu_ps(complex.as_ptr().cast()));
+            let hi = _mm_castsi128_ps(_mm_loadu_si64(complex.get_unchecked(2..).as_ptr().cast()));
+            AvxStoreF {
+                v: _mm256_insertf128_ps::<1>(lo, hi),
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn from_complex3u(complex: &[MaybeUninit<Complex<f32>>]) -> Self {
         unsafe {
             let lo = _mm256_castps128_ps256(_mm_loadu_ps(complex.as_ptr().cast()));
             let hi = _mm_castsi128_ps(_mm_loadu_si64(complex.get_unchecked(2..).as_ptr().cast()));
@@ -138,7 +183,24 @@ impl AvxStoreF {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn write_u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
+        unsafe { _mm256_storeu_ps(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn write_lo1(&self, to_ref: &mut [Complex<f32>]) {
+        unsafe {
+            _mm_storeu_si64(
+                to_ref.as_mut_ptr().cast(),
+                _mm_castps_si128(_mm256_castps256_ps128(self.v)),
+            )
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn write_lo1u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
         unsafe {
             _mm_storeu_si64(
                 to_ref.as_mut_ptr().cast(),
@@ -155,7 +217,25 @@ impl AvxStoreF {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn write_lo2u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
+        unsafe { _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v)) }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn write_lo3(&self, to_ref: &mut [Complex<f32>]) {
+        unsafe {
+            _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v));
+            _mm_storeu_si64(
+                to_ref.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                _mm_castps_si128(_mm256_extractf128_ps::<1>(self.v)),
+            );
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn write_lo3u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
         unsafe {
             _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v));
             _mm_storeu_si64(

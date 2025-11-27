@@ -34,6 +34,7 @@ use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::_mm256_setzero_ps;
+use std::mem::MaybeUninit;
 
 pub(crate) struct AvxButterfly35f {
     direction: FftDirection,
@@ -187,7 +188,7 @@ impl AvxButterfly35f {
             let mut rows1: [AvxStoreF; 5] = [AvxStoreF::zero(); 5];
             let mut rows7: [AvxStoreF; 7] = [AvxStoreF::zero(); 7];
 
-            let mut scratch = [Complex::<f32>::default(); 35];
+            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 35];
 
             for chunk in in_place.chunks_exact_mut(35) {
                 // columns
@@ -211,8 +212,8 @@ impl AvxButterfly35f {
                     let (transposed_left, transposed_right) = transpose_7x5(rows0, rows1);
 
                     for i in 0..7 {
-                        transposed_left[i].write(scratch.get_unchecked_mut(i * 5..));
-                        transposed_right[i].write_lo1(scratch.get_unchecked_mut(i * 5 + 4..));
+                        transposed_left[i].write_u(scratch.get_unchecked_mut(i * 5..));
+                        transposed_right[i].write_lo1u(scratch.get_unchecked_mut(i * 5 + 4..));
                     }
                 }
 
@@ -222,7 +223,7 @@ impl AvxButterfly35f {
                     let k = 0;
                     for i in 0..7 {
                         rows7[i] =
-                            AvxStoreF::from_complex_ref(scratch.get_unchecked(i * 5 + k * 2..));
+                            AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 5 + k * 2..));
                     }
                     rows7 = self.bf7.exec(rows7);
                     for i in 0..7 {
@@ -231,7 +232,7 @@ impl AvxButterfly35f {
                 }
                 {
                     for i in 0..7 {
-                        rows7[i] = AvxStoreF::from_complex(scratch.get_unchecked(i * 5 + 4));
+                        rows7[i] = AvxStoreF::from_complexu(scratch.get_unchecked(i * 5 + 4));
                     }
                     rows7 = self.bf7.exec(rows7);
                     for i in 0..7 {

@@ -41,7 +41,7 @@ use std::time::{Duration, Instant};
 use zaft::Zaft;
 
 fn check_power_group(c: &mut Criterion, n: usize, group: String) {
-    let mut input_power = vec![Complex::<f32>::default(); n];
+    let mut input_power = vec![Complex::<f64>::default(); n];
     for z in input_power.iter_mut() {
         *z = Complex {
             re: rand::rng().random(),
@@ -50,10 +50,10 @@ fn check_power_group(c: &mut Criterion, n: usize, group: String) {
     }
 
     c.bench_function(format!("zaft {group}s").as_str(), |b| {
-        let plan = Zaft::make_inverse_fft_f32(input_power.len()).unwrap();
+        let plan = Zaft::make_inverse_fft_f64(input_power.len()).unwrap();
         let s = input_power
             .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
+            .map(|&x| Complex::new(x.re, x.im))
             .collect::<Vec<_>>();
         let mut working = s.to_vec();
         b.iter(|| {
@@ -112,17 +112,16 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 2686];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 1024];
     let mut c = Criterion::default()
         .sample_size(10)
         .warm_up_time(Duration::from_millis(200))
         .measurement_time(Duration::from_millis(200));
     // bench_zaft_averages(&mut c);
-    // check_power_group(&mut c, 42 * 7, "42 * 7".to_string());
+    check_power_groups(&mut c, 169, "169f".to_string());
+    check_power_group(&mut c, 169, "169d".to_string());
+
     // // check_power_groups(&mut c, 11usize.pow(4), "11^4".to_string());
-    // for i in 2..24 {
-    //     check_power_group(&mut c, 42 * i, format!("size {}, 42*{i} mul {i}", 42 * i));
-    // }
     // for i in 2..8 {
     //     check_power_group(
     //         &mut c,

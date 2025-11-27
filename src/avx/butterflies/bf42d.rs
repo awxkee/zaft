@@ -33,6 +33,7 @@ use crate::avx::transpose::transpose_f64x2_2x6;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 
 pub(crate) struct AvxButterfly42d {
     direction: FftDirection,
@@ -104,7 +105,7 @@ impl AvxButterfly42d {
 
             let mut rows7: [AvxStoreD; 7] = [AvxStoreD::zero(); 7];
 
-            let mut scratch = [Complex::<f64>::default(); 42];
+            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 42];
 
             for chunk in in_place.chunks_exact_mut(42) {
                 // columns
@@ -124,9 +125,9 @@ impl AvxButterfly42d {
                     let transposed = transpose_f64x2_2x6(rows0);
 
                     for i in 0..3 {
-                        transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 6 + i * 2..));
+                        transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 6 + i * 2..));
                         transposed[i * 2 + 1]
-                            .write(scratch.get_unchecked_mut((k * 2 + 1) * 6 + i * 2..));
+                            .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 6 + i * 2..));
                     }
                 }
 
@@ -146,7 +147,7 @@ impl AvxButterfly42d {
                     let transposed = transpose_f64x2_2x6(rows0);
 
                     for i in 0..3 {
-                        transposed[i * 2].write(scratch.get_unchecked_mut(k * 2 * 6 + i * 2..));
+                        transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 6 + i * 2..));
                     }
                 }
 
@@ -155,7 +156,7 @@ impl AvxButterfly42d {
                 for k in 0..3 {
                     for i in 0..7 {
                         rows7[i] =
-                            AvxStoreD::from_complex_ref(scratch.get_unchecked(i * 6 + k * 2..));
+                            AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 6 + k * 2..));
                     }
                     rows7 = self.bf7.exec(rows7);
                     for i in 0..7 {

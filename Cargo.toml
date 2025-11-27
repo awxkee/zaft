@@ -2,7 +2,7 @@ workspace = { members = ["app"], exclude = ["fuzz"] }
 
 [package]
 name = "zaft"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Fast fourier transform"
 readme = "README.md"

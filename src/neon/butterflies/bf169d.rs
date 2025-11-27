@@ -35,30 +35,30 @@ use num_complex::Complex;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-macro_rules! gen_bf36d {
+macro_rules! gen_bf169d {
     ($name: ident, $feature: literal, $internal_bf: ident, $mul: ident) => {
         use crate::neon::mixed::$internal_bf;
         pub(crate) struct $name {
             direction: FftDirection,
-            bf6: $internal_bf,
-            twiddles: [NeonStoreD; 36],
+            bf13: $internal_bf,
+            twiddles: [NeonStoreD; 156],
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
-                let mut twiddles = [NeonStoreD::default(); 36];
+                let mut twiddles = [NeonStoreD::default(); 156];
                 let mut q = 0usize;
-                let len_per_row = 6;
+                let len_per_row = 13;
                 const COMPLEX_PER_VECTOR: usize = 1;
                 let quotient = len_per_row / COMPLEX_PER_VECTOR;
                 let remainder = len_per_row % COMPLEX_PER_VECTOR;
 
                 let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
                 for x in 0..num_twiddle_columns {
-                    for y in 1..6 {
+                    for y in 1..13 {
                         twiddles[q] = NeonStoreD::from_complex(&compute_twiddle(
                             y * (x * COMPLEX_PER_VECTOR),
-                            36,
+                            169,
                             fft_direction,
                         ));
                         q += 1;
@@ -67,7 +67,7 @@ macro_rules! gen_bf36d {
                 Self {
                     direction: fft_direction,
                     twiddles,
-                    bf6: $internal_bf::new(fft_direction),
+                    bf13: $internal_bf::new(fft_direction),
                 }
             }
         }
@@ -83,14 +83,14 @@ macro_rules! gen_bf36d {
 
             #[inline]
             fn length(&self) -> usize {
-                36
+                169
             }
         }
 
         impl $name {
             #[target_feature(enable = $feature)]
             fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if in_place.len() % 36 != 0 {
+                if in_place.len() % 169 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -98,39 +98,39 @@ macro_rules! gen_bf36d {
                 }
 
                 unsafe {
-                    let mut rows: [NeonStoreD; 6] = [NeonStoreD::default(); 6];
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 36];
+                    let mut rows: [NeonStoreD; 13] = [NeonStoreD::default(); 13];
+                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 169];
 
-                    for chunk in in_place.chunks_exact_mut(36) {
+                    for chunk in in_place.chunks_exact_mut(169) {
                         // columns
-                        for k in 0..6 {
-                            for i in 0..6 {
+                        for k in 0..13 {
+                            for i in 0..13 {
                                 rows[i] =
-                                    NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 6 + k..));
+                                    NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 13 + k..));
                             }
 
-                            rows = self.bf6.exec(rows);
+                            rows = self.bf13.exec(rows);
 
-                            for i in 1..6 {
-                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 5 * k]);
+                            for i in 1..13 {
+                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 12 * k]);
                             }
 
-                            for i in 0..6 {
-                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 6 + i..));
+                            for i in 0..13 {
+                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 13 + i..));
                             }
                         }
 
                         // rows
 
-                        for k in 0..6 {
-                            for i in 0..6 {
+                        for k in 0..13 {
+                            for i in 0..13 {
                                 rows[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 6 + k..),
+                                    scratch.get_unchecked(i * 13 + k..),
                                 );
                             }
-                            rows = self.bf6.exec(rows);
-                            for i in 0..6 {
-                                rows[i].write(chunk.get_unchecked_mut(i * 6 + k..));
+                            rows = self.bf13.exec(rows);
+                            for i in 0..13 {
+                                rows[i].write(chunk.get_unchecked_mut(i * 13 + k..));
                             }
                         }
                     }
@@ -138,6 +138,7 @@ macro_rules! gen_bf36d {
                 Ok(())
             }
         }
+
         impl FftExecutorOutOfPlace<f64> for $name {
             fn execute_out_of_place(
                 &self,
@@ -155,47 +156,47 @@ macro_rules! gen_bf36d {
                 src: &[Complex<f64>],
                 dst: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                if src.len() % 36 != 0 {
+                if src.len() % 169 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
                 }
-                if dst.len() % 36 != 0 {
+                if dst.len() % 169 != 0 {
                     return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
                 }
 
-                let mut rows: [NeonStoreD; 6] = [NeonStoreD::default(); 6];
-                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 36];
+                let mut rows: [NeonStoreD; 13] = [NeonStoreD::default(); 13];
+                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 169];
 
                 unsafe {
-                    for (dst, src) in dst.chunks_exact_mut(36).zip(src.chunks_exact(36)) {
+                    for (dst, src) in dst.chunks_exact_mut(169).zip(src.chunks_exact(169)) {
                         // columns
-                        for k in 0..6 {
-                            for i in 0..6 {
+                        for k in 0..13 {
+                            for i in 0..13 {
                                 rows[i] =
-                                    NeonStoreD::from_complex_ref(src.get_unchecked(i * 6 + k..));
+                                    NeonStoreD::from_complex_ref(src.get_unchecked(i * 13 + k..));
                             }
 
-                            rows = self.bf6.exec(rows);
+                            rows = self.bf13.exec(rows);
 
-                            for i in 1..6 {
-                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 5 * k]);
+                            for i in 1..13 {
+                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 12 * k]);
                             }
 
-                            for i in 0..6 {
-                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 6 + i..));
+                            for i in 0..13 {
+                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 13 + i..));
                             }
                         }
 
                         // rows
 
-                        for k in 0..6 {
-                            for i in 0..6 {
+                        for k in 0..13 {
+                            for i in 0..13 {
                                 rows[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 6 + k..),
+                                    scratch.get_unchecked(i * 13 + k..),
                                 );
                             }
-                            rows = self.bf6.exec(rows);
-                            for i in 0..6 {
-                                rows[i].write(dst.get_unchecked_mut(i * 6 + k..));
+                            rows = self.bf13.exec(rows);
+                            for i in 0..13 {
+                                rows[i].write(dst.get_unchecked_mut(i * 13 + k..));
                             }
                         }
                     }
@@ -212,12 +213,17 @@ macro_rules! gen_bf36d {
     };
 }
 
-gen_bf36d!(NeonButterfly36d, "neon", ColumnButterfly6d, mul_by_complex);
+gen_bf169d!(
+    NeonButterfly169d,
+    "neon",
+    ColumnButterfly13d,
+    mul_by_complex
+);
 #[cfg(feature = "fcma")]
-gen_bf36d!(
-    NeonFcmaButterfly36d,
+gen_bf169d!(
+    NeonFcmaButterfly169d,
     "fcma",
-    ColumnFcmaButterfly6d,
+    ColumnFcmaButterfly13d,
     fcmul_fcma
 );
 
@@ -228,29 +234,35 @@ mod tests {
     #[cfg(feature = "fcma")]
     use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
-    test_butterfly!(test_neon_butterfly36_f64, f64, NeonButterfly36d, 36, 1e-7);
-    test_oof_butterfly!(
-        test_oof_neon_butterfly36_f64,
+    test_butterfly!(
+        test_neon_butterfly169_f64,
         f64,
-        NeonButterfly36d,
-        36,
+        NeonButterfly169d,
+        169,
+        1e-7
+    );
+    test_oof_butterfly!(
+        test_oof_neon_butterfly156_f64,
+        f64,
+        NeonButterfly169d,
+        169,
         1e-7
     );
 
     #[cfg(feature = "fcma")]
     test_fcma_butterfly!(
-        test_fcma_butterfly36_f64,
+        test_fcma_butterfly169_f64,
         f64,
-        NeonFcmaButterfly36d,
-        36,
+        NeonFcmaButterfly169d,
+        169,
         1e-7
     );
     #[cfg(feature = "fcma")]
     test_oof_fcma_butterfly!(
-        test_oof_fcma_butterfly36_f64,
+        test_oof_fcma_butterfly156_f64,
         f64,
-        NeonFcmaButterfly36d,
-        36,
+        NeonFcmaButterfly169d,
+        169,
         1e-7
     );
 }

@@ -606,6 +606,42 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    fn butterfly128(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly128d,
+            NeonButterfly128d,
+            NeonFcmaButterfly128d
+        )
+    }
+
+    fn butterfly169(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly169d,
+            NeonButterfly169d,
+            NeonFcmaButterfly169d
+        )
+    }
+
+    fn butterfly256(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly256d,
+            NeonButterfly256d,
+            NeonFcmaButterfly256d
+        )
+    }
+
     fn radix3(
         n: usize,
         fft_direction: FftDirection,
