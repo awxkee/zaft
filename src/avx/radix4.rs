@@ -32,6 +32,7 @@ use crate::avx::util::{
     _mm_unpacklo_ps64, _mm256_create_pd, _mm256_create_ps, _mm256_fcmul_pd, _mm256_fcmul_ps,
     create_avx4_twiddles, shuffle,
 };
+use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
 use crate::radix4::Radix4Twiddles;
 use crate::traits::FftTrigonometry;
@@ -270,7 +271,7 @@ impl AvxFmaRadix4<f64> {
             }
         };
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
@@ -567,7 +568,7 @@ impl AvxFmaRadix4<f32> {
             }
         };
 
-        let mut scratch = vec![Complex::default(); self.execution_length];
+        let mut scratch = try_vec![Complex::default(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first

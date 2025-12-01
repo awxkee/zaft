@@ -36,7 +36,8 @@ use crate::avx::mixed::butterflies::{
     ColumnButterfly7d, ColumnButterfly7f, ColumnButterfly8d, ColumnButterfly8f, ColumnButterfly9d,
     ColumnButterfly9f, ColumnButterfly10d, ColumnButterfly10f, ColumnButterfly11d,
     ColumnButterfly11f, ColumnButterfly12d, ColumnButterfly12f, ColumnButterfly13d,
-    ColumnButterfly13f, ColumnButterfly16d, ColumnButterfly16f,
+    ColumnButterfly13f, ColumnButterfly14d, ColumnButterfly14f, ColumnButterfly16d,
+    ColumnButterfly16f,
 };
 use crate::err::try_vec;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
@@ -508,6 +509,8 @@ define_mixed_radixd!(AvxMixedRadix12d, ColumnButterfly12d, 12);
 define_mixed_radixf!(AvxMixedRadix12f, ColumnButterfly12f, 12);
 define_mixed_radixd!(AvxMixedRadix13d, ColumnButterfly13d, 13);
 define_mixed_radixf!(AvxMixedRadix13f, ColumnButterfly13f, 13);
+define_mixed_radixd!(AvxMixedRadix14d, ColumnButterfly14d, 14);
+define_mixed_radixf!(AvxMixedRadix14f, ColumnButterfly14f, 14);
 define_mixed_radixd!(AvxMixedRadix16d, ColumnButterfly16d, 16);
 define_mixed_radixf!(AvxMixedRadix16f, ColumnButterfly16f, 16);
 

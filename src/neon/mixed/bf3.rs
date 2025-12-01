@@ -36,7 +36,19 @@ pub(crate) struct ColumnButterfly3d {
     tw_im: float64x2_t,
 }
 
+#[cfg(feature = "fcma")]
+pub(crate) struct ColumnFcmaButterfly3d {
+    tw_re: float64x2_t,
+    tw_im: float64x2_t,
+}
+
 pub(crate) struct ColumnButterfly3f {
+    tw_re: float32x4_t,
+    tw_im: float32x4_t,
+}
+
+#[cfg(feature = "fcma")]
+pub(crate) struct ColumnFcmaButterfly3f {
     tw_re: float32x4_t,
     tw_im: float32x4_t,
 }
@@ -72,6 +84,39 @@ impl ColumnButterfly3d {
                 NeonStoreD::raw(y2),
             ]
         }
+    }
+}
+
+#[cfg(feature = "fcma")]
+impl ColumnFcmaButterfly3d {
+    pub(crate) fn new(direction: FftDirection) -> Self {
+        let twiddle = compute_twiddle::<f64>(1, 3, direction);
+        unsafe {
+            let q = vld1q_f64([-twiddle.im, twiddle.im].as_ptr().cast());
+            Self {
+                tw_re: vdupq_n_f64(twiddle.re),
+                tw_im: q,
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec(&self, store: [NeonStoreD; 3]) -> [NeonStoreD; 3] {
+        let xp = vaddq_f64(store[1].v, store[2].v);
+        let xn = vsubq_f64(store[1].v, store[2].v);
+        let sum = vaddq_f64(store[0].v, xp);
+
+        let w_1 = vfmaq_f64(store[0].v, self.tw_re, xp);
+
+        let y0 = sum;
+        let y1 = vcmlaq_rot90_f64(w_1, self.tw_im, xn);
+        let y2 = vcmlaq_rot270_f64(w_1, self.tw_im, xn);
+        [
+            NeonStoreD::raw(y0),
+            NeonStoreD::raw(y1),
+            NeonStoreD::raw(y2),
+        ]
     }
 }
 
@@ -132,5 +177,61 @@ impl ColumnButterfly3f {
                 NeonStoreFh::raw(y2),
             ]
         }
+    }
+}
+
+#[cfg(feature = "fcma")]
+impl ColumnFcmaButterfly3f {
+    pub(crate) fn new(direction: FftDirection) -> Self {
+        let twiddle = compute_twiddle::<f32>(1, 3, direction);
+        unsafe {
+            let q = vld1q_f32(
+                [-twiddle.im, twiddle.im, -twiddle.im, twiddle.im]
+                    .as_ptr()
+                    .cast(),
+            );
+            Self {
+                tw_re: vdupq_n_f32(twiddle.re),
+                tw_im: q,
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec(&self, store: [NeonStoreF; 3]) -> [NeonStoreF; 3] {
+        let xp = vaddq_f32(store[1].v, store[2].v);
+        let xn = vsubq_f32(store[1].v, store[2].v);
+        let sum = vaddq_f32(store[0].v, xp);
+
+        let w_1 = vfmaq_f32(store[0].v, self.tw_re, xp);
+
+        let y0 = sum;
+        let y1 = vcmlaq_rot90_f32(w_1, self.tw_im, xn);
+        let y2 = vcmlaq_rot270_f32(w_1, self.tw_im, xn);
+        [
+            NeonStoreF::raw(y0),
+            NeonStoreF::raw(y1),
+            NeonStoreF::raw(y2),
+        ]
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exech(&self, store: [NeonStoreFh; 3]) -> [NeonStoreFh; 3] {
+        let xp = vadd_f32(store[1].v, store[2].v);
+        let xn = vsub_f32(store[1].v, store[2].v);
+        let sum = vadd_f32(store[0].v, xp);
+
+        let w_1 = vfma_f32(store[0].v, vget_low_f32(self.tw_re), xp);
+
+        let y0 = sum;
+        let y1 = vcmla_rot90_f32(w_1, vget_low_f32(self.tw_im), xn);
+        let y2 = vcmla_rot270_f32(w_1, vget_low_f32(self.tw_im), xn);
+        [
+            NeonStoreFh::raw(y0),
+            NeonStoreFh::raw(y1),
+            NeonStoreFh::raw(y2),
+        ]
     }
 }

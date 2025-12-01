@@ -121,7 +121,6 @@ impl NeonFcmaRadix6<f64> {
         unsafe {
             let twiddle_re = vdupq_n_f64(self.twiddle_re);
             let twiddle_w_2 = vld1q_f64(self.twiddle_im.as_ptr().cast());
-            let n_twiddle_w_2 = vnegq_f64(twiddle_w_2);
 
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
@@ -169,7 +168,6 @@ impl NeonFcmaRadix6<f64> {
                                 u4,
                                 twiddle_re,
                                 twiddle_w_2,
-                                n_twiddle_w_2,
                             );
                             let (t1, t3, t5) = NeonButterfly::butterfly3_f64_fcma(
                                 u3,
@@ -177,7 +175,6 @@ impl NeonFcmaRadix6<f64> {
                                 u1,
                                 twiddle_re,
                                 twiddle_w_2,
-                                n_twiddle_w_2,
                             );
                             let (y0, y3) = NeonButterfly::butterfly2_f64(t0, t1);
                             let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);
@@ -240,7 +237,6 @@ impl NeonFcmaRadix6<f32> {
         unsafe {
             let twiddle_re = vdupq_n_f32(self.twiddle_re);
             let twiddle_w_2 = vld1q_f32(self.twiddle_im.as_ptr().cast());
-            let n_twiddle_w_2 = vnegq_f32(twiddle_w_2);
 
             let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
@@ -301,7 +297,6 @@ impl NeonFcmaRadix6<f32> {
                                 u4,
                                 twiddle_re,
                                 twiddle_w_2,
-                                n_twiddle_w_2,
                             );
                             let (t1, t3, t5) = NeonButterfly::butterfly3_f32_fcma(
                                 u3,
@@ -309,7 +304,6 @@ impl NeonFcmaRadix6<f32> {
                                 u1,
                                 twiddle_re,
                                 twiddle_w_2,
-                                n_twiddle_w_2,
                             );
                             let (y0, y3) = NeonButterfly::butterfly2_f32(t0, t1);
                             let (y4, y1) = NeonButterfly::butterfly2_f32(t2, t3);
@@ -375,7 +369,6 @@ impl NeonFcmaRadix6<f32> {
                                 u4,
                                 vget_low_f32(twiddle_re),
                                 vget_low_f32(twiddle_w_2),
-                                vget_low_f32(n_twiddle_w_2),
                             );
                             let (t1, t3, t5) = NeonButterfly::butterfly3h_f32_fcma(
                                 u3,
@@ -383,7 +376,6 @@ impl NeonFcmaRadix6<f32> {
                                 u1,
                                 vget_low_f32(twiddle_re),
                                 vget_low_f32(twiddle_w_2),
-                                vget_low_f32(n_twiddle_w_2),
                             );
                             let (y0, y3) = NeonButterfly::butterfly2h_f32(t0, t1);
                             let (y4, y1) = NeonButterfly::butterfly2h_f32(t2, t3);

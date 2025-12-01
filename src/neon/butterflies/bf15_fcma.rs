@@ -85,7 +85,6 @@ impl NeonFcmaButterfly15<f64> {
         unsafe {
             let tw3_re = vdupq_n_f64(self.tw3_re);
             let tw3_im = vld1q_f64(self.tw3_im.as_ptr().cast());
-            let n_tw3_im = vnegq_f64(tw3_im);
 
             for chunk in in_place.chunks_exact_mut(15) {
                 let u0 = vld1q_f64(chunk.as_ptr().cast());
@@ -111,21 +110,16 @@ impl NeonFcmaButterfly15<f64> {
                 // Since this is good-thomas algorithm, we don't need twiddle factors
 
                 // Transpose the data and do size-3 FFTs down the columns
-                let (y0, y1, y2) = NeonButterfly::butterfly3_f64_fcma(
-                    mid0.0, mid1.0, mid2.0, tw3_re, tw3_im, n_tw3_im,
-                );
-                let (y3, y4, y5) = NeonButterfly::butterfly3_f64_fcma(
-                    mid0.1, mid1.1, mid2.1, tw3_re, tw3_im, n_tw3_im,
-                );
-                let (y6, y7, y8) = NeonButterfly::butterfly3_f64_fcma(
-                    mid0.2, mid1.2, mid2.2, tw3_re, tw3_im, n_tw3_im,
-                );
-                let (y9, y10, y11) = NeonButterfly::butterfly3_f64_fcma(
-                    mid0.3, mid1.3, mid2.3, tw3_re, tw3_im, n_tw3_im,
-                );
-                let (y12, y13, y14) = NeonButterfly::butterfly3_f64_fcma(
-                    mid0.4, mid1.4, mid2.4, tw3_re, tw3_im, n_tw3_im,
-                );
+                let (y0, y1, y2) =
+                    NeonButterfly::butterfly3_f64_fcma(mid0.0, mid1.0, mid2.0, tw3_re, tw3_im);
+                let (y3, y4, y5) =
+                    NeonButterfly::butterfly3_f64_fcma(mid0.1, mid1.1, mid2.1, tw3_re, tw3_im);
+                let (y6, y7, y8) =
+                    NeonButterfly::butterfly3_f64_fcma(mid0.2, mid1.2, mid2.2, tw3_re, tw3_im);
+                let (y9, y10, y11) =
+                    NeonButterfly::butterfly3_f64_fcma(mid0.3, mid1.3, mid2.3, tw3_re, tw3_im);
+                let (y12, y13, y14) =
+                    NeonButterfly::butterfly3_f64_fcma(mid0.4, mid1.4, mid2.4, tw3_re, tw3_im);
 
                 vst1q_f64(chunk.as_mut_ptr().cast(), y0);
                 vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y4);
@@ -183,7 +177,6 @@ impl NeonFcmaButterfly15<f32> {
         unsafe {
             let tw3_re = vdupq_n_f32(self.tw3_re);
             let tw3_im = vld1q_f32(self.tw3_im.as_ptr().cast());
-            let n_tw3_im = vnegq_f32(tw3_im);
 
             for chunk in in_place.chunks_exact_mut(30) {
                 let u0u1 = vld1q_f32(chunk.as_ptr().cast());
@@ -225,21 +218,16 @@ impl NeonFcmaButterfly15<f32> {
                 // Since this is good-thomas algorithm, we don't need twiddle factors
 
                 // Transpose the data and do size-3 FFTs down the columns
-                let (y0, y1, y2) = NeonButterfly::butterfly3_f32_fcma(
-                    mid0.0, mid1.0, mid2.0, tw3_re, tw3_im, n_tw3_im,
-                );
-                let (y3, y4, y5) = NeonButterfly::butterfly3_f32_fcma(
-                    mid0.1, mid1.1, mid2.1, tw3_re, tw3_im, n_tw3_im,
-                );
-                let (y6, y7, y8) = NeonButterfly::butterfly3_f32_fcma(
-                    mid0.2, mid1.2, mid2.2, tw3_re, tw3_im, n_tw3_im,
-                );
-                let (y9, y10, y11) = NeonButterfly::butterfly3_f32_fcma(
-                    mid0.3, mid1.3, mid2.3, tw3_re, tw3_im, n_tw3_im,
-                );
-                let (y12, y13, y14) = NeonButterfly::butterfly3_f32_fcma(
-                    mid0.4, mid1.4, mid2.4, tw3_re, tw3_im, n_tw3_im,
-                );
+                let (y0, y1, y2) =
+                    NeonButterfly::butterfly3_f32_fcma(mid0.0, mid1.0, mid2.0, tw3_re, tw3_im);
+                let (y3, y4, y5) =
+                    NeonButterfly::butterfly3_f32_fcma(mid0.1, mid1.1, mid2.1, tw3_re, tw3_im);
+                let (y6, y7, y8) =
+                    NeonButterfly::butterfly3_f32_fcma(mid0.2, mid1.2, mid2.2, tw3_re, tw3_im);
+                let (y9, y10, y11) =
+                    NeonButterfly::butterfly3_f32_fcma(mid0.3, mid1.3, mid2.3, tw3_re, tw3_im);
+                let (y12, y13, y14) =
+                    NeonButterfly::butterfly3_f32_fcma(mid0.4, mid1.4, mid2.4, tw3_re, tw3_im);
 
                 vst1q_f32(
                     chunk.as_mut_ptr().cast(),
@@ -350,7 +338,6 @@ impl NeonFcmaButterfly15<f32> {
                     mid2.0,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (y3, y4, y5) = NeonButterfly::butterfly3h_f32_fcma(
                     mid0.1,
@@ -358,7 +345,6 @@ impl NeonFcmaButterfly15<f32> {
                     mid2.1,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (y6, y7, y8) = NeonButterfly::butterfly3h_f32_fcma(
                     mid0.2,
@@ -366,7 +352,6 @@ impl NeonFcmaButterfly15<f32> {
                     mid2.2,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (y9, y10, y11) = NeonButterfly::butterfly3h_f32_fcma(
                     mid0.3,
@@ -374,7 +359,6 @@ impl NeonFcmaButterfly15<f32> {
                     mid2.3,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (y12, y13, y14) = NeonButterfly::butterfly3h_f32_fcma(
                     mid0.4,
@@ -382,7 +366,6 @@ impl NeonFcmaButterfly15<f32> {
                     mid2.4,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
 
                 vst1q_f32(chunk.as_mut_ptr().cast(), vcombine_f32(y0, y4));

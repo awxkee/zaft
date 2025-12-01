@@ -70,45 +70,36 @@ impl ColumnButterfly4d {
 
 #[cfg(feature = "fcma")]
 pub(crate) struct ColumnFcmaButterfly4d {
-    direction: FftDirection,
+    pub(crate) rot_sign: float64x2_t,
 }
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly4d {
     #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
-        Self { direction }
+        Self {
+            rot_sign: unsafe {
+                match direction {
+                    FftDirection::Forward => vdupq_n_f64(-1.0),
+                    FftDirection::Inverse => vdupq_n_f64(1.0),
+                }
+            },
+        }
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 4]) -> [NeonStoreD; 4] {
-        match self.direction {
-            FftDirection::Forward => {
-                let t0 = vaddq_f64(store[0].v, store[2].v);
-                let t1 = vsubq_f64(store[0].v, store[2].v);
-                let t2 = vaddq_f64(store[1].v, store[3].v);
-                let t3 = vsubq_f64(store[1].v, store[3].v);
-                [
-                    NeonStoreD::raw(vaddq_f64(t0, t2)),
-                    NeonStoreD::raw(vcaddq_rot270_f64(t1, t3)),
-                    NeonStoreD::raw(vsubq_f64(t0, t2)),
-                    NeonStoreD::raw(vcaddq_rot90_f64(t1, t3)),
-                ]
-            }
-            FftDirection::Inverse => {
-                let t0 = vaddq_f64(store[0].v, store[2].v);
-                let t1 = vsubq_f64(store[0].v, store[2].v);
-                let t2 = vaddq_f64(store[1].v, store[3].v);
-                let t3 = vsubq_f64(store[1].v, store[3].v);
-                [
-                    NeonStoreD::raw(vaddq_f64(t0, t2)),
-                    NeonStoreD::raw(vcaddq_rot90_f64(t1, t3)),
-                    NeonStoreD::raw(vsubq_f64(t0, t2)),
-                    NeonStoreD::raw(vcaddq_rot270_f64(t1, t3)),
-                ]
-            }
-        }
+        let t0 = vaddq_f64(store[0].v, store[2].v);
+        let t1 = vsubq_f64(store[0].v, store[2].v);
+        let t2 = vaddq_f64(store[1].v, store[3].v);
+        let t3 = vsubq_f64(store[1].v, store[3].v);
+        [
+            NeonStoreD::raw(vaddq_f64(t0, t2)),
+            NeonStoreD::raw(vcmlaq_rot90_f64(t1, self.rot_sign, t3)),
+            NeonStoreD::raw(vsubq_f64(t0, t2)),
+            NeonStoreD::raw(vcmlaq_rot270_f64(t1, self.rot_sign, t3)),
+        ]
     }
 }
 
@@ -171,75 +162,50 @@ impl ColumnButterfly4f {
 
 #[cfg(feature = "fcma")]
 pub(crate) struct ColumnFcmaButterfly4f {
-    direction: FftDirection,
+    rot_sign: float32x4_t,
 }
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly4f {
     #[inline]
     pub(crate) fn new(direction: FftDirection) -> Self {
-        Self { direction }
+        Self {
+            rot_sign: unsafe {
+                match direction {
+                    FftDirection::Forward => vdupq_n_f32(-1.0),
+                    FftDirection::Inverse => vdupq_n_f32(1.0),
+                }
+            },
+        }
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 4]) -> [NeonStoreF; 4] {
-        match self.direction {
-            FftDirection::Forward => {
-                let t0 = vaddq_f32(store[0].v, store[2].v);
-                let t1 = vsubq_f32(store[0].v, store[2].v);
-                let t2 = vaddq_f32(store[1].v, store[3].v);
-                let t3 = vsubq_f32(store[1].v, store[3].v);
-                [
-                    NeonStoreF::raw(vaddq_f32(t0, t2)),
-                    NeonStoreF::raw(vcaddq_rot270_f32(t1, t3)),
-                    NeonStoreF::raw(vsubq_f32(t0, t2)),
-                    NeonStoreF::raw(vcaddq_rot90_f32(t1, t3)),
-                ]
-            }
-            FftDirection::Inverse => {
-                let t0 = vaddq_f32(store[0].v, store[2].v);
-                let t1 = vsubq_f32(store[0].v, store[2].v);
-                let t2 = vaddq_f32(store[1].v, store[3].v);
-                let t3 = vsubq_f32(store[1].v, store[3].v);
-                [
-                    NeonStoreF::raw(vaddq_f32(t0, t2)),
-                    NeonStoreF::raw(vcaddq_rot90_f32(t1, t3)),
-                    NeonStoreF::raw(vsubq_f32(t0, t2)),
-                    NeonStoreF::raw(vcaddq_rot270_f32(t1, t3)),
-                ]
-            }
-        }
+        let t0 = vaddq_f32(store[0].v, store[2].v);
+        let t1 = vsubq_f32(store[0].v, store[2].v);
+        let t2 = vaddq_f32(store[1].v, store[3].v);
+        let t3 = vsubq_f32(store[1].v, store[3].v);
+        [
+            NeonStoreF::raw(vaddq_f32(t0, t2)),
+            NeonStoreF::raw(vcmlaq_rot90_f32(t1, self.rot_sign, t3)),
+            NeonStoreF::raw(vsubq_f32(t0, t2)),
+            NeonStoreF::raw(vcmlaq_rot270_f32(t1, self.rot_sign, t3)),
+        ]
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 4]) -> [NeonStoreFh; 4] {
-        match self.direction {
-            FftDirection::Forward => {
-                let t0 = vadd_f32(store[0].v, store[2].v);
-                let t1 = vsub_f32(store[0].v, store[2].v);
-                let t2 = vadd_f32(store[1].v, store[3].v);
-                let t3 = vsub_f32(store[1].v, store[3].v);
-                [
-                    NeonStoreFh::raw(vadd_f32(t0, t2)),
-                    NeonStoreFh::raw(vcadd_rot270_f32(t1, t3)),
-                    NeonStoreFh::raw(vsub_f32(t0, t2)),
-                    NeonStoreFh::raw(vcadd_rot90_f32(t1, t3)),
-                ]
-            }
-            FftDirection::Inverse => {
-                let t0 = vadd_f32(store[0].v, store[2].v);
-                let t1 = vsub_f32(store[0].v, store[2].v);
-                let t2 = vadd_f32(store[1].v, store[3].v);
-                let t3 = vsub_f32(store[1].v, store[3].v);
-                [
-                    NeonStoreFh::raw(vadd_f32(t0, t2)),
-                    NeonStoreFh::raw(vcadd_rot90_f32(t1, t3)),
-                    NeonStoreFh::raw(vsub_f32(t0, t2)),
-                    NeonStoreFh::raw(vcadd_rot270_f32(t1, t3)),
-                ]
-            }
-        }
+        let t0 = vadd_f32(store[0].v, store[2].v);
+        let t1 = vsub_f32(store[0].v, store[2].v);
+        let t2 = vadd_f32(store[1].v, store[3].v);
+        let t3 = vsub_f32(store[1].v, store[3].v);
+        [
+            NeonStoreFh::raw(vadd_f32(t0, t2)),
+            NeonStoreFh::raw(vcmla_rot90_f32(t1, vget_low_f32(self.rot_sign), t3)),
+            NeonStoreFh::raw(vsub_f32(t0, t2)),
+            NeonStoreFh::raw(vcmla_rot270_f32(t1, vget_low_f32(self.rot_sign), t3)),
+        ]
     }
 }

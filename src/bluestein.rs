@@ -55,11 +55,6 @@ fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
     let twice_len = destination.len() * 2;
 
     // Standard bluestein's twiddle computation requires us to square the index before usingit to compute a twiddle factor
-    // And since twiddle factors are cyclic, we can improve precision once the squared index gets converted to floating point by taking a modulo
-    // Modulo is expensive, so we're going to use strength-reduction to keep it manageable
-
-    // Strength-reduced u128s are very heavy, so we only want to use them if we need them - and we only need them if
-    // len * len doesn't fit in a u64, AKA if len doesn't fit in a u32
     if destination.len() < u32::MAX as usize {
         let twice_len_reduced = DividerU64::new(twice_len as u64);
 

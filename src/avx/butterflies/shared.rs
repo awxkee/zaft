@@ -26,9 +26,67 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::FftDirection;
 use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::avx::util::shuffle;
+use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
+
+#[target_feature(enable = "avx")]
+pub(crate) fn gen_butterfly_twiddles_f32<const N: usize>(
+    rows: usize,
+    cols: usize,
+    direction: FftDirection,
+    size: usize,
+) -> [AvxStoreF; N] {
+    let mut twiddles = [AvxStoreF::zero(); N];
+    let mut q = 0usize;
+    let len_per_row = rows;
+    const COMPLEX_PER_VECTOR: usize = 4;
+    let quotient = len_per_row / COMPLEX_PER_VECTOR;
+    let remainder = len_per_row % COMPLEX_PER_VECTOR;
+
+    let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
+    for x in 0..num_twiddle_columns {
+        for y in 1..cols {
+            twiddles[q] = AvxStoreF::set_complex4(
+                compute_twiddle(y * (x * COMPLEX_PER_VECTOR), size, direction),
+                compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), size, direction),
+                compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 2), size, direction),
+                compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 3), size, direction),
+            );
+            q += 1;
+        }
+    }
+    twiddles
+}
+
+#[target_feature(enable = "avx")]
+pub(crate) fn gen_butterfly_twiddles_f64<const N: usize>(
+    rows: usize,
+    cols: usize,
+    direction: FftDirection,
+    size: usize,
+) -> [AvxStoreD; N] {
+    let mut twiddles = [AvxStoreD::zero(); N];
+    let mut q = 0usize;
+    let len_per_row = rows;
+    const COMPLEX_PER_VECTOR: usize = 2;
+    let quotient = len_per_row / COMPLEX_PER_VECTOR;
+    let remainder = len_per_row % COMPLEX_PER_VECTOR;
+
+    let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
+    for x in 0..num_twiddle_columns {
+        for y in 1..cols {
+            twiddles[q] = AvxStoreD::set_complex2(
+                compute_twiddle(y * (x * COMPLEX_PER_VECTOR), size, direction),
+                compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), size, direction),
+            );
+            q += 1;
+        }
+    }
+    twiddles
+}
 
 pub(crate) struct AvxButterfly {}
 

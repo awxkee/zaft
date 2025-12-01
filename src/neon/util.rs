@@ -260,11 +260,6 @@ pub(crate) unsafe fn vdupq_complex_f32(c: Complex<f32>) -> float32x4_t {
     unsafe { vld1q_f32([c.re, c.im, c.re, c.im].as_ptr().cast()) }
 }
 
-#[inline(always)]
-pub(crate) unsafe fn vdup_complex_f32(c: Complex<f32>) -> float32x2_t {
-    unsafe { vld1_f32([c.re, c.im].as_ptr().cast()) }
-}
-
 pub(crate) fn create_neon_twiddles<T: FftTrigonometry + 'static + Float + Sized, const N: usize>(
     base: usize,
     size: usize,
