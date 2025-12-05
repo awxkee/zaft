@@ -28,9 +28,9 @@
  */
 #![allow(clippy::needless_range_loop)]
 
+use crate::avx::butterflies::shared::gen_butterfly_twiddles_f64;
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly5d, ColumnButterfly7d};
 use crate::avx::transpose::transpose_f64x2_2x2;
-use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::_mm256_setzero_pd;
@@ -50,26 +50,9 @@ impl AvxButterfly35d {
 
     #[target_feature(enable = "avx2")]
     pub(crate) fn new_init(fft_direction: FftDirection) -> Self {
-        let mut twiddles = [AvxStoreD::zero(); 16];
-        let mut q = 0usize;
-        let len_per_row = 7;
-        const COMPLEX_PER_VECTOR: usize = 2;
-        let quotient = len_per_row / COMPLEX_PER_VECTOR;
-        let remainder = len_per_row % COMPLEX_PER_VECTOR;
-
-        let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-        for x in 0..num_twiddle_columns {
-            for y in 1..5 {
-                twiddles[q] = AvxStoreD::set_complex2(
-                    compute_twiddle(y * (x * COMPLEX_PER_VECTOR), 35, fft_direction),
-                    compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), 35, fft_direction),
-                );
-                q += 1;
-            }
-        }
         Self {
             direction: fft_direction,
-            twiddles,
+            twiddles: gen_butterfly_twiddles_f64(7, 5, fft_direction, 35),
             bf7: ColumnButterfly7d::new(fft_direction),
             bf5: ColumnButterfly5d::new(fft_direction),
         }
@@ -153,14 +136,10 @@ impl AvxButterfly35d {
             for chunk in in_place.chunks_exact_mut(35) {
                 // columns
                 {
-                    let k = 0;
                     for i in 0..5 {
-                        rows0[i] =
-                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + k * 6..));
-                        rows1[i] =
-                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + k * 6 + 2..));
-                        rows2[i] =
-                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + k * 6 + 4..));
+                        rows0[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7..));
+                        rows1[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + 2..));
+                        rows2[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + 4..));
                     }
 
                     rows0 = self.bf5.exec(rows0);

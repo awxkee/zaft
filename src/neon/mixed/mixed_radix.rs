@@ -29,7 +29,7 @@
 #![allow(clippy::modulo_one)]
 use crate::err::try_vec;
 use crate::neon::mixed::bf2::{ColumnButterfly2d, ColumnButterfly2f};
-use crate::neon::mixed::bf3::{ColumnButterfly3d, ColumnButterfly3f};
+use crate::neon::mixed::bf3::*;
 use crate::neon::mixed::bf4::{ColumnButterfly4d, ColumnButterfly4f};
 use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
 use crate::transpose::{TransposeExecutor, TransposeFactory};
@@ -140,7 +140,10 @@ macro_rules! define_mixed_radix_neon_d {
                             }
                         }
 
-                        let output = self.inner_bf.exec(columns);
+                        #[allow(unused_unsafe)]
+                        let output = unsafe {
+                            self.inner_bf.exec(columns)
+                        };
 
                         unsafe {
                             output[0].write(scratch.get_unchecked_mut(index_base..));
@@ -716,6 +719,7 @@ use crate::neon::mixed::bf10::*;
 use crate::neon::mixed::bf11::*;
 use crate::neon::mixed::bf12::*;
 use crate::neon::mixed::bf13::*;
+use crate::neon::mixed::bf14::*;
 use crate::neon::mixed::bf16::*;
 
 define_mixed_radix_neon_d!(NeonMixedRadix2, ColumnButterfly2d, 2);
@@ -730,11 +734,12 @@ define_mixed_radix_neon_d!(NeonMixedRadix10, ColumnButterfly10d, 10);
 define_mixed_radix_neon_d!(NeonMixedRadix11, ColumnButterfly11d, 11);
 define_mixed_radix_neon_d!(NeonMixedRadix12, ColumnButterfly12d, 12);
 define_mixed_radix_neon_d!(NeonMixedRadix13, ColumnButterfly13d, 13);
+define_mixed_radix_neon_d!(NeonMixedRadix14, ColumnButterfly14d, 14);
 define_mixed_radix_neon_d!(NeonMixedRadix16, ColumnButterfly16d, 16);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix2, ColumnButterfly2d, 2);
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix3, ColumnButterfly3d, 3);
+define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix3, ColumnFcmaButterfly3d, 3);
 #[cfg(feature = "fcma")]
 use crate::neon::mixed::bf4::{ColumnFcmaButterfly4d, ColumnFcmaButterfly4f};
 
@@ -759,6 +764,8 @@ define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix12, ColumnFcmaButterfly12d, 12
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix13, ColumnFcmaButterfly13d, 13);
 #[cfg(feature = "fcma")]
+define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix14, ColumnFcmaButterfly14d, 14);
+#[cfg(feature = "fcma")]
 define_mixed_radix_neon_d_fcma!(NeonFcmaMixedRadix16, ColumnFcmaButterfly16d, 16);
 define_mixed_radix_neon_f!(NeonMixedRadix2f, ColumnButterfly2f, 2);
 define_mixed_radix_neon_f!(NeonMixedRadix3f, ColumnButterfly3f, 3);
@@ -772,11 +779,12 @@ define_mixed_radix_neon_f!(NeonMixedRadix10f, ColumnButterfly10f, 10);
 define_mixed_radix_neon_f!(NeonMixedRadix11f, ColumnButterfly11f, 11);
 define_mixed_radix_neon_f!(NeonMixedRadix12f, ColumnButterfly12f, 12);
 define_mixed_radix_neon_f!(NeonMixedRadix13f, ColumnButterfly13f, 13);
+define_mixed_radix_neon_f!(NeonMixedRadix14f, ColumnButterfly14f, 14);
 define_mixed_radix_neon_f!(NeonMixedRadix16f, ColumnButterfly16f, 16);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix2f, ColumnButterfly2f, 2);
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix3f, ColumnButterfly3f, 3);
+define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix3f, ColumnFcmaButterfly3f, 3);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix4f, ColumnFcmaButterfly4f, 4);
 #[cfg(feature = "fcma")]
@@ -797,6 +805,8 @@ define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix11f, ColumnFcmaButterfly11f, 1
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix12f, ColumnFcmaButterfly12f, 12);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix13f, ColumnFcmaButterfly13f, 13);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix14f, ColumnFcmaButterfly14f, 14);
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f_fcma!(NeonFcmaMixedRadix16f, ColumnFcmaButterfly16f, 16);
 

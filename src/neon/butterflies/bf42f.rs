@@ -28,12 +28,11 @@
  */
 #![allow(clippy::needless_range_loop)]
 
+use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::neon_transpose_f32x2_7x6_aos;
-use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
-use std::mem::MaybeUninit;
 
 macro_rules! gen_bf42f {
     ($name: ident, $feature: literal, $internal_bf6: ident, $internal_bf7: ident, $mul: ident) => {
@@ -47,26 +46,9 @@ macro_rules! gen_bf42f {
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
-                let mut twiddles = [NeonStoreF::default(); 20];
-                let mut q = 0usize;
-                let len_per_row = 7;
-                const COMPLEX_PER_VECTOR: usize = 2;
-                let quotient = len_per_row / COMPLEX_PER_VECTOR;
-                let remainder = len_per_row % COMPLEX_PER_VECTOR;
-
-                let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-                for x in 0..num_twiddle_columns {
-                    for y in 1..6 {
-                        twiddles[q] = NeonStoreF::from_complex2(
-                            compute_twiddle(y * (x * COMPLEX_PER_VECTOR), 42, fft_direction),
-                            compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), 42, fft_direction),
-                        );
-                        q += 1;
-                    }
-                }
                 Self {
                     direction: fft_direction,
-                    twiddles,
+                    twiddles: gen_butterfly_twiddles_f32(7, 6, fft_direction, 42),
                     bf7: $internal_bf7::new(fft_direction),
                     bf6: $internal_bf6::new(fft_direction),
                 }
@@ -104,10 +86,6 @@ macro_rules! gen_bf42f {
                     let mut rows2: [NeonStoreF; 6] = [NeonStoreF::default(); 6];
                     let mut rows3: [NeonStoreF; 6] = [NeonStoreF::default(); 6];
 
-                    let mut rows7: [NeonStoreF; 7] = [NeonStoreF::default(); 7];
-
-                    let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 42];
-
                     for chunk in in_place.chunks_exact_mut(42) {
                         // columns
                         for i in 0..6 {
@@ -131,27 +109,22 @@ macro_rules! gen_bf42f {
                             rows3[i] = NeonStoreF::$mul(rows3[i], self.twiddles[i - 1 + 15]);
                         }
 
-                        let (v0, v1, v2) = neon_transpose_f32x2_7x6_aos(rows0, rows1, rows2, rows3);
+                        let (mut v0, mut v1, mut v2) =
+                            neon_transpose_f32x2_7x6_aos(rows0, rows1, rows2, rows3);
 
+                        v0 = self.bf7.exec(v0);
                         for i in 0..7 {
-                            v0[i].write_uninit(scratch.get_unchecked_mut(i * 6..));
-                            v1[i].write_uninit(scratch.get_unchecked_mut(i * 6 + 2..));
-                            v2[i].write_uninit(scratch.get_unchecked_mut(i * 6 + 4..));
+                            v0[i].write(chunk.get_unchecked_mut(i * 6..));
                         }
-
+                        v1 = self.bf7.exec(v1);
+                        for i in 0..7 {
+                            v1[i].write(chunk.get_unchecked_mut(i * 6 + 2..));
+                        }
+                        v2 = self.bf7.exec(v2);
+                        for i in 0..7 {
+                            v2[i].write(chunk.get_unchecked_mut(i * 6 + 4..));
+                        }
                         // rows
-
-                        for k in 0..3 {
-                            for i in 0..7 {
-                                rows7[i] = NeonStoreF::from_complex_refu(
-                                    scratch.get_unchecked(i * 6 + k * 2..),
-                                );
-                            }
-                            rows7 = self.bf7.exec(rows7);
-                            for i in 0..7 {
-                                rows7[i].write(chunk.get_unchecked_mut(i * 6 + k * 2..));
-                            }
-                        }
                     }
                 }
                 Ok(())

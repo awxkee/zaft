@@ -252,6 +252,12 @@ impl Zaft {
                 if let Some(q_fft_opt) = q_fft_opt {
                     return Ok(Some(q_fft_opt));
                 }
+            } else if min_length == 14 {
+                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+                let q_fft_opt = T::mixed_radix_butterfly14(q_fft)?;
+                if let Some(q_fft_opt) = q_fft_opt {
+                    return Ok(Some(q_fft_opt));
+                }
             } else if min_length == 16 {
                 let q_fft = Zaft::strategy(max_length as usize, _direction)?;
                 let q_fft_opt = T::mixed_radix_butterfly16(q_fft)?;
@@ -335,6 +341,10 @@ impl Zaft {
             let factor2 = prime_factors.factor_of_2();
             let factor3 = prime_factors.factor_of_3();
 
+            if factor2 == 1 && factor3 > 3 && T::butterfly54(direction).is_some() {
+                try_mixed_radix!(54, product / 54)
+            }
+
             if factor3 >= 1 && factor2 >= 4 {
                 if product.is_multiple_of(36)
                     && product / 36 > 1
@@ -372,7 +382,7 @@ impl Zaft {
                     try_mixed_radix!(20, product / 20)
                 }
             } else if factor_of_5 == 2 {
-                if factor_of_2 >= 3 {
+                if factor_of_2 >= 3 && T::butterfly100(direction).is_some() {
                     #[cfg(all(target_arch = "aarch64", feature = "neon"))]
                     {
                         try_mixed_radix!(product / 100, 100)
@@ -452,16 +462,58 @@ impl Zaft {
             }
         } else if prime_factors.has_power_of_two_and_three() {
             #[allow(clippy::collapsible_if)]
-            if product == 84
+            if (product == 84
                 || product == 294
                 || product == 252
                 || product == 378
                 || product == 504
                 || product == 672
-                || product == 756
+                || product == 756)
+                && T::butterfly42(direction).is_some()
             {
                 try_mixed_radix!(42, product / 42)
             }
+            let factor_of_2 = prime_factors.factor_of_2();
+            let factor_of_3 = prime_factors.factor_of_3();
+            let factor_of_5 = prime_factors.factor_of_5();
+
+            if (factor_of_2 == 1 && factor_of_3 == 1 && factor_of_5 > 1)
+                && T::butterfly30(direction).is_some()
+            {
+                // factor out 30
+                try_mixed_radix!(30, product / 30)
+            }
+
+            if ((product.is_multiple_of(144) && (product / 144) <= 16)
+                || product == 5040
+                || product == 4896
+                || product == 8496
+                || product == 8352)
+                && T::butterfly144(direction).is_some()
+            {
+                // factor out 144
+                try_mixed_radix!(product / 144, 144)
+            }
+
+            if ((product.is_multiple_of(72) && (product / 72) <= 16)
+                || product == 2088
+                || product == 3240
+                || product == 3816
+                || product == 4248)
+                && T::butterfly72(direction).is_some()
+            {
+                // factor out 72
+                try_mixed_radix!(product / 72, 72)
+            }
+        }
+
+        if product.is_multiple_of(63)
+            && product / 63 <= 16
+            && product != 126
+            && T::butterfly64(direction).is_some()
+        {
+            // factor out 63
+            try_mixed_radix!(63, product / 63)
         }
 
         let factor_of_11 = prime_factors.factor_of_11();
@@ -472,6 +524,12 @@ impl Zaft {
         } else if factor_of_13 > 0 {
             let power_of_13 = 13u64.pow(factor_of_13);
             try_mixed_radix!(power_of_13, product / power_of_13)
+        }
+
+        if (product == 147 || product == 315 || product == 378 || product == 399)
+            && T::butterfly21(direction).is_some()
+        {
+            try_mixed_radix!(21, product / 21)
         }
 
         #[cfg(any(
@@ -605,12 +663,24 @@ impl Zaft {
             return T::butterfly20(fft_direction);
         } else if n == 23 {
             return T::butterfly23(fft_direction);
+        } else if n == 21 {
+            if let Some(executor) = T::butterfly21(fft_direction) {
+                return Ok(executor);
+            }
+        } else if n == 24 {
+            if let Some(executor) = T::butterfly24(fft_direction) {
+                return Ok(executor);
+            }
         } else if n == 25 {
             return T::butterfly25(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 27 {
             return T::butterfly27(fft_direction).map(|x| x.into_fft_executor());
         } else if n == 29 {
             return T::butterfly29(fft_direction);
+        } else if n == 30 {
+            if let Some(executor) = T::butterfly30(fft_direction) {
+                return Ok(executor);
+            }
         } else if n == 31 {
             return T::butterfly31(fft_direction);
         } else if n == 32 {
@@ -635,9 +705,21 @@ impl Zaft {
             if let Some(executor) = T::butterfly49(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
+        } else if n == 54 {
+            if let Some(executor) = T::butterfly54(fft_direction) {
+                return Ok(executor);
+            }
+        } else if n == 63 {
+            if let Some(executor) = T::butterfly63(fft_direction) {
+                return Ok(executor);
+            }
         } else if n == 64 {
             if let Some(executor) = T::butterfly64(fft_direction) {
                 return Ok(executor.into_fft_executor());
+            }
+        } else if n == 72 {
+            if let Some(executor) = T::butterfly72(fft_direction) {
+                return Ok(executor);
             }
         } else if n == 81 {
             if let Some(executor) = T::butterfly81(fft_direction) {
@@ -654,6 +736,10 @@ impl Zaft {
         } else if n == 128 {
             if let Some(executor) = T::butterfly128(fft_direction) {
                 return Ok(executor.into_fft_executor());
+            }
+        } else if n == 144 {
+            if let Some(executor) = T::butterfly144(fft_direction) {
+                return Ok(executor);
             }
         } else if n == 169 {
             if let Some(executor) = T::butterfly169(fft_direction) {

@@ -27,9 +27,9 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::needless_range_loop)]
+use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::neon_transpose_f32x2_6x6_aos;
-use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::vst1q_f32;
@@ -46,22 +46,9 @@ macro_rules! gen_bf36f {
 
         impl $name {
             pub fn new(direction: FftDirection) -> Self {
-                let mut twiddles = [NeonStoreF::default(); 15];
-                const ENTRIES: usize = 2;
-                let num_twiddle_columns = 3;
-                let mut k = 0usize;
-                for x in 0..num_twiddle_columns {
-                    for y in 1..6 {
-                        twiddles[k] = NeonStoreF::from_complex2(
-                            compute_twiddle(y * (x * ENTRIES), 36, direction),
-                            compute_twiddle(y * (x * ENTRIES + 1), 36, direction),
-                        );
-                        k += 1;
-                    }
-                }
                 Self {
                     direction,
-                    twiddles,
+                    twiddles: gen_butterfly_twiddles_f32(6, 6, direction, 36),
                     bf6_column: $internal_bf::new(direction),
                 }
             }

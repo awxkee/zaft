@@ -28,9 +28,9 @@
  */
 #![allow(clippy::needless_range_loop)]
 
+use crate::avx::butterflies::shared::{gen_butterfly_twiddles_f32, gen_butterfly_twiddles_f64};
 use crate::avx::mixed::{AvxStoreD, AvxStoreF, ColumnButterfly5d, ColumnButterfly5f};
 use crate::avx::transpose::{transpose_5x5_f32, transpose_5x5_f64};
-use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use std::sync::Arc;
@@ -44,26 +44,9 @@ pub(crate) struct AvxButterfly25d {
 impl AvxButterfly25d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         unsafe {
-            let mut twiddles = [AvxStoreD::zero(); 12];
-            let mut q = 0usize;
-            let len_per_row = 5;
-            const COMPLEX_PER_VECTOR: usize = 2;
-            let quotient = len_per_row / COMPLEX_PER_VECTOR;
-            let remainder = len_per_row % COMPLEX_PER_VECTOR;
-
-            let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-            for x in 0..num_twiddle_columns {
-                for y in 1..5 {
-                    twiddles[q] = AvxStoreD::set_complex2(
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR), 25, fft_direction),
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), 25, fft_direction),
-                    );
-                    q += 1;
-                }
-            }
             Self {
                 direction: fft_direction,
-                twiddles,
+                twiddles: gen_butterfly_twiddles_f64(5, 5, fft_direction, 25),
                 bf5: ColumnButterfly5d::new(fft_direction),
             }
         }
@@ -258,28 +241,9 @@ pub(crate) struct AvxButterfly25f {
 impl AvxButterfly25f {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         unsafe {
-            let mut twiddles = [AvxStoreF::zero(); 8];
-            let mut q = 0usize;
-            let len_per_row = 5;
-            const COMPLEX_PER_VECTOR: usize = 4;
-            let quotient = len_per_row / COMPLEX_PER_VECTOR;
-            let remainder = len_per_row % COMPLEX_PER_VECTOR;
-
-            let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-            for x in 0..num_twiddle_columns {
-                for y in 1..5 {
-                    twiddles[q] = AvxStoreF::set_complex4(
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR), 25, fft_direction),
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), 25, fft_direction),
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 2), 25, fft_direction),
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 3), 25, fft_direction),
-                    );
-                    q += 1;
-                }
-            }
             Self {
                 direction: fft_direction,
-                twiddles,
+                twiddles: gen_butterfly_twiddles_f32(5, 5, fft_direction, 25),
                 bf5: ColumnButterfly5f::new(fft_direction),
             }
         }

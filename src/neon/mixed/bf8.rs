@@ -28,6 +28,8 @@
  */
 use crate::FftDirection;
 use crate::neon::butterflies::NeonButterfly;
+#[cfg(feature = "fcma")]
+use crate::neon::butterflies::{FastFcmaBf4d, FastFcmaBf4f};
 use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
 use crate::neon::util::{v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32};
 use std::arch::aarch64::*;
@@ -95,80 +97,50 @@ impl ColumnButterfly8d {
 
 #[cfg(feature = "fcma")]
 pub(crate) struct ColumnFcmaButterfly8d {
-    direction: FftDirection,
     root2: f64,
+    bf4: FastFcmaBf4d,
 }
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly8d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
-            direction: fft_direction,
             root2: 0.5f64.sqrt(),
+            bf4: FastFcmaBf4d::new(fft_direction),
         }
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 8]) -> [NeonStoreD; 8] {
-        match self.direction {
-            FftDirection::Forward => {
-                let (u0, u2, u4, u6) =
-                    NeonButterfly::bf4_f64_forward(store[0].v, store[2].v, store[4].v, store[6].v);
-                let (u1, mut u3, mut u5, mut u7) =
-                    NeonButterfly::bf4_f64_forward(store[1].v, store[3].v, store[5].v, store[7].v);
+        let (u0, u2, u4, u6) = self
+            .bf4
+            .exec(store[0].v, store[2].v, store[4].v, store[6].v);
+        let (u1, mut u3, mut u5, mut u7) = self
+            .bf4
+            .exec(store[1].v, store[3].v, store[5].v, store[7].v);
 
-                u3 = vmulq_n_f64(vcaddq_rot270_f64(u3, u3), self.root2);
-                u5 = vcaddq_rot270_f64(vdupq_n_f64(0.), u5);
-                u7 = vmulq_n_f64(
-                    vsubq_f64(vcaddq_rot270_f64(vdupq_n_f64(0.), u7), u7),
-                    self.root2,
-                );
+        u3 = vmulq_n_f64(vcmlaq_rot90_f64(u3, self.bf4.rot_sign, u3), self.root2);
+        u5 = vcmlaq_rot90_f64(vdupq_n_f64(0.), self.bf4.rot_sign, u5);
+        u7 = vmulq_n_f64(
+            vsubq_f64(vcmlaq_rot90_f64(vdupq_n_f64(0.), self.bf4.rot_sign, u7), u7),
+            self.root2,
+        );
 
-                let (y0, y1) = NeonButterfly::butterfly2_f64(u0, u1);
-                let (y2, y3) = NeonButterfly::butterfly2_f64(u2, u3);
-                let (y4, y5) = NeonButterfly::butterfly2_f64(u4, u5);
-                let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
-                [
-                    NeonStoreD::raw(y0),
-                    NeonStoreD::raw(y2),
-                    NeonStoreD::raw(y4),
-                    NeonStoreD::raw(y6),
-                    NeonStoreD::raw(y1),
-                    NeonStoreD::raw(y3),
-                    NeonStoreD::raw(y5),
-                    NeonStoreD::raw(y7),
-                ]
-            }
-            FftDirection::Inverse => {
-                let (u0, u2, u4, u6) =
-                    NeonButterfly::bf4_f64_backward(store[0].v, store[2].v, store[4].v, store[6].v);
-                let (u1, mut u3, mut u5, mut u7) =
-                    NeonButterfly::bf4_f64_backward(store[1].v, store[3].v, store[5].v, store[7].v);
-
-                u3 = vmulq_n_f64(vcaddq_rot90_f64(u3, u3), self.root2);
-                u5 = vcaddq_rot90_f64(vdupq_n_f64(0.), u5);
-                u7 = vmulq_n_f64(
-                    vsubq_f64(vcaddq_rot90_f64(vdupq_n_f64(0.), u7), u7),
-                    self.root2,
-                );
-
-                let (y0, y1) = NeonButterfly::butterfly2_f64(u0, u1);
-                let (y2, y3) = NeonButterfly::butterfly2_f64(u2, u3);
-                let (y4, y5) = NeonButterfly::butterfly2_f64(u4, u5);
-                let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
-                [
-                    NeonStoreD::raw(y0),
-                    NeonStoreD::raw(y2),
-                    NeonStoreD::raw(y4),
-                    NeonStoreD::raw(y6),
-                    NeonStoreD::raw(y1),
-                    NeonStoreD::raw(y3),
-                    NeonStoreD::raw(y5),
-                    NeonStoreD::raw(y7),
-                ]
-            }
-        }
+        let (y0, y1) = NeonButterfly::butterfly2_f64(u0, u1);
+        let (y2, y3) = NeonButterfly::butterfly2_f64(u2, u3);
+        let (y4, y5) = NeonButterfly::butterfly2_f64(u4, u5);
+        let (y6, y7) = NeonButterfly::butterfly2_f64(u6, u7);
+        [
+            NeonStoreD::raw(y0),
+            NeonStoreD::raw(y2),
+            NeonStoreD::raw(y4),
+            NeonStoreD::raw(y6),
+            NeonStoreD::raw(y1),
+            NeonStoreD::raw(y3),
+            NeonStoreD::raw(y5),
+            NeonStoreD::raw(y7),
+        ]
     }
 }
 
@@ -282,148 +254,90 @@ impl ColumnButterfly8f {
 
 #[cfg(feature = "fcma")]
 pub(crate) struct ColumnFcmaButterfly8f {
-    direction: FftDirection,
     root2: f32,
+    bf4: FastFcmaBf4f,
 }
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly8f {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
-            direction: fft_direction,
             root2: 0.5f32.sqrt(),
+            bf4: FastFcmaBf4f::new(fft_direction),
         }
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 8]) -> [NeonStoreF; 8] {
-        match self.direction {
-            FftDirection::Forward => {
-                let (u0, u2, u4, u6) =
-                    NeonButterfly::bf4_forward_f32(store[0].v, store[2].v, store[4].v, store[6].v);
-                let (u1, mut u3, mut u5, mut u7) =
-                    NeonButterfly::bf4_forward_f32(store[1].v, store[3].v, store[5].v, store[7].v);
+        let (u0, u2, u4, u6) = self
+            .bf4
+            .exec(store[0].v, store[2].v, store[4].v, store[6].v);
+        let (u1, mut u3, mut u5, mut u7) = self
+            .bf4
+            .exec(store[1].v, store[3].v, store[5].v, store[7].v);
 
-                u3 = vmulq_n_f32(vcaddq_rot270_f32(u3, u3), self.root2);
-                u5 = vcaddq_rot270_f32(vdupq_n_f32(0.), u5);
-                u7 = vmulq_n_f32(
-                    vsubq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), u7), u7),
-                    self.root2,
-                );
+        u3 = vmulq_n_f32(vcmlaq_rot90_f32(u3, self.bf4.rot_sign, u3), self.root2);
+        u5 = vcmlaq_rot90_f32(vdupq_n_f32(0.), self.bf4.rot_sign, u5);
+        u7 = vmulq_n_f32(
+            vsubq_f32(vcmlaq_rot90_f32(vdupq_n_f32(0.), self.bf4.rot_sign, u7), u7),
+            self.root2,
+        );
 
-                let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
-                let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
-                let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
-                let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
+        let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
+        let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
+        let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
+        let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
 
-                [
-                    NeonStoreF::raw(zy0),
-                    NeonStoreF::raw(zy2),
-                    NeonStoreF::raw(zy4),
-                    NeonStoreF::raw(zy6),
-                    NeonStoreF::raw(zy1),
-                    NeonStoreF::raw(zy3),
-                    NeonStoreF::raw(zy5),
-                    NeonStoreF::raw(zy7),
-                ]
-            }
-            FftDirection::Inverse => {
-                let (u0, u2, u4, u6) =
-                    NeonButterfly::bf4_backward_f32(store[0].v, store[2].v, store[4].v, store[6].v);
-                let (u1, mut u3, mut u5, mut u7) =
-                    NeonButterfly::bf4_backward_f32(store[1].v, store[3].v, store[5].v, store[7].v);
-
-                u3 = vmulq_n_f32(vcaddq_rot90_f32(u3, u3), self.root2);
-                u5 = vcaddq_rot90_f32(vdupq_n_f32(0.), u5);
-                u7 = vmulq_n_f32(
-                    vsubq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), u7), u7),
-                    self.root2,
-                );
-
-                let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0, u1);
-                let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2, u3);
-                let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4, u5);
-                let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6, u7);
-
-                [
-                    NeonStoreF::raw(zy0),
-                    NeonStoreF::raw(zy2),
-                    NeonStoreF::raw(zy4),
-                    NeonStoreF::raw(zy6),
-                    NeonStoreF::raw(zy1),
-                    NeonStoreF::raw(zy3),
-                    NeonStoreF::raw(zy5),
-                    NeonStoreF::raw(zy7),
-                ]
-            }
-        }
+        [
+            NeonStoreF::raw(zy0),
+            NeonStoreF::raw(zy2),
+            NeonStoreF::raw(zy4),
+            NeonStoreF::raw(zy6),
+            NeonStoreF::raw(zy1),
+            NeonStoreF::raw(zy3),
+            NeonStoreF::raw(zy5),
+            NeonStoreF::raw(zy7),
+        ]
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 8]) -> [NeonStoreFh; 8] {
-        match self.direction {
-            FftDirection::Forward => {
-                let (u0, u2, u4, u6) =
-                    NeonButterfly::bf4h_forward_f32(store[0].v, store[2].v, store[4].v, store[6].v);
-                let (u1, mut u3, mut u5, mut u7) =
-                    NeonButterfly::bf4h_forward_f32(store[1].v, store[3].v, store[5].v, store[7].v);
+        let (u0, u2, u4, u6) = self
+            .bf4
+            .exech(store[0].v, store[2].v, store[4].v, store[6].v);
+        let (u1, mut u3, mut u5, mut u7) = self
+            .bf4
+            .exech(store[1].v, store[3].v, store[5].v, store[7].v);
 
-                u3 = vmul_n_f32(vcadd_rot270_f32(u3, u3), self.root2);
-                u5 = vcadd_rot270_f32(vdup_n_f32(0.), u5);
-                u7 = vmul_n_f32(
-                    vsub_f32(vcadd_rot270_f32(vdup_n_f32(0.), u7), u7),
-                    self.root2,
-                );
+        u3 = vmul_n_f32(
+            vcmla_rot90_f32(u3, vget_low_f32(self.bf4.rot_sign), u3),
+            self.root2,
+        );
+        u5 = vcmla_rot90_f32(vdup_n_f32(0.), vget_low_f32(self.bf4.rot_sign), u5);
+        u7 = vmul_n_f32(
+            vsub_f32(
+                vcmla_rot90_f32(vdup_n_f32(0.), vget_low_f32(self.bf4.rot_sign), u7),
+                u7,
+            ),
+            self.root2,
+        );
 
-                let (zy0, zy1) = NeonButterfly::butterfly2h_f32(u0, u1);
-                let (zy2, zy3) = NeonButterfly::butterfly2h_f32(u2, u3);
-                let (zy4, zy5) = NeonButterfly::butterfly2h_f32(u4, u5);
-                let (zy6, zy7) = NeonButterfly::butterfly2h_f32(u6, u7);
+        let (zy0, zy1) = NeonButterfly::butterfly2h_f32(u0, u1);
+        let (zy2, zy3) = NeonButterfly::butterfly2h_f32(u2, u3);
+        let (zy4, zy5) = NeonButterfly::butterfly2h_f32(u4, u5);
+        let (zy6, zy7) = NeonButterfly::butterfly2h_f32(u6, u7);
 
-                [
-                    NeonStoreFh::raw(zy0),
-                    NeonStoreFh::raw(zy2),
-                    NeonStoreFh::raw(zy4),
-                    NeonStoreFh::raw(zy6),
-                    NeonStoreFh::raw(zy1),
-                    NeonStoreFh::raw(zy3),
-                    NeonStoreFh::raw(zy5),
-                    NeonStoreFh::raw(zy7),
-                ]
-            }
-            FftDirection::Inverse => {
-                let (u0, u2, u4, u6) = NeonButterfly::bf4h_backward_f32(
-                    store[0].v, store[2].v, store[4].v, store[6].v,
-                );
-                let (u1, mut u3, mut u5, mut u7) = NeonButterfly::bf4h_backward_f32(
-                    store[1].v, store[3].v, store[5].v, store[7].v,
-                );
-
-                u3 = vmul_n_f32(vcadd_rot90_f32(u3, u3), self.root2);
-                u5 = vcadd_rot90_f32(vdup_n_f32(0.), u5);
-                u7 = vmul_n_f32(
-                    vsub_f32(vcadd_rot90_f32(vdup_n_f32(0.), u7), u7),
-                    self.root2,
-                );
-
-                let (zy0, zy1) = NeonButterfly::butterfly2h_f32(u0, u1);
-                let (zy2, zy3) = NeonButterfly::butterfly2h_f32(u2, u3);
-                let (zy4, zy5) = NeonButterfly::butterfly2h_f32(u4, u5);
-                let (zy6, zy7) = NeonButterfly::butterfly2h_f32(u6, u7);
-
-                [
-                    NeonStoreFh::raw(zy0),
-                    NeonStoreFh::raw(zy2),
-                    NeonStoreFh::raw(zy4),
-                    NeonStoreFh::raw(zy6),
-                    NeonStoreFh::raw(zy1),
-                    NeonStoreFh::raw(zy3),
-                    NeonStoreFh::raw(zy5),
-                    NeonStoreFh::raw(zy7),
-                ]
-            }
-        }
+        [
+            NeonStoreFh::raw(zy0),
+            NeonStoreFh::raw(zy2),
+            NeonStoreFh::raw(zy4),
+            NeonStoreFh::raw(zy6),
+            NeonStoreFh::raw(zy1),
+            NeonStoreFh::raw(zy3),
+            NeonStoreFh::raw(zy5),
+            NeonStoreFh::raw(zy7),
+        ]
     }
 }

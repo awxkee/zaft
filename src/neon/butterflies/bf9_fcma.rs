@@ -93,7 +93,6 @@ impl NeonFcmaButterfly9<f64> {
         unsafe {
             let tw3_re = vdupq_n_f64(self.twiddle3_re);
             let tw3_im = vld1q_f64(self.twiddle3_im.as_ptr().cast());
-            let ntw3_im = vnegq_f64(tw3_im);
             let tw1 = vld1q_f64(self.twiddle1.as_ptr().cast());
             let tw2 = vld1q_f64(self.twiddle2.as_ptr().cast());
             let tw4 = vld1q_f64(self.twiddle4.as_ptr().cast());
@@ -109,24 +108,20 @@ impl NeonFcmaButterfly9<f64> {
                 let u7 = vld1q_f64(chunk.get_unchecked(7..).as_ptr().cast());
                 let u8 = vld1q_f64(chunk.get_unchecked(8..).as_ptr().cast());
 
-                let (u0, u3, u6) =
-                    NeonButterfly::butterfly3_f64_fcma(u0, u3, u6, tw3_re, tw3_im, ntw3_im);
+                let (u0, u3, u6) = NeonButterfly::butterfly3_f64_fcma(u0, u3, u6, tw3_re, tw3_im);
                 let (u1, mut u4, mut u7) =
-                    NeonButterfly::butterfly3_f64_fcma(u1, u4, u7, tw3_re, tw3_im, ntw3_im);
+                    NeonButterfly::butterfly3_f64_fcma(u1, u4, u7, tw3_re, tw3_im);
                 let (u2, mut u5, mut u8) =
-                    NeonButterfly::butterfly3_f64_fcma(u2, u5, u8, tw3_re, tw3_im, ntw3_im);
+                    NeonButterfly::butterfly3_f64_fcma(u2, u5, u8, tw3_re, tw3_im);
 
                 u4 = vfcmulq_fcma_f64(u4, tw1);
                 u7 = vfcmulq_fcma_f64(u7, tw2);
                 u5 = vfcmulq_fcma_f64(u5, tw2);
                 u8 = vfcmulq_fcma_f64(u8, tw4);
 
-                let (y0, y3, y6) =
-                    NeonButterfly::butterfly3_f64_fcma(u0, u1, u2, tw3_re, tw3_im, ntw3_im);
-                let (y1, y4, y7) =
-                    NeonButterfly::butterfly3_f64_fcma(u3, u4, u5, tw3_re, tw3_im, ntw3_im);
-                let (y2, y5, y8) =
-                    NeonButterfly::butterfly3_f64_fcma(u6, u7, u8, tw3_re, tw3_im, ntw3_im);
+                let (y0, y3, y6) = NeonButterfly::butterfly3_f64_fcma(u0, u1, u2, tw3_re, tw3_im);
+                let (y1, y4, y7) = NeonButterfly::butterfly3_f64_fcma(u3, u4, u5, tw3_re, tw3_im);
+                let (y2, y5, y8) = NeonButterfly::butterfly3_f64_fcma(u6, u7, u8, tw3_re, tw3_im);
 
                 vst1q_f64(chunk.as_mut_ptr().cast(), y0);
                 vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
@@ -159,7 +154,6 @@ impl NeonFcmaButterfly9<f64> {
         unsafe {
             let tw3_re = vdupq_n_f64(self.twiddle3_re);
             let tw3_im = vld1q_f64(self.twiddle3_im.as_ptr().cast());
-            let ntw3_im = vnegq_f64(tw3_im);
             let tw1 = vld1q_f64(self.twiddle1.as_ptr().cast());
             let tw2 = vld1q_f64(self.twiddle2.as_ptr().cast());
             let tw4 = vld1q_f64(self.twiddle4.as_ptr().cast());
@@ -175,24 +169,20 @@ impl NeonFcmaButterfly9<f64> {
                 let u7 = vld1q_f64(src.get_unchecked(7..).as_ptr().cast());
                 let u8 = vld1q_f64(src.get_unchecked(8..).as_ptr().cast());
 
-                let (u0, u3, u6) =
-                    NeonButterfly::butterfly3_f64_fcma(u0, u3, u6, tw3_re, tw3_im, ntw3_im);
+                let (u0, u3, u6) = NeonButterfly::butterfly3_f64_fcma(u0, u3, u6, tw3_re, tw3_im);
                 let (u1, mut u4, mut u7) =
-                    NeonButterfly::butterfly3_f64_fcma(u1, u4, u7, tw3_re, tw3_im, ntw3_im);
+                    NeonButterfly::butterfly3_f64_fcma(u1, u4, u7, tw3_re, tw3_im);
                 let (u2, mut u5, mut u8) =
-                    NeonButterfly::butterfly3_f64_fcma(u2, u5, u8, tw3_re, tw3_im, ntw3_im);
+                    NeonButterfly::butterfly3_f64_fcma(u2, u5, u8, tw3_re, tw3_im);
 
                 u4 = vfcmulq_fcma_f64(u4, tw1);
                 u7 = vfcmulq_fcma_f64(u7, tw2);
                 u5 = vfcmulq_fcma_f64(u5, tw2);
                 u8 = vfcmulq_fcma_f64(u8, tw4);
 
-                let (y0, y3, y6) =
-                    NeonButterfly::butterfly3_f64_fcma(u0, u1, u2, tw3_re, tw3_im, ntw3_im);
-                let (y1, y4, y7) =
-                    NeonButterfly::butterfly3_f64_fcma(u3, u4, u5, tw3_re, tw3_im, ntw3_im);
-                let (y2, y5, y8) =
-                    NeonButterfly::butterfly3_f64_fcma(u6, u7, u8, tw3_re, tw3_im, ntw3_im);
+                let (y0, y3, y6) = NeonButterfly::butterfly3_f64_fcma(u0, u1, u2, tw3_re, tw3_im);
+                let (y1, y4, y7) = NeonButterfly::butterfly3_f64_fcma(u3, u4, u5, tw3_re, tw3_im);
+                let (y2, y5, y8) = NeonButterfly::butterfly3_f64_fcma(u6, u7, u8, tw3_re, tw3_im);
 
                 vst1q_f64(dst.as_mut_ptr().cast(), y0);
                 vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
@@ -253,7 +243,6 @@ impl NeonFcmaButterfly9<f32> {
         unsafe {
             let tw3_re = vdupq_n_f32(self.twiddle3_re);
             let tw3_im = vld1q_f32(self.twiddle3_im.as_ptr().cast());
-            let n_tw3_im = vnegq_f32(tw3_im);
             let tw1 = vld1q_f32(self.twiddle1.as_ptr().cast());
             let tw2 = vld1q_f32(self.twiddle2.as_ptr().cast());
             let tw4 = vld1q_f32(self.twiddle4.as_ptr().cast());
@@ -279,24 +268,20 @@ impl NeonFcmaButterfly9<f32> {
                 let u7 = vcombine_f32(vget_high_f32(u6u7), vget_low_f32(u16u17));
                 let u8 = vcombine_f32(vget_low_f32(u8u9), vget_high_f32(u16u17));
 
-                let (u0, u3, u6) =
-                    NeonButterfly::butterfly3_f32_fcma(u0, u3, u6, tw3_re, tw3_im, n_tw3_im);
+                let (u0, u3, u6) = NeonButterfly::butterfly3_f32_fcma(u0, u3, u6, tw3_re, tw3_im);
                 let (u1, mut u4, mut u7) =
-                    NeonButterfly::butterfly3_f32_fcma(u1, u4, u7, tw3_re, tw3_im, n_tw3_im);
+                    NeonButterfly::butterfly3_f32_fcma(u1, u4, u7, tw3_re, tw3_im);
                 let (u2, mut u5, mut u8) =
-                    NeonButterfly::butterfly3_f32_fcma(u2, u5, u8, tw3_re, tw3_im, n_tw3_im);
+                    NeonButterfly::butterfly3_f32_fcma(u2, u5, u8, tw3_re, tw3_im);
 
                 u4 = vfcmulq_fcma_f32(u4, tw1);
                 u7 = vfcmulq_fcma_f32(u7, tw2);
                 u5 = vfcmulq_fcma_f32(u5, tw2);
                 u8 = vfcmulq_fcma_f32(u8, tw4);
 
-                let (y0, y3, y6) =
-                    NeonButterfly::butterfly3_f32_fcma(u0, u1, u2, tw3_re, tw3_im, n_tw3_im);
-                let (y1, y4, y7) =
-                    NeonButterfly::butterfly3_f32_fcma(u3, u4, u5, tw3_re, tw3_im, n_tw3_im);
-                let (y2, y5, y8) =
-                    NeonButterfly::butterfly3_f32_fcma(u6, u7, u8, tw3_re, tw3_im, n_tw3_im);
+                let (y0, y3, y6) = NeonButterfly::butterfly3_f32_fcma(u0, u1, u2, tw3_re, tw3_im);
+                let (y1, y4, y7) = NeonButterfly::butterfly3_f32_fcma(u3, u4, u5, tw3_re, tw3_im);
+                let (y2, y5, y8) = NeonButterfly::butterfly3_f32_fcma(u6, u7, u8, tw3_re, tw3_im);
 
                 let qy0 = vcombine_f32(vget_low_f32(y0), vget_low_f32(y1));
                 let qy1 = vcombine_f32(vget_low_f32(y2), vget_low_f32(y3));
@@ -343,7 +328,6 @@ impl NeonFcmaButterfly9<f32> {
                     u6,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (u1, mut u4, mut u7) = NeonButterfly::butterfly3h_f32_fcma(
                     u1,
@@ -351,7 +335,6 @@ impl NeonFcmaButterfly9<f32> {
                     u7,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (u2, mut u5, mut u8) = NeonButterfly::butterfly3h_f32_fcma(
                     u2,
@@ -359,7 +342,6 @@ impl NeonFcmaButterfly9<f32> {
                     u8,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
 
                 let hu4u7 = vfcmulq_fcma_f32(
@@ -381,7 +363,6 @@ impl NeonFcmaButterfly9<f32> {
                     u2,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (y1, y4, y7) = NeonButterfly::butterfly3h_f32_fcma(
                     u3,
@@ -389,7 +370,6 @@ impl NeonFcmaButterfly9<f32> {
                     u5,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (y2, y5, y8) = NeonButterfly::butterfly3h_f32_fcma(
                     u6,
@@ -397,7 +377,6 @@ impl NeonFcmaButterfly9<f32> {
                     u8,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
 
                 vst1q_f32(chunk.as_mut_ptr().cast(), vcombine_f32(y0, y1));
@@ -435,7 +414,6 @@ impl NeonFcmaButterfly9<f32> {
         unsafe {
             let tw3_re = vdupq_n_f32(self.twiddle3_re);
             let tw3_im = vld1q_f32(self.twiddle3_im.as_ptr().cast());
-            let n_tw3_im = vnegq_f32(tw3_im);
             let tw1 = vld1q_f32(self.twiddle1.as_ptr().cast());
             let tw2 = vld1q_f32(self.twiddle2.as_ptr().cast());
             let tw4 = vld1q_f32(self.twiddle4.as_ptr().cast());
@@ -461,24 +439,20 @@ impl NeonFcmaButterfly9<f32> {
                 let u7 = vcombine_f32(vget_high_f32(u6u7), vget_low_f32(u16u17));
                 let u8 = vcombine_f32(vget_low_f32(u8u9), vget_high_f32(u16u17));
 
-                let (u0, u3, u6) =
-                    NeonButterfly::butterfly3_f32_fcma(u0, u3, u6, tw3_re, tw3_im, n_tw3_im);
+                let (u0, u3, u6) = NeonButterfly::butterfly3_f32_fcma(u0, u3, u6, tw3_re, tw3_im);
                 let (u1, mut u4, mut u7) =
-                    NeonButterfly::butterfly3_f32_fcma(u1, u4, u7, tw3_re, tw3_im, n_tw3_im);
+                    NeonButterfly::butterfly3_f32_fcma(u1, u4, u7, tw3_re, tw3_im);
                 let (u2, mut u5, mut u8) =
-                    NeonButterfly::butterfly3_f32_fcma(u2, u5, u8, tw3_re, tw3_im, n_tw3_im);
+                    NeonButterfly::butterfly3_f32_fcma(u2, u5, u8, tw3_re, tw3_im);
 
                 u4 = vfcmulq_fcma_f32(u4, tw1);
                 u7 = vfcmulq_fcma_f32(u7, tw2);
                 u5 = vfcmulq_fcma_f32(u5, tw2);
                 u8 = vfcmulq_fcma_f32(u8, tw4);
 
-                let (y0, y3, y6) =
-                    NeonButterfly::butterfly3_f32_fcma(u0, u1, u2, tw3_re, tw3_im, n_tw3_im);
-                let (y1, y4, y7) =
-                    NeonButterfly::butterfly3_f32_fcma(u3, u4, u5, tw3_re, tw3_im, n_tw3_im);
-                let (y2, y5, y8) =
-                    NeonButterfly::butterfly3_f32_fcma(u6, u7, u8, tw3_re, tw3_im, n_tw3_im);
+                let (y0, y3, y6) = NeonButterfly::butterfly3_f32_fcma(u0, u1, u2, tw3_re, tw3_im);
+                let (y1, y4, y7) = NeonButterfly::butterfly3_f32_fcma(u3, u4, u5, tw3_re, tw3_im);
+                let (y2, y5, y8) = NeonButterfly::butterfly3_f32_fcma(u6, u7, u8, tw3_re, tw3_im);
 
                 let qy0 = vcombine_f32(vget_low_f32(y0), vget_low_f32(y1));
                 let qy1 = vcombine_f32(vget_low_f32(y2), vget_low_f32(y3));
@@ -526,7 +500,6 @@ impl NeonFcmaButterfly9<f32> {
                     u6,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (u1, mut u4, mut u7) = NeonButterfly::butterfly3h_f32_fcma(
                     u1,
@@ -534,7 +507,6 @@ impl NeonFcmaButterfly9<f32> {
                     u7,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (u2, mut u5, mut u8) = NeonButterfly::butterfly3h_f32_fcma(
                     u2,
@@ -542,7 +514,6 @@ impl NeonFcmaButterfly9<f32> {
                     u8,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
 
                 let hu4u7 = vfcmulq_fcma_f32(
@@ -564,7 +535,6 @@ impl NeonFcmaButterfly9<f32> {
                     u2,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (y1, y4, y7) = NeonButterfly::butterfly3h_f32_fcma(
                     u3,
@@ -572,7 +542,6 @@ impl NeonFcmaButterfly9<f32> {
                     u5,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
                 let (y2, y5, y8) = NeonButterfly::butterfly3h_f32_fcma(
                     u6,
@@ -580,7 +549,6 @@ impl NeonFcmaButterfly9<f32> {
                     u8,
                     vget_low_f32(tw3_re),
                     vget_low_f32(tw3_im),
-                    vget_low_f32(n_tw3_im),
                 );
 
                 vst1q_f32(dst.as_mut_ptr().cast(), vcombine_f32(y0, y1));

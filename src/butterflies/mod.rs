@@ -136,6 +136,9 @@ macro_rules! test_butterfly {
         #[test]
         fn $method_name() {
             use rand::Rng;
+            let radix_forward = $butterfly::new(FftDirection::Forward);
+            let radix_inverse = $butterfly::new(FftDirection::Inverse);
+            assert_eq!(radix_forward.length(), $scale);
             for i in 1..20 {
                 let val = $scale as usize;
                 let size = val * i;
@@ -153,8 +156,6 @@ macro_rules! test_butterfly {
                 let mut ref_src = src.to_vec();
                 reference_forward.execute(&mut ref_src).unwrap();
 
-                let radix_forward = $butterfly::new(FftDirection::Forward);
-                let radix_inverse = $butterfly::new(FftDirection::Inverse);
                 radix_forward.execute(&mut input).unwrap();
 
                 input

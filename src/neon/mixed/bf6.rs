@@ -148,7 +148,6 @@ impl ColumnButterfly6f {
 pub(crate) struct ColumnFcmaButterfly6f {
     tw_re: float32x4_t,
     tw_im: float32x4_t,
-    n_tw_im: float32x4_t,
 }
 
 #[cfg(feature = "fcma")]
@@ -164,7 +163,6 @@ impl ColumnFcmaButterfly6f {
             Self {
                 tw_re: vdupq_n_f32(twiddle.re),
                 tw_im: q,
-                n_tw_im: vnegq_f32(q),
             }
         }
     }
@@ -173,20 +171,10 @@ impl ColumnFcmaButterfly6f {
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 6]) -> [NeonStoreF; 6] {
         let (t0, t2, t4) = NeonButterfly::butterfly3_f32_fcma(
-            store[0].v,
-            store[2].v,
-            store[4].v,
-            self.tw_re,
-            self.tw_im,
-            self.n_tw_im,
+            store[0].v, store[2].v, store[4].v, self.tw_re, self.tw_im,
         );
         let (t1, t3, t5) = NeonButterfly::butterfly3_f32_fcma(
-            store[3].v,
-            store[5].v,
-            store[1].v,
-            self.tw_re,
-            self.tw_im,
-            self.n_tw_im,
+            store[3].v, store[5].v, store[1].v, self.tw_re, self.tw_im,
         );
         let (y0, y3) = NeonButterfly::butterfly2_f32(t0, t1);
         let (y4, y1) = NeonButterfly::butterfly2_f32(t2, t3);
@@ -210,7 +198,6 @@ impl ColumnFcmaButterfly6f {
             store[4].v,
             vget_low_f32(self.tw_re),
             vget_low_f32(self.tw_im),
-            vget_low_f32(self.n_tw_im),
         );
         let (t1, t3, t5) = NeonButterfly::butterfly3h_f32_fcma(
             store[3].v,
@@ -218,7 +205,6 @@ impl ColumnFcmaButterfly6f {
             store[1].v,
             vget_low_f32(self.tw_re),
             vget_low_f32(self.tw_im),
-            vget_low_f32(self.n_tw_im),
         );
         let (y0, y3) = NeonButterfly::butterfly2h_f32(t0, t1);
         let (y4, y1) = NeonButterfly::butterfly2h_f32(t2, t3);
@@ -238,7 +224,6 @@ impl ColumnFcmaButterfly6f {
 pub(crate) struct ColumnFcmaButterfly6d {
     tw_re: float64x2_t,
     tw_im: float64x2_t,
-    n_tw_im: float64x2_t,
 }
 
 #[cfg(feature = "fcma")]
@@ -251,7 +236,6 @@ impl ColumnFcmaButterfly6d {
             Self {
                 tw_re: vdupq_n_f64(twiddle.re),
                 tw_im: q,
-                n_tw_im: vnegq_f64(q),
             }
         }
     }
@@ -260,20 +244,10 @@ impl ColumnFcmaButterfly6d {
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 6]) -> [NeonStoreD; 6] {
         let (t0, t2, t4) = NeonButterfly::butterfly3_f64_fcma(
-            store[0].v,
-            store[2].v,
-            store[4].v,
-            self.tw_re,
-            self.tw_im,
-            self.n_tw_im,
+            store[0].v, store[2].v, store[4].v, self.tw_re, self.tw_im,
         );
         let (t1, t3, t5) = NeonButterfly::butterfly3_f64_fcma(
-            store[3].v,
-            store[5].v,
-            store[1].v,
-            self.tw_re,
-            self.tw_im,
-            self.n_tw_im,
+            store[3].v, store[5].v, store[1].v, self.tw_re, self.tw_im,
         );
         let (y0, y3) = NeonButterfly::butterfly2_f64(t0, t1);
         let (y4, y1) = NeonButterfly::butterfly2_f64(t2, t3);

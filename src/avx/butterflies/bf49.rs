@@ -28,6 +28,7 @@
  */
 #![allow(clippy::needless_range_loop)]
 
+use crate::avx::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::avx::mixed::{AvxStoreD, AvxStoreF, ColumnButterfly7d, ColumnButterfly7f};
 use crate::avx::transpose::{store_transpose_7x7_f32, transpose_7x7_f64};
 use crate::util::compute_twiddle;
@@ -308,28 +309,9 @@ pub(crate) struct AvxButterfly49f {
 impl AvxButterfly49f {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         unsafe {
-            let mut twiddles = [AvxStoreF::zero(); 12];
-            let mut q = 0usize;
-            let len_per_row = 7;
-            const COMPLEX_PER_VECTOR: usize = 4;
-            let quotient = len_per_row / COMPLEX_PER_VECTOR;
-            let remainder = len_per_row % COMPLEX_PER_VECTOR;
-
-            let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-            for x in 0..num_twiddle_columns {
-                for y in 1..7 {
-                    twiddles[q] = AvxStoreF::set_complex4(
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR), 49, fft_direction),
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), 49, fft_direction),
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 2), 49, fft_direction),
-                        compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 3), 49, fft_direction),
-                    );
-                    q += 1;
-                }
-            }
             Self {
                 direction: fft_direction,
-                twiddles,
+                twiddles: gen_butterfly_twiddles_f32(7, 7, fft_direction, 49),
                 bf7: ColumnButterfly7f::new(fft_direction),
             }
         }

@@ -30,6 +30,7 @@ mod bf10;
 mod bf11;
 mod bf12;
 mod bf13;
+mod bf14;
 mod bf16;
 mod bf2;
 mod bf3;
@@ -42,6 +43,9 @@ mod bf9;
 mod mixed_radix;
 mod neon_store;
 
+pub(crate) use bf3::{ColumnButterfly3d, ColumnButterfly3f};
+#[cfg(feature = "fcma")]
+pub(crate) use bf3::{ColumnFcmaButterfly3d, ColumnFcmaButterfly3f};
 pub(crate) use bf4::{ColumnButterfly4d, ColumnButterfly4f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf4::{ColumnFcmaButterfly4d, ColumnFcmaButterfly4f};
@@ -83,14 +87,14 @@ pub(crate) use mixed_radix::{
     NeonFcmaMixedRadix8, NeonFcmaMixedRadix8f, NeonFcmaMixedRadix9, NeonFcmaMixedRadix9f,
     NeonFcmaMixedRadix10, NeonFcmaMixedRadix10f, NeonFcmaMixedRadix11, NeonFcmaMixedRadix11f,
     NeonFcmaMixedRadix12, NeonFcmaMixedRadix12f, NeonFcmaMixedRadix13, NeonFcmaMixedRadix13f,
-    NeonFcmaMixedRadix16, NeonFcmaMixedRadix16f,
+    NeonFcmaMixedRadix14, NeonFcmaMixedRadix14f, NeonFcmaMixedRadix16, NeonFcmaMixedRadix16f,
 };
 pub(crate) use mixed_radix::{
     NeonMixedRadix2, NeonMixedRadix2f, NeonMixedRadix3, NeonMixedRadix3f, NeonMixedRadix4,
     NeonMixedRadix4f, NeonMixedRadix5, NeonMixedRadix5f, NeonMixedRadix6, NeonMixedRadix6f,
     NeonMixedRadix7, NeonMixedRadix7f, NeonMixedRadix8, NeonMixedRadix8f, NeonMixedRadix9,
     NeonMixedRadix9f, NeonMixedRadix10, NeonMixedRadix10f, NeonMixedRadix11, NeonMixedRadix11f,
-    NeonMixedRadix12, NeonMixedRadix12f, NeonMixedRadix13, NeonMixedRadix13f, NeonMixedRadix16,
-    NeonMixedRadix16f,
+    NeonMixedRadix12, NeonMixedRadix12f, NeonMixedRadix13, NeonMixedRadix13f, NeonMixedRadix14,
+    NeonMixedRadix14f, NeonMixedRadix16, NeonMixedRadix16f,
 };
-pub(crate) use neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
+pub(crate) use neon_store::{NeonStoreD, NeonStoreF};

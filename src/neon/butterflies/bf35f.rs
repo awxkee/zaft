@@ -28,9 +28,9 @@
  */
 #![allow(clippy::needless_range_loop)]
 
+use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::{neon_transpose_f32x2_2x2_impl, transpose_6x5};
-use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::{float32x4x2_t, vdupq_n_f32};
@@ -48,26 +48,9 @@ macro_rules! gen_bf35f {
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
-                let mut twiddles = [NeonStoreF::default(); 16];
-                let mut q = 0usize;
-                let len_per_row = 7;
-                const COMPLEX_PER_VECTOR: usize = 2;
-                let quotient = len_per_row / COMPLEX_PER_VECTOR;
-                let remainder = len_per_row % COMPLEX_PER_VECTOR;
-
-                let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
-                for x in 0..num_twiddle_columns {
-                    for y in 1..5 {
-                        twiddles[q] = NeonStoreF::from_complex2(
-                            compute_twiddle(y * (x * COMPLEX_PER_VECTOR), 35, fft_direction),
-                            compute_twiddle(y * (x * COMPLEX_PER_VECTOR + 1), 35, fft_direction),
-                        );
-                        q += 1;
-                    }
-                }
                 Self {
                     direction: fft_direction,
-                    twiddles,
+                    twiddles: gen_butterfly_twiddles_f32(7, 5, fft_direction, 35),
                     bf7: $internal_bf7::new(fft_direction),
                     bf5: $internal_bf5::new(fft_direction),
                 }
