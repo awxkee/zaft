@@ -789,6 +789,11 @@ impl Zaft {
             T::radix5(n, fft_direction)
         } else if prime_factors.is_power_of_two {
             // Use Radix-4 if a power of 2
+            if n / 512 <= 16 && T::butterfly512(fft_direction).is_some() {
+                if let Some(exec) = Zaft::try_split_mixed_radix_butterflies(n as u64 / 512, 512, fft_direction)? {
+                    return Ok(exec);
+                }
+            }
             T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_six {
             T::radix6(n, fft_direction)
