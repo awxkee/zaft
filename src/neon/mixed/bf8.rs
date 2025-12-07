@@ -166,6 +166,31 @@ impl ColumnButterfly8f {
     }
 
     #[inline(always)]
+    pub(crate) fn rotate1(&self, v: NeonStoreF) -> NeonStoreF {
+        unsafe {
+            NeonStoreF::raw(vmulq_n_f32(
+                vaddq_f32(v_rotate90_f32(v.v, self.rotate), v.v),
+                self.root2,
+            ))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn rotate3(&self, v: NeonStoreF) -> NeonStoreF {
+        unsafe {
+            NeonStoreF::raw(vmulq_n_f32(
+                vsubq_f32(v_rotate90_f32(v.v, self.rotate), v.v),
+                self.root2,
+            ))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn rotate(&self, v: NeonStoreF) -> NeonStoreF {
+        NeonStoreF::raw(v_rotate90_f32(v.v, self.rotate))
+    }
+
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreF; 8]) -> [NeonStoreF; 8] {
         unsafe {
             let (u0, u2, u4, u6) = NeonButterfly::butterfly4_f32(
@@ -265,6 +290,33 @@ impl ColumnFcmaButterfly8f {
             root2: 0.5f32.sqrt(),
             bf4: FastFcmaBf4f::new(fft_direction),
         }
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate1(&self, v: NeonStoreF) -> NeonStoreF {
+        NeonStoreF::raw(vmulq_n_f32(
+            vcmlaq_rot90_f32(v.v, self.bf4.rot_sign, v.v),
+            self.root2,
+        ))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate3(&self, v: NeonStoreF) -> NeonStoreF {
+        NeonStoreF::raw(vmulq_n_f32(
+            vsubq_f32(
+                vcmlaq_rot90_f32(vdupq_n_f32(0.), self.bf4.rot_sign, v.v),
+                v.v,
+            ),
+            self.root2,
+        ))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate(&self, v: NeonStoreF) -> NeonStoreF {
+        NeonStoreF::raw(vcmlaq_rot90_f32(vdupq_n_f32(0.), self.bf4.rot_sign, v.v))
     }
 
     #[inline]

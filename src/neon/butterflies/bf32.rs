@@ -218,7 +218,7 @@ gen_bf32d!(
 );
 
 #[inline(always)]
-fn transpose_8x4_to_4x8_f32(
+pub(crate) fn transpose_8x4_to_4x8_f32(
     rows0: [NeonStoreF; 4],
     rows1: [NeonStoreF; 4],
     rows2: [NeonStoreF; 4],

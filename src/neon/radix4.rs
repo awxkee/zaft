@@ -200,7 +200,15 @@ where
             4 => T::butterfly16(fft_direction)?,
             _ => {
                 if exponent % 2 == 1 {
-                    if exponent >= 7 {
+                    if exponent >= 9 {
+                        T::butterfly512(fft_direction).map_or_else(
+                            || {
+                                T::butterfly128(fft_direction)
+                                    .map_or_else(|| T::butterfly32(fft_direction), Ok)
+                            },
+                            Ok,
+                        )?
+                    } else if exponent >= 7 {
                         T::butterfly128(fft_direction)
                             .map_or_else(|| T::butterfly32(fft_direction), Ok)?
                     } else {
@@ -505,6 +513,6 @@ mod tests {
     use super::*;
     use crate::util::test_radix;
 
-    test_radix!(test_neon_radix4, f32, NeonRadix4, 11, 2, 1e-2);
+    test_radix!(test_neon_radix4, f32, NeonRadix4, 12, 2, 1e-2);
     test_radix!(test_neon_radix4_f64, f64, NeonRadix4, 11, 2, 1e-8);
 }

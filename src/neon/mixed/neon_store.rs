@@ -41,6 +41,13 @@ pub(crate) struct NeonStoreF {
     pub(crate) v: float32x4_t,
 }
 
+impl NeonStoreF {
+    #[inline(always)]
+    pub(crate) fn neg(&self) -> NeonStoreF {
+        unsafe { NeonStoreF::raw(vnegq_f32(self.v)) }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct NeonStoreFh {
     pub(crate) v: float32x2_t,

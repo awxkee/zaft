@@ -775,6 +775,10 @@ impl Zaft {
             if let Some(executor) = T::butterfly256(fft_direction) {
                 return Ok(executor.into_fft_executor());
             }
+        } else if n == 512 {
+            if let Some(executor) = T::butterfly512(fft_direction) {
+                return Ok(executor);
+            }
         }
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {

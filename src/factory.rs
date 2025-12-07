@@ -320,6 +320,9 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly256(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly512(
+        fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn radix3(
         n: usize,
         fft_direction: FftDirection,
@@ -1000,6 +1003,19 @@ impl AlgorithmFactory<f32> for f32 {
             NeonButterfly256f,
             NeonFcmaButterfly256f
         )
+    }
+
+    fn butterfly512(_fft_direction: FftDirection) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            if std::arch::is_aarch64_feature_detected!("fcma") {
+                use crate::neon::NeonFcmaButterfly512f;
+                return Some(Arc::new(NeonFcmaButterfly512f::new(_fft_direction)));
+            }
+            use crate::neon::NeonButterfly512f;
+            Some(Arc::new(NeonButterfly512f::new( _fft_direction)))
+        }
     }
 
     fn radix3(
