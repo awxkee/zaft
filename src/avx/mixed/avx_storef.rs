@@ -70,6 +70,14 @@ impl SseStoreF {
 impl AvxStoreF {
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn neg(&self) -> AvxStoreF {
+        AvxStoreF {
+            v: _mm256_xor_ps(self.v, _mm256_set1_ps(-0.0)),
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn raw(r: __m256) -> AvxStoreF {
         AvxStoreF { v: r }
     }
@@ -128,6 +136,14 @@ impl AvxStoreF {
     ) -> Self {
         AvxStoreF {
             v: _mm256_setr_ps(v0.re, v0.im, v1.re, v1.im, v2.re, v2.im, v3.re, v3.im),
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn set_complex(v0: Complex<f32>) -> Self {
+        AvxStoreF {
+            v: _mm256_setr_ps(v0.re, v0.im, v0.re, v0.im, v0.re, v0.im, v0.re, v0.im),
         }
     }
 
