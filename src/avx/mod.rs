@@ -57,8 +57,9 @@ pub(crate) use butterflies::{
     AvxButterfly49f, AvxButterfly54d, AvxButterfly54f, AvxButterfly63d, AvxButterfly63f,
     AvxButterfly64d, AvxButterfly64f, AvxButterfly72d, AvxButterfly72f, AvxButterfly81d,
     AvxButterfly81f, AvxButterfly100d, AvxButterfly100f, AvxButterfly121d, AvxButterfly121f,
-    AvxButterfly128d, AvxButterfly128f, AvxButterfly144d, AvxButterfly144f, AvxButterfly169d,
-    AvxButterfly169f, AvxButterfly256d, AvxButterfly256f, AvxButterfly512d, AvxButterfly512f,
+    AvxButterfly125d, AvxButterfly125f, AvxButterfly128d, AvxButterfly128f, AvxButterfly144d,
+    AvxButterfly144f, AvxButterfly169d, AvxButterfly169f, AvxButterfly243d, AvxButterfly243f,
+    AvxButterfly256d, AvxButterfly256f, AvxButterfly512d, AvxButterfly512f,
 };
 pub(crate) use c2r::C2RAvxTwiddles;
 pub(crate) use mixed::{

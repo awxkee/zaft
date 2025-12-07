@@ -27,18 +27,16 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::avx::butterflies::AvxFastButterfly3;
 use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::mixed::avx_storef::AvxStoreF;
-use crate::avx::util::{_mm256_fcmul_pd, _mm256_fcmul_ps};
+use crate::avx::mixed::{ColumnButterfly3d, ColumnButterfly3f};
 use crate::util::compute_twiddle;
-use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly9d {
-    bf3: AvxFastButterfly3<f64>,
-    twiddle1: __m256d,
-    twiddle2: __m256d,
-    twiddle4: __m256d,
+    pub(crate) bf3: ColumnButterfly3d,
+    twiddle1: AvxStoreD,
+    twiddle2: AvxStoreD,
+    twiddle4: AvxStoreD,
 }
 
 impl ColumnButterfly9d {
@@ -47,13 +45,11 @@ impl ColumnButterfly9d {
         let tw1 = compute_twiddle::<f64>(1, 9, direction);
         let tw2 = compute_twiddle::<f64>(2, 9, direction);
         let tw4 = compute_twiddle::<f64>(4, 9, direction);
-        unsafe {
-            Self {
-                twiddle1: _mm256_loadu_pd([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr().cast()),
-                twiddle2: _mm256_loadu_pd([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr().cast()),
-                twiddle4: _mm256_loadu_pd([tw4.re, tw4.im, tw4.re, tw4.im].as_ptr().cast()),
-                bf3: AvxFastButterfly3::<f64>::new(direction),
-            }
+        Self {
+            twiddle1: AvxStoreD::set_complex(&tw1),
+            twiddle2: AvxStoreD::set_complex(&tw2),
+            twiddle4: AvxStoreD::set_complex(&tw4),
+            bf3: ColumnButterfly3d::new(direction),
         }
     }
 }
@@ -62,37 +58,27 @@ impl ColumnButterfly9d {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 9]) -> [AvxStoreD; 9] {
-        let (u0, u3, u6) = self.bf3.exec(v[0].v, v[3].v, v[6].v);
-        let (u1, mut u4, mut u7) = self.bf3.exec(v[1].v, v[4].v, v[7].v);
-        let (u2, mut u5, mut u8) = self.bf3.exec(v[2].v, v[5].v, v[8].v);
+        let [u0, u3, u6] = self.bf3.exec([v[0], v[3], v[6]]);
+        let [u1, mut u4, mut u7] = self.bf3.exec([v[1], v[4], v[7]]);
+        let [u2, mut u5, mut u8] = self.bf3.exec([v[2], v[5], v[8]]);
 
-        u4 = _mm256_fcmul_pd(u4, self.twiddle1);
-        u7 = _mm256_fcmul_pd(u7, self.twiddle2);
-        u5 = _mm256_fcmul_pd(u5, self.twiddle2);
-        u8 = _mm256_fcmul_pd(u8, self.twiddle4);
+        u4 = AvxStoreD::mul_by_complex(u4, self.twiddle1);
+        u7 = AvxStoreD::mul_by_complex(u7, self.twiddle2);
+        u5 = AvxStoreD::mul_by_complex(u5, self.twiddle2);
+        u8 = AvxStoreD::mul_by_complex(u8, self.twiddle4);
 
-        let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
-        let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
-        let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
-        [
-            AvxStoreD::raw(y0),
-            AvxStoreD::raw(y1),
-            AvxStoreD::raw(y2),
-            AvxStoreD::raw(y3),
-            AvxStoreD::raw(y4),
-            AvxStoreD::raw(y5),
-            AvxStoreD::raw(y6),
-            AvxStoreD::raw(y7),
-            AvxStoreD::raw(y8),
-        ]
+        let [y0, y3, y6] = self.bf3.exec([u0, u1, u2]);
+        let [y1, y4, y7] = self.bf3.exec([u3, u4, u5]);
+        let [y2, y5, y8] = self.bf3.exec([u6, u7, u8]);
+        [y0, y1, y2, y3, y4, y5, y6, y7, y8]
     }
 }
 
 pub(crate) struct ColumnButterfly9f {
-    bf3: AvxFastButterfly3<f32>,
-    twiddle1: __m256,
-    twiddle2: __m256,
-    twiddle4: __m256,
+    pub(crate) bf3: ColumnButterfly3f,
+    twiddle1: AvxStoreF,
+    twiddle2: AvxStoreF,
+    twiddle4: AvxStoreF,
 }
 
 impl ColumnButterfly9f {
@@ -101,61 +87,31 @@ impl ColumnButterfly9f {
         let tw1 = compute_twiddle::<f32>(1, 9, direction);
         let tw2 = compute_twiddle::<f32>(2, 9, direction);
         let tw4 = compute_twiddle::<f32>(4, 9, direction);
-        unsafe {
-            Self {
-                twiddle1: _mm256_loadu_ps(
-                    [
-                        tw1.re, tw1.im, tw1.re, tw1.im, tw1.re, tw1.im, tw1.re, tw1.im,
-                    ]
-                    .as_ptr()
-                    .cast(),
-                ),
-                twiddle2: _mm256_loadu_ps(
-                    [
-                        tw2.re, tw2.im, tw2.re, tw2.im, tw2.re, tw2.im, tw2.re, tw2.im,
-                    ]
-                    .as_ptr()
-                    .cast(),
-                ),
-                twiddle4: _mm256_loadu_ps(
-                    [
-                        tw4.re, tw4.im, tw4.re, tw4.im, tw4.re, tw4.im, tw4.re, tw4.im,
-                    ]
-                    .as_ptr()
-                    .cast(),
-                ),
-                bf3: AvxFastButterfly3::<f32>::new(direction),
-            }
+        Self {
+            twiddle1: AvxStoreF::set_complex(tw1),
+            twiddle2: AvxStoreF::set_complex(tw2),
+            twiddle4: AvxStoreF::set_complex(tw4),
+            bf3: ColumnButterfly3f::new(direction),
         }
     }
 }
 
 impl ColumnButterfly9f {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreF; 9]) -> [AvxStoreF; 9] {
-        let (u0, u3, u6) = self.bf3.exec(v[0].v, v[3].v, v[6].v);
-        let (u1, mut u4, mut u7) = self.bf3.exec(v[1].v, v[4].v, v[7].v);
-        let (u2, mut u5, mut u8) = self.bf3.exec(v[2].v, v[5].v, v[8].v);
+        let [u0, u3, u6] = self.bf3.exec([v[0], v[3], v[6]]);
+        let [u1, mut u4, mut u7] = self.bf3.exec([v[1], v[4], v[7]]);
+        let [u2, mut u5, mut u8] = self.bf3.exec([v[2], v[5], v[8]]);
 
-        u4 = _mm256_fcmul_ps(u4, self.twiddle1);
-        u7 = _mm256_fcmul_ps(u7, self.twiddle2);
-        u5 = _mm256_fcmul_ps(u5, self.twiddle2);
-        u8 = _mm256_fcmul_ps(u8, self.twiddle4);
+        u4 = AvxStoreF::mul_by_complex(u4, self.twiddle1);
+        u7 = AvxStoreF::mul_by_complex(u7, self.twiddle2);
+        u5 = AvxStoreF::mul_by_complex(u5, self.twiddle2);
+        u8 = AvxStoreF::mul_by_complex(u8, self.twiddle4);
 
-        let (y0, y3, y6) = self.bf3.exec(u0, u1, u2);
-        let (y1, y4, y7) = self.bf3.exec(u3, u4, u5);
-        let (y2, y5, y8) = self.bf3.exec(u6, u7, u8);
-        [
-            AvxStoreF::raw(y0),
-            AvxStoreF::raw(y1),
-            AvxStoreF::raw(y2),
-            AvxStoreF::raw(y3),
-            AvxStoreF::raw(y4),
-            AvxStoreF::raw(y5),
-            AvxStoreF::raw(y6),
-            AvxStoreF::raw(y7),
-            AvxStoreF::raw(y8),
-        ]
+        let [y0, y3, y6] = self.bf3.exec([u0, u1, u2]);
+        let [y1, y4, y7] = self.bf3.exec([u3, u4, u5]);
+        let [y2, y5, y8] = self.bf3.exec([u6, u7, u8]);
+        [y0, y1, y2, y3, y4, y5, y6, y7, y8]
     }
 }

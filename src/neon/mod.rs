@@ -77,9 +77,10 @@ pub(crate) use butterflies::{
     NeonButterfly42f, NeonButterfly48d, NeonButterfly48f, NeonButterfly49d, NeonButterfly49f,
     NeonButterfly54d, NeonButterfly54f, NeonButterfly63d, NeonButterfly63f, NeonButterfly64d,
     NeonButterfly64f, NeonButterfly72d, NeonButterfly72f, NeonButterfly81d, NeonButterfly81f,
-    NeonButterfly100d, NeonButterfly100f, NeonButterfly121d, NeonButterfly121f, NeonButterfly128d,
-    NeonButterfly128f, NeonButterfly144d, NeonButterfly144f, NeonButterfly169d, NeonButterfly169f,
-    NeonButterfly256d, NeonButterfly256f, NeonButterfly512f,
+    NeonButterfly100d, NeonButterfly100f, NeonButterfly121d, NeonButterfly121f, NeonButterfly125d,
+    NeonButterfly125f, NeonButterfly128d, NeonButterfly128f, NeonButterfly144d, NeonButterfly144f,
+    NeonButterfly169d, NeonButterfly169f, NeonButterfly243d, NeonButterfly243f, NeonButterfly256d,
+    NeonButterfly256f, NeonButterfly512f,
 };
 #[cfg(feature = "fcma")]
 pub(crate) use butterflies::{
@@ -97,8 +98,9 @@ pub(crate) use butterflies::{
     NeonFcmaButterfly54d, NeonFcmaButterfly54f, NeonFcmaButterfly63d, NeonFcmaButterfly63f,
     NeonFcmaButterfly64d, NeonFcmaButterfly64f, NeonFcmaButterfly72d, NeonFcmaButterfly72f,
     NeonFcmaButterfly81d, NeonFcmaButterfly81f, NeonFcmaButterfly100d, NeonFcmaButterfly100f,
-    NeonFcmaButterfly121d, NeonFcmaButterfly121f, NeonFcmaButterfly128d, NeonFcmaButterfly128f,
-    NeonFcmaButterfly144d, NeonFcmaButterfly144f, NeonFcmaButterfly169d, NeonFcmaButterfly169f,
+    NeonFcmaButterfly121d, NeonFcmaButterfly121f, NeonFcmaButterfly125d, NeonFcmaButterfly125f,
+    NeonFcmaButterfly128d, NeonFcmaButterfly128f, NeonFcmaButterfly144d, NeonFcmaButterfly144f,
+    NeonFcmaButterfly169d, NeonFcmaButterfly169f, NeonFcmaButterfly243d, NeonFcmaButterfly243f,
     NeonFcmaButterfly256d, NeonFcmaButterfly256f, NeonFcmaButterfly512f,
 };
 pub(crate) use c2r::C2RNeonTwiddles;
