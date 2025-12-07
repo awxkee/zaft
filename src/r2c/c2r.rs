@@ -38,8 +38,23 @@ use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 pub trait C2RFftExecutor<T> {
+    /// Executes the Complex-to-Real Inverse FFT.
+    ///
+    /// The size of the `input` slice must be equal to `self.complex_length()`, and the size of the
+    /// `output` slice must be equal to `self.real_length()`.
+    ///
+    /// # Parameters
+    /// * `input`: The **complex-valued**, frequency-domain input array.
+    /// * `output`: The mutable slice where the final **real-valued** time-domain result will be written.
+    ///
+    /// # Errors
+    /// Returns a `ZaftError` if the execution fails (e.g., due to incorrect slice lengths or internal computation errors).
     fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError>;
+    /// Returns the **length** of the final **real-valued** output array (N).
+    ///
+    /// This is the size of the time-domain vector that results from the inverse transform.
     fn real_length(&self) -> usize;
+    /// Returns the **length** of the **complex-valued** input array (`N/2 + 1`).
     fn complex_length(&self) -> usize;
 }
 

@@ -67,6 +67,7 @@ mod radix5;
 mod radix6;
 mod radix7;
 mod spectrum_arithmetic;
+mod td;
 mod traits;
 mod transpose;
 mod transpose_arbitrary;
@@ -98,6 +99,7 @@ use crate::r2c::{
     R2CFftOddInterceptor,
 };
 use crate::spectrum_arithmetic::SpectrumOpsFactory;
+use crate::td::{TwoDimensionalC2C, TwoDimensionalC2R, TwoDimensionalR2C};
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
 pub use err::ZaftError;
@@ -106,10 +108,34 @@ use num_traits::{AsPrimitive, Float, MulAdd};
 pub use r2c::{C2RFftExecutor, R2CFftExecutor};
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
+pub use td::{
+    ExecutorWithScratch, TwoDimensionalExecutorC2R, TwoDimensionalExecutorR2C,
+    TwoDimensionalFftExecutor,
+};
 
 pub trait FftExecutor<T> {
+    /// Executes the Complex-to-Complex FFT operation **in-place**.
+    ///
+    /// The input/output slice `in_place` must have a length equal to `self.length()`.
+    /// The direction of the transform (Forward or Inverse) is determined by the executor's
+    /// pre-configured state, accessible via `self.direction()`.
+    ///
+    /// # Parameters
+    /// * `in_place`: The mutable slice containing the complex-valued input data. Upon completion,
+    ///   it will contain the complex-valued frequency-domain result (for a Forward transform)
+    ///   or the time-domain result (for an Inverse transform).
+    ///
+    /// # Errors
+    /// Returns a `ZaftError` if the execution fails (e.g., due to an incorrect slice length).
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError>;
+    /// Returns the **direction** of the transform this executor is configured to perform.
+    ///
+    /// The direction is typically either `FftDirection::Forward` (Time to Frequency) or
+    /// `FftDirection::Inverse` (Frequency to Time).
     fn direction(&self) -> FftDirection;
+    /// Returns the **length** (size N) of the input and output complex vectors.
+    ///
+    /// This is the number of complex elements that the executor is designed to process.
     fn length(&self) -> usize;
 }
 
@@ -795,6 +821,17 @@ impl Zaft {
         }
     }
 
+    /// Creates a Real-to-Complex (R2C) FFT plan executor for single-precision floating-point numbers (`f32`).
+    ///
+    /// This plan transforms a real-valued input array of length `n` into a complex
+    /// output array of length `n/2 + 1` (or `n` if odd, with a special handling for the last complex element).
+    ///
+    /// # Parameters
+    /// * `n`: The **length** of the real-valued input vector.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `R2CFftExecutor<f32>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
     pub fn make_r2c_fft_f32(
         n: usize,
     ) -> Result<Arc<dyn R2CFftExecutor<f32> + Send + Sync>, ZaftError> {
@@ -812,6 +849,17 @@ impl Zaft {
         }
     }
 
+    /// Creates a Complex-to-Real (C2R) Inverse FFT plan executor for single-precision floating-point numbers (`f32`).
+    ///
+    /// This plan transforms a complex input array (the result of an R2C FFT)
+    /// back into a real-valued output array of length `n`.
+    ///
+    /// # Parameters
+    /// * `n`: The **length** of the final real-valued output vector.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `C2RFftExecutor<f32>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
     pub fn make_c2r_fft_f32(
         n: usize,
     ) -> Result<Arc<dyn C2RFftExecutor<f32> + Send + Sync>, ZaftError> {
@@ -829,18 +877,46 @@ impl Zaft {
         }
     }
 
+    /// Creates a standard Complex-to-Complex Forward FFT plan executor for single-precision floating-point numbers (`f32`).
+    ///
+    /// This is used for a standard Discrete Fourier Transform (DFT) where both input and output are complex.
+    ///
+    /// # Parameters
+    /// * `n`: The **length** of the input/output complex vectors.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `FftExecutor<f32>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
     pub fn make_forward_fft_f32(
         n: usize,
     ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Forward)
     }
 
+    /// Creates a standard Complex-to-Complex Forward FFT plan executor for double-precision floating-point numbers (`f64`).
+    ///
+    /// # Parameters
+    /// * `n`: The **length** of the input/output complex vectors.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `FftExecutor<f64>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
     pub fn make_forward_fft_f64(
         n: usize,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Forward)
     }
 
+    /// Creates a Complex-to-Real (C2R) Inverse FFT plan executor for double-precision floating-point numbers (`f64`).
+    ///
+    /// This is the double-precision version of `make_c2r_fft_f32`.
+    ///
+    /// # Parameters
+    /// * `n`: The **length** of the final real-valued output vector.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `C2RFftExecutor<f64>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
     pub fn make_c2r_fft_f64(
         n: usize,
     ) -> Result<Arc<dyn C2RFftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -858,6 +934,16 @@ impl Zaft {
         }
     }
 
+    /// Creates a Real-to-Complex (R2C) FFT plan executor for double-precision floating-point numbers (`f64`).
+    ///
+    /// This is the double-precision version of `make_r2c_fft_f32`.
+    ///
+    /// # Parameters
+    /// * `n`: The **length** of the real-valued input vector.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `R2CFftExecutor<f64>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
     pub fn make_r2c_fft_f64(
         n: usize,
     ) -> Result<Arc<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -875,22 +961,329 @@ impl Zaft {
         }
     }
 
+    /// Creates a standard Complex-to-Complex Inverse FFT plan executor for single-precision floating-point numbers (`f32`).
+    ///
+    /// This is the inverse transformation for the standard DFT, used to convert frequency-domain data
+    /// back into the time domain.
+    ///
+    /// # Parameters
+    /// * `n`: The **length** of the input/output complex vectors.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `FftExecutor<f32>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
     pub fn make_inverse_fft_f32(
         n: usize,
     ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Inverse)
     }
 
+    /// Creates a standard Complex-to-Complex Inverse FFT plan executor for double-precision floating-point numbers (`f64`).
+    ///
+    /// # Parameters
+    /// * `n`: The **length** of the input/output complex vectors.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `FftExecutor<f64>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
     pub fn make_inverse_fft_f64(
         n: usize,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         Zaft::strategy(n, FftDirection::Inverse)
     }
+
+    /// Creates a high-performance, two-dimensional Real-to-Complex (R2C) FFT plan executor for single-precision floating-point numbers (`f32`).
+    ///
+    /// This function constructs a plan for transforming a **real-valued** 2D input array (with dimensions `height x width`)
+    /// into its frequency-domain representation. The executor is optimized for parallel
+    /// execution across the specified number of threads.
+    ///
+    /// **The R2C 2D FFT is typically performed in two steps:**
+    /// 1. A 1D R2C FFT is performed across the **rows** (or columns) of the input.
+    /// 2. A 1D Complex-to-Complex (C2C) FFT is performed across the **columns** (or rows) of the intermediate complex data.
+    ///
+    /// # Parameters
+    /// * `width`: The number of elements in the X-dimension (columns) of the 2D input array.
+    /// * `height`: The number of elements in the Y-dimension (rows) of the 2D input array.
+    /// * `thread_count`: The maximum number of threads the executor is allowed to use during execution.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `TwoDimensionalExecutorR2C<f32>` plan,
+    /// or a `ZaftError` if the plan cannot be generated (e.g., due to invalid dimensions).
+    ///
+    /// # Note on Output Size
+    /// The resulting frequency-domain complex data will typically have dimensions of `height x (width/2 + 1)`
+    /// complex elements, leveraging the Hermitian symmetry property of real-input FFTs.
+    pub fn make_2d_r2c_fft_f32(
+        width: usize,
+        height: usize,
+        thread_count: usize,
+    ) -> Result<Arc<dyn TwoDimensionalExecutorR2C<f32> + Send + Sync>, ZaftError> {
+        if width * height == 0 {
+            return Err(ZaftError::ZeroSizedFft);
+        }
+        let width_fft = Zaft::make_r2c_fft_f32(width)?;
+        let height_fft = Zaft::make_forward_fft_f32(height)?;
+        Ok(Arc::new(TwoDimensionalR2C {
+            width_r2c_executor: width_fft,
+            height_c2c_executor: height_fft,
+            thread_count: thread_count.max(1),
+            width,
+            height,
+            transpose_width_to_height: f32::transpose_strategy((width / 2) + 1, height),
+        }))
+    }
+
+    /// Creates a high-performance, two-dimensional Real-to-Complex (R2C) FFT plan executor for **double-precision floating-point numbers** (`f64`).
+    ///
+    /// This function constructs a plan for transforming a **real-valued** 2D input array (with dimensions `height x width`)
+    /// into its frequency-domain representation. The executor is highly optimized for parallel
+    /// execution across the specified number of threads.
+    ///
+    /// **The R2C 2D FFT typically follows a row-column or column-row decomposition:**
+    /// 1. A 1D R2C FFT is performed across the elements of one axis.
+    /// 2. A 1D Complex-to-Complex (C2C) FFT is performed across the elements of the other axis on the intermediate complex data.
+    ///
+    /// This process efficiently computes the 2D transform while leveraging the computational savings offered
+    /// by the real-valued nature of the input data.
+    ///
+    ///
+    /// # Parameters
+    /// * `width`: The number of elements in the X-dimension (**columns**) of the 2D input array.
+    /// * `height`: The number of elements in the Y-dimension (**rows**) of the 2D input array.
+    /// * `thread_count`: The maximum number of threads the executor is allowed to use during the parallel computation.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `TwoDimensionalExecutorR2C<f64>` plan,
+    /// which is safe to use across threads (`Send + Sync`), or a `ZaftError` if the plan cannot be generated.
+    ///
+    /// # Note on Output Size
+    /// Due to the resulting frequency-domain complex data will only store approximately half
+    /// the data required for a full C2C transform. Specifically, the output complex array will typically have dimensions
+    /// of `height x (width/2 + 1)` complex elements.
+    pub fn make_2d_r2c_fft_f64(
+        width: usize,
+        height: usize,
+        thread_count: usize,
+    ) -> Result<Arc<dyn TwoDimensionalExecutorR2C<f64> + Send + Sync>, ZaftError> {
+        if width * height == 0 {
+            return Err(ZaftError::ZeroSizedFft);
+        }
+        let width_fft = Zaft::make_r2c_fft_f64(width)?;
+        let height_fft = Zaft::make_forward_fft_f64(height)?;
+        Ok(Arc::new(TwoDimensionalR2C {
+            width_r2c_executor: width_fft,
+            height_c2c_executor: height_fft,
+            thread_count: thread_count.max(1),
+            width,
+            height,
+            transpose_width_to_height: f64::transpose_strategy((width / 2) + 1, height),
+        }))
+    }
+
+    /// Creates a 2D complex-to-complex FFT executor for f32 inputs.
+    ///
+    /// This function constructs a two-dimensional FFT executor that can perform
+    /// forward or inverse FFTs on a width × height grid of complex f32 values.
+    /// The executor internally manages separate FFTs along the width and height dimensions,
+    /// and uses a transpose strategy for efficient computation.
+    ///
+    /// # Parameters
+    ///
+    /// * width - The number of columns in the input data grid.
+    /// * height - The number of rows in the input data grid.
+    /// * fft_direction - The direction of the FFT (Forward or Inverse).
+    /// * thread_count - Number of threads to use for parallel computation (minimum 1).
+    ///
+    /// # Returns
+    ///
+    /// Returns a Result containing an Arc to a type implementing
+    /// [TwoDimensionalFftExecutor<f32>], or a [ZaftError] if FFT creation fails.
+    ///
+    /// # Notes
+    ///
+    /// The internal width and height of the FFT executors are swapped for inverse FFTs
+    /// to correctly handle the transformation.
+    pub fn make_2d_c2c_fft_f32(
+        width: usize,
+        height: usize,
+        fft_direction: FftDirection,
+        thread_count: usize,
+    ) -> Result<Arc<dyn TwoDimensionalFftExecutor<f32> + Send + Sync>, ZaftError> {
+        if width * height == 0 {
+            return Err(ZaftError::ZeroSizedFft);
+        }
+        let fft_width = match fft_direction {
+            FftDirection::Forward => width,
+            FftDirection::Inverse => height,
+        };
+        let fft_height = match fft_direction {
+            FftDirection::Forward => height,
+            FftDirection::Inverse => width,
+        };
+        let width_fft = match fft_direction {
+            FftDirection::Forward => Zaft::make_forward_fft_f32(fft_width)?,
+            FftDirection::Inverse => Zaft::make_inverse_fft_f32(fft_width)?,
+        };
+        let height_fft = match fft_direction {
+            FftDirection::Forward => Zaft::make_forward_fft_f32(fft_height)?,
+            FftDirection::Inverse => Zaft::make_inverse_fft_f32(fft_height)?,
+        };
+        Ok(Arc::new(TwoDimensionalC2C {
+            width_c2c_executor: width_fft,
+            height_c2c_executor: height_fft,
+            thread_count: thread_count.max(1),
+            width: fft_width,
+            height: fft_height,
+            transpose_width_to_height: f32::transpose_strategy(fft_width, fft_height),
+        }))
+    }
+
+    /// Creates a 2D complex-to-complex FFT executor for f64 inputs.
+    ///
+    /// This function constructs a two-dimensional FFT executor that can perform
+    /// forward or inverse FFTs on a width × height grid of complex f64 values.
+    /// The executor internally manages separate FFTs along the width and height dimensions,
+    /// and uses a transpose strategy for efficient computation.
+    ///
+    /// # Parameters
+    ///
+    /// * width - The number of columns in the input data grid.
+    /// * height - The number of rows in the input data grid.
+    /// * fft_direction - The direction of the FFT (Forward or Inverse).
+    /// * thread_count - Number of threads to use for parallel computation (minimum 1).
+    ///
+    /// # Returns
+    ///
+    /// Returns a Result containing an Arc to a type implementing
+    /// [TwoDimensionalFftExecutor<f64>], or a [ZaftError] if FFT creation fails.
+    ///
+    /// # Notes
+    ///
+    /// The internal width and height of the FFT executors are swapped for inverse FFTs
+    /// to correctly handle the transformation.
+    pub fn make_2d_c2c_fft_f64(
+        width: usize,
+        height: usize,
+        fft_direction: FftDirection,
+        thread_count: usize,
+    ) -> Result<Arc<dyn TwoDimensionalFftExecutor<f64> + Send + Sync>, ZaftError> {
+        if width * height == 0 {
+            return Err(ZaftError::ZeroSizedFft);
+        }
+        let fft_width = match fft_direction {
+            FftDirection::Forward => width,
+            FftDirection::Inverse => height,
+        };
+        let fft_height = match fft_direction {
+            FftDirection::Forward => height,
+            FftDirection::Inverse => width,
+        };
+        let width_fft = match fft_direction {
+            FftDirection::Forward => Zaft::make_forward_fft_f64(fft_width)?,
+            FftDirection::Inverse => Zaft::make_inverse_fft_f64(fft_width)?,
+        };
+        let height_fft = match fft_direction {
+            FftDirection::Forward => Zaft::make_forward_fft_f64(fft_height)?,
+            FftDirection::Inverse => Zaft::make_inverse_fft_f64(fft_height)?,
+        };
+        Ok(Arc::new(TwoDimensionalC2C {
+            width_c2c_executor: width_fft,
+            height_c2c_executor: height_fft,
+            thread_count: thread_count.max(1),
+            width: fft_width,
+            height: fft_height,
+            transpose_width_to_height: f64::transpose_strategy(fft_width, fft_height),
+        }))
+    }
+
+    /// Creates two-dimensional Complex-to-Real (C2R) Inverse FFT plan executor
+    /// for **single-precision floating-point numbers** (`f32`).
+    ///
+    /// This plan transforms a **Hermitian symmetric complex** frequency-domain input array (the output of an R2C FFT)
+    /// back into a **real-valued** time-domain output array of size `height x width`. The executor is configured
+    /// for parallel execution across the specified number of threads.
+    ///
+    /// # Parameters
+    /// * `width`: The number of elements in the X-dimension (**columns**) of the final real output.
+    /// * `height`: The number of elements in the Y-dimension (**rows**) of the final real output.
+    /// * `thread_count`: The maximum number of threads the executor is allowed to use during the parallel computation.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `TwoDimensionalExecutorC2R<f32>` plan,
+    /// or a `ZaftError` if the plan cannot be generated (e.g., `ZeroSizedFft`).
+    ///
+    /// # Errors
+    /// Returns `ZaftError::ZeroSizedFft` if `width * height` is zero.
+    pub fn make_2d_c2r_fft_f32(
+        width: usize,
+        height: usize,
+        thread_count: usize,
+    ) -> Result<Arc<dyn TwoDimensionalExecutorC2R<f32> + Send + Sync>, ZaftError> {
+        if width * height == 0 {
+            return Err(ZaftError::ZeroSizedFft);
+        }
+        let width_fft = Zaft::make_c2r_fft_f32(width)?;
+        let height_fft = Zaft::make_inverse_fft_f32(height)?;
+        Ok(Arc::new(TwoDimensionalC2R {
+            width_c2r_executor: width_fft,
+            height_c2c_executor: height_fft,
+            thread_count: thread_count.max(1),
+            width,
+            height,
+            transpose_height_to_width: f32::transpose_strategy(height, (width / 2) + 1),
+        }))
+    }
+
+    /// Creates two-dimensional Complex-to-Real (C2R) Inverse FFT plan executor
+    /// for **double-precision floating-point numbers** (`f64`).
+    ///
+    /// This is the double-precision equivalent of `make_2d_c2r_fft_f32`. It transforms the complex,
+    /// frequency-domain input back into a real-valued array of size `height x width`.
+    ///
+    /// # Parameters
+    /// * `width`: The number of elements in the X-dimension (**columns**) of the final real output.
+    /// * `height`: The number of elements in the Y-dimension (**rows**) of the final real output.
+    /// * `thread_count`: The maximum number of threads the executor is allowed to use during the parallel computation.
+    ///
+    /// # Returns
+    /// A `Result` containing an `Arc` to a dynamically dispatched `TwoDimensionalExecutorC2R<f64>` plan,
+    /// or a `ZaftError` if the plan cannot be generated.
+    ///
+    /// # Errors
+    /// Returns `ZaftError::ZeroSizedFft` if `width * height` is zero.
+    pub fn make_2d_c2r_fft_f64(
+        width: usize,
+        height: usize,
+        thread_count: usize,
+    ) -> Result<Arc<dyn TwoDimensionalExecutorC2R<f64> + Send + Sync>, ZaftError> {
+        if width * height == 0 {
+            return Err(ZaftError::ZeroSizedFft);
+        }
+        let width_fft = Zaft::make_c2r_fft_f64(width)?;
+        let height_fft = Zaft::make_inverse_fft_f64(height)?;
+        Ok(Arc::new(TwoDimensionalC2R {
+            width_c2r_executor: width_fft,
+            height_c2c_executor: height_fft,
+            thread_count: thread_count.max(1),
+            width,
+            height,
+            transpose_height_to_width: f64::transpose_strategy(height, (width / 2) + 1),
+        }))
+    }
 }
 
+/// Specifies the direction of a Fast Fourier Transform (FFT) operation.
+///
+/// This enum is used to configure FFT executors, indicating whether the transform should
+/// map from the time domain to the frequency domain, or vice versa.
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
 pub enum FftDirection {
+    /// Represents the **Forward** transform, which typically maps data from the **time or spatial domain**
+    /// into the **frequency domain**.
     Forward,
+    /// Represents the **Inverse** transform, which maps data back from the **frequency domain**
+    /// into the **time or spatial domain**.
     Inverse,
 }
 

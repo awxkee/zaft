@@ -38,8 +38,26 @@ use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 pub trait R2CFftExecutor<T> {
+    /// Executes the Real-to-Complex Forward FFT.
+    ///
+    /// The size of the `input` slice must be equal to `self.real_length()`, and the size of the
+    /// `output` slice must be equal to `self.complex_length()`.
+    ///
+    /// # Parameters
+    /// * `input`: The **real-valued** time-domain input array.
+    /// * `output`: The mutable slice where the **complex-valued, Hermitian symmetric** frequency data will be written.
+    ///
+    /// # Errors
+    /// Returns a `ZaftError` if the execution fails (e.g., due to incorrect slice lengths or internal computation errors).
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError>;
+    /// Returns the **length** of the **real-valued** input array (N).
+    ///
+    /// This is the size of the time-domain vector being transformed.
     fn real_length(&self) -> usize;
+    /// Returns the **length** of the **complex-valued** output array (`N/2 + 1`).
+    ///
+    /// This represents the number of complex elements required to store the meaningful, non-redundant
+    /// frequency components due to Hermitian symmetry.
     fn complex_length(&self) -> usize;
 }
 

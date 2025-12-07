@@ -21,6 +21,7 @@ num-complex = "0.4"
 num-traits = "0.2.3"
 pxfm = "^0.1.25"
 num-integer = "0.1.46"
+novtb = "0.1.7"
 
 [dev-dependencies]
 rand = "0.9"
@@ -33,3 +34,9 @@ neon = []
 fcma = ["neon"]
 # x86_64 AVX intrinsics
 avx = []
+
+[package.metadata.docs.rs]
+# To build locally:
+# RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features --no-deps --open --manifest-path ./Cargo.toml
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
