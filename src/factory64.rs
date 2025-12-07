@@ -775,10 +775,7 @@ impl AlgorithmFactory<f64> for f64 {
                     use crate::avx::AvxButterfly512d;
                     return Some(Arc::new(AvxButterfly512d::new(_fft_direction)));
                 }
-                #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
-                {
-                    None
-                }
+                None
             })
             .clone()
     }
