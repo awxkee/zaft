@@ -757,8 +757,30 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
-    fn butterfly512(fft_direction: FftDirection) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
-        None
+    fn butterfly512(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>>> =
+            OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>>> =
+            OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if has_valid_avx() {
+                    use crate::avx::AvxButterfly512d;
+                    return Some(Arc::new(AvxButterfly512d::new(_fft_direction)));
+                }
+                #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+                {
+                    None
+                }
+            })
+            .clone()
     }
 
     fn radix3(

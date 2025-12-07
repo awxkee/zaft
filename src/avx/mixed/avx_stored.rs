@@ -39,6 +39,14 @@ pub(crate) struct AvxStoreD {
 impl AvxStoreD {
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn neg(&self) -> AvxStoreD {
+        AvxStoreD::raw(_mm256_xor_pd(self.v, _mm256_set1_pd(-0.0)))
+    }
+}
+
+impl AvxStoreD {
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn raw(r: __m256d) -> AvxStoreD {
         AvxStoreD { v: r }
     }
@@ -72,6 +80,14 @@ impl AvxStoreD {
                     complex as *const Complex<f64> as *const f64,
                 )),
             }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn set_complex(complex: &Complex<f64>) -> Self {
+        AvxStoreD {
+            v: _mm256_setr_pd(complex.re, complex.im, complex.re, complex.im),
         }
     }
 
