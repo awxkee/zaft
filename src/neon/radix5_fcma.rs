@@ -82,6 +82,9 @@ where
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly5(fft_direction)?,
             _ => T::butterfly25(fft_direction)?,
+            // _ => {
+            //     T::butterfly125(fft_direction).map_or_else(|| T::butterfly25(fft_direction), Ok)?
+            // }
         };
 
         let butterfly_length = butterfly.length();

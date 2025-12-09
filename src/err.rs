@@ -36,6 +36,7 @@ pub enum ZaftError {
     InvalidPointerSize(u128),
     InvalidSizeMultiplier(usize, usize),
     ZeroSizedFft,
+    ScratchBufferIsTooSmall(usize, usize),
 }
 
 impl Error for ZaftError {}
@@ -56,6 +57,9 @@ impl std::fmt::Display for ZaftError {
                 "Size {s0} is assumed to be multiplier of {s1} to execute many DFT, but it wasn't"
             )),
             ZaftError::ZeroSizedFft => f.write_str("Cannot execute FFT on zero-sized buffers"),
+            ZaftError::ScratchBufferIsTooSmall(current, required) => f.write_fmt(format_args!(
+                "Scratch buffer size must be at least {required} but it is {current}"
+            )),
         }
     }
 }

@@ -709,6 +709,18 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    fn butterfly125(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly125d,
+            NeonButterfly125d,
+            NeonFcmaButterfly125d
+        )
+    }
+
     fn butterfly128(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
@@ -745,6 +757,18 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    fn butterfly243(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly243d,
+            NeonButterfly243d,
+            NeonFcmaButterfly243d
+        )
+    }
+
     fn butterfly256(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
@@ -755,6 +779,29 @@ impl AlgorithmFactory<f64> for f64 {
             NeonButterfly256d,
             NeonFcmaButterfly256d
         )
+    }
+
+    fn butterfly512(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>>> =
+            OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>>> =
+            OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if has_valid_avx() {
+                    use crate::avx::AvxButterfly512d;
+                    return Some(Arc::new(AvxButterfly512d::new(_fft_direction)));
+                }
+                None
+            })
+            .clone()
     }
 
     fn radix3(

@@ -10,6 +10,7 @@ num-complex = "0.4.6"
 rand = "0.9"
 criterion = "0.8.0"
 realfft = "3.5"
+primal-check = "0.3.4"
 
 [dev-dependencies]
 criterion = "0.8.0"

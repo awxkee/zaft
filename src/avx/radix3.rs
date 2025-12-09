@@ -237,7 +237,11 @@ where
             1 => T::butterfly3(fft_direction)?,
             2 => T::butterfly9(fft_direction)?,
             3 => T::butterfly27(fft_direction)?,
-            _ => T::butterfly81(fft_direction).map_or_else(|| T::butterfly27(fft_direction), Ok)?,
+            4 => T::butterfly81(fft_direction).map_or_else(|| T::butterfly27(fft_direction), Ok)?,
+            _ => T::butterfly243(fft_direction).map_or_else(
+                || T::butterfly81(fft_direction).map_or_else(|| T::butterfly27(fft_direction), Ok),
+                Ok,
+            )?,
         };
 
         let mut twiddles = Vec::new();

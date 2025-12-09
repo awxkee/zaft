@@ -84,6 +84,33 @@ pub(crate) fn gen_butterfly_twiddles_f32<const N: usize>(
     twiddles
 }
 
+pub(crate) fn gen_butterfly_separate_cols_twiddles_f32<const N: usize>(
+    rows: usize,
+    cols: usize,
+    direction: FftDirection,
+    size: usize,
+) -> [NeonStoreF; N] {
+    let mut twiddles = [NeonStoreF::default(); N];
+    let mut q = 0usize;
+    let len_per_row = rows;
+    const COMPLEX_PER_VECTOR: usize = 1;
+    let quotient = len_per_row / COMPLEX_PER_VECTOR;
+    let remainder = len_per_row % COMPLEX_PER_VECTOR;
+
+    let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
+    for x in 0..num_twiddle_columns {
+        for y in 1..cols {
+            twiddles[q] = NeonStoreF::from_complex(&compute_twiddle(
+                y * (x * COMPLEX_PER_VECTOR),
+                size,
+                direction,
+            ));
+            q += 1;
+        }
+    }
+    twiddles
+}
+
 pub(crate) struct NeonButterfly {}
 
 impl NeonButterfly {

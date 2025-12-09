@@ -30,9 +30,10 @@
 
 use crate::avx::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::avx::mixed::{AvxStoreF, ColumnButterfly11f};
-use crate::avx::transpose::transpose_4x11;
+use crate::avx::transpose::avx_transpose_f32x2_4x4_impl;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
+use std::arch::x86_64::_mm256_setzero_ps;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
@@ -96,55 +97,133 @@ impl AvxButterfly121f {
 
                     rows = self.bf11.exec(rows);
 
-                    for i in 1..11 {
-                        rows[i] = AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
-                    }
+                    let q1 = AvxStoreF::mul_by_complex(rows[1], self.twiddles[10 * k]);
+                    let q2 = AvxStoreF::mul_by_complex(rows[2], self.twiddles[10 * k + 1]);
+                    let q3 = AvxStoreF::mul_by_complex(rows[3], self.twiddles[10 * k + 2]);
+                    let t = avx_transpose_f32x2_4x4_impl(rows[0].v, q1.v, q2.v, q3.v);
+                    AvxStoreF::raw(t.0).write_u(scratch.get_unchecked_mut(k * 4 * 11..));
+                    AvxStoreF::raw(t.1).write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11..));
+                    AvxStoreF::raw(t.2).write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11..));
+                    AvxStoreF::raw(t.3).write_u(scratch.get_unchecked_mut((k * 4 + 3) * 11..));
 
-                    let transposed = transpose_4x11(rows);
-
-                    for i in 0..2 {
-                        transposed[i * 4].write_u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
-                        transposed[i * 4 + 1]
+                    for i in 1..2 {
+                        let q0 = AvxStoreF::mul_by_complex(
+                            rows[i * 4],
+                            self.twiddles[(i - 1) * 4 + 3 + 10 * k],
+                        );
+                        let q1 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 1],
+                            self.twiddles[(i - 1) * 4 + 4 + 10 * k],
+                        );
+                        let q2 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 2],
+                            self.twiddles[(i - 1) * 4 + 5 + 10 * k],
+                        );
+                        let q3 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 3],
+                            self.twiddles[(i - 1) * 4 + 6 + 10 * k],
+                        );
+                        let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, q3.v);
+                        AvxStoreF::raw(t.0)
+                            .write_u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        AvxStoreF::raw(t.1)
                             .write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
-                        transposed[i * 4 + 2]
+                        AvxStoreF::raw(t.2)
                             .write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
-                        transposed[i * 4 + 3]
+                        AvxStoreF::raw(t.3)
                             .write_u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + i * 4..));
                     }
 
-                    transposed[4 * 2].write_lo3u(scratch.get_unchecked_mut(k * 4 * 11 + 8..));
-                    transposed[4 * 2 + 1]
-                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + 8..));
-                    transposed[4 * 2 + 2]
-                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + 8..));
-                    transposed[4 * 2 + 3]
-                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + 8..));
+                    {
+                        let i = 2;
+                        let q0 = AvxStoreF::mul_by_complex(
+                            rows[i * 4],
+                            self.twiddles[(i - 1) * 4 + 3 + 10 * k],
+                        );
+                        let q1 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 1],
+                            self.twiddles[(i - 1) * 4 + 4 + 10 * k],
+                        );
+                        let q2 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 2],
+                            self.twiddles[(i - 1) * 4 + 5 + 10 * k],
+                        );
+                        let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, _mm256_setzero_ps());
+                        AvxStoreF::raw(t.0)
+                            .write_lo3u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        AvxStoreF::raw(t.1)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
+                        AvxStoreF::raw(t.2)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
+                        AvxStoreF::raw(t.3)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + i * 4..));
+                    }
                 }
 
                 {
+                    let k = 2;
                     for i in 0..11 {
                         rows[i] = AvxStoreF::from_complex3(chunk.get_unchecked(i * 11 + 8..));
                     }
 
                     rows = self.bf11.exec(rows);
 
-                    for i in 1..11 {
-                        rows[i] = AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * 2]);
+                    let q1 = AvxStoreF::mul_by_complex(rows[1], self.twiddles[10 * k]);
+                    let q2 = AvxStoreF::mul_by_complex(rows[2], self.twiddles[10 * k + 1]);
+                    let q3 = AvxStoreF::mul_by_complex(rows[3], self.twiddles[10 * k + 2]);
+                    let t = avx_transpose_f32x2_4x4_impl(rows[0].v, q1.v, q2.v, q3.v);
+                    AvxStoreF::raw(t.0).write_u(scratch.get_unchecked_mut(k * 4 * 11..));
+                    AvxStoreF::raw(t.1).write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11..));
+                    AvxStoreF::raw(t.2).write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11..));
+
+                    for i in 1..2 {
+                        let q0 = AvxStoreF::mul_by_complex(
+                            rows[i * 4],
+                            self.twiddles[(i - 1) * 4 + 3 + 10 * k],
+                        );
+                        let q1 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 1],
+                            self.twiddles[(i - 1) * 4 + 4 + 10 * k],
+                        );
+                        let q2 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 2],
+                            self.twiddles[(i - 1) * 4 + 5 + 10 * k],
+                        );
+                        let q3 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 3],
+                            self.twiddles[(i - 1) * 4 + 6 + 10 * k],
+                        );
+                        let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, q3.v);
+                        AvxStoreF::raw(t.0)
+                            .write_u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        AvxStoreF::raw(t.1)
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
+                        AvxStoreF::raw(t.2)
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
                     }
 
-                    let transposed = transpose_4x11(rows);
-
-                    for i in 0..2 {
-                        transposed[i * 4].write_u(scratch.get_unchecked_mut(8 * 11 + i * 4..));
-                        transposed[i * 4 + 1]
-                            .write_u(scratch.get_unchecked_mut((8 + 1) * 11 + i * 4..));
-                        transposed[i * 4 + 2]
-                            .write_u(scratch.get_unchecked_mut((8 + 2) * 11 + i * 4..));
+                    {
+                        let i = 2;
+                        let q0 = AvxStoreF::mul_by_complex(
+                            rows[i * 4],
+                            self.twiddles[(i - 1) * 4 + 3 + 10 * k],
+                        );
+                        let q1 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 1],
+                            self.twiddles[(i - 1) * 4 + 4 + 10 * k],
+                        );
+                        let q2 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 2],
+                            self.twiddles[(i - 1) * 4 + 5 + 10 * k],
+                        );
+                        let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, _mm256_setzero_ps());
+                        AvxStoreF::raw(t.0)
+                            .write_lo3u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        AvxStoreF::raw(t.1)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
+                        AvxStoreF::raw(t.2)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
                     }
-
-                    transposed[4 * 2].write_lo3u(scratch.get_unchecked_mut(8 * 11 + 8..));
-                    transposed[4 * 2 + 1].write_lo3u(scratch.get_unchecked_mut((8 + 1) * 11 + 8..));
-                    transposed[4 * 2 + 2].write_lo3u(scratch.get_unchecked_mut((8 + 2) * 11 + 8..));
                 }
 
                 // rows
@@ -211,55 +290,133 @@ impl AvxButterfly121f {
 
                     rows = self.bf11.exec(rows);
 
-                    for i in 1..11 {
-                        rows[i] = AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * k]);
-                    }
+                    let q1 = AvxStoreF::mul_by_complex(rows[1], self.twiddles[10 * k]);
+                    let q2 = AvxStoreF::mul_by_complex(rows[2], self.twiddles[10 * k + 1]);
+                    let q3 = AvxStoreF::mul_by_complex(rows[3], self.twiddles[10 * k + 2]);
+                    let t = avx_transpose_f32x2_4x4_impl(rows[0].v, q1.v, q2.v, q3.v);
+                    AvxStoreF::raw(t.0).write_u(scratch.get_unchecked_mut(k * 4 * 11..));
+                    AvxStoreF::raw(t.1).write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11..));
+                    AvxStoreF::raw(t.2).write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11..));
+                    AvxStoreF::raw(t.3).write_u(scratch.get_unchecked_mut((k * 4 + 3) * 11..));
 
-                    let transposed = transpose_4x11(rows);
-
-                    for i in 0..2 {
-                        transposed[i * 4].write_u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
-                        transposed[i * 4 + 1]
+                    for i in 1..2 {
+                        let q0 = AvxStoreF::mul_by_complex(
+                            rows[i * 4],
+                            self.twiddles[(i - 1) * 4 + 3 + 10 * k],
+                        );
+                        let q1 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 1],
+                            self.twiddles[(i - 1) * 4 + 4 + 10 * k],
+                        );
+                        let q2 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 2],
+                            self.twiddles[(i - 1) * 4 + 5 + 10 * k],
+                        );
+                        let q3 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 3],
+                            self.twiddles[(i - 1) * 4 + 6 + 10 * k],
+                        );
+                        let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, q3.v);
+                        AvxStoreF::raw(t.0)
+                            .write_u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        AvxStoreF::raw(t.1)
                             .write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
-                        transposed[i * 4 + 2]
+                        AvxStoreF::raw(t.2)
                             .write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
-                        transposed[i * 4 + 3]
+                        AvxStoreF::raw(t.3)
                             .write_u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + i * 4..));
                     }
 
-                    transposed[4 * 2].write_lo3u(scratch.get_unchecked_mut(k * 4 * 11 + 8..));
-                    transposed[4 * 2 + 1]
-                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + 8..));
-                    transposed[4 * 2 + 2]
-                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + 8..));
-                    transposed[4 * 2 + 3]
-                        .write_lo3u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + 8..));
+                    {
+                        let i = 2;
+                        let q0 = AvxStoreF::mul_by_complex(
+                            rows[i * 4],
+                            self.twiddles[(i - 1) * 4 + 3 + 10 * k],
+                        );
+                        let q1 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 1],
+                            self.twiddles[(i - 1) * 4 + 4 + 10 * k],
+                        );
+                        let q2 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 2],
+                            self.twiddles[(i - 1) * 4 + 5 + 10 * k],
+                        );
+                        let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, _mm256_setzero_ps());
+                        AvxStoreF::raw(t.0)
+                            .write_lo3u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        AvxStoreF::raw(t.1)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
+                        AvxStoreF::raw(t.2)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
+                        AvxStoreF::raw(t.3)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 3) * 11 + i * 4..));
+                    }
                 }
 
                 {
+                    let k = 2;
                     for i in 0..11 {
                         rows[i] = AvxStoreF::from_complex3(src.get_unchecked(i * 11 + 8..));
                     }
 
                     rows = self.bf11.exec(rows);
 
-                    for i in 1..11 {
-                        rows[i] = AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 10 * 2]);
+                    let q1 = AvxStoreF::mul_by_complex(rows[1], self.twiddles[10 * k]);
+                    let q2 = AvxStoreF::mul_by_complex(rows[2], self.twiddles[10 * k + 1]);
+                    let q3 = AvxStoreF::mul_by_complex(rows[3], self.twiddles[10 * k + 2]);
+                    let t = avx_transpose_f32x2_4x4_impl(rows[0].v, q1.v, q2.v, q3.v);
+                    AvxStoreF::raw(t.0).write_u(scratch.get_unchecked_mut(k * 4 * 11..));
+                    AvxStoreF::raw(t.1).write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11..));
+                    AvxStoreF::raw(t.2).write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11..));
+
+                    for i in 1..2 {
+                        let q0 = AvxStoreF::mul_by_complex(
+                            rows[i * 4],
+                            self.twiddles[(i - 1) * 4 + 3 + 10 * k],
+                        );
+                        let q1 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 1],
+                            self.twiddles[(i - 1) * 4 + 4 + 10 * k],
+                        );
+                        let q2 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 2],
+                            self.twiddles[(i - 1) * 4 + 5 + 10 * k],
+                        );
+                        let q3 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 3],
+                            self.twiddles[(i - 1) * 4 + 6 + 10 * k],
+                        );
+                        let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, q3.v);
+                        AvxStoreF::raw(t.0)
+                            .write_u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        AvxStoreF::raw(t.1)
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
+                        AvxStoreF::raw(t.2)
+                            .write_u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
                     }
 
-                    let transposed = transpose_4x11(rows);
-
-                    for i in 0..2 {
-                        transposed[i * 4].write_u(scratch.get_unchecked_mut(8 * 11 + i * 4..));
-                        transposed[i * 4 + 1]
-                            .write_u(scratch.get_unchecked_mut((8 + 1) * 11 + i * 4..));
-                        transposed[i * 4 + 2]
-                            .write_u(scratch.get_unchecked_mut((8 + 2) * 11 + i * 4..));
+                    {
+                        let i = 2;
+                        let q0 = AvxStoreF::mul_by_complex(
+                            rows[i * 4],
+                            self.twiddles[(i - 1) * 4 + 3 + 10 * k],
+                        );
+                        let q1 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 1],
+                            self.twiddles[(i - 1) * 4 + 4 + 10 * k],
+                        );
+                        let q2 = AvxStoreF::mul_by_complex(
+                            rows[i * 4 + 2],
+                            self.twiddles[(i - 1) * 4 + 5 + 10 * k],
+                        );
+                        let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, _mm256_setzero_ps());
+                        AvxStoreF::raw(t.0)
+                            .write_lo3u(scratch.get_unchecked_mut(k * 4 * 11 + i * 4..));
+                        AvxStoreF::raw(t.1)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 1) * 11 + i * 4..));
+                        AvxStoreF::raw(t.2)
+                            .write_lo3u(scratch.get_unchecked_mut((k * 4 + 2) * 11 + i * 4..));
                     }
-
-                    transposed[4 * 2].write_lo3u(scratch.get_unchecked_mut(8 * 11 + 8..));
-                    transposed[4 * 2 + 1].write_lo3u(scratch.get_unchecked_mut((8 + 1) * 11 + 8..));
-                    transposed[4 * 2 + 2].write_lo3u(scratch.get_unchecked_mut((8 + 2) * 11 + 8..));
                 }
 
                 // rows

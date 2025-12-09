@@ -69,7 +69,15 @@ where
             4 => T::butterfly16(fft_direction)?,
             _ => {
                 if exponent % 2 == 1 {
-                    if exponent >= 7 {
+                    if exponent >= 9 {
+                        T::butterfly512(fft_direction).map_or_else(
+                            || {
+                                T::butterfly128(fft_direction)
+                                    .map_or_else(|| T::butterfly32(fft_direction), Ok)
+                            },
+                            Ok,
+                        )?
+                    } else if exponent >= 7 {
                         T::butterfly128(fft_direction)
                             .map_or_else(|| T::butterfly32(fft_direction), Ok)?
                     } else {

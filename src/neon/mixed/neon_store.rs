@@ -41,6 +41,13 @@ pub(crate) struct NeonStoreF {
     pub(crate) v: float32x4_t,
 }
 
+impl NeonStoreF {
+    #[inline(always)]
+    pub(crate) fn neg(&self) -> NeonStoreF {
+        unsafe { NeonStoreF::raw(vnegq_f32(self.v)) }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct NeonStoreFh {
     pub(crate) v: float32x2_t,
@@ -131,6 +138,11 @@ impl NeonStoreF {
     }
 
     #[inline]
+    pub(crate) fn to_lo(self) -> NeonStoreFh {
+        unsafe { NeonStoreFh::raw(vget_low_f32(self.v)) }
+    }
+
+    #[inline]
     pub(crate) fn from_complex_refu(complex: &[MaybeUninit<Complex<f32>>]) -> Self {
         unsafe {
             NeonStoreF {
@@ -167,6 +179,15 @@ impl NeonStoreF {
                     .as_ptr()
                     .cast(),
                 ),
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn from_complex_lou(complex: &MaybeUninit<Complex<f32>>) -> Self {
+        unsafe {
+            NeonStoreF {
+                v: vcombine_f32(vld1_f32(complex.as_ptr().cast()), vdup_n_f32(0.)),
             }
         }
     }
