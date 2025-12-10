@@ -278,4 +278,18 @@ impl AvxStoreF {
             v: _mm256_setzero_ps(),
         }
     }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn lo(&self) -> Self {
+        Self { v: self.v }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn hi(&self) -> Self {
+        Self {
+            v: _mm256_castps128_ps256(_mm256_extractf128_ps::<1>(self.v)),
+        }
+    }
 }

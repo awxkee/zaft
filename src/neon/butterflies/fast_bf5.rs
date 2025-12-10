@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::neon::util::{v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32};
+use crate::neon::util::{v_rotate90_f32, v_rotate90_f64};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
 use num_complex::Complex;
@@ -156,104 +156,6 @@ impl NeonFastButterfly5<f64> {
 }
 
 impl NeonFastButterfly5<f32> {
-    #[inline(always)]
-    pub(crate) fn exech(
-        &self,
-        u0: float32x2_t,
-        u1: float32x2_t,
-        u2: float32x2_t,
-        u3: float32x2_t,
-        u4: float32x2_t,
-        rot: float32x2_t, // [-0.0, 0.0] - 90 rot
-    ) -> (
-        float32x2_t,
-        float32x2_t,
-        float32x2_t,
-        float32x2_t,
-        float32x2_t,
-    ) {
-        unsafe {
-            let x14p = vadd_f32(u1, u4);
-            let x14n = vsub_f32(u1, u4);
-            let x23p = vadd_f32(u2, u3);
-            let x23n = vsub_f32(u2, u3);
-            let y0 = vadd_f32(vadd_f32(u0, x14p), x23p);
-
-            let temp_b1_1 = vmul_n_f32(x14n, self.twiddle1.im);
-            let temp_b2_1 = vmul_n_f32(x14n, self.twiddle2.im);
-
-            let temp_a1 = vfma_n_f32(
-                vfma_n_f32(u0, x14p, self.twiddle1.re),
-                x23p,
-                self.twiddle2.re,
-            );
-            let temp_a2 = vfma_n_f32(
-                vfma_n_f32(u0, x14p, self.twiddle2.re),
-                x23p,
-                self.twiddle1.re,
-            );
-
-            let temp_b1 = vfma_n_f32(temp_b1_1, x23n, self.twiddle2.im);
-            let temp_b2 = vfms_n_f32(temp_b2_1, x23n, self.twiddle1.im);
-
-            let temp_b1_rot = vh_rotate90_f32(temp_b1, rot);
-            let temp_b2_rot = vh_rotate90_f32(temp_b2, rot);
-
-            let y1 = vadd_f32(temp_a1, temp_b1_rot);
-            let y2 = vadd_f32(temp_a2, temp_b2_rot);
-            let y3 = vsub_f32(temp_a2, temp_b2_rot);
-            let y4 = vsub_f32(temp_a1, temp_b1_rot);
-            (y0, y1, y2, y3, y4)
-        }
-    }
-
-    #[cfg(feature = "fcma")]
-    #[target_feature(enable = "fcma")]
-    #[inline]
-    pub(crate) fn exech_fcma(
-        &self,
-        u0: float32x2_t,
-        u1: float32x2_t,
-        u2: float32x2_t,
-        u3: float32x2_t,
-        u4: float32x2_t,
-    ) -> (
-        float32x2_t,
-        float32x2_t,
-        float32x2_t,
-        float32x2_t,
-        float32x2_t,
-    ) {
-        let x14p = vadd_f32(u1, u4);
-        let x14n = vsub_f32(u1, u4);
-        let x23p = vadd_f32(u2, u3);
-        let x23n = vsub_f32(u2, u3);
-        let y0 = vadd_f32(vadd_f32(u0, x14p), x23p);
-
-        let temp_b1_1 = vmul_n_f32(x14n, self.twiddle1.im);
-        let temp_b2_1 = vmul_n_f32(x14n, self.twiddle2.im);
-
-        let temp_a1 = vfma_n_f32(
-            vfma_n_f32(u0, x14p, self.twiddle1.re),
-            x23p,
-            self.twiddle2.re,
-        );
-        let temp_a2 = vfma_n_f32(
-            vfma_n_f32(u0, x14p, self.twiddle2.re),
-            x23p,
-            self.twiddle1.re,
-        );
-
-        let temp_b1 = vfma_n_f32(temp_b1_1, x23n, self.twiddle2.im);
-        let temp_b2 = vfms_n_f32(temp_b2_1, x23n, self.twiddle1.im);
-
-        let y1 = vcadd_rot90_f32(temp_a1, temp_b1);
-        let y2 = vcadd_rot90_f32(temp_a2, temp_b2);
-        let y3 = vcadd_rot270_f32(temp_a2, temp_b2);
-        let y4 = vcadd_rot270_f32(temp_a1, temp_b1);
-        (y0, y1, y2, y3, y4)
-    }
-
     #[inline(always)]
     pub(crate) fn exec(
         &self,

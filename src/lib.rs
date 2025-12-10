@@ -300,92 +300,41 @@ impl Zaft {
         {
             let min_length = _n_length.min(_q_length);
             let max_length = _n_length.max(_q_length);
-            if min_length == 2 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly2(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 3 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly3(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 4 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly4(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 5 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly5(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 6 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly6(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 7 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly7(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 8 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly8(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 9 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly9(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 10 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly10(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 11 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly11(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 12 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly12(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 13 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly13(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 14 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly14(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
-            } else if min_length == 16 {
-                let q_fft = Zaft::strategy(max_length as usize, _direction)?;
-                let q_fft_opt = T::mixed_radix_butterfly16(q_fft)?;
-                if let Some(q_fft_opt) = q_fft_opt {
-                    return Ok(Some(q_fft_opt));
-                }
+
+            if !(2..=16).contains(&min_length) {
+                // If no butterfly exists, return None
+                return Ok(None);
             }
-            Ok(None)
+
+            // 1. Get the initial FFT strategy regardless of the butterfly size.
+            let q_fft = Zaft::strategy(max_length as usize, _direction)?;
+
+            let q_fft_opt = match min_length {
+                2 => T::mixed_radix_butterfly2(q_fft),
+                3 => T::mixed_radix_butterfly3(q_fft),
+                4 => T::mixed_radix_butterfly4(q_fft),
+                5 => T::mixed_radix_butterfly5(q_fft),
+                6 => T::mixed_radix_butterfly6(q_fft),
+                7 => T::mixed_radix_butterfly7(q_fft),
+                8 => T::mixed_radix_butterfly8(q_fft),
+                9 => T::mixed_radix_butterfly9(q_fft),
+                10 => T::mixed_radix_butterfly10(q_fft),
+                11 => T::mixed_radix_butterfly11(q_fft),
+                12 => T::mixed_radix_butterfly12(q_fft),
+                13 => T::mixed_radix_butterfly13(q_fft),
+                14 => T::mixed_radix_butterfly14(q_fft),
+                15 => T::mixed_radix_butterfly15(q_fft),
+                16 => T::mixed_radix_butterfly16(q_fft),
+                // This arm is covered by the early exit, but is required if the early exit is removed.
+                _ => unreachable!("min_length is outside the supported range [2, 16]."),
+            };
+
+            // 3. Handle the result once.
+            if let Some(q_fft_opt) = q_fft_opt? {
+                Ok(Some(q_fft_opt))
+            } else {
+                Ok(None)
+            }
         }
     }
 
@@ -889,6 +838,10 @@ impl Zaft {
         } else if n == 81 {
             if let Some(executor) = T::butterfly81(fft_direction) {
                 return Ok(executor.into_fft_executor());
+            }
+        } else if n == 96 {
+            if let Some(executor) = T::butterfly96(fft_direction) {
+                return Ok(executor);
             }
         } else if n == 100 {
             if let Some(executor) = T::butterfly100(fft_direction) {

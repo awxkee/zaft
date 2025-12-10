@@ -28,36 +28,37 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::butterflies::shared::gen_butterfly_twiddles_f64;
-use crate::neon::mixed::NeonStoreD;
+use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
+use crate::neon::mixed::NeonStoreF;
+use crate::neon::transpose::transpose_2x8;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
-macro_rules! gen_bf72d {
-    ($name: ident, $feature: literal, $internal_bf8: ident, $internal_bf9: ident, $mul: ident) => {
+macro_rules! gen_bf96f {
+    ($name: ident, $feature: literal, $internal_bf8: ident, $internal_bf12: ident, $mul: ident) => {
         use crate::neon::mixed::$internal_bf8;
-        use crate::neon::mixed::$internal_bf9;
+        use crate::neon::mixed::$internal_bf12;
         pub(crate) struct $name {
             direction: FftDirection,
             bf8: $internal_bf8,
-            bf9: $internal_bf9,
-            twiddles: [NeonStoreD; 63],
+            bf12: $internal_bf12,
+            twiddles: [NeonStoreF; 42],
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
                 Self {
                     direction: fft_direction,
-                    twiddles: gen_butterfly_twiddles_f64(9, 8, fft_direction, 72),
+                    twiddles: gen_butterfly_twiddles_f32(12, 8, fft_direction, 96),
                     bf8: $internal_bf8::new(fft_direction),
-                    bf9: $internal_bf9::new(fft_direction),
+                    bf12: $internal_bf12::new(fft_direction),
                 }
             }
         }
 
-        impl FftExecutor<f64> for $name {
-            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        impl FftExecutor<f32> for $name {
+            fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
                 unsafe { self.execute_impl(in_place) }
             }
 
@@ -67,14 +68,14 @@ macro_rules! gen_bf72d {
 
             #[inline]
             fn length(&self) -> usize {
-                72
+                96
             }
         }
 
         impl $name {
             #[target_feature(enable = $feature)]
-            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(72) {
+            fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of(96) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -82,40 +83,47 @@ macro_rules! gen_bf72d {
                 }
 
                 unsafe {
-                    let mut rows: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
-                    let mut rows9: [NeonStoreD; 9] = [NeonStoreD::default(); 9];
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 72];
+                    let mut rows: [NeonStoreF; 8] = [NeonStoreF::default(); 8];
+                    let mut rows12: [NeonStoreF; 12] = [NeonStoreF::default(); 12];
+                    let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 96];
 
-                    for chunk in in_place.chunks_exact_mut(72) {
+                    for chunk in in_place.chunks_exact_mut(96) {
                         // columns
-                        for k in 0..9 {
+                        for k in 0..6 {
                             for i in 0..8 {
-                                rows[i] =
-                                    NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 9 + k..));
+                                rows[i] = NeonStoreF::from_complex_ref(
+                                    chunk.get_unchecked(i * 12 + k * 2..),
+                                );
                             }
 
                             rows = self.bf8.exec(rows);
 
                             for i in 1..8 {
-                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 7 * k]);
+                                rows[i] = NeonStoreF::$mul(rows[i], self.twiddles[i - 1 + 7 * k]);
                             }
 
-                            for i in 0..8 {
-                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 8 + i..));
+                            let transposed = transpose_2x8(rows);
+
+                            for i in 0..4 {
+                                transposed[i * 2]
+                                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
+                                transposed[i * 2 + 1].write_uninit(
+                                    scratch.get_unchecked_mut((k * 2 + 1) * 8 + i * 2..),
+                                );
                             }
                         }
 
                         // rows
 
-                        for k in 0..8 {
-                            for i in 0..9 {
-                                rows9[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 8 + k..),
+                        for k in 0..4 {
+                            for i in 0..12 {
+                                rows12[i] = NeonStoreF::from_complex_refu(
+                                    scratch.get_unchecked(i * 8 + k * 2..),
                                 );
                             }
-                            rows9 = self.bf9.exec(rows9);
-                            for i in 0..9 {
-                                rows9[i].write(chunk.get_unchecked_mut(i * 8 + k..));
+                            rows12 = self.bf12.exec(rows12);
+                            for i in 0..12 {
+                                rows12[i].write(chunk.get_unchecked_mut(i * 8 + k * 2..));
                             }
                         }
                     }
@@ -126,19 +134,19 @@ macro_rules! gen_bf72d {
     };
 }
 
-gen_bf72d!(
-    NeonButterfly72d,
+gen_bf96f!(
+    NeonButterfly96f,
     "neon",
-    ColumnButterfly8d,
-    ColumnButterfly9d,
+    ColumnButterfly8f,
+    ColumnButterfly12f,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-gen_bf72d!(
-    NeonFcmaButterfly72d,
+gen_bf96f!(
+    NeonFcmaButterfly96f,
     "fcma",
-    ColumnFcmaButterfly8d,
-    ColumnFcmaButterfly9d,
+    ColumnFcmaButterfly8f,
+    ColumnFcmaButterfly12f,
     fcmul_fcma
 );
 
@@ -149,14 +157,8 @@ mod tests {
     #[cfg(feature = "fcma")]
     use crate::neon::butterflies::test_fcma_butterfly;
 
-    test_butterfly!(test_neon_butterfly72_f64, f64, NeonButterfly72d, 72, 1e-7);
+    test_butterfly!(test_neon_butterfly96, f32, NeonButterfly96f, 96, 1e-3);
 
     #[cfg(feature = "fcma")]
-    test_fcma_butterfly!(
-        test_fcma_butterfly72_f64,
-        f64,
-        NeonFcmaButterfly72d,
-        72,
-        1e-7
-    );
+    test_fcma_butterfly!(test_fcma_butterfly96, f32, NeonFcmaButterfly96f, 96, 1e-3);
 }
