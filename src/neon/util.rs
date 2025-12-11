@@ -194,7 +194,7 @@ pub(crate) fn conj_f64(v: float64x2_t, a: float64x2_t) -> float64x2_t {
     }
 }
 
-// #[cfg(feature = "fcma")]
+#[cfg(feature = "fcma")]
 #[inline]
 pub(crate) fn conj_f32(v: float32x2_t, a: float32x2_t) -> float32x2_t {
     unsafe { vreinterpret_f32_u32(veor_u32(vreinterpret_u32_f32(v), vreinterpret_u32_f32(a))) }

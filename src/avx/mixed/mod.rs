@@ -34,20 +34,21 @@ mod mixed_radix;
 pub(super) use avx_stored::AvxStoreD;
 pub(super) use avx_storef::{AvxStoreF, SseStoreF};
 pub(super) use butterflies::{
-    ColumnButterfly3d, ColumnButterfly3f, ColumnButterfly4d, ColumnButterfly4f, ColumnButterfly5d,
-    ColumnButterfly5f, ColumnButterfly6d, ColumnButterfly6f, ColumnButterfly7d, ColumnButterfly7f,
-    ColumnButterfly8d, ColumnButterfly8f, ColumnButterfly9d, ColumnButterfly9f, ColumnButterfly10d,
-    ColumnButterfly10f, ColumnButterfly11d, ColumnButterfly11f, ColumnButterfly12d,
-    ColumnButterfly12f, ColumnButterfly13d, ColumnButterfly13f, ColumnButterfly16d,
-    ColumnButterfly16f,
+    ColumnButterfly2d, ColumnButterfly2f, ColumnButterfly3d, ColumnButterfly3f, ColumnButterfly4d,
+    ColumnButterfly4f, ColumnButterfly5d, ColumnButterfly5f, ColumnButterfly6d, ColumnButterfly6f,
+    ColumnButterfly7d, ColumnButterfly7f, ColumnButterfly8d, ColumnButterfly8f, ColumnButterfly9d,
+    ColumnButterfly9f, ColumnButterfly10d, ColumnButterfly10f, ColumnButterfly11d,
+    ColumnButterfly11f, ColumnButterfly12d, ColumnButterfly12f, ColumnButterfly13d,
+    ColumnButterfly13f, ColumnButterfly16d, ColumnButterfly16f,
 };
 pub(crate) use mixed_radix::{
     AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,
     AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d, AvxMixedRadix10d, AvxMixedRadix11d,
-    AvxMixedRadix12d, AvxMixedRadix13d, AvxMixedRadix14d, AvxMixedRadix14f, AvxMixedRadix16d,
+    AvxMixedRadix12d, AvxMixedRadix13d, AvxMixedRadix14d, AvxMixedRadix14f, AvxMixedRadix15d,
+    AvxMixedRadix16d,
 };
 pub(crate) use mixed_radix::{
     AvxMixedRadix2f, AvxMixedRadix3f, AvxMixedRadix4f, AvxMixedRadix5f, AvxMixedRadix6f,
     AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
-    AvxMixedRadix12f, AvxMixedRadix13f, AvxMixedRadix16f,
+    AvxMixedRadix12f, AvxMixedRadix13f, AvxMixedRadix15f, AvxMixedRadix16f,
 };

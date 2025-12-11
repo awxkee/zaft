@@ -25,126 +25,75 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-use crate::avx::butterflies::{AvxFastButterfly3, AvxFastButterfly5d, AvxFastButterfly5f};
-use crate::avx::util::{
-    _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpackhilo_ps64, _mm_unpacklo_ps64,
-    _mm_unpacklohi_ps64, _mm256_create_pd, _mm256_create_ps,
+use crate::avx::butterflies::shared::{gen_butterfly_twiddles_f32, gen_butterfly_twiddles_f64};
+use crate::avx::mixed::{
+    AvxStoreD, AvxStoreF, ColumnButterfly3d, ColumnButterfly3f, ColumnButterfly5d,
+    ColumnButterfly5f,
 };
+use crate::avx::transpose::{avx_transpose_f32x2_4x4_impl, transpose_f64x2_2x2};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
 pub(crate) struct AvxButterfly15d {
     direction: FftDirection,
-    bf5: AvxFastButterfly5d,
-    bf3: AvxFastButterfly3<f64>,
+    bf3: ColumnButterfly3d,
+    bf5: ColumnButterfly5d,
+    twiddles: [AvxStoreD; 6],
+}
+
+#[inline]
+#[target_feature(enable = "avx2")]
+pub(crate) fn transpose_f64x2_5x3(
+    rows0: [AvxStoreD; 3],
+    rows1: [AvxStoreD; 3],
+    rows2: [AvxStoreD; 3],
+) -> ([AvxStoreD; 5], [AvxStoreD; 5]) {
+    let a0 = transpose_f64x2_2x2(rows0[0].v, rows0[1].v);
+    let d0 = transpose_f64x2_2x2(rows0[2].v, _mm256_setzero_pd());
+
+    let b0 = transpose_f64x2_2x2(rows1[0].v, rows1[1].v);
+    let e0 = transpose_f64x2_2x2(rows1[2].v, _mm256_setzero_pd());
+
+    let c0 = transpose_f64x2_2x2(rows2[0].v, rows2[1].v);
+    let f0 = transpose_f64x2_2x2(rows2[2].v, _mm256_setzero_pd());
+    (
+        [
+            AvxStoreD::raw(a0.0),
+            AvxStoreD::raw(a0.1),
+            AvxStoreD::raw(b0.0),
+            AvxStoreD::raw(b0.1),
+            AvxStoreD::raw(c0.0),
+        ],
+        [
+            AvxStoreD::raw(d0.0),
+            AvxStoreD::raw(d0.1),
+            AvxStoreD::raw(e0.0),
+            AvxStoreD::raw(e0.1),
+            AvxStoreD::raw(f0.0),
+        ],
+    )
 }
 
 impl AvxButterfly15d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
+        unsafe { Self::new_init(fft_direction) }
+    }
+
+    #[target_feature(enable = "avx2")]
+    fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            bf5: unsafe { AvxFastButterfly5d::new(fft_direction) },
-            bf3: unsafe { AvxFastButterfly3::<f64>::new(fft_direction) },
+            twiddles: gen_butterfly_twiddles_f64(5, 3, fft_direction, 15),
+            bf3: ColumnButterfly3d::new(fft_direction),
+            bf5: ColumnButterfly5d::new(fft_direction),
         }
-    }
-}
-
-impl AvxButterfly15d {
-    #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        unsafe {
-            if in_place.len() % 15 != 0 {
-                return Err(ZaftError::InvalidSizeMultiplier(
-                    in_place.len(),
-                    self.length(),
-                ));
-            }
-
-            for chunk in in_place.chunks_exact_mut(15) {
-                let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
-                let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
-                let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
-                let u6u7 = _mm256_loadu_pd(chunk.get_unchecked(6..).as_ptr().cast());
-                let u8u9 = _mm256_loadu_pd(chunk.get_unchecked(8..).as_ptr().cast());
-                let u10u11 = _mm256_loadu_pd(chunk.get_unchecked(10..).as_ptr().cast());
-                let u12u13 = _mm256_loadu_pd(chunk.get_unchecked(12..).as_ptr().cast());
-                let u14 = _mm_loadu_pd(chunk.get_unchecked(14..).as_ptr().cast());
-
-                const LO_HI: i32 = 0b0011_0000;
-                const HI_LO: i32 = 0b0010_0001;
-                const HI_HI: i32 = 0b0011_0001;
-                const LO_LO: i32 = 0b0010_0000;
-
-                let mid0mid1 = self.bf5.exec(
-                    _mm256_permute2f128_pd::<LO_HI>(u0u1, u4u5),
-                    _mm256_permute2f128_pd::<HI_LO>(u2u3, u8u9),
-                    _mm256_permute2f128_pd::<LO_HI>(u6u7, u10u11),
-                    _mm256_permute2f128_pd::<HI_LO>(u8u9, _mm256_castpd128_pd256(u14)),
-                    _mm256_permute2f128_pd::<LO_LO>(u12u13, u2u3),
-                );
-                let mid2 = self.bf5.exec_short(
-                    _mm256_castpd256_pd128(u10u11),
-                    _mm256_extractf128_pd::<1>(u12u13),
-                    _mm256_extractf128_pd::<1>(u0u1),
-                    _mm256_castpd256_pd128(u4u5),
-                    _mm256_extractf128_pd::<1>(u6u7),
-                );
-
-                let (y0y3, y1y4, y2y5) = self.bf3.exec(
-                    _mm256_permute2f128_pd::<LO_LO>(mid0mid1.0, mid0mid1.1),
-                    _mm256_permute2f128_pd::<HI_HI>(mid0mid1.0, mid0mid1.1),
-                    _mm256_create_pd(mid2.0, mid2.1),
-                );
-                let (y6y9, y7y10, y8y11) = self.bf3.exec(
-                    _mm256_permute2f128_pd::<LO_LO>(mid0mid1.2, mid0mid1.3),
-                    _mm256_permute2f128_pd::<HI_HI>(mid0mid1.2, mid0mid1.3),
-                    _mm256_create_pd(mid2.2, mid2.3),
-                );
-                let (y12, y13, y14) = self.bf3.exec_m128(
-                    _mm256_castpd256_pd128(mid0mid1.4),
-                    _mm256_extractf128_pd::<1>(mid0mid1.4),
-                    mid2.4,
-                );
-
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                    _mm256_permute2f128_pd::<LO_HI>(y0y3, y1y4),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    _mm256_permute2f128_pd::<LO_HI>(y8y11, y6y9),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(4..).as_mut_ptr().cast(),
-                    _mm256_permute2f128_pd::<LO_LO>(_mm256_castpd128_pd256(y13), y2y5),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
-                    _mm256_permute2f128_pd::<HI_LO>(y0y3, y7y10),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(8..).as_mut_ptr().cast(),
-                    _mm256_permute2f128_pd::<HI_LO>(y8y11, _mm256_castpd128_pd256(y12)),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(10..).as_mut_ptr().cast(),
-                    _mm256_permute2f128_pd::<LO_HI>(y1y4, y2y5),
-                );
-                _mm256_storeu_pd(
-                    chunk.get_unchecked_mut(12..).as_mut_ptr().cast(),
-                    _mm256_permute2f128_pd::<LO_HI>(y6y9, y7y10),
-                );
-                _mm_storeu_pd(chunk.get_unchecked_mut(14..).as_mut_ptr().cast(), y14);
-            }
-        }
-        Ok(())
     }
 }
 
 impl FftExecutor<f64> for AvxButterfly15d {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_f64(in_place) }
+        unsafe { self.execute_impl(in_place) }
     }
 
     fn direction(&self) -> FftDirection {
@@ -157,100 +106,128 @@ impl FftExecutor<f64> for AvxButterfly15d {
     }
 }
 
+impl AvxButterfly15d {
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        if !in_place.len().is_multiple_of(15) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                in_place.len(),
+                self.length(),
+            ));
+        }
+
+        unsafe {
+            let mut rows0: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows1: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows2: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+
+            for chunk in in_place.chunks_exact_mut(15) {
+                // columns
+                for i in 0..3 {
+                    rows0[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 5..));
+                    rows1[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 5 + 2..));
+                    rows2[i] = AvxStoreD::from_complex(chunk.get_unchecked(i * 5 + 4));
+                }
+
+                rows0 = self.bf3.exec(rows0);
+                rows1 = self.bf3.exec(rows1);
+                rows2 = self.bf3.exec(rows2);
+
+                for i in 1..3 {
+                    rows0[i] = AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1]);
+                    rows1[i] = AvxStoreD::mul_by_complex(rows1[i], self.twiddles[i - 1 + 2]);
+                    rows2[i] = AvxStoreD::mul_by_complex(rows2[i], self.twiddles[i - 1 + 4]);
+                }
+
+                let transposed = transpose_f64x2_5x3(rows0, rows1, rows2);
+
+                let q0 = self.bf5.exec(transposed.0);
+                let q1 = self.bf5.exec(transposed.1);
+
+                for i in 0..5 {
+                    q0[i].write(chunk.get_unchecked_mut(i * 3..));
+                    q1[i].write_lo(chunk.get_unchecked_mut(i * 3 + 2..));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 pub(crate) struct AvxButterfly15f {
     direction: FftDirection,
-    bf5: AvxFastButterfly5f,
-    bf3: AvxFastButterfly3<f32>,
+    bf3: ColumnButterfly3f,
+    bf5: ColumnButterfly5f,
+    twiddles: [AvxStoreF; 6],
 }
 
 impl AvxButterfly15f {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
+        unsafe { Self::new_init(fft_direction) }
+    }
+
+    #[target_feature(enable = "avx2")]
+    fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            bf5: unsafe { AvxFastButterfly5f::new(fft_direction) },
-            bf3: unsafe { AvxFastButterfly3::<f32>::new(fft_direction) },
+            twiddles: gen_butterfly_twiddles_f32(5, 3, fft_direction, 15),
+            bf3: ColumnButterfly3f::new(fft_direction),
+            bf5: ColumnButterfly5f::new(fft_direction),
         }
     }
+}
+
+#[inline]
+#[target_feature(enable = "avx2", enable = "fma")]
+pub(crate) fn transpose_f32x2_5x3(rows0: [AvxStoreF; 3], rows1: [AvxStoreF; 3]) -> [AvxStoreF; 5] {
+    let a0 = avx_transpose_f32x2_4x4_impl(rows0[0].v, rows0[1].v, rows0[2].v, _mm256_setzero_ps());
+    let b0 = avx_transpose_f32x2_4x4_impl(rows1[0].v, rows1[1].v, rows1[2].v, _mm256_setzero_ps());
+
+    [
+        AvxStoreF::raw(a0.0),
+        AvxStoreF::raw(a0.1),
+        AvxStoreF::raw(a0.2),
+        AvxStoreF::raw(a0.3),
+        AvxStoreF::raw(b0.0),
+    ]
 }
 
 impl AvxButterfly15f {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        if !in_place.len().is_multiple_of(15) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                in_place.len(),
+                self.length(),
+            ));
+        }
+
         unsafe {
-            if in_place.len() % 15 != 0 {
-                return Err(ZaftError::InvalidSizeMultiplier(
-                    in_place.len(),
-                    self.length(),
-                ));
-            }
+            let mut rows0: [AvxStoreF; 3] = [AvxStoreF::zero(); 3];
+            let mut rows1: [AvxStoreF; 3] = [AvxStoreF::zero(); 3];
 
             for chunk in in_place.chunks_exact_mut(15) {
-                let u0u1u2u3 = _mm256_loadu_ps(chunk.as_ptr().cast());
-                let u4u5u6u7 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());
-                let u8u9u10u11 = _mm256_loadu_ps(chunk.get_unchecked(8..).as_ptr().cast());
-                let u11u12u13u14 = _mm256_loadu_ps(chunk.get_unchecked(11..).as_ptr().cast());
+                // columns
+                for i in 0..3 {
+                    rows0[i] = AvxStoreF::from_complex_ref(chunk.get_unchecked(i * 5..));
+                    rows1[i] = AvxStoreF::from_complex(chunk.get_unchecked(i * 5 + 4));
+                }
 
-                let u0u1 = _mm256_castps256_ps128(u0u1u2u3);
-                let u4u5 = _mm256_castps256_ps128(u4u5u6u7);
-                let u2u3 = _mm256_extractf128_ps::<1>(u0u1u2u3);
-                let u8u9 = _mm256_castps256_ps128(u8u9u10u11);
-                let u6u7 = _mm256_extractf128_ps::<1>(u4u5u6u7);
-                let u11u12 = _mm256_castps256_ps128(u11u12u13u14);
-                let u13u14 = _mm256_extractf128_ps::<1>(u11u12u13u14);
-                let u10u11 = _mm256_extractf128_ps::<1>(u8u9u10u11);
+                rows0 = self.bf3.exec(rows0);
+                rows1 = self.bf3.exec(rows1);
 
-                let u0u5 = _mm_unpacklohi_ps64(u0u1, u4u5);
+                for i in 1..3 {
+                    rows0[i] = AvxStoreF::mul_by_complex(rows0[i], self.twiddles[i - 1]);
+                    rows1[i] = AvxStoreF::mul_by_complex(rows1[i], self.twiddles[i - 1 + 2]);
+                }
 
-                let mid0mid1 = self.bf5.exec(
-                    u0u5,
-                    _mm_unpackhilo_ps64(u2u3, u8u9),
-                    _mm_unpacklo_ps64(u6u7, u11u12),
-                    _mm_unpackhi_ps64(u8u9, u13u14),
-                    _mm_unpackhilo_ps64(u11u12, u2u3),
-                );
-                let mid2 = self.bf5.exec(
-                    u10u11,
-                    u13u14,
-                    _mm_unpackhi_ps64(u0u1, u0u1),
-                    u4u5,
-                    _mm_unpackhi_ps64(u6u7, u6u7),
-                );
+                let transposed = transpose_f32x2_5x3(rows0, rows1);
 
-                let (y0y3, y1y4, y2y5) = self.bf3.exec_m128(
-                    _mm_unpacklo_ps64(mid0mid1.0, mid0mid1.1),
-                    _mm_unpackhi_ps64(mid0mid1.0, mid0mid1.1),
-                    _mm_unpacklo_ps64(mid2.0, mid2.1),
-                );
-                let (y6y9, y7y10, y8y11) = self.bf3.exec_m128(
-                    _mm_unpacklo_ps64(mid0mid1.2, mid0mid1.3),
-                    _mm_unpackhi_ps64(mid0mid1.2, mid0mid1.3),
-                    _mm_unpacklo_ps64(mid2.2, mid2.3),
-                );
-                let (y12, y13, y14) = self.bf3.exec_m128(
-                    mid0mid1.4,
-                    _mm_unpackhi_ps64(mid0mid1.4, mid0mid1.4),
-                    mid2.4,
-                );
+                let q0 = self.bf5.exec(transposed);
 
-                let y0000 = _mm256_create_ps(
-                    _mm_unpacklohi_ps64(y0y3, y1y4),
-                    _mm_unpacklohi_ps64(y8y11, y6y9),
-                );
-                let y0001 = _mm256_create_ps(
-                    _mm_unpacklo_ps64(y13, y2y5),
-                    _mm_unpackhilo_ps64(y0y3, y7y10),
-                );
-                let y0002 = _mm256_create_ps(
-                    _mm_unpackhilo_ps64(y8y11, y12),
-                    _mm_unpacklohi_ps64(y1y4, y2y5),
-                );
-                let y003 = _mm_unpacklohi_ps64(y6y9, y7y10);
-
-                _mm256_storeu_ps(chunk.as_mut_ptr().cast(), y0000);
-                _mm256_storeu_ps(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y0001);
-                _mm256_storeu_ps(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y0002);
-                _mm_storeu_ps(chunk.get_unchecked_mut(12..).as_mut_ptr().cast(), y003);
-                _m128s_store_f32x2(chunk.get_unchecked_mut(14..).as_mut_ptr().cast(), y14);
+                for i in 0..5 {
+                    q0[i].write_lo3(chunk.get_unchecked_mut(i * 3..));
+                }
             }
         }
         Ok(())

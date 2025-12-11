@@ -308,15 +308,15 @@ pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
 // }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 2048];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 520];
     let mut c = Criterion::default().sample_size(10);
     // .warm_up_time(Duration::from_millis(200))
     // .measurement_time(Duration::from_millis(200));
     // bench_zaft_averages(&mut c);
-    check_power_group(&mut c, 125, "125d".to_string());
-    check_power_groups(&mut c, 125, "125f".to_string());
-    check_power_group(&mut c, 3125, "3125d".to_string());
-    check_power_groups(&mut c, 3125, "3125f".to_string());
+    // check_power_group(&mut c, 96, "96d".to_string());
+    // check_power_groups(&mut c, 96, "96f".to_string());
+    // check_power_group(&mut c, 3125, "3125d".to_string());
+    // check_power_groups(&mut c, 3125, "3125f".to_string());
 
     // check_power_groups(&mut c, 3usize.pow(6), "3^6f".to_string());
 

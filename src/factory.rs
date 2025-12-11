@@ -304,6 +304,7 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly81(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly96(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly100(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
@@ -445,6 +446,10 @@ pub(crate) trait AlgorithmFactory<T> {
 
     #[allow(unused)]
     fn mixed_radix_butterfly14(
+        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
+    #[allow(unused)]
+    fn mixed_radix_butterfly15(
         right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
@@ -648,8 +653,8 @@ impl AlgorithmFactory<f32> for f32 {
             fft_direction,
             Butterfly15,
             AvxButterfly15f,
-            NeonButterfly15,
-            NeonFcmaButterfly15
+            NeonButterfly15f,
+            NeonFcmaButterfly15f
         )
     }
 
@@ -659,9 +664,9 @@ impl AlgorithmFactory<f32> for f32 {
         make_composite_butterfly!(
             fft_direction,
             Butterfly16,
-            AvxButterfly16,
-            NeonButterfly16,
-            NeonFcmaButterfly16
+            AvxButterfly16f,
+            NeonButterfly16f,
+            NeonFcmaButterfly16f
         )
     }
 
@@ -708,8 +713,8 @@ impl AlgorithmFactory<f32> for f32 {
             fft_direction,
             Butterfly20,
             AvxButterfly20f,
-            NeonButterfly20,
-            NeonFcmaButterfly20
+            NeonButterfly20f,
+            NeonFcmaButterfly20f
         )
     }
 
@@ -936,6 +941,18 @@ impl AlgorithmFactory<f32> for f32 {
             AvxButterfly81f,
             NeonButterfly81f,
             NeonFcmaButterfly81f
+        )
+    }
+
+    fn butterfly96(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly96f,
+            NeonButterfly96f,
+            NeonFcmaButterfly96f
         )
     }
 
@@ -1374,6 +1391,18 @@ impl AlgorithmFactory<f32> for f32 {
             AvxMixedRadix14f,
             NeonMixedRadix14f,
             NeonFcmaMixedRadix14f
+        )
+    }
+
+    #[allow(unused)]
+    fn mixed_radix_butterfly15(
+        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
+        make_mixed_radix!(
+            right_fft,
+            AvxMixedRadix15f,
+            NeonMixedRadix15f,
+            NeonFcmaMixedRadix15f
         )
     }
 
