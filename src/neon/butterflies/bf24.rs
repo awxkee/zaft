@@ -128,7 +128,7 @@ macro_rules! gen_bf24d {
         impl $name {
             #[target_feature(enable = $features)]
             fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if in_place.len() % 24 != 0 {
+                if !in_place.len().is_multiple_of(24) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -264,7 +264,7 @@ macro_rules! gen_bf24f {
         impl $name {
             #[target_feature(enable = $features)]
             fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if in_place.len() % 24 != 0 {
+                if !in_place.len().is_multiple_of(24) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),

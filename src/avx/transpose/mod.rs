@@ -34,7 +34,7 @@ mod f32x2_4xn;
 mod f32x2_6x6;
 mod f32x2_7x7;
 mod f32x2_8x3;
-mod f32x2_8x4;
+mod f32x2_8xn;
 mod f64x2_2x2;
 mod f64x2_2xn;
 mod f64x2_4x4;
@@ -70,10 +70,10 @@ pub(crate) use f32x2_7x7::{
     transpose_7x7_f32, transpose_7x7_f64,
 };
 pub(crate) use f32x2_8x3::{block_transpose_f32x2_3x8, block_transpose_f32x2_8x3};
-pub(crate) use f32x2_8x4::avx2_transpose_f32x2_8x4;
+pub(crate) use f32x2_8xn::{avx2_transpose_f32x2_8x4, transpose_f32x2_8x5};
 pub(crate) use f64x2_2x2::{avx_transpose_f64x2_2x2, transpose_f64x2_2x2};
 pub(crate) use f64x2_2xn::{
-    transpose_2x3d, transpose_2x4d, transpose_2x5d, transpose_f64x2_2x2d, transpose_f64x2_2x6,
+    transpose_2x3d, transpose_2x4d, transpose_f64x2_2x2d, transpose_f64x2_2x5, transpose_f64x2_2x6,
     transpose_f64x2_2x7, transpose_f64x2_2x8, transpose_f64x2_2x9, transpose_f64x2_2x10,
     transpose_f64x2_2x11, transpose_f64x2_2x12, transpose_f64x2_2x13, transpose_f64x2_2x14,
     transpose_f64x2_2x15, transpose_f64x2_2x16,

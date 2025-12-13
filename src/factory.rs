@@ -290,6 +290,7 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly36(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly40(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly42(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly48(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly49(
@@ -300,6 +301,7 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly64(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly66(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly72(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly81(
         fft_direction: FftDirection,
@@ -593,8 +595,8 @@ impl AlgorithmFactory<f32> for f32 {
             fft_direction,
             Butterfly10,
             AvxButterfly10f,
-            NeonButterfly10,
-            NeonFcmaButterfly10
+            NeonButterfly10f,
+            NeonFcmaButterfly10f
         )
     }
 
@@ -605,8 +607,8 @@ impl AlgorithmFactory<f32> for f32 {
             fft_direction,
             Butterfly11,
             AvxButterfly11,
-            NeonButterfly11,
-            NeonFcmaButterfly11
+            NeonButterfly11f,
+            NeonFcmaButterfly11f
         )
     }
 
@@ -616,9 +618,9 @@ impl AlgorithmFactory<f32> for f32 {
         make_default_butterfly!(
             fft_direction,
             Butterfly12,
-            AvxButterfly12,
-            NeonButterfly12,
-            NeonFcmaButterfly12
+            AvxButterfly12f,
+            NeonButterfly12f,
+            NeonFcmaButterfly12f
         )
     }
 
@@ -629,8 +631,8 @@ impl AlgorithmFactory<f32> for f32 {
             fft_direction,
             Butterfly13,
             AvxButterfly13,
-            NeonButterfly13,
-            NeonFcmaButterfly13
+            NeonButterfly13f,
+            NeonFcmaButterfly13f
         )
     }
 
@@ -640,9 +642,9 @@ impl AlgorithmFactory<f32> for f32 {
         make_default_butterfly!(
             fft_direction,
             Butterfly14,
-            AvxButterfly14,
-            NeonButterfly14,
-            NeonFcmaButterfly14
+            AvxButterfly14f,
+            NeonButterfly14f,
+            NeonFcmaButterfly14f
         )
     }
 
@@ -848,6 +850,18 @@ impl AlgorithmFactory<f32> for f32 {
         )
     }
 
+    fn butterfly40(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly40f,
+            NeonButterfly40f,
+            NeonFcmaButterfly40f
+        )
+    }
+
     fn butterfly42(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
@@ -917,6 +931,18 @@ impl AlgorithmFactory<f32> for f32 {
             AvxButterfly64f,
             NeonButterfly64f,
             NeonFcmaButterfly64f
+        )
+    }
+
+    fn butterfly66(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly66f,
+            NeonButterfly66f,
+            NeonFcmaButterfly66f
         )
     }
 

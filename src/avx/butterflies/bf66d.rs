@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 11/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk 12/2025. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -29,36 +29,36 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::avx::butterflies::shared::gen_butterfly_twiddles_f64;
-use crate::avx::mixed::{AvxStoreD, ColumnButterfly6d, ColumnButterfly7d};
+use crate::avx::mixed::{AvxStoreD, ColumnButterfly6d, ColumnButterfly11d};
 use crate::avx::transpose::transpose_f64x2_2x6;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
-pub(crate) struct AvxButterfly42d {
+pub(crate) struct AvxButterfly66d {
     direction: FftDirection,
     bf6: ColumnButterfly6d,
-    bf7: ColumnButterfly7d,
-    twiddles: [AvxStoreD; 20],
+    bf11: ColumnButterfly11d,
+    twiddles: [AvxStoreD; 30],
 }
 
-impl AvxButterfly42d {
+impl AvxButterfly66d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         unsafe { Self::new_init(fft_direction) }
     }
 
     #[target_feature(enable = "avx2")]
-    fn new_init(fft_direction: FftDirection) -> Self {
+    pub(crate) fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            twiddles: gen_butterfly_twiddles_f64(7, 6, fft_direction, 42),
-            bf7: ColumnButterfly7d::new(fft_direction),
+            twiddles: gen_butterfly_twiddles_f64(11, 6, fft_direction, 66),
             bf6: ColumnButterfly6d::new(fft_direction),
+            bf11: ColumnButterfly11d::new(fft_direction),
         }
     }
 }
 
-impl FftExecutor<f64> for AvxButterfly42d {
+impl FftExecutor<f64> for AvxButterfly66d {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_impl(in_place) }
     }
@@ -69,14 +69,14 @@ impl FftExecutor<f64> for AvxButterfly42d {
 
     #[inline]
     fn length(&self) -> usize {
-        42
+        66
     }
 }
 
-impl AvxButterfly42d {
+impl AvxButterfly66d {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(42) {
+        if !in_place.len().is_multiple_of(66) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -84,28 +84,25 @@ impl AvxButterfly42d {
         }
 
         unsafe {
-            let mut rows0: [AvxStoreD; 6] = [AvxStoreD::zero(); 6];
+            let mut rows: [AvxStoreD; 6] = [AvxStoreD::zero(); 6];
+            let mut rows11: [AvxStoreD; 11] = [AvxStoreD::zero(); 11];
+            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 66];
 
-            let mut rows7: [AvxStoreD; 7] = [AvxStoreD::zero(); 7];
-
-            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 42];
-
-            for chunk in in_place.chunks_exact_mut(42) {
+            for chunk in in_place.chunks_exact_mut(66) {
                 // columns
-                for k in 0..3 {
+                for k in 0..5 {
                     for i in 0..6 {
-                        rows0[i] =
-                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + k * 2..));
+                        rows[i] =
+                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 11 + k * 2..));
                     }
 
-                    rows0 = self.bf6.exec(rows0);
+                    rows = self.bf6.exec(rows);
 
                     for i in 1..6 {
-                        rows0[i] =
-                            AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 5 * k]);
+                        rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 5 * k]);
                     }
 
-                    let transposed = transpose_f64x2_2x6(rows0);
+                    let transposed = transpose_f64x2_2x6(rows);
 
                     for i in 0..3 {
                         transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 6 + i * 2..));
@@ -115,19 +112,18 @@ impl AvxButterfly42d {
                 }
 
                 {
-                    let k = 3;
+                    let k = 5;
                     for i in 0..6 {
-                        rows0[i] = AvxStoreD::from_complex(chunk.get_unchecked(i * 7 + k * 2));
+                        rows[i] = AvxStoreD::from_complex(chunk.get_unchecked(i * 11 + k * 2));
                     }
 
-                    rows0 = self.bf6.exec(rows0);
+                    rows = self.bf6.exec(rows);
 
                     for i in 1..6 {
-                        rows0[i] =
-                            AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 5 * k]);
+                        rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 5 * k]);
                     }
 
-                    let transposed = transpose_f64x2_2x6(rows0);
+                    let transposed = transpose_f64x2_2x6(rows);
 
                     for i in 0..3 {
                         transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 6 + i * 2..));
@@ -137,13 +133,13 @@ impl AvxButterfly42d {
                 // rows
 
                 for k in 0..3 {
-                    for i in 0..7 {
-                        rows7[i] =
+                    for i in 0..11 {
+                        rows11[i] =
                             AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 6 + k * 2..));
                     }
-                    rows7 = self.bf7.exec(rows7);
-                    for i in 0..7 {
-                        rows7[i].write(chunk.get_unchecked_mut(i * 6 + k * 2..));
+                    rows11 = self.bf11.exec(rows11);
+                    for i in 0..11 {
+                        rows11[i].write(chunk.get_unchecked_mut(i * 6 + k * 2..));
                     }
                 }
             }
@@ -157,5 +153,5 @@ mod tests {
     use super::*;
     use crate::avx::butterflies::test_avx_butterfly;
 
-    test_avx_butterfly!(test_avx_butterfly42, f64, AvxButterfly42d, 42, 1e-3);
+    test_avx_butterfly!(test_avx_butterfly66_f64, f64, AvxButterfly66d, 66, 1e-3);
 }

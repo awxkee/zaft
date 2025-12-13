@@ -27,7 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-use crate::avx::transpose::avx_transpose_u64_4x4_impl;
+use crate::avx::mixed::AvxStoreF;
+use crate::avx::transpose::{avx_transpose_f32x2_4x4_impl, avx_transpose_u64_4x4_impl};
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
@@ -84,4 +85,49 @@ pub(crate) fn avx2_transpose_f32x2_8x4(
             v1.3,
         );
     }
+}
+
+#[inline]
+#[target_feature(enable = "avx")]
+pub(crate) fn transpose_f32x2_8x5(
+    rows0: [AvxStoreF; 5],
+    rows1: [AvxStoreF; 5],
+) -> ([AvxStoreF; 8], [AvxStoreF; 8]) {
+    let transposed00 = avx_transpose_f32x2_4x4_impl(rows0[0].v, rows0[1].v, rows0[2].v, rows0[3].v);
+    let transposed01 = avx_transpose_f32x2_4x4_impl(rows1[0].v, rows1[1].v, rows1[2].v, rows1[3].v);
+    let transposed10 = avx_transpose_f32x2_4x4_impl(
+        rows0[4].v,
+        _mm256_setzero_ps(),
+        _mm256_setzero_ps(),
+        _mm256_setzero_ps(),
+    );
+    let transposed11 = avx_transpose_f32x2_4x4_impl(
+        rows1[4].v,
+        _mm256_setzero_ps(),
+        _mm256_setzero_ps(),
+        _mm256_setzero_ps(),
+    );
+
+    let output0 = [
+        AvxStoreF::raw(transposed00.0),
+        AvxStoreF::raw(transposed00.1),
+        AvxStoreF::raw(transposed00.2),
+        AvxStoreF::raw(transposed00.3),
+        AvxStoreF::raw(transposed01.0),
+        AvxStoreF::raw(transposed01.1),
+        AvxStoreF::raw(transposed01.2),
+        AvxStoreF::raw(transposed01.3),
+    ];
+    let output1 = [
+        AvxStoreF::raw(transposed10.0),
+        AvxStoreF::raw(transposed10.1),
+        AvxStoreF::raw(transposed10.2),
+        AvxStoreF::raw(transposed10.3),
+        AvxStoreF::raw(transposed11.0),
+        AvxStoreF::raw(transposed11.1),
+        AvxStoreF::raw(transposed11.2),
+        AvxStoreF::raw(transposed11.3),
+    ];
+
+    (output0, output1)
 }

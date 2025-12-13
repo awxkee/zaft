@@ -26,291 +26,270 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::butterflies::NeonButterfly;
-use crate::traits::FftTrigonometry;
-use crate::util::compute_twiddle;
+use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
+use crate::neon::mixed::{NeonStoreD, NeonStoreF};
+use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 
-pub(crate) struct NeonButterfly12<T> {
-    direction: FftDirection,
-    twiddle_re: T,
-    twiddle_im: [T; 4],
-}
-
-impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> NeonButterfly12<T>
-where
-    f64: AsPrimitive<T>,
-{
-    pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        let twiddle = compute_twiddle::<T>(1, 3, fft_direction);
-        Self {
-            direction: fft_direction,
-            twiddle_re: twiddle.re,
-            twiddle_im: [-twiddle.im, twiddle.im, -twiddle.im, twiddle.im],
-        }
-    }
-}
-
-impl FftExecutor<f64> for NeonButterfly12<f64> {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 12 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
+macro_rules! get_bf12d {
+    ($name: ident, $features: literal, $internal_bf4: ident, $internal_bf3: ident) => {
+        use crate::neon::mixed::{$internal_bf3, $internal_bf4};
+        pub(crate) struct $name {
+            direction: FftDirection,
+            bf3: $internal_bf3,
+            bf4: $internal_bf4,
         }
 
-        unsafe {
-            static INVERSE_ROT: [f64; 2] = [-0.0, 0.0];
-            static FORWARD_ROT: [f64; 2] = [0.0, -0.0];
-
-            let rot_sign = vld1q_f64(match self.direction {
-                FftDirection::Inverse => INVERSE_ROT.as_ptr(),
-                FftDirection::Forward => FORWARD_ROT.as_ptr(),
-            });
-
-            let tw3_re = vdupq_n_f64(self.twiddle_re);
-            let tw3_wim = vld1q_f64(self.twiddle_im.as_ptr().cast());
-
-            for chunk in in_place.chunks_exact_mut(12) {
-                let u0 = vld1q_f64(chunk.as_ptr().cast());
-                let u1 = vld1q_f64(chunk.get_unchecked(3..).as_ptr().cast());
-                let u2 = vld1q_f64(chunk.get_unchecked(6..).as_ptr().cast());
-                let u3 = vld1q_f64(chunk.get_unchecked(9..).as_ptr().cast());
-
-                let u4 = vld1q_f64(chunk.get_unchecked(4..).as_ptr().cast());
-                let u5 = vld1q_f64(chunk.get_unchecked(7..).as_ptr().cast());
-                let u6 = vld1q_f64(chunk.get_unchecked(10..).as_ptr().cast());
-                let u7 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
-
-                let u8 = vld1q_f64(chunk.get_unchecked(8..).as_ptr().cast());
-                let u9 = vld1q_f64(chunk.get_unchecked(11..).as_ptr().cast());
-                let u10 = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
-                let u11 = vld1q_f64(chunk.get_unchecked(5..).as_ptr().cast());
-
-                let (u0, u1, u2, u3) = NeonButterfly::butterfly4_f64(u0, u1, u2, u3, rot_sign);
-                let (u4, u5, u6, u7) = NeonButterfly::butterfly4_f64(u4, u5, u6, u7, rot_sign);
-                let (u8, u9, u10, u11) = NeonButterfly::butterfly4_f64(u8, u9, u10, u11, rot_sign);
-
-                let (y0, y4, y8) = NeonButterfly::butterfly3_f64(u0, u4, u8, tw3_re, tw3_wim);
-                let (y9, y1, y5) = NeonButterfly::butterfly3_f64(u1, u5, u9, tw3_re, tw3_wim);
-                let (y6, y10, y2) = NeonButterfly::butterfly3_f64(u2, u6, u10, tw3_re, tw3_wim);
-                let (y3, y7, y11) = NeonButterfly::butterfly3_f64(u3, u7, u11, tw3_re, tw3_wim);
-
-                vst1q_f64(chunk.as_mut_ptr().cast(), y0);
-                vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
-                vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
-                vst1q_f64(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), y3);
-                vst1q_f64(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
-                vst1q_f64(chunk.get_unchecked_mut(5..).as_mut_ptr().cast(), y5);
-                vst1q_f64(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), y6);
-                vst1q_f64(chunk.get_unchecked_mut(7..).as_mut_ptr().cast(), y7);
-                vst1q_f64(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y8);
-                vst1q_f64(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), y9);
-                vst1q_f64(chunk.get_unchecked_mut(10..).as_mut_ptr().cast(), y10);
-                vst1q_f64(chunk.get_unchecked_mut(11..).as_mut_ptr().cast(), y11);
+        impl $name {
+            pub(crate) fn new(fft_direction: FftDirection) -> Self {
+                Self {
+                    direction: fft_direction,
+                    bf3: $internal_bf3::new(fft_direction),
+                    bf4: $internal_bf4::new(fft_direction),
+                }
             }
         }
-        Ok(())
-    }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        12
-    }
-}
-
-impl FftExecutor<f32> for NeonButterfly12<f32> {
-    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 12 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
-
-        unsafe {
-            static INVERSE_ROT: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            static FORWARD_ROT: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
-
-            let rot_sign = vld1q_f32(match self.direction {
-                FftDirection::Inverse => INVERSE_ROT.as_ptr(),
-                FftDirection::Forward => FORWARD_ROT.as_ptr(),
-            });
-
-            let tw3_re = vdupq_n_f32(self.twiddle_re);
-            let tw3_wim = vld1q_f32(self.twiddle_im.as_ptr().cast());
-
-            for chunk in in_place.chunks_exact_mut(24) {
-                let u0u7 = vld1q_f32(chunk.as_mut_ptr().cast());
-                let u10u1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
-                let u4u11 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
-                let u2u5 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
-                let u8u3 = vld1q_f32(chunk.get_unchecked(8..).as_ptr().cast());
-                let u6u9 = vld1q_f32(chunk.get_unchecked(10..).as_ptr().cast());
-                let u12u13 = vld1q_f32(chunk.get_unchecked(12..).as_ptr().cast());
-                let u14u15 = vld1q_f32(chunk.get_unchecked(14..).as_ptr().cast());
-                let u16u17 = vld1q_f32(chunk.get_unchecked(16..).as_ptr().cast());
-                let u18u19 = vld1q_f32(chunk.get_unchecked(18..).as_ptr().cast());
-                let u20u21 = vld1q_f32(chunk.get_unchecked(20..).as_ptr().cast());
-                let u22u23 = vld1q_f32(chunk.get_unchecked(22..).as_ptr().cast());
-
-                let u0 = vcombine_f32(vget_low_f32(u0u7), vget_low_f32(u12u13));
-                let u1 = vcombine_f32(vget_high_f32(u10u1), vget_high_f32(u14u15));
-                let u2 = vcombine_f32(vget_low_f32(u2u5), vget_low_f32(u18u19));
-                let u3 = vcombine_f32(vget_high_f32(u8u3), vget_high_f32(u20u21));
-                let u4 = vcombine_f32(vget_low_f32(u4u11), vget_low_f32(u16u17));
-                let u5 = vcombine_f32(vget_high_f32(u2u5), vget_high_f32(u18u19));
-                let u6 = vcombine_f32(vget_low_f32(u6u9), vget_low_f32(u22u23));
-                let u7 = vcombine_f32(vget_high_f32(u0u7), vget_high_f32(u12u13));
-                let u8 = vcombine_f32(vget_low_f32(u8u3), vget_low_f32(u20u21));
-                let u9 = vcombine_f32(vget_high_f32(u6u9), vget_high_f32(u22u23));
-                let u10 = vcombine_f32(vget_low_f32(u10u1), vget_low_f32(u14u15));
-                let u11 = vcombine_f32(vget_high_f32(u4u11), vget_high_f32(u16u17));
-
-                let (u0, u1, u2, u3) = NeonButterfly::butterfly4_f32(u0, u1, u2, u3, rot_sign);
-                let (u4, u5, u6, u7) = NeonButterfly::butterfly4_f32(u4, u5, u6, u7, rot_sign);
-                let (u8, u9, u10, u11) = NeonButterfly::butterfly4_f32(u8, u9, u10, u11, rot_sign);
-
-                let (y0, y4, y8) = NeonButterfly::butterfly3_f32(u0, u4, u8, tw3_re, tw3_wim);
-                let (y9, y1, y5) = NeonButterfly::butterfly3_f32(u1, u5, u9, tw3_re, tw3_wim);
-                let (y6, y10, y2) = NeonButterfly::butterfly3_f32(u2, u6, u10, tw3_re, tw3_wim);
-                let (y3, y7, y11) = NeonButterfly::butterfly3_f32(u3, u7, u11, tw3_re, tw3_wim);
-
-                let qy0 = vcombine_f32(vget_low_f32(y0), vget_low_f32(y1));
-                let qy1 = vcombine_f32(vget_low_f32(y2), vget_low_f32(y3));
-                let qy2 = vcombine_f32(vget_low_f32(y4), vget_low_f32(y5));
-                let qy3 = vcombine_f32(vget_low_f32(y6), vget_low_f32(y7));
-                let qy4 = vcombine_f32(vget_low_f32(y8), vget_low_f32(y9));
-                let qy5 = vcombine_f32(vget_low_f32(y10), vget_low_f32(y11));
-                let qy6 = vcombine_f32(vget_high_f32(y0), vget_high_f32(y1));
-                let qy7 = vcombine_f32(vget_high_f32(y2), vget_high_f32(y3));
-                let qy8 = vcombine_f32(vget_high_f32(y4), vget_high_f32(y5));
-                let qy9 = vcombine_f32(vget_high_f32(y6), vget_high_f32(y7));
-                let qy10 = vcombine_f32(vget_high_f32(y8), vget_high_f32(y9));
-                let qy11 = vcombine_f32(vget_high_f32(y10), vget_high_f32(y11));
-
-                vst1q_f32(chunk.as_mut_ptr().cast(), qy0);
-                vst1q_f32(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), qy1);
-                vst1q_f32(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), qy2);
-                vst1q_f32(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), qy3);
-                vst1q_f32(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), qy4);
-                vst1q_f32(chunk.get_unchecked_mut(10..).as_mut_ptr().cast(), qy5);
-                vst1q_f32(chunk.get_unchecked_mut(12..).as_mut_ptr().cast(), qy6);
-                vst1q_f32(chunk.get_unchecked_mut(14..).as_mut_ptr().cast(), qy7);
-                vst1q_f32(chunk.get_unchecked_mut(16..).as_mut_ptr().cast(), qy8);
-                vst1q_f32(chunk.get_unchecked_mut(18..).as_mut_ptr().cast(), qy9);
-                vst1q_f32(chunk.get_unchecked_mut(20..).as_mut_ptr().cast(), qy10);
-                vst1q_f32(chunk.get_unchecked_mut(22..).as_mut_ptr().cast(), qy11);
+        impl FftExecutor<f64> for $name {
+            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
             }
 
-            let rem = in_place.chunks_exact_mut(24).into_remainder();
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
 
-            for chunk in rem.chunks_exact_mut(12) {
-                let u0u7 = vld1q_f32(chunk.as_mut_ptr().cast());
-                let u10u1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
-                let u4u11 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
-                let u2u5 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
-                let u8u3 = vld1q_f32(chunk.get_unchecked(8..).as_ptr().cast());
-                let u6u9 = vld1q_f32(chunk.get_unchecked(10..).as_ptr().cast());
-
-                let u0 = vget_low_f32(u0u7);
-                let u1 = vget_high_f32(u10u1);
-                let u2 = vget_low_f32(u2u5);
-                let u3 = vget_high_f32(u8u3);
-                let u4 = vget_low_f32(u4u11);
-                let u5 = vget_high_f32(u2u5);
-                let u6 = vget_low_f32(u6u9);
-                let u7 = vget_high_f32(u0u7);
-                let u8 = vget_low_f32(u8u3);
-                let u9 = vget_high_f32(u6u9);
-                let u10 = vget_low_f32(u10u1);
-                let u11 = vget_high_f32(u4u11);
-
-                let (u0, u1, u2, u3) =
-                    NeonButterfly::butterfly4h_f32(u0, u1, u2, u3, vget_low_f32(rot_sign));
-                let (u4, u5, u6, u7) =
-                    NeonButterfly::butterfly4h_f32(u4, u5, u6, u7, vget_low_f32(rot_sign));
-                let (u8, u9, u10, u11) =
-                    NeonButterfly::butterfly4h_f32(u8, u9, u10, u11, vget_low_f32(rot_sign));
-
-                let (y0, y4, y8) = NeonButterfly::butterfly3h_f32(
-                    u0,
-                    u4,
-                    u8,
-                    vget_low_f32(tw3_re),
-                    vget_low_f32(tw3_wim),
-                );
-                let (y9, y1, y5) = NeonButterfly::butterfly3h_f32(
-                    u1,
-                    u5,
-                    u9,
-                    vget_low_f32(tw3_re),
-                    vget_low_f32(tw3_wim),
-                );
-                let (y6, y10, y2) = NeonButterfly::butterfly3h_f32(
-                    u2,
-                    u6,
-                    u10,
-                    vget_low_f32(tw3_re),
-                    vget_low_f32(tw3_wim),
-                );
-                let (y3, y7, y11) = NeonButterfly::butterfly3h_f32(
-                    u3,
-                    u7,
-                    u11,
-                    vget_low_f32(tw3_re),
-                    vget_low_f32(tw3_wim),
-                );
-
-                vst1q_f32(chunk.as_mut_ptr().cast(), vcombine_f32(y0, y1));
-                vst1q_f32(
-                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    vcombine_f32(y2, y3),
-                );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(4..).as_mut_ptr().cast(),
-                    vcombine_f32(y4, y5),
-                );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
-                    vcombine_f32(y6, y7),
-                );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(8..).as_mut_ptr().cast(),
-                    vcombine_f32(y8, y9),
-                );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(10..).as_mut_ptr().cast(),
-                    vcombine_f32(y10, y11),
-                );
+            #[inline]
+            fn length(&self) -> usize {
+                12
             }
         }
-        Ok(())
-    }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
+        impl $name {
+            #[target_feature(enable = $features)]
+            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of(12) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        in_place.len(),
+                        self.length(),
+                    ));
+                }
 
-    #[inline]
-    fn length(&self) -> usize {
-        12
-    }
+                unsafe {
+                    for chunk in in_place.chunks_exact_mut(12) {
+                        let u0 = NeonStoreD::raw(vld1q_f64(chunk.as_ptr().cast()));
+                        let u1 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(3..).as_ptr().cast()));
+                        let u2 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(6..).as_ptr().cast()));
+                        let u3 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(9..).as_ptr().cast()));
+
+                        let u4 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(4..).as_ptr().cast()));
+                        let u5 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(7..).as_ptr().cast()));
+                        let u6 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(10..).as_ptr().cast()));
+                        let u7 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast()));
+
+                        let u8 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(8..).as_ptr().cast()));
+                        let u9 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(11..).as_ptr().cast()));
+                        let u10 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast()));
+                        let u11 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(5..).as_ptr().cast()));
+
+                        let [u0, u1, u2, u3] = self.bf4.exec([u0, u1, u2, u3]);
+                        let [u4, u5, u6, u7] = self.bf4.exec([u4, u5, u6, u7]);
+                        let [u8, u9, u10, u11] = self.bf4.exec([u8, u9, u10, u11]);
+
+                        let [y0, y4, y8] = self.bf3.exec([u0, u4, u8]);
+                        let [y9, y1, y5] = self.bf3.exec([u1, u5, u9]);
+                        let [y6, y10, y2] = self.bf3.exec([u2, u6, u10]);
+                        let [y3, y7, y11] = self.bf3.exec([u3, u7, u11]);
+
+                        vst1q_f64(chunk.as_mut_ptr().cast(), y0.v);
+                        vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1.v);
+                        vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2.v);
+                        vst1q_f64(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), y3.v);
+                        vst1q_f64(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y4.v);
+                        vst1q_f64(chunk.get_unchecked_mut(5..).as_mut_ptr().cast(), y5.v);
+                        vst1q_f64(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), y6.v);
+                        vst1q_f64(chunk.get_unchecked_mut(7..).as_mut_ptr().cast(), y7.v);
+                        vst1q_f64(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y8.v);
+                        vst1q_f64(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), y9.v);
+                        vst1q_f64(chunk.get_unchecked_mut(10..).as_mut_ptr().cast(), y10.v);
+                        vst1q_f64(chunk.get_unchecked_mut(11..).as_mut_ptr().cast(), y11.v);
+                    }
+                }
+                Ok(())
+            }
+        }
+    };
 }
+
+get_bf12d!(
+    NeonButterfly12d,
+    "neon",
+    ColumnButterfly4d,
+    ColumnButterfly3d
+);
+#[cfg(feature = "fcma")]
+get_bf12d!(
+    NeonFcmaButterfly12d,
+    "fcma",
+    ColumnFcmaButterfly4d,
+    ColumnFcmaButterfly3d
+);
+
+#[inline(always)]
+pub(crate) fn transpose_f32x2_4x3(
+    rows0: [NeonStoreF; 3],
+    rows1: [NeonStoreF; 3],
+) -> ([NeonStoreF; 4], [NeonStoreF; 4]) {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows0[0].v, rows0[1].v));
+    let d0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows0[2].v, unsafe { vdupq_n_f32(0.) }));
+
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows1[0].v, rows1[1].v));
+    let e0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows1[2].v, unsafe { vdupq_n_f32(0.) }));
+    (
+        [
+            NeonStoreF::raw(a0.0),
+            NeonStoreF::raw(a0.1),
+            NeonStoreF::raw(b0.0),
+            NeonStoreF::raw(b0.1),
+        ],
+        [
+            NeonStoreF::raw(d0.0),
+            NeonStoreF::raw(d0.1),
+            NeonStoreF::raw(e0.0),
+            NeonStoreF::raw(e0.1),
+        ],
+    )
+}
+
+macro_rules! gen_bf12f {
+    ($name: ident, $features: literal, $internal_bf4: ident, $internal_bf3: ident, $mul: ident) => {
+        use crate::neon::mixed::{$internal_bf3, $internal_bf4};
+        pub(crate) struct $name {
+            direction: FftDirection,
+            bf3: $internal_bf3,
+            bf4: $internal_bf4,
+            twiddles: [NeonStoreF; 4],
+        }
+
+        impl $name {
+            pub(crate) fn new(fft_direction: FftDirection) -> Self {
+                Self {
+                    direction: fft_direction,
+                    twiddles: gen_butterfly_twiddles_f32(4, 3, fft_direction, 12),
+                    bf3: $internal_bf3::new(fft_direction),
+                    bf4: $internal_bf4::new(fft_direction),
+                }
+            }
+        }
+
+        impl FftExecutor<f32> for $name {
+            fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            #[inline]
+            fn length(&self) -> usize {
+                12
+            }
+        }
+
+        impl $name {
+            #[target_feature(enable = $features)]
+            fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of(12) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        in_place.len(),
+                        self.length(),
+                    ));
+                }
+
+                unsafe {
+                    let mut rows0: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
+                    let mut rows1: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
+
+                    for chunk in in_place.chunks_exact_mut(12) {
+                        // columns
+                        for i in 0..3 {
+                            rows0[i] = NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 4..));
+                            rows1[i] =
+                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 4 + 2..));
+                        }
+
+                        rows0 = self.bf3.exec(rows0);
+                        rows1 = self.bf3.exec(rows1);
+
+                        for i in 1..3 {
+                            rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
+                            rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i - 1 + 2]);
+                        }
+
+                        let transposed = transpose_f32x2_4x3(rows0, rows1);
+
+                        let q0 = self.bf4.exec(transposed.0);
+                        let q1 = self.bf4.exec(transposed.1);
+
+                        for i in 0..4 {
+                            q0[i].write(chunk.get_unchecked_mut(i * 3..));
+                            q1[i].write_lo(chunk.get_unchecked_mut(i * 3 + 2..));
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+    };
+}
+
+gen_bf12f!(
+    NeonButterfly12f,
+    "neon",
+    ColumnButterfly4f,
+    ColumnButterfly3f,
+    mul_by_complex
+);
+#[cfg(feature = "fcma")]
+gen_bf12f!(
+    NeonFcmaButterfly12f,
+    "fcma",
+    ColumnFcmaButterfly4f,
+    ColumnFcmaButterfly3f,
+    fcmul_fcma
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
+    #[cfg(feature = "fcma")]
+    use crate::neon::butterflies::test_fcma_butterfly;
 
-    test_butterfly!(test_neon_butterfly12, f32, NeonButterfly12, 12, 1e-5);
-    test_butterfly!(test_neon_butterfly12_f64, f64, NeonButterfly12, 12, 1e-7);
+    test_butterfly!(test_neon_butterfly12, f32, NeonButterfly12f, 12, 1e-5);
+    #[cfg(feature = "fcma")]
+    test_fcma_butterfly!(test_fcma_butterfly12, f32, NeonFcmaButterfly12f, 12, 1e-5);
+    test_butterfly!(test_neon_butterfly12_f64, f64, NeonButterfly12d, 12, 1e-7);
+    #[cfg(feature = "fcma")]
+    test_fcma_butterfly!(
+        test_fcma_butterfly12_f64,
+        f64,
+        NeonFcmaButterfly12d,
+        12,
+        1e-7
+    );
 }

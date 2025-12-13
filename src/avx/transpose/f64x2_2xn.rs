@@ -31,7 +31,7 @@ use crate::avx::transpose::transpose_f64x2_2x2;
 use std::arch::x86_64::{_mm256_permute2f128_pd, _mm256_setzero_pd};
 
 #[inline(always)]
-pub(crate) fn transpose_2x5d(rows: [AvxStoreD; 5]) -> [AvxStoreD; 6] {
+pub(crate) fn transpose_f64x2_2x5(rows: [AvxStoreD; 5]) -> [AvxStoreD; 6] {
     unsafe {
         let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
         let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
