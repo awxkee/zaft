@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 11/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk 12/2025. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -29,20 +29,20 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::avx::butterflies::shared::gen_butterfly_twiddles_f64;
-use crate::avx::mixed::{AvxStoreD, ColumnButterfly6d, ColumnButterfly7d};
-use crate::avx::transpose::transpose_f64x2_2x6;
+use crate::avx::mixed::{AvxStoreD, ColumnButterfly5d, ColumnButterfly8d};
+use crate::avx::transpose::transpose_f64x2_2x5;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
-pub(crate) struct AvxButterfly42d {
+pub(crate) struct AvxButterfly40d {
     direction: FftDirection,
-    bf6: ColumnButterfly6d,
-    bf7: ColumnButterfly7d,
-    twiddles: [AvxStoreD; 20],
+    bf5: ColumnButterfly5d,
+    bf8: ColumnButterfly8d,
+    twiddles: [AvxStoreD; 16],
 }
 
-impl AvxButterfly42d {
+impl AvxButterfly40d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         unsafe { Self::new_init(fft_direction) }
     }
@@ -51,14 +51,14 @@ impl AvxButterfly42d {
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            twiddles: gen_butterfly_twiddles_f64(7, 6, fft_direction, 42),
-            bf7: ColumnButterfly7d::new(fft_direction),
-            bf6: ColumnButterfly6d::new(fft_direction),
+            twiddles: gen_butterfly_twiddles_f64(8, 5, fft_direction, 40),
+            bf8: ColumnButterfly8d::new(fft_direction),
+            bf5: ColumnButterfly5d::new(fft_direction),
         }
     }
 }
 
-impl FftExecutor<f64> for AvxButterfly42d {
+impl FftExecutor<f64> for AvxButterfly40d {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_impl(in_place) }
     }
@@ -69,14 +69,14 @@ impl FftExecutor<f64> for AvxButterfly42d {
 
     #[inline]
     fn length(&self) -> usize {
-        42
+        40
     }
 }
 
-impl AvxButterfly42d {
+impl AvxButterfly40d {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(42) {
+        if !in_place.len().is_multiple_of(40) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -84,66 +84,64 @@ impl AvxButterfly42d {
         }
 
         unsafe {
-            let mut rows0: [AvxStoreD; 6] = [AvxStoreD::zero(); 6];
+            let mut rows0: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
 
-            let mut rows7: [AvxStoreD; 7] = [AvxStoreD::zero(); 7];
+            let mut rows8: [AvxStoreD; 8] = [AvxStoreD::zero(); 8];
 
-            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 42];
+            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 40];
 
-            for chunk in in_place.chunks_exact_mut(42) {
+            for chunk in in_place.chunks_exact_mut(40) {
                 // columns
-                for k in 0..3 {
-                    for i in 0..6 {
+                for k in 0..4 {
+                    for i in 0..5 {
                         rows0[i] =
-                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + k * 2..));
+                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 8 + k * 2..));
                     }
 
-                    rows0 = self.bf6.exec(rows0);
+                    rows0 = self.bf5.exec(rows0);
 
-                    for i in 1..6 {
+                    for i in 1..5 {
                         rows0[i] =
-                            AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 5 * k]);
+                            AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 4 * k]);
                     }
 
-                    let transposed = transpose_f64x2_2x6(rows0);
+                    let transposed = transpose_f64x2_2x5(rows0);
 
-                    for i in 0..3 {
-                        transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 6 + i * 2..));
+                    for i in 0..2 {
+                        transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + i * 2..));
                         transposed[i * 2 + 1]
-                            .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 6 + i * 2..));
-                    }
-                }
-
-                {
-                    let k = 3;
-                    for i in 0..6 {
-                        rows0[i] = AvxStoreD::from_complex(chunk.get_unchecked(i * 7 + k * 2));
+                            .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 5 + i * 2..));
                     }
 
-                    rows0 = self.bf6.exec(rows0);
-
-                    for i in 1..6 {
-                        rows0[i] =
-                            AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 5 * k]);
-                    }
-
-                    let transposed = transpose_f64x2_2x6(rows0);
-
-                    for i in 0..3 {
-                        transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 6 + i * 2..));
+                    {
+                        let i = 2;
+                        transposed[4].write_lou(scratch.get_unchecked_mut(k * 2 * 5 + i * 2..));
+                        transposed[5]
+                            .write_lou(scratch.get_unchecked_mut((k * 2 + 1) * 5 + i * 2..));
                     }
                 }
 
                 // rows
 
-                for k in 0..3 {
-                    for i in 0..7 {
-                        rows7[i] =
-                            AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 6 + k * 2..));
+                for k in 0..2 {
+                    for i in 0..8 {
+                        rows8[i] =
+                            AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 5 + k * 2..));
                     }
-                    rows7 = self.bf7.exec(rows7);
-                    for i in 0..7 {
-                        rows7[i].write(chunk.get_unchecked_mut(i * 6 + k * 2..));
+                    rows8 = self.bf8.exec(rows8);
+                    for i in 0..8 {
+                        rows8[i].write(chunk.get_unchecked_mut(i * 5 + k * 2..));
+                    }
+                }
+
+                {
+                    let k = 2;
+                    for i in 0..8 {
+                        rows8[i] = AvxStoreD::from_complexu(scratch.get_unchecked(i * 5 + k * 2));
+                    }
+                    rows8 = self.bf8.exec(rows8);
+                    for i in 0..8 {
+                        rows8[i].write_lo(chunk.get_unchecked_mut(i * 5 + k * 2..));
                     }
                 }
             }
@@ -157,5 +155,5 @@ mod tests {
     use super::*;
     use crate::avx::butterflies::test_avx_butterfly;
 
-    test_avx_butterfly!(test_avx_butterfly42, f64, AvxButterfly42d, 42, 1e-3);
+    test_avx_butterfly!(test_avx_butterfly40, f64, AvxButterfly40d, 40, 1e-3);
 }

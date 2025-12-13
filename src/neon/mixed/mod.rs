@@ -44,7 +44,7 @@ mod bf9;
 mod mixed_radix;
 mod neon_store;
 
-pub(crate) use bf2::ColumnButterfly2f;
+pub(crate) use bf2::{ColumnButterfly2d, ColumnButterfly2f};
 pub(crate) use bf3::{ColumnButterfly3d, ColumnButterfly3f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf3::{ColumnFcmaButterfly3d, ColumnFcmaButterfly3f};

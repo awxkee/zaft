@@ -308,13 +308,14 @@ pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
 // }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 520];
-    let mut c = Criterion::default().sample_size(10);
-    // .warm_up_time(Duration::from_millis(200))
-    // .measurement_time(Duration::from_millis(200));
+    let mut data = vec![Complex::new(0.0019528865, 0.); 858];
+    let mut c = Criterion::default()
+        .sample_size(10)
+        .warm_up_time(Duration::from_millis(200))
+        .measurement_time(Duration::from_millis(200));
     // bench_zaft_averages(&mut c);
-    // check_power_group(&mut c, 96, "96d".to_string());
-    // check_power_groups(&mut c, 96, "96f".to_string());
+    // check_power_group(&mut c, 66, "66d".to_string());
+    // check_power_groups(&mut c, 66, "66f".to_string());
     // check_power_group(&mut c, 3125, "3125d".to_string());
     // check_power_groups(&mut c, 3125, "3125f".to_string());
 
@@ -336,8 +337,8 @@ fn main() {
     // [47, 59, 61, 127, 461, 647, 1427, 1973]
     // println!("bluesteins: {bluesteins:?}");
 
-    // for i in 1..25 {
-    //     check_power_groups(&mut c, 144 * i, format!("size {}, 144 * {i}", 144 * i));
+    // for i in 1..30 {
+    //     check_power_groups(&mut c, 66 * i, format!("size {}, 66 * {i}", 66 * i));
     // }
     // for i in 2..8 {
     //     check_power_group(

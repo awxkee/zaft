@@ -76,7 +76,7 @@ impl FftExecutor<f64> for AvxButterfly72d {
 impl AvxButterfly72d {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 72 != 0 {
+        if !in_place.len().is_multiple_of(72) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),

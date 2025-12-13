@@ -605,7 +605,7 @@ define_transpose_oddd!(AvxTransposeNx9F64, f64, transpose_f64x2_2x9, 2, 9);
 define_transpose_evend!(AvxTransposeNx8F64, f64, transpose_f64x2_2x8, 2, 8);
 define_transpose_oddd!(AvxTransposeNx7F64, f64, transpose_f64x2_2x7, 2, 7);
 define_transpose_evend!(AvxTransposeNx6F64, f64, transpose_f64x2_2x6, 2, 6);
-define_transpose_oddd!(AvxTransposeNx5F64, f64, transpose_2x5d, 2, 5);
+define_transpose_oddd!(AvxTransposeNx5F64, f64, transpose_f64x2_2x5, 2, 5);
 define_transpose_evend!(AvxTransposeNx4F64, f64, transpose_2x4d, 2, 4);
 define_transpose_oddd!(AvxTransposeNx3F64, f64, transpose_2x3d, 2, 3);
 define_transpose_evend!(AvxTransposeNx2F64, f64, transpose_f64x2_2x2d, 2, 2);

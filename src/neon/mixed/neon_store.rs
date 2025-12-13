@@ -217,6 +217,11 @@ impl NeonStoreF {
     }
 
     #[inline]
+    pub(crate) fn write_hi(&self, to_ref: &mut [Complex<f32>]) {
+        unsafe { vst1q_lane_f64::<1>(to_ref.as_mut_ptr().cast(), vreinterpretq_f64_f32(self.v)) }
+    }
+
+    #[inline]
     pub(crate) fn write_lo_u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
         unsafe { vst1_f32(to_ref.as_mut_ptr().cast(), vget_low_f32(self.v)) }
     }

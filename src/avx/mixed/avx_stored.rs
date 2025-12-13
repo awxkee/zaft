@@ -129,6 +129,17 @@ impl AvxStoreD {
 
     #[inline]
     #[target_feature(enable = "avx")]
+    pub(crate) fn write_hi(&self, to_ref: &mut [Complex<f64>]) {
+        unsafe {
+            _mm_storeu_pd(
+                to_ref.as_mut_ptr().cast(),
+                _mm256_extractf128_pd::<1>(self.v),
+            )
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
     pub(crate) fn write_lou(&self, to_ref: &mut [MaybeUninit<Complex<f64>>]) {
         unsafe { _mm_storeu_pd(to_ref.as_mut_ptr().cast(), _mm256_castpd256_pd128(self.v)) }
     }

@@ -113,7 +113,7 @@ pub(crate) fn neon_transpose_f32x2_7x5_aos(
     }
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn neon_transpose_f32x2_7x6_aos(
     rows1: [NeonStoreF; 6],
     rows2: [NeonStoreF; 6],

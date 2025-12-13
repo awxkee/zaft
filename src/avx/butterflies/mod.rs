@@ -75,6 +75,8 @@ mod bf35f;
 mod bf36d;
 mod bf36f;
 mod bf4;
+mod bf40d;
+mod bf40f;
 mod bf42d;
 mod bf42f;
 mod bf48d;
@@ -90,6 +92,8 @@ mod bf63d;
 mod bf63f;
 mod bf64d;
 mod bf64f;
+mod bf66d;
+mod bf66f;
 mod bf7;
 mod bf72d;
 mod bf72f;
@@ -102,7 +106,6 @@ mod bf96f;
 mod fast_bf3;
 mod fast_bf4;
 mod fast_bf5;
-mod fast_bf7;
 mod fast_bf8;
 mod fast_bf9;
 mod fast_bf9d;
@@ -117,10 +120,10 @@ pub(crate) use bf7::AvxButterfly7;
 pub(crate) use bf8::AvxButterfly8;
 pub(crate) use bf9::AvxButterfly9;
 pub(crate) use bf10::{AvxButterfly10d, AvxButterfly10f};
-pub(crate) use bf11::AvxButterfly11;
-pub(crate) use bf12::AvxButterfly12;
-pub(crate) use bf13::AvxButterfly13;
-pub(crate) use bf14::AvxButterfly14;
+pub(crate) use bf11::{AvxButterfly11, AvxButterfly11d};
+pub(crate) use bf12::{AvxButterfly12d, AvxButterfly12f};
+pub(crate) use bf13::{AvxButterfly13, AvxButterfly13d};
+pub(crate) use bf14::{AvxButterfly14d, AvxButterfly14f};
 pub(crate) use bf15::{AvxButterfly15d, AvxButterfly15f};
 pub(crate) use bf16::{AvxButterfly16d, AvxButterfly16f};
 pub(crate) use bf17::AvxButterfly17;
@@ -145,6 +148,8 @@ pub(crate) use bf35d::AvxButterfly35d;
 pub(crate) use bf35f::AvxButterfly35f;
 pub(crate) use bf36d::AvxButterfly36d;
 pub(crate) use bf36f::AvxButterfly36f;
+pub(crate) use bf40d::AvxButterfly40d;
+pub(crate) use bf40f::AvxButterfly40f;
 pub(crate) use bf42d::AvxButterfly42d;
 pub(crate) use bf42f::AvxButterfly42f;
 pub(crate) use bf48d::AvxButterfly48d;
@@ -156,6 +161,8 @@ pub(crate) use bf63d::AvxButterfly63d;
 pub(crate) use bf63f::AvxButterfly63f;
 pub(crate) use bf64d::AvxButterfly64d;
 pub(crate) use bf64f::AvxButterfly64f;
+pub(crate) use bf66d::AvxButterfly66d;
+pub(crate) use bf66f::AvxButterfly66f;
 pub(crate) use bf72d::AvxButterfly72d;
 pub(crate) use bf72f::AvxButterfly72f;
 pub(crate) use bf81d::AvxButterfly81d;
@@ -273,16 +280,6 @@ macro_rules! shift_load4 {
 
 pub(crate) use shift_load4;
 
-macro_rules! shift_load2 {
-    ($chunk: expr, $size: expr, $offset0: expr) => {{
-        let q0 = _mm_loadu_ps($chunk.get_unchecked($offset0..).as_ptr().cast());
-        let q1 = _mm_loadu_ps($chunk.get_unchecked($offset0 + $size..).as_ptr().cast());
-        (_mm_unpacklo_ps64(q0, q1), _mm_unpackhi_ps64(q0, q1))
-    }};
-}
-
-pub(crate) use shift_load2;
-
 macro_rules! shift_load2dd {
     ($chunk: expr, $size: expr, $offset0: expr) => {{
         let q0 = _mm256_loadu_pd($chunk.get_unchecked($offset0..).as_ptr().cast());
@@ -367,23 +364,6 @@ macro_rules! shift_store4 {
 }
 
 pub(crate) use shift_store4;
-
-macro_rules! shift_store2 {
-    ($chunk: expr, $size: expr, $offset0: expr, $r0: expr, $r1: expr) => {{
-        let l0 = _mm_unpacklo_ps64($r0, $r1);
-        _mm_storeu_ps($chunk.get_unchecked_mut($offset0..).as_mut_ptr().cast(), l0);
-        let q0 = _mm_unpackhi_ps64($r0, $r1);
-        _mm_storeu_ps(
-            $chunk
-                .get_unchecked_mut($offset0 + $size..)
-                .as_mut_ptr()
-                .cast(),
-            q0,
-        );
-    }};
-}
-
-pub(crate) use shift_store2;
 
 macro_rules! shift_store8 {
     ($chunk: expr, $size: expr, $offset0: expr, $q0: expr, $q1: expr, $q2: expr, $q3: expr) => {{

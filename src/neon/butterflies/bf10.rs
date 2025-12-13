@@ -26,423 +26,411 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::butterflies::NeonButterfly;
-use crate::neon::butterflies::fast_bf5::NeonFastButterfly5;
-use crate::neon::util::vqtrnq_f32;
-use crate::traits::FftTrigonometry;
+use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
+use crate::neon::mixed::{ColumnButterfly2d, NeonStoreD, NeonStoreF};
+use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 use std::sync::Arc;
 
-pub(crate) struct NeonButterfly10<T> {
-    direction: FftDirection,
-    bf5: NeonFastButterfly5<T>,
-}
-
-impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> NeonButterfly10<T>
-where
-    f64: AsPrimitive<T>,
-{
-    pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        Self {
-            direction: fft_direction,
-            bf5: NeonFastButterfly5::new(fft_direction),
-        }
-    }
-}
-
-impl FftExecutor<f64> for NeonButterfly10<f64> {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 10 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
+macro_rules! gen_bf10d {
+    ($name: ident, $features: literal, $internal_bf5: ident) => {
+        use crate::neon::mixed::$internal_bf5;
+        pub(crate) struct $name {
+            direction: FftDirection,
+            bf5: $internal_bf5,
+            bf2: ColumnButterfly2d,
         }
 
-        unsafe {
-            static ROT_90: [f64; 2] = [-0.0, 0.0];
-            let rot_sign = vld1q_f64(ROT_90.as_ptr());
-
-            for chunk in in_place.chunks_exact_mut(10) {
-                let u0 = vld1q_f64(chunk.as_ptr().cast());
-                let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
-                let u2 = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
-                let u3 = vld1q_f64(chunk.get_unchecked(3..).as_ptr().cast());
-                let u4 = vld1q_f64(chunk.get_unchecked(4..).as_ptr().cast());
-                let u5 = vld1q_f64(chunk.get_unchecked(5..).as_ptr().cast());
-                let u6 = vld1q_f64(chunk.get_unchecked(6..).as_ptr().cast());
-                let u7 = vld1q_f64(chunk.get_unchecked(7..).as_ptr().cast());
-                let u8 = vld1q_f64(chunk.get_unchecked(8..).as_ptr().cast());
-                let u9 = vld1q_f64(chunk.get_unchecked(9..).as_ptr().cast());
-
-                let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
-                let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
-
-                // Since this is good-thomas algorithm, we don't need twiddle factors
-                let (y0, y1) = NeonButterfly::butterfly2_f64(mid0.0, mid1.0);
-                let (y2, y3) = NeonButterfly::butterfly2_f64(mid0.1, mid1.1);
-                let (y4, y5) = NeonButterfly::butterfly2_f64(mid0.2, mid1.2);
-                let (y6, y7) = NeonButterfly::butterfly2_f64(mid0.3, mid1.3);
-                let (y8, y9) = NeonButterfly::butterfly2_f64(mid0.4, mid1.4);
-
-                vst1q_f64(chunk.as_mut_ptr().cast(), y0);
-                vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y3);
-                vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y4);
-
-                vst1q_f64(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), y7);
-                vst1q_f64(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y8);
-                vst1q_f64(chunk.get_unchecked_mut(5..).as_mut_ptr().cast(), y1);
-
-                vst1q_f64(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), y2);
-                vst1q_f64(chunk.get_unchecked_mut(7..).as_mut_ptr().cast(), y5);
-                vst1q_f64(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y6);
-
-                vst1q_f64(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), y9);
+        impl $name {
+            pub(crate) fn new(fft_direction: FftDirection) -> Self {
+                Self {
+                    direction: fft_direction,
+                    bf5: $internal_bf5::new(fft_direction),
+                    bf2: ColumnButterfly2d::new(fft_direction),
+                }
             }
         }
-        Ok(())
-    }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        10
-    }
-}
-
-impl FftExecutorOutOfPlace<f64> for NeonButterfly10<f64> {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-    ) -> Result<(), ZaftError> {
-        if src.len() % 10 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if dst.len() % 10 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
-
-        unsafe {
-            static ROT_90: [f64; 2] = [-0.0, 0.0];
-            let rot_sign = vld1q_f64(ROT_90.as_ptr());
-
-            for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
-                let u0 = vld1q_f64(src.as_ptr().cast());
-                let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
-                let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
-                let u3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());
-                let u4 = vld1q_f64(src.get_unchecked(4..).as_ptr().cast());
-                let u5 = vld1q_f64(src.get_unchecked(5..).as_ptr().cast());
-                let u6 = vld1q_f64(src.get_unchecked(6..).as_ptr().cast());
-                let u7 = vld1q_f64(src.get_unchecked(7..).as_ptr().cast());
-                let u8 = vld1q_f64(src.get_unchecked(8..).as_ptr().cast());
-                let u9 = vld1q_f64(src.get_unchecked(9..).as_ptr().cast());
-
-                let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
-                let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
-
-                // Since this is good-thomas algorithm, we don't need twiddle factors
-                let (y0, y1) = NeonButterfly::butterfly2_f64(mid0.0, mid1.0);
-                let (y2, y3) = NeonButterfly::butterfly2_f64(mid0.1, mid1.1);
-                let (y4, y5) = NeonButterfly::butterfly2_f64(mid0.2, mid1.2);
-                let (y6, y7) = NeonButterfly::butterfly2_f64(mid0.3, mid1.3);
-                let (y8, y9) = NeonButterfly::butterfly2_f64(mid0.4, mid1.4);
-
-                vst1q_f64(dst.as_mut_ptr().cast(), y0);
-                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y3);
-                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y4);
-
-                vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y7);
-                vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y8);
-                vst1q_f64(dst.get_unchecked_mut(5..).as_mut_ptr().cast(), y1);
-
-                vst1q_f64(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), y2);
-                vst1q_f64(dst.get_unchecked_mut(7..).as_mut_ptr().cast(), y5);
-                vst1q_f64(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), y6);
-
-                vst1q_f64(dst.get_unchecked_mut(9..).as_mut_ptr().cast(), y9);
-            }
-        }
-        Ok(())
-    }
-}
-
-impl CompositeFftExecutor<f64> for NeonButterfly10<f64> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-        self
-    }
-}
-
-impl FftExecutor<f32> for NeonButterfly10<f32> {
-    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 10 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
-
-        unsafe {
-            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            let rot_sign = vld1q_f32(ROT_90.as_ptr());
-
-            for chunk in in_place.chunks_exact_mut(20) {
-                let u0u1 = vld1q_f32(chunk.as_ptr().cast());
-                let u2u3 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
-                let u4u5 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
-                let u6u7 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
-                let u8u9 = vld1q_f32(chunk.get_unchecked(8..).as_ptr().cast());
-                let u10u11 = vld1q_f32(chunk.get_unchecked(10..).as_ptr().cast());
-                let u12u13 = vld1q_f32(chunk.get_unchecked(12..).as_ptr().cast());
-                let u14u15 = vld1q_f32(chunk.get_unchecked(14..).as_ptr().cast());
-                let u16u17 = vld1q_f32(chunk.get_unchecked(16..).as_ptr().cast());
-                let u18u19 = vld1q_f32(chunk.get_unchecked(18..).as_ptr().cast());
-
-                let (u0, u1) = vqtrnq_f32(u0u1, u10u11);
-                let (u2, u3) = vqtrnq_f32(u2u3, u12u13);
-                let (u4, u5) = vqtrnq_f32(u4u5, u14u15);
-                let (u6, u7) = vqtrnq_f32(u6u7, u16u17);
-                let (u8, u9) = vqtrnq_f32(u8u9, u18u19);
-
-                let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
-                let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
-
-                // Since this is good-thomas algorithm, we don't need twiddle factors
-                let (zy0, zy1) = NeonButterfly::butterfly2_f32(mid0.0, mid1.0);
-                let (zy2, zy3) = NeonButterfly::butterfly2_f32(mid0.1, mid1.1);
-                let (zy4, zy5) = NeonButterfly::butterfly2_f32(mid0.2, mid1.2);
-                let (zy6, zy7) = NeonButterfly::butterfly2_f32(mid0.3, mid1.3);
-                let (zy8, zy9) = NeonButterfly::butterfly2_f32(mid0.4, mid1.4);
-
-                let (y0, y1) = vqtrnq_f32(zy0, zy3);
-                let (y2, y3) = vqtrnq_f32(zy4, zy7);
-                let (y4, y5) = vqtrnq_f32(zy8, zy1);
-                let (y6, y7) = vqtrnq_f32(zy2, zy5);
-                let (y8, y9) = vqtrnq_f32(zy6, zy9);
-
-                vst1q_f32(chunk.as_mut_ptr().cast(), y0);
-                vst1q_f32(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
-                vst1q_f32(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
-                vst1q_f32(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), y6);
-                vst1q_f32(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y8);
-                vst1q_f32(chunk.get_unchecked_mut(10..).as_mut_ptr().cast(), y1);
-                vst1q_f32(chunk.get_unchecked_mut(12..).as_mut_ptr().cast(), y3);
-                vst1q_f32(chunk.get_unchecked_mut(14..).as_mut_ptr().cast(), y5);
-                vst1q_f32(chunk.get_unchecked_mut(16..).as_mut_ptr().cast(), y7);
-                vst1q_f32(chunk.get_unchecked_mut(18..).as_mut_ptr().cast(), y9);
+        impl FftExecutor<f64> for $name {
+            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
             }
 
-            let rem = in_place.chunks_exact_mut(20).into_remainder();
-
-            for chunk in rem.chunks_exact_mut(10) {
-                let u0u1 = vld1q_f32(chunk.as_ptr().cast());
-                let u2u3 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
-                let u4u5 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
-                let u6u7 = vld1q_f32(chunk.get_unchecked(6..).as_ptr().cast());
-                let u8u9 = vld1q_f32(chunk.get_unchecked(8..).as_ptr().cast());
-
-                let (u0, u1) = (vget_low_f32(u0u1), vget_high_f32(u0u1));
-                let (u2, u3) = (vget_low_f32(u2u3), vget_high_f32(u2u3));
-                let (u4, u5) = (vget_low_f32(u4u5), vget_high_f32(u4u5));
-                let (u6, u7) = (vget_low_f32(u6u7), vget_high_f32(u6u7));
-                let (u8, u9) = (vget_low_f32(u8u9), vget_high_f32(u8u9));
-
-                let mid0 = self.bf5.exec(
-                    vcombine_f32(u0, u5),
-                    vcombine_f32(u2, u7),
-                    vcombine_f32(u4, u9),
-                    vcombine_f32(u6, u1),
-                    vcombine_f32(u8, u3),
-                    rot_sign,
-                );
-
-                // Since this is good-thomas algorithm, we don't need twiddle factors
-                let (y0, y1) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.0), vget_high_f32(mid0.0));
-                let (y2, y3) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.1), vget_high_f32(mid0.1));
-                let (y4, y5) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.2), vget_high_f32(mid0.2));
-                let (y6, y7) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.3), vget_high_f32(mid0.3));
-                let (y8, y9) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.4), vget_high_f32(mid0.4));
-
-                vst1q_f32(chunk.as_mut_ptr().cast(), vcombine_f32(y0, y3));
-                vst1q_f32(
-                    chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    vcombine_f32(y4, y7),
-                );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(4..).as_mut_ptr().cast(),
-                    vcombine_f32(y8, y1),
-                );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(6..).as_mut_ptr().cast(),
-                    vcombine_f32(y2, y5),
-                );
-                vst1q_f32(
-                    chunk.get_unchecked_mut(8..).as_mut_ptr().cast(),
-                    vcombine_f32(y6, y9),
-                );
-            }
-        }
-        Ok(())
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        10
-    }
-}
-
-impl FftExecutorOutOfPlace<f32> for NeonButterfly10<f32> {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-    ) -> Result<(), ZaftError> {
-        if src.len() % 10 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if dst.len() % 10 != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
-
-        unsafe {
-            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            let rot_sign = vld1q_f32(ROT_90.as_ptr());
-
-            for (dst, src) in dst.chunks_exact_mut(20).zip(src.chunks_exact(20)) {
-                let u0u1 = vld1q_f32(src.as_ptr().cast());
-                let u2u3 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
-                let u4u5 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
-                let u6u7 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
-                let u8u9 = vld1q_f32(src.get_unchecked(8..).as_ptr().cast());
-                let u10u11 = vld1q_f32(src.get_unchecked(10..).as_ptr().cast());
-                let u12u13 = vld1q_f32(src.get_unchecked(12..).as_ptr().cast());
-                let u14u15 = vld1q_f32(src.get_unchecked(14..).as_ptr().cast());
-                let u16u17 = vld1q_f32(src.get_unchecked(16..).as_ptr().cast());
-                let u18u19 = vld1q_f32(src.get_unchecked(18..).as_ptr().cast());
-
-                let (u0, u1) = vqtrnq_f32(u0u1, u10u11);
-                let (u2, u3) = vqtrnq_f32(u2u3, u12u13);
-                let (u4, u5) = vqtrnq_f32(u4u5, u14u15);
-                let (u6, u7) = vqtrnq_f32(u6u7, u16u17);
-                let (u8, u9) = vqtrnq_f32(u8u9, u18u19);
-
-                let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
-                let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
-
-                // Since this is good-thomas algorithm, we don't need twiddle factors
-                let (zy0, zy1) = NeonButterfly::butterfly2_f32(mid0.0, mid1.0);
-                let (zy2, zy3) = NeonButterfly::butterfly2_f32(mid0.1, mid1.1);
-                let (zy4, zy5) = NeonButterfly::butterfly2_f32(mid0.2, mid1.2);
-                let (zy6, zy7) = NeonButterfly::butterfly2_f32(mid0.3, mid1.3);
-                let (zy8, zy9) = NeonButterfly::butterfly2_f32(mid0.4, mid1.4);
-
-                let (y0, y1) = vqtrnq_f32(zy0, zy3);
-                let (y2, y3) = vqtrnq_f32(zy4, zy7);
-                let (y4, y5) = vqtrnq_f32(zy8, zy1);
-                let (y6, y7) = vqtrnq_f32(zy2, zy5);
-                let (y8, y9) = vqtrnq_f32(zy6, zy9);
-
-                vst1q_f32(dst.as_mut_ptr().cast(), y0);
-                vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
-                vst1q_f32(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y4);
-                vst1q_f32(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), y6);
-                vst1q_f32(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), y8);
-                vst1q_f32(dst.get_unchecked_mut(10..).as_mut_ptr().cast(), y1);
-                vst1q_f32(dst.get_unchecked_mut(12..).as_mut_ptr().cast(), y3);
-                vst1q_f32(dst.get_unchecked_mut(14..).as_mut_ptr().cast(), y5);
-                vst1q_f32(dst.get_unchecked_mut(16..).as_mut_ptr().cast(), y7);
-                vst1q_f32(dst.get_unchecked_mut(18..).as_mut_ptr().cast(), y9);
+            fn direction(&self) -> FftDirection {
+                self.direction
             }
 
-            let rem_dst = dst.chunks_exact_mut(20).into_remainder();
-            let rem_src = src.chunks_exact(20).remainder();
-
-            for (dst, src) in rem_dst.chunks_exact_mut(10).zip(rem_src.chunks_exact(10)) {
-                let u0u1 = vld1q_f32(src.as_ptr().cast());
-                let u2u3 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
-                let u4u5 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
-                let u6u7 = vld1q_f32(src.get_unchecked(6..).as_ptr().cast());
-                let u8u9 = vld1q_f32(src.get_unchecked(8..).as_ptr().cast());
-
-                let (u0, u1) = (vget_low_f32(u0u1), vget_high_f32(u0u1));
-                let (u2, u3) = (vget_low_f32(u2u3), vget_high_f32(u2u3));
-                let (u4, u5) = (vget_low_f32(u4u5), vget_high_f32(u4u5));
-                let (u6, u7) = (vget_low_f32(u6u7), vget_high_f32(u6u7));
-                let (u8, u9) = (vget_low_f32(u8u9), vget_high_f32(u8u9));
-
-                let mid0 = self.bf5.exec(
-                    vcombine_f32(u0, u5),
-                    vcombine_f32(u2, u7),
-                    vcombine_f32(u4, u9),
-                    vcombine_f32(u6, u1),
-                    vcombine_f32(u8, u3),
-                    rot_sign,
-                );
-
-                // Since this is good-thomas algorithm, we don't need twiddle factors
-                let (y0, y1) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.0), vget_high_f32(mid0.0));
-                let (y2, y3) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.1), vget_high_f32(mid0.1));
-                let (y4, y5) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.2), vget_high_f32(mid0.2));
-                let (y6, y7) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.3), vget_high_f32(mid0.3));
-                let (y8, y9) =
-                    NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.4), vget_high_f32(mid0.4));
-
-                vst1q_f32(dst.as_mut_ptr().cast(), vcombine_f32(y0, y3));
-                vst1q_f32(
-                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    vcombine_f32(y4, y7),
-                );
-                vst1q_f32(
-                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
-                    vcombine_f32(y8, y1),
-                );
-                vst1q_f32(
-                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
-                    vcombine_f32(y2, y5),
-                );
-                vst1q_f32(
-                    dst.get_unchecked_mut(8..).as_mut_ptr().cast(),
-                    vcombine_f32(y6, y9),
-                );
+            #[inline]
+            fn length(&self) -> usize {
+                10
             }
         }
-        Ok(())
-    }
+
+        impl $name {
+            #[target_feature(enable = $features)]
+            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of(10) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        in_place.len(),
+                        self.length(),
+                    ));
+                }
+
+                unsafe {
+                    for chunk in in_place.chunks_exact_mut(10) {
+                        let u0 = NeonStoreD::raw(vld1q_f64(chunk.as_ptr().cast()));
+                        let u1 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast()));
+                        let u2 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast()));
+                        let u3 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(3..).as_ptr().cast()));
+                        let u4 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(4..).as_ptr().cast()));
+                        let u5 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(5..).as_ptr().cast()));
+                        let u6 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(6..).as_ptr().cast()));
+                        let u7 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(7..).as_ptr().cast()));
+                        let u8 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(8..).as_ptr().cast()));
+                        let u9 =
+                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(9..).as_ptr().cast()));
+
+                        let mid0 = self.bf5.exec([u0, u2, u4, u6, u8]);
+                        let mid1 = self.bf5.exec([u5, u7, u9, u1, u3]);
+
+                        // Since this is good-thomas algorithm, we don't need twiddle factors
+                        let [y0, y1] = self.bf2.exec([mid0[0], mid1[0]]);
+                        let [y2, y3] = self.bf2.exec([mid0[1], mid1[1]]);
+                        let [y4, y5] = self.bf2.exec([mid0[2], mid1[2]]);
+                        let [y6, y7] = self.bf2.exec([mid0[3], mid1[3]]);
+                        let [y8, y9] = self.bf2.exec([mid0[4], mid1[4]]);
+
+                        vst1q_f64(chunk.as_mut_ptr().cast(), y0.v);
+                        vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y3.v);
+                        vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y4.v);
+
+                        vst1q_f64(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), y7.v);
+                        vst1q_f64(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y8.v);
+                        vst1q_f64(chunk.get_unchecked_mut(5..).as_mut_ptr().cast(), y1.v);
+
+                        vst1q_f64(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), y2.v);
+                        vst1q_f64(chunk.get_unchecked_mut(7..).as_mut_ptr().cast(), y5.v);
+                        vst1q_f64(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), y6.v);
+
+                        vst1q_f64(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), y9.v);
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl FftExecutorOutOfPlace<f64> for $name {
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<f64>],
+                dst: &mut [Complex<f64>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_out_of_place_impl(src, dst) }
+            }
+        }
+
+        impl $name {
+            #[target_feature(enable = $features)]
+            fn execute_out_of_place_impl(
+                &self,
+                src: &[Complex<f64>],
+                dst: &mut [Complex<f64>],
+            ) -> Result<(), ZaftError> {
+                if !src.len().is_multiple_of(10) {
+                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+                }
+                if !dst.len().is_multiple_of(10) {
+                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+                }
+
+                unsafe {
+                    for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
+                        let u0 = NeonStoreD::raw(vld1q_f64(src.as_ptr().cast()));
+                        let u1 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(1..).as_ptr().cast()));
+                        let u2 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(2..).as_ptr().cast()));
+                        let u3 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(3..).as_ptr().cast()));
+                        let u4 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(4..).as_ptr().cast()));
+                        let u5 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(5..).as_ptr().cast()));
+                        let u6 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(6..).as_ptr().cast()));
+                        let u7 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(7..).as_ptr().cast()));
+                        let u8 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(8..).as_ptr().cast()));
+                        let u9 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(9..).as_ptr().cast()));
+
+                        let mid0 = self.bf5.exec([u0, u2, u4, u6, u8]);
+                        let mid1 = self.bf5.exec([u5, u7, u9, u1, u3]);
+
+                        // Since this is good-thomas algorithm, we don't need twiddle factors
+                        let [y0, y1] = self.bf2.exec([mid0[0], mid1[0]]);
+                        let [y2, y3] = self.bf2.exec([mid0[1], mid1[1]]);
+                        let [y4, y5] = self.bf2.exec([mid0[2], mid1[2]]);
+                        let [y6, y7] = self.bf2.exec([mid0[3], mid1[3]]);
+                        let [y8, y9] = self.bf2.exec([mid0[4], mid1[4]]);
+
+                        vst1q_f64(dst.as_mut_ptr().cast(), y0.v);
+                        vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y3.v);
+                        vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y4.v);
+
+                        vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y7.v);
+                        vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y8.v);
+                        vst1q_f64(dst.get_unchecked_mut(5..).as_mut_ptr().cast(), y1.v);
+
+                        vst1q_f64(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), y2.v);
+                        vst1q_f64(dst.get_unchecked_mut(7..).as_mut_ptr().cast(), y5.v);
+                        vst1q_f64(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), y6.v);
+
+                        vst1q_f64(dst.get_unchecked_mut(9..).as_mut_ptr().cast(), y9.v);
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl CompositeFftExecutor<f64> for $name {
+            fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
+                self
+            }
+        }
+    };
 }
 
-impl CompositeFftExecutor<f32> for NeonButterfly10<f32> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-        self
-    }
+gen_bf10d!(NeonButterfly10d, "neon", ColumnButterfly5d);
+#[cfg(feature = "fcma")]
+gen_bf10d!(NeonFcmaButterfly10d, "fcma", ColumnFcmaButterfly5d);
+
+#[inline(always)]
+pub(crate) fn transpose_f32x2_5x2(
+    rows0: [NeonStoreF; 2],
+    rows1: [NeonStoreF; 2],
+    rows2: [NeonStoreF; 2],
+) -> [NeonStoreF; 5] {
+    let a0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows0[0].v, rows0[1].v));
+
+    let b0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows1[0].v, rows1[1].v));
+
+    let c0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(rows2[0].v, rows2[1].v));
+    [
+        NeonStoreF::raw(a0.0),
+        NeonStoreF::raw(a0.1),
+        NeonStoreF::raw(b0.0),
+        NeonStoreF::raw(b0.1),
+        NeonStoreF::raw(c0.0),
+    ]
 }
+
+use crate::neon::mixed::ColumnButterfly2f;
+
+macro_rules! gen_bf10f {
+    ($name: ident, $features: literal, $internal_bf5: ident, $internal_bf2: ident, $mul: ident) => {
+        use crate::neon::mixed::$internal_bf5;
+        pub(crate) struct $name {
+            direction: FftDirection,
+            bf2: $internal_bf2,
+            bf5: $internal_bf5,
+            twiddles: [NeonStoreF; 6],
+        }
+
+        impl $name {
+            pub(crate) fn new(fft_direction: FftDirection) -> Self {
+                Self {
+                    direction: fft_direction,
+                    twiddles: gen_butterfly_twiddles_f32(5, 2, fft_direction, 10),
+                    bf2: $internal_bf2::new(fft_direction),
+                    bf5: $internal_bf5::new(fft_direction),
+                }
+            }
+        }
+
+        impl FftExecutor<f32> for $name {
+            fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            #[inline]
+            fn length(&self) -> usize {
+                10
+            }
+        }
+
+        impl $name {
+            #[target_feature(enable = $features)]
+            fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of(10) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        in_place.len(),
+                        self.length(),
+                    ));
+                }
+
+                unsafe {
+                    let mut rows0: [NeonStoreF; 2] = [NeonStoreF::default(); 2];
+                    let mut rows1: [NeonStoreF; 2] = [NeonStoreF::default(); 2];
+                    let mut rows2: [NeonStoreF; 2] = [NeonStoreF::default(); 2];
+
+                    for chunk in in_place.chunks_exact_mut(10) {
+                        // columns
+                        for i in 0..2 {
+                            rows0[i] = NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 5..));
+                            rows1[i] =
+                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 5 + 2..));
+                            rows2[i] = NeonStoreF::from_complex(chunk.get_unchecked(i * 5 + 4));
+                        }
+
+                        rows0 = self.bf2.exec(rows0);
+                        rows1 = self.bf2.exec(rows1);
+                        rows2 = self.bf2.exec(rows2);
+
+                        rows0[1] = NeonStoreF::$mul(rows0[1], self.twiddles[0]);
+                        rows1[1] = NeonStoreF::$mul(rows1[1], self.twiddles[1]);
+                        rows2[1] = NeonStoreF::$mul(rows2[1], self.twiddles[2]);
+
+                        let transposed = transpose_f32x2_5x2(rows0, rows1, rows2);
+
+                        // rows
+
+                        let q0 = self.bf5.exec(transposed);
+
+                        for i in 0..5 {
+                            q0[i].write(chunk.get_unchecked_mut(i * 2..));
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl FftExecutorOutOfPlace<f32> for $name {
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<f32>],
+                dst: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_out_of_place_impl(src, dst) }
+            }
+        }
+
+        impl $name {
+            #[target_feature(enable = $features)]
+            fn execute_out_of_place_impl(
+                &self,
+                src: &[Complex<f32>],
+                dst: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                if !src.len().is_multiple_of(10) {
+                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+                }
+                if !dst.len().is_multiple_of(10) {
+                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+                }
+
+                unsafe {
+                    let mut rows0: [NeonStoreF; 2] = [NeonStoreF::default(); 2];
+                    let mut rows1: [NeonStoreF; 2] = [NeonStoreF::default(); 2];
+                    let mut rows2: [NeonStoreF; 2] = [NeonStoreF::default(); 2];
+
+                    for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
+                        // columns
+                        for i in 0..2 {
+                            rows0[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 5..));
+                            rows1[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 5 + 2..));
+                            rows2[i] = NeonStoreF::from_complex(src.get_unchecked(i * 5 + 4));
+                        }
+
+                        rows0 = self.bf2.exec(rows0);
+                        rows1 = self.bf2.exec(rows1);
+                        rows2 = self.bf2.exec(rows2);
+
+                        rows0[1] = NeonStoreF::$mul(rows0[1], self.twiddles[0]);
+                        rows1[1] = NeonStoreF::$mul(rows1[1], self.twiddles[1]);
+                        rows2[1] = NeonStoreF::$mul(rows2[1], self.twiddles[2]);
+
+                        let transposed = transpose_f32x2_5x2(rows0, rows1, rows2);
+
+                        // rows
+
+                        let q0 = self.bf5.exec(transposed);
+
+                        for i in 0..5 {
+                            q0[i].write(dst.get_unchecked_mut(i * 2..));
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl CompositeFftExecutor<f32> for $name {
+            fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
+                self
+            }
+        }
+    };
+}
+
+gen_bf10f!(
+    NeonButterfly10f,
+    "neon",
+    ColumnButterfly5f,
+    ColumnButterfly2f,
+    mul_by_complex
+);
+#[cfg(feature = "fcma")]
+gen_bf10f!(
+    NeonFcmaButterfly10f,
+    "fcma",
+    ColumnFcmaButterfly5f,
+    ColumnButterfly2f,
+    fcmul_fcma
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    #[cfg(feature = "fcma")]
+    use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
-    test_butterfly!(test_neon_butterfly10, f32, NeonButterfly10, 10, 1e-5);
-    test_butterfly!(test_neon_butterfly10_f64, f64, NeonButterfly10, 10, 1e-7);
-    test_oof_butterfly!(test_oof_butterfly10, f32, NeonButterfly10, 10, 1e-5);
-    test_oof_butterfly!(test_oof_butterfly10_f64, f64, NeonButterfly10, 10, 1e-9);
+    test_butterfly!(test_neon_butterfly10, f32, NeonButterfly10f, 10, 1e-5);
+    #[cfg(feature = "fcma")]
+    test_fcma_butterfly!(test_fcma_butterfly10, f32, NeonFcmaButterfly10f, 10, 1e-5);
+    test_butterfly!(test_neon_butterfly10_f64, f64, NeonButterfly10d, 10, 1e-7);
+    #[cfg(feature = "fcma")]
+    test_fcma_butterfly!(
+        test_fcma_butterfly10_f64,
+        f64,
+        NeonFcmaButterfly10d,
+        10,
+        1e-7
+    );
+    test_oof_butterfly!(test_oof_butterfly10, f32, NeonButterfly10f, 10, 1e-5);
+    #[cfg(feature = "fcma")]
+    test_oof_fcma_butterfly!(
+        test_oof_fcma_butterfly10,
+        f32,
+        NeonFcmaButterfly10f,
+        10,
+        1e-5
+    );
+    test_oof_butterfly!(test_oof_butterfly10_f64, f64, NeonButterfly10d, 10, 1e-9);
+    #[cfg(feature = "fcma")]
+    test_oof_fcma_butterfly!(
+        test_oof_fcma_butterfly10_f64,
+        f64,
+        NeonFcmaButterfly10d,
+        10,
+        1e-9
+    );
 }

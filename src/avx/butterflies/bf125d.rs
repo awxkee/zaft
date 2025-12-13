@@ -32,7 +32,7 @@ use crate::avx::butterflies::shared::{
     gen_butterfly_separate_cols_twiddles_f64, gen_butterfly_twiddles_f64,
 };
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly5d};
-use crate::avx::transpose::transpose_2x5d;
+use crate::avx::transpose::transpose_f64x2_2x5;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
@@ -287,7 +287,7 @@ impl AvxButterfly125d {
                         rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
                     }
 
-                    let transposed = transpose_2x5d(rows);
+                    let transposed = transpose_f64x2_2x5(rows);
 
                     for i in 0..2 {
                         transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + i * 2..));
@@ -311,7 +311,7 @@ impl AvxButterfly125d {
                         rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
                     }
 
-                    let transposed = transpose_2x5d(rows);
+                    let transposed = transpose_f64x2_2x5(rows);
 
                     transposed[0].write_u(scratch.get_unchecked_mut(k * 2 * 5..));
                     transposed[2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + 2..));
@@ -381,7 +381,7 @@ impl AvxButterfly125d {
                         rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
                     }
 
-                    let transposed = transpose_2x5d(rows);
+                    let transposed = transpose_f64x2_2x5(rows);
 
                     for i in 0..2 {
                         transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + i * 2..));
@@ -405,7 +405,7 @@ impl AvxButterfly125d {
                         rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
                     }
 
-                    let transposed = transpose_2x5d(rows);
+                    let transposed = transpose_f64x2_2x5(rows);
 
                     transposed[0].write_u(scratch.get_unchecked_mut(k * 2 * 5..));
                     transposed[2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + 2..));

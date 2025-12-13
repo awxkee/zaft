@@ -562,6 +562,11 @@ impl Zaft {
                 // factor out 72
                 try_mixed_radix!(product / 72, 72)
             }
+
+            if product == 858 && T::butterfly66(direction).is_some() {
+                // factor out 66
+                try_mixed_radix!(66, product / 66)
+            }
         }
 
         if product.is_multiple_of(63)
@@ -725,6 +730,117 @@ impl Zaft {
         T::bluestein(convolve_fft, n, direction)
     }
 
+    fn plan_butterfly<T: FftSample>(
+        n: usize,
+        fft_direction: FftDirection,
+    ) -> Option<Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>> {
+        match n {
+            1 => return Some(T::butterfly1(fft_direction).map(|x| x.into_fft_executor())),
+            2 => return Some(T::butterfly2(fft_direction).map(|x| x.into_fft_executor())),
+            3 => return Some(T::butterfly3(fft_direction).map(|x| x.into_fft_executor())),
+            4 => return Some(T::butterfly4(fft_direction).map(|x| x.into_fft_executor())),
+            5 => return Some(T::butterfly5(fft_direction).map(|x| x.into_fft_executor())),
+            6 => return Some(T::butterfly6(fft_direction).map(|x| x.into_fft_executor())),
+            7 => return Some(T::butterfly7(fft_direction).map(|x| x.into_fft_executor())),
+            8 => return Some(T::butterfly8(fft_direction).map(|x| x.into_fft_executor())),
+            9 => return Some(T::butterfly9(fft_direction).map(|x| x.into_fft_executor())),
+            10 => return Some(T::butterfly10(fft_direction).map(|x| x.into_fft_executor())),
+            11 => return Some(T::butterfly11(fft_direction).map(|x| x.into_fft_executor())),
+            12 => return Some(T::butterfly12(fft_direction)),
+            13 => return Some(T::butterfly13(fft_direction).map(|x| x.into_fft_executor())),
+            14 => return Some(T::butterfly14(fft_direction)),
+            15 => return Some(T::butterfly15(fft_direction)),
+            16 => return Some(T::butterfly16(fft_direction).map(|x| x.into_fft_executor())),
+            17 => return Some(T::butterfly17(fft_direction)),
+            18 => return Some(T::butterfly18(fft_direction)),
+            19 => return Some(T::butterfly19(fft_direction)),
+            20 => return Some(T::butterfly20(fft_direction)),
+            21 => {
+                return T::butterfly21(fft_direction).map(Ok);
+            }
+            23 => return Some(T::butterfly23(fft_direction)),
+            24 => {
+                return T::butterfly24(fft_direction).map(Ok);
+            }
+            25 => return Some(T::butterfly25(fft_direction).map(|x| x.into_fft_executor())),
+            27 => return Some(T::butterfly27(fft_direction).map(|x| x.into_fft_executor())),
+            29 => return Some(T::butterfly29(fft_direction)),
+            30 => {
+                return T::butterfly30(fft_direction).map(Ok);
+            }
+            31 => return Some(T::butterfly31(fft_direction)),
+            32 => return Some(T::butterfly32(fft_direction).map(|x| x.into_fft_executor())),
+            35 => {
+                return T::butterfly35(fft_direction).map(Ok);
+            }
+            36 => {
+                return T::butterfly36(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            40 => {
+                return T::butterfly40(fft_direction).map(Ok);
+            }
+            42 => {
+                return T::butterfly42(fft_direction).map(Ok);
+            }
+            48 => {
+                return T::butterfly48(fft_direction).map(Ok);
+            }
+            49 => {
+                return T::butterfly49(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            54 => {
+                return T::butterfly54(fft_direction).map(Ok);
+            }
+            63 => {
+                return T::butterfly63(fft_direction).map(Ok);
+            }
+            64 => {
+                return T::butterfly64(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            66 => {
+                return T::butterfly66(fft_direction).map(Ok);
+            }
+            72 => {
+                return T::butterfly72(fft_direction).map(Ok);
+            }
+            81 => {
+                return T::butterfly81(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            96 => {
+                return T::butterfly96(fft_direction).map(Ok);
+            }
+            100 => {
+                return T::butterfly100(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            121 => {
+                return T::butterfly121(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            125 => {
+                return T::butterfly125(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            128 => {
+                return T::butterfly128(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            144 => {
+                return T::butterfly144(fft_direction).map(Ok);
+            }
+            169 => {
+                return T::butterfly169(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            243 => {
+                return T::butterfly243(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            256 => {
+                return T::butterfly256(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            512 => {
+                return T::butterfly512(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            _ => {}
+        }
+        None
+    }
+
     pub(crate) fn strategy<T: FftSample>(
         n: usize,
         fft_direction: FftDirection,
@@ -735,149 +851,9 @@ impl Zaft {
         if n == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
-        if n == 1 {
-            return T::butterfly1(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 2 {
-            return T::butterfly2(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 3 {
-            return T::butterfly3(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 4 {
-            return T::butterfly4(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 5 {
-            return T::butterfly5(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 6 {
-            return T::butterfly6(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 7 {
-            return T::butterfly7(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 8 {
-            return T::butterfly8(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 9 {
-            return T::butterfly9(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 10 {
-            return T::butterfly10(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 11 {
-            return T::butterfly11(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 12 {
-            return T::butterfly12(fft_direction);
-        } else if n == 13 {
-            return T::butterfly13(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 14 {
-            return T::butterfly14(fft_direction);
-        } else if n == 15 {
-            return T::butterfly15(fft_direction);
-        } else if n == 16 {
-            return T::butterfly16(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 17 {
-            return T::butterfly17(fft_direction);
-        } else if n == 18 {
-            return T::butterfly18(fft_direction);
-        } else if n == 19 {
-            return T::butterfly19(fft_direction);
-        } else if n == 20 {
-            return T::butterfly20(fft_direction);
-        } else if n == 23 {
-            return T::butterfly23(fft_direction);
-        } else if n == 21 {
-            if let Some(executor) = T::butterfly21(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 24 {
-            if let Some(executor) = T::butterfly24(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 25 {
-            return T::butterfly25(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 27 {
-            return T::butterfly27(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 29 {
-            return T::butterfly29(fft_direction);
-        } else if n == 30 {
-            if let Some(executor) = T::butterfly30(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 31 {
-            return T::butterfly31(fft_direction);
-        } else if n == 32 {
-            return T::butterfly32(fft_direction).map(|x| x.into_fft_executor());
-        } else if n == 35 {
-            if let Some(executor) = T::butterfly35(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 36 {
-            if let Some(executor) = T::butterfly36(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 42 {
-            if let Some(executor) = T::butterfly42(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 48 {
-            if let Some(executor) = T::butterfly48(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 49 {
-            if let Some(executor) = T::butterfly49(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 54 {
-            if let Some(executor) = T::butterfly54(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 63 {
-            if let Some(executor) = T::butterfly63(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 64 {
-            if let Some(executor) = T::butterfly64(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 72 {
-            if let Some(executor) = T::butterfly72(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 81 {
-            if let Some(executor) = T::butterfly81(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 96 {
-            if let Some(executor) = T::butterfly96(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 100 {
-            if let Some(executor) = T::butterfly100(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 121 {
-            if let Some(executor) = T::butterfly121(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 125 {
-            if let Some(executor) = T::butterfly125(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 128 {
-            if let Some(executor) = T::butterfly128(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 144 {
-            if let Some(executor) = T::butterfly144(fft_direction) {
-                return Ok(executor);
-            }
-        } else if n == 169 {
-            if let Some(executor) = T::butterfly169(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 243 {
-            if let Some(executor) = T::butterfly243(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 256 {
-            if let Some(executor) = T::butterfly256(fft_direction) {
-                return Ok(executor.into_fft_executor());
-            }
-        } else if n == 512 {
-            if let Some(executor) = T::butterfly512(fft_direction) {
-                return Ok(executor);
+        if n <= 512 {
+            if let Some(bf) = Zaft::plan_butterfly(n, fft_direction) {
+                return bf;
             }
         }
         let prime_factors = PrimeFactors::from_number(n as u64);

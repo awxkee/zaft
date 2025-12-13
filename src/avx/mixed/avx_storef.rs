@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::util::_mm256_fcmul_ps;
+use crate::avx::util::{_mm256_create_ps, _mm256_fcmul_ps};
 use num_complex::Complex;
 use std::arch::x86_64::*;
 use std::mem::MaybeUninit;
@@ -221,6 +221,20 @@ impl AvxStoreF {
             _mm_storeu_si64(
                 to_ref.as_mut_ptr().cast(),
                 _mm_castps_si128(_mm256_castps256_ps128(self.v)),
+            )
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx")]
+    pub(crate) fn write2lo(&self, other: Self, to_ref: &mut [Complex<f32>]) {
+        unsafe {
+            _mm256_storeu_ps(
+                to_ref.as_mut_ptr().cast(),
+                _mm256_create_ps(
+                    _mm256_castps256_ps128(self.v),
+                    _mm256_castps256_ps128(other.v),
+                ),
             )
         }
     }

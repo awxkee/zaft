@@ -82,7 +82,7 @@ pub(crate) use f32x2_7x5::{
 };
 pub(crate) use f32x2_7x7::{block_transpose_f32x2_7x7, neon_transpose_f32x2_7x7_aos};
 pub(crate) use f32x2_8x3::block_transpose_f32x2_8x3;
-pub(crate) use f32x2_8x8::transpose_8x8_f32;
+pub(crate) use f32x2_8x8::{neon_transpose_f32x2_8x5_aos, transpose_8x8_f32};
 pub(crate) use f32x2_9x2::block_transpose_f32x2_9x2;
 pub(crate) use f32x2_11x2::block_transpose_f32x2_11x2;
 pub(crate) use f64x2_2x2::{neon_transpose_f64x2_2x2, neon_transpose_f64x2_4x4_impl};
