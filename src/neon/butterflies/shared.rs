@@ -463,3 +463,59 @@ impl FastFcmaBf4d {
         )
     }
 }
+
+pub(crate) struct NeonRotate90F {
+    sign: float32x4_t,
+}
+
+impl NeonRotate90F {
+    pub(crate) fn new() -> Self {
+        Self {
+            sign: unsafe { vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr()) },
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn roth(&self, values: float32x2_t) -> float32x2_t {
+        unsafe {
+            let temp = vext_f32::<1>(values, values);
+            vreinterpret_f32_u32(veor_u32(
+                vreinterpret_u32_f32(temp),
+                vreinterpret_u32_f32(vget_low_f32(self.sign)),
+            ))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn rot(&self, values: float32x4_t) -> float32x4_t {
+        unsafe {
+            let temp = vrev64q_f32(values);
+            vreinterpretq_f32_u32(veorq_u32(
+                vreinterpretq_u32_f32(temp),
+                vreinterpretq_u32_f32(self.sign),
+            ))
+        }
+    }
+}
+
+#[cfg(feature = "fcma")]
+pub(crate) struct NeonFcmaRotate90F {}
+
+#[cfg(feature = "fcma")]
+impl NeonFcmaRotate90F {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn roth(&self, values: float32x2_t) -> float32x2_t {
+        vcadd_rot90_f32(vdup_n_f32(0.), values)
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rot(&self, values: float32x4_t) -> float32x4_t {
+        vcaddq_rot90_f32(vdupq_n_f32(0.), values)
+    }
+}

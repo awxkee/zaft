@@ -800,6 +800,9 @@ impl Zaft {
             66 => {
                 return T::butterfly66(fft_direction).map(Ok);
             }
+            70 => {
+                return T::butterfly70(fft_direction).map(Ok);
+            }
             72 => {
                 return T::butterfly72(fft_direction).map(Ok);
             }

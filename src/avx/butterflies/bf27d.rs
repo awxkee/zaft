@@ -26,54 +26,68 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::butterflies::fast_bf9d::AvxFastButterfly9d;
-use crate::avx::util::{_mm256_create_pd, _mm256_fcmul_pd, _mm256_set2_complexd};
-use crate::util::compute_twiddle;
+use crate::avx::butterflies::bf16::transpose_4x4;
+use crate::avx::butterflies::shared::gen_butterfly_twiddles_f64;
+use crate::avx::mixed::{AvxStoreD, ColumnButterfly9d};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
-use std::arch::x86_64::*;
 use std::sync::Arc;
+
+#[inline]
+#[target_feature(enable = "avx2")]
+fn transpose_f64x2_9x3(
+    rows0: [AvxStoreD; 3],
+    rows1: [AvxStoreD; 3],
+    rows2: [AvxStoreD; 3],
+    rows3: [AvxStoreD; 3],
+    rows4: [AvxStoreD; 3],
+) -> ([AvxStoreD; 9], [AvxStoreD; 9]) {
+    let a0 = transpose_4x4(
+        [rows0[0], rows0[1], rows0[2], AvxStoreD::zero()],
+        [rows1[0], rows1[1], rows1[2], AvxStoreD::zero()],
+    );
+    let b0 = transpose_4x4(
+        [rows2[0], rows2[1], rows2[2], AvxStoreD::zero()],
+        [rows3[0], rows3[1], rows3[2], AvxStoreD::zero()],
+    );
+    let c0 = transpose_4x4(
+        [rows4[0], rows4[1], rows4[2], AvxStoreD::zero()],
+        [
+            AvxStoreD::zero(),
+            AvxStoreD::zero(),
+            AvxStoreD::zero(),
+            AvxStoreD::zero(),
+        ],
+    );
+    (
+        [
+            // row 0
+            a0.0[0], a0.0[1], a0.0[2], a0.0[3], b0.0[0], b0.0[1], b0.0[2], b0.0[3], c0.0[0],
+        ],
+        [
+            // row 0
+            a0.1[0], a0.1[1], a0.1[2], a0.1[3], b0.1[0], b0.1[1], b0.1[2], b0.1[3], c0.1[0],
+        ],
+    )
+}
 
 pub(crate) struct AvxButterfly27d {
     direction: FftDirection,
-    bf9: AvxFastButterfly9d,
-    tw1tw2: __m256d,
-    tw2tw4: __m256d,
-    tw3tw6: __m256d,
-    tw4tw8: __m256d,
-    tw5tw9: __m256d,
-    tw6tw10: __m256d,
-    tw7tw11: __m256d,
-    tw8tw12: __m256d,
+    bf9: ColumnButterfly9d,
+    twiddles: [AvxStoreD; 10],
 }
 
 impl AvxButterfly27d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        unsafe {
-            let t1 = compute_twiddle(1, 27, fft_direction);
-            let t2 = compute_twiddle(2, 27, fft_direction);
-            let t3 = compute_twiddle(3, 27, fft_direction);
-            let t4 = compute_twiddle(4, 27, fft_direction);
-            let t5 = compute_twiddle(5, 27, fft_direction);
-            let t6 = compute_twiddle(6, 27, fft_direction);
-            let t7 = compute_twiddle(7, 27, fft_direction);
-            let t8 = compute_twiddle(8, 27, fft_direction);
-            let t9 = compute_twiddle(10, 27, fft_direction);
-            let t10 = compute_twiddle(12, 27, fft_direction);
-            let t11 = compute_twiddle(14, 27, fft_direction);
-            let t12 = compute_twiddle(16, 27, fft_direction);
-            Self {
-                direction: fft_direction,
-                tw1tw2: _mm256_set2_complexd(t1, t2),
-                tw2tw4: _mm256_set2_complexd(t2, t4),
-                tw3tw6: _mm256_set2_complexd(t3, t6),
-                tw4tw8: _mm256_set2_complexd(t4, t8),
-                tw5tw9: _mm256_set2_complexd(t5, t9),
-                tw6tw10: _mm256_set2_complexd(t6, t10),
-                tw7tw11: _mm256_set2_complexd(t7, t11),
-                tw8tw12: _mm256_set2_complexd(t8, t12),
-                bf9: AvxFastButterfly9d::new(fft_direction),
-            }
+        unsafe { Self::new_init(fft_direction) }
+    }
+
+    #[target_feature(enable = "avx2")]
+    fn new_init(fft_direction: FftDirection) -> Self {
+        Self {
+            twiddles: gen_butterfly_twiddles_f64(9, 3, fft_direction, 27),
+            bf9: ColumnButterfly9d::new(fft_direction),
+            direction: fft_direction,
         }
     }
 }
@@ -81,7 +95,7 @@ impl AvxButterfly27d {
 impl AvxButterfly27d {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 27 != 0 {
+        if !in_place.len().is_multiple_of(27) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -89,108 +103,48 @@ impl AvxButterfly27d {
         }
 
         unsafe {
+            let mut rows0: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows1: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows2: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows3: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows4: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+
             for chunk in in_place.chunks_exact_mut(27) {
-                let u0u1 = _mm256_loadu_pd(chunk.as_ptr().cast());
-                let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
-                let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
-                let u6u7 = _mm256_loadu_pd(chunk.get_unchecked(6..).as_ptr().cast());
-                let u8u9 = _mm256_loadu_pd(chunk.get_unchecked(8..).as_ptr().cast());
-                let u10u11 = _mm256_loadu_pd(chunk.get_unchecked(10..).as_ptr().cast());
-                let u12u13 = _mm256_loadu_pd(chunk.get_unchecked(12..).as_ptr().cast());
-                let u14u15 = _mm256_loadu_pd(chunk.get_unchecked(14..).as_ptr().cast());
-                let u16u17 = _mm256_loadu_pd(chunk.get_unchecked(16..).as_ptr().cast());
-                let u18u19 = _mm256_loadu_pd(chunk.get_unchecked(18..).as_ptr().cast());
-                let u20u21 = _mm256_loadu_pd(chunk.get_unchecked(20..).as_ptr().cast());
-                let u22u23 = _mm256_loadu_pd(chunk.get_unchecked(22..).as_ptr().cast());
-                let u24u25 = _mm256_loadu_pd(chunk.get_unchecked(24..).as_ptr().cast());
-                let u26 = _mm_loadu_pd(chunk.get_unchecked(26..).as_ptr().cast());
+                // columns
+                for i in 0..3 {
+                    rows0[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 9..));
+                    rows1[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 9 + 2..));
+                    rows2[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 9 + 4..));
+                    rows3[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 9 + 6..));
+                    rows4[i] = AvxStoreD::from_complex(chunk.get_unchecked(i * 9 + 8));
+                }
 
-                let s0 = self.bf9.exec_m128d(
-                    _mm256_castpd256_pd128(u0u1),
-                    _mm256_extractf128_pd::<1>(u2u3),
-                    _mm256_castpd256_pd128(u6u7),
-                    _mm256_extractf128_pd::<1>(u8u9),
-                    _mm256_castpd256_pd128(u12u13),
-                    _mm256_extractf128_pd::<1>(u14u15),
-                    _mm256_castpd256_pd128(u18u19),
-                    _mm256_extractf128_pd::<1>(u20u21),
-                    _mm256_castpd256_pd128(u24u25),
-                );
+                rows0 = self.bf9.bf3.exec(rows0);
+                rows1 = self.bf9.bf3.exec(rows1);
+                rows2 = self.bf9.bf3.exec(rows2);
+                rows3 = self.bf9.bf3.exec(rows3);
+                rows4 = self.bf9.bf3.exec(rows4);
 
-                const HI_LO: i32 = 0b0010_0001;
-                const HI_HI: i32 = 0b0011_0001;
-                const LO_LO: i32 = 0b0010_0000;
+                for i in 1..3 {
+                    rows0[i] = AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1]);
+                    rows1[i] = AvxStoreD::mul_by_complex(rows1[i], self.twiddles[i - 1 + 2]);
+                    rows2[i] = AvxStoreD::mul_by_complex(rows2[i], self.twiddles[i - 1 + 4]);
+                    rows3[i] = AvxStoreD::mul_by_complex(rows3[i], self.twiddles[i - 1 + 6]);
+                    rows4[i] = AvxStoreD::mul_by_complex(rows4[i], self.twiddles[i - 1 + 8]);
+                }
 
-                let mut s1s2 = self.bf9.exec(
-                    _mm256_permute2f128_pd::<HI_LO>(u0u1, u2u3),
-                    u4u5,
-                    _mm256_permute2f128_pd::<HI_LO>(u6u7, u8u9),
-                    u10u11,
-                    _mm256_permute2f128_pd::<HI_LO>(u12u13, u14u15),
-                    u16u17,
-                    _mm256_permute2f128_pd::<HI_LO>(u18u19, u20u21),
-                    u22u23,
-                    _mm256_permute2f128_pd::<HI_LO>(u24u25, _mm256_castpd128_pd256(u26)),
-                );
+                let t = transpose_f64x2_9x3(rows0, rows1, rows2, rows3, rows4);
 
-                s1s2.1 = _mm256_fcmul_pd(s1s2.1, self.tw1tw2);
-                s1s2.2 = _mm256_fcmul_pd(s1s2.2, self.tw2tw4);
-                s1s2.3 = _mm256_fcmul_pd(s1s2.3, self.tw3tw6);
-                s1s2.4 = _mm256_fcmul_pd(s1s2.4, self.tw4tw8);
-                s1s2.5 = _mm256_fcmul_pd(s1s2.5, self.tw5tw9);
-                s1s2.6 = _mm256_fcmul_pd(s1s2.6, self.tw6tw10);
-                s1s2.7 = _mm256_fcmul_pd(s1s2.7, self.tw7tw11);
-                s1s2.8 = _mm256_fcmul_pd(s1s2.8, self.tw8tw12);
+                // rows
+                let left = self.bf9.exec(t.0);
+                let right = self.bf9.exec(t.1);
 
-                let z0z1 = self.bf9.bf3.exec(
-                    _mm256_create_pd(s0.0, s0.1),
-                    _mm256_permute2f128_pd::<LO_LO>(s1s2.0, s1s2.1),
-                    _mm256_permute2f128_pd::<HI_HI>(s1s2.0, s1s2.1),
-                );
-
-                _mm256_storeu_pd(chunk.as_mut_ptr().cast(), z0z1.0);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), z0z1.1);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(18..).as_mut_ptr().cast(), z0z1.2);
-
-                let z2z3 = self.bf9.bf3.exec(
-                    _mm256_create_pd(s0.2, s0.3),
-                    _mm256_permute2f128_pd::<LO_LO>(s1s2.2, s1s2.3),
-                    _mm256_permute2f128_pd::<HI_HI>(s1s2.2, s1s2.3),
-                );
-
-                _mm256_storeu_pd(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), z2z3.0);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(11..).as_mut_ptr().cast(), z2z3.1);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(20..).as_mut_ptr().cast(), z2z3.2);
-
-                let z4z5 = self.bf9.bf3.exec(
-                    _mm256_create_pd(s0.4, s0.5),
-                    _mm256_permute2f128_pd::<LO_LO>(s1s2.4, s1s2.5),
-                    _mm256_permute2f128_pd::<HI_HI>(s1s2.4, s1s2.5),
-                );
-
-                _mm256_storeu_pd(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), z4z5.0);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(13..).as_mut_ptr().cast(), z4z5.1);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(22..).as_mut_ptr().cast(), z4z5.2);
-
-                let z6z7 = self.bf9.bf3.exec(
-                    _mm256_create_pd(s0.6, s0.7),
-                    _mm256_permute2f128_pd::<LO_LO>(s1s2.6, s1s2.7),
-                    _mm256_permute2f128_pd::<HI_HI>(s1s2.6, s1s2.7),
-                );
-
-                _mm256_storeu_pd(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), z6z7.0);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(15..).as_mut_ptr().cast(), z6z7.1);
-                _mm256_storeu_pd(chunk.get_unchecked_mut(24..).as_mut_ptr().cast(), z6z7.2);
-
-                let z8 = self.bf9.bf3.exec_m128(
-                    s0.8,
-                    _mm256_castpd256_pd128(s1s2.8),
-                    _mm256_extractf128_pd::<1>(s1s2.8),
-                );
-
-                _mm_storeu_pd(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), z8.0);
-                _mm_storeu_pd(chunk.get_unchecked_mut(17..).as_mut_ptr().cast(), z8.1);
-                _mm_storeu_pd(chunk.get_unchecked_mut(26..).as_mut_ptr().cast(), z8.2);
+                for i in 0..9 {
+                    left[i].write(chunk.get_unchecked_mut(i * 3..));
+                }
+                for i in 0..9 {
+                    right[i].write_lo(chunk.get_unchecked_mut(i * 3 + 2..));
+                }
             }
         }
         Ok(())
@@ -202,117 +156,56 @@ impl AvxButterfly27d {
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 27 != 0 {
+        if !src.len().is_multiple_of(27) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
 
-        if dst.len() % 27 != 0 {
+        if !dst.len().is_multiple_of(27) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
         unsafe {
+            let mut rows0: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows1: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows2: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows3: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
+            let mut rows4: [AvxStoreD; 3] = [AvxStoreD::zero(); 3];
             for (dst, src) in dst.chunks_exact_mut(27).zip(src.chunks_exact(27)) {
-                let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
-                let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
-                let u4u5 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
-                let u6u7 = _mm256_loadu_pd(src.get_unchecked(6..).as_ptr().cast());
-                let u8u9 = _mm256_loadu_pd(src.get_unchecked(8..).as_ptr().cast());
-                let u10u11 = _mm256_loadu_pd(src.get_unchecked(10..).as_ptr().cast());
-                let u12u13 = _mm256_loadu_pd(src.get_unchecked(12..).as_ptr().cast());
-                let u14u15 = _mm256_loadu_pd(src.get_unchecked(14..).as_ptr().cast());
-                let u16u17 = _mm256_loadu_pd(src.get_unchecked(16..).as_ptr().cast());
-                let u18u19 = _mm256_loadu_pd(src.get_unchecked(18..).as_ptr().cast());
-                let u20u21 = _mm256_loadu_pd(src.get_unchecked(20..).as_ptr().cast());
-                let u22u23 = _mm256_loadu_pd(src.get_unchecked(22..).as_ptr().cast());
-                let u24u25 = _mm256_loadu_pd(src.get_unchecked(24..).as_ptr().cast());
-                let u26 = _mm_loadu_pd(src.get_unchecked(26..).as_ptr().cast());
+                // columns
+                for i in 0..3 {
+                    rows0[i] = AvxStoreD::from_complex_ref(src.get_unchecked(i * 9..));
+                    rows1[i] = AvxStoreD::from_complex_ref(src.get_unchecked(i * 9 + 2..));
+                    rows2[i] = AvxStoreD::from_complex_ref(src.get_unchecked(i * 9 + 4..));
+                    rows3[i] = AvxStoreD::from_complex_ref(src.get_unchecked(i * 9 + 6..));
+                    rows4[i] = AvxStoreD::from_complex(src.get_unchecked(i * 9 + 8));
+                }
 
-                let s0 = self.bf9.exec_m128d(
-                    _mm256_castpd256_pd128(u0u1),
-                    _mm256_extractf128_pd::<1>(u2u3),
-                    _mm256_castpd256_pd128(u6u7),
-                    _mm256_extractf128_pd::<1>(u8u9),
-                    _mm256_castpd256_pd128(u12u13),
-                    _mm256_extractf128_pd::<1>(u14u15),
-                    _mm256_castpd256_pd128(u18u19),
-                    _mm256_extractf128_pd::<1>(u20u21),
-                    _mm256_castpd256_pd128(u24u25),
-                );
+                rows0 = self.bf9.bf3.exec(rows0);
+                rows1 = self.bf9.bf3.exec(rows1);
+                rows2 = self.bf9.bf3.exec(rows2);
+                rows3 = self.bf9.bf3.exec(rows3);
+                rows4 = self.bf9.bf3.exec(rows4);
 
-                const HI_LO: i32 = 0b0010_0001;
-                const HI_HI: i32 = 0b0011_0001;
-                const LO_LO: i32 = 0b0010_0000;
+                for i in 1..3 {
+                    rows0[i] = AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1]);
+                    rows1[i] = AvxStoreD::mul_by_complex(rows1[i], self.twiddles[i - 1 + 2]);
+                    rows2[i] = AvxStoreD::mul_by_complex(rows2[i], self.twiddles[i - 1 + 4]);
+                    rows3[i] = AvxStoreD::mul_by_complex(rows3[i], self.twiddles[i - 1 + 6]);
+                    rows4[i] = AvxStoreD::mul_by_complex(rows4[i], self.twiddles[i - 1 + 8]);
+                }
 
-                let mut s1s2 = self.bf9.exec(
-                    _mm256_permute2f128_pd::<HI_LO>(u0u1, u2u3),
-                    u4u5,
-                    _mm256_permute2f128_pd::<HI_LO>(u6u7, u8u9),
-                    u10u11,
-                    _mm256_permute2f128_pd::<HI_LO>(u12u13, u14u15),
-                    u16u17,
-                    _mm256_permute2f128_pd::<HI_LO>(u18u19, u20u21),
-                    u22u23,
-                    _mm256_permute2f128_pd::<HI_LO>(u24u25, _mm256_castpd128_pd256(u26)),
-                );
+                let t = transpose_f64x2_9x3(rows0, rows1, rows2, rows3, rows4);
 
-                s1s2.1 = _mm256_fcmul_pd(s1s2.1, self.tw1tw2);
-                s1s2.2 = _mm256_fcmul_pd(s1s2.2, self.tw2tw4);
-                s1s2.3 = _mm256_fcmul_pd(s1s2.3, self.tw3tw6);
-                s1s2.4 = _mm256_fcmul_pd(s1s2.4, self.tw4tw8);
-                s1s2.5 = _mm256_fcmul_pd(s1s2.5, self.tw5tw9);
-                s1s2.6 = _mm256_fcmul_pd(s1s2.6, self.tw6tw10);
-                s1s2.7 = _mm256_fcmul_pd(s1s2.7, self.tw7tw11);
-                s1s2.8 = _mm256_fcmul_pd(s1s2.8, self.tw8tw12);
+                // rows
+                let left = self.bf9.exec(t.0);
+                let right = self.bf9.exec(t.1);
 
-                let z0z1 = self.bf9.bf3.exec(
-                    _mm256_create_pd(s0.0, s0.1),
-                    _mm256_permute2f128_pd::<LO_LO>(s1s2.0, s1s2.1),
-                    _mm256_permute2f128_pd::<HI_HI>(s1s2.0, s1s2.1),
-                );
-
-                _mm256_storeu_pd(dst.as_mut_ptr().cast(), z0z1.0);
-                _mm256_storeu_pd(dst.get_unchecked_mut(9..).as_mut_ptr().cast(), z0z1.1);
-                _mm256_storeu_pd(dst.get_unchecked_mut(18..).as_mut_ptr().cast(), z0z1.2);
-
-                let z2z3 = self.bf9.bf3.exec(
-                    _mm256_create_pd(s0.2, s0.3),
-                    _mm256_permute2f128_pd::<LO_LO>(s1s2.2, s1s2.3),
-                    _mm256_permute2f128_pd::<HI_HI>(s1s2.2, s1s2.3),
-                );
-
-                _mm256_storeu_pd(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), z2z3.0);
-                _mm256_storeu_pd(dst.get_unchecked_mut(11..).as_mut_ptr().cast(), z2z3.1);
-                _mm256_storeu_pd(dst.get_unchecked_mut(20..).as_mut_ptr().cast(), z2z3.2);
-
-                let z4z5 = self.bf9.bf3.exec(
-                    _mm256_create_pd(s0.4, s0.5),
-                    _mm256_permute2f128_pd::<LO_LO>(s1s2.4, s1s2.5),
-                    _mm256_permute2f128_pd::<HI_HI>(s1s2.4, s1s2.5),
-                );
-
-                _mm256_storeu_pd(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), z4z5.0);
-                _mm256_storeu_pd(dst.get_unchecked_mut(13..).as_mut_ptr().cast(), z4z5.1);
-                _mm256_storeu_pd(dst.get_unchecked_mut(22..).as_mut_ptr().cast(), z4z5.2);
-
-                let z6z7 = self.bf9.bf3.exec(
-                    _mm256_create_pd(s0.6, s0.7),
-                    _mm256_permute2f128_pd::<LO_LO>(s1s2.6, s1s2.7),
-                    _mm256_permute2f128_pd::<HI_HI>(s1s2.6, s1s2.7),
-                );
-
-                _mm256_storeu_pd(dst.get_unchecked_mut(6..).as_mut_ptr().cast(), z6z7.0);
-                _mm256_storeu_pd(dst.get_unchecked_mut(15..).as_mut_ptr().cast(), z6z7.1);
-                _mm256_storeu_pd(dst.get_unchecked_mut(24..).as_mut_ptr().cast(), z6z7.2);
-
-                let z8 = self.bf9.bf3.exec_m128(
-                    s0.8,
-                    _mm256_castpd256_pd128(s1s2.8),
-                    _mm256_extractf128_pd::<1>(s1s2.8),
-                );
-
-                _mm_storeu_pd(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), z8.0);
-                _mm_storeu_pd(dst.get_unchecked_mut(17..).as_mut_ptr().cast(), z8.1);
-                _mm_storeu_pd(dst.get_unchecked_mut(26..).as_mut_ptr().cast(), z8.2);
+                for i in 0..9 {
+                    left[i].write(dst.get_unchecked_mut(i * 3..));
+                }
+                for i in 0..9 {
+                    right[i].write_lo(dst.get_unchecked_mut(i * 3 + 2..));
+                }
             }
         }
         Ok(())

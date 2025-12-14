@@ -250,16 +250,6 @@ pub(crate) fn vfcmul_conj_b_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2
     }
 }
 
-#[inline(always)]
-pub(crate) fn vdup_complex_f64(c: Complex<f64>) -> float64x2_t {
-    unsafe { vcombine_f64(vdup_n_f64(c.re), vdup_n_f64(c.im)) }
-}
-
-#[inline(always)]
-pub(crate) unsafe fn vdupq_complex_f32(c: Complex<f32>) -> float32x4_t {
-    unsafe { vld1q_f32([c.re, c.im, c.re, c.im].as_ptr().cast()) }
-}
-
 pub(crate) fn create_neon_twiddles<T: FftTrigonometry + 'static + Float + Sized, const N: usize>(
     base: usize,
     size: usize,
