@@ -12,7 +12,7 @@ use std::time::Duration;
 use zaft::Zaft;
 
 pub fn bench_rustfft_averages(c: &mut Criterion) {
-    c.bench_function("rustfft avg1", |b| {
+    c.bench_function("rustfft 1..=1500 float", |b| {
         b.iter_batched(
             || {
                 // Prepare all inputs and FFT plans
@@ -38,7 +38,7 @@ pub fn bench_rustfft_averages(c: &mut Criterion) {
 }
 
 pub fn bench_zaft_averages(c: &mut Criterion) {
-    c.bench_function("zaft avg1", |b| {
+    c.bench_function("zaft 1..=1500 float", |b| {
         b.iter_batched(
             || {
                 // Prepare all inputs and FFT plans
@@ -64,7 +64,7 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
 }
 
 pub fn bench_rustfft_average(c: &mut Criterion) {
-    c.bench_function("rustfft avg", |b| {
+    c.bench_function("rustfft 1..=1500 double", |b| {
         b.iter_batched(
             || {
                 // Prepare all inputs and FFT plans
@@ -90,7 +90,7 @@ pub fn bench_rustfft_average(c: &mut Criterion) {
 }
 
 pub fn bench_zaft_average(c: &mut Criterion) {
-    c.bench_function("zaft avg", |b| {
+    c.bench_function("zaft 1..=1500 double", |b| {
         b.iter_batched(
             || {
                 // Prepare all inputs and FFT plans
@@ -297,7 +297,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    check_power_group(c, 125, "125".to_string());
+    check_power_group(c, 70, "70".to_string());
+    check_power_group(c, 72, "72".to_string());
     // check_power_group(c, 1920, "Full HD".to_string());
     // check_power_group(c, 1000, "power 10".to_string());
     // check_power_group(c, 11 * 11 * 11, "power 11".to_string());

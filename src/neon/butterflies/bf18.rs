@@ -27,13 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::butterflies::fast_bf9d::NeonFastButterfly9d;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
 macro_rules! butterfly18d {
     ($name: ident, $bf_name: ident) => {
+        use crate::neon::mixed::$bf_name;
         pub(crate) struct $name {
             direction: FftDirection,
             bf9: $bf_name,
@@ -50,7 +50,7 @@ macro_rules! butterfly18d {
 
         impl FftExecutor<f64> for $name {
             fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if in_place.len() % 18 != 0 {
+                if !in_place.len().is_multiple_of(18) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -92,37 +92,55 @@ macro_rules! butterfly18d {
                         let (t14, t15) = NeonButterfly::butterfly2_f64(u14, u15);
                         let (t16, t17) = NeonButterfly::butterfly2_f64(u16, u17);
 
-                        let (u0, u2, u4, u6, u8, u10, u12, u14, u16) =
-                            self.bf9.exec(t0, t2, t4, t6, t8, t10, t12, t14, t16);
-                        let (u9, u11, u13, u15, u17, u1, u3, u5, u7) =
-                            self.bf9.exec(t1, t3, t5, t7, t9, t11, t13, t15, t17);
+                        let [u0, u2, u4, u6, u8, u10, u12, u14, u16] = self.bf9.exec([
+                            NeonStoreD::raw(t0),
+                            NeonStoreD::raw(t2),
+                            NeonStoreD::raw(t4),
+                            NeonStoreD::raw(t6),
+                            NeonStoreD::raw(t8),
+                            NeonStoreD::raw(t10),
+                            NeonStoreD::raw(t12),
+                            NeonStoreD::raw(t14),
+                            NeonStoreD::raw(t16),
+                        ]);
+                        let [u9, u11, u13, u15, u17, u1, u3, u5, u7] = self.bf9.exec([
+                            NeonStoreD::raw(t1),
+                            NeonStoreD::raw(t3),
+                            NeonStoreD::raw(t5),
+                            NeonStoreD::raw(t7),
+                            NeonStoreD::raw(t9),
+                            NeonStoreD::raw(t11),
+                            NeonStoreD::raw(t13),
+                            NeonStoreD::raw(t15),
+                            NeonStoreD::raw(t17),
+                        ]);
 
-                        vst1q_f64(chunk.as_mut_ptr().cast(), u0);
-                        vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), u1);
+                        vst1q_f64(chunk.as_mut_ptr().cast(), u0.v);
+                        vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), u1.v);
 
-                        vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), u2);
-                        vst1q_f64(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), u3);
+                        vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), u2.v);
+                        vst1q_f64(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), u3.v);
 
-                        vst1q_f64(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), u4);
-                        vst1q_f64(chunk.get_unchecked_mut(5..).as_mut_ptr().cast(), u5);
+                        vst1q_f64(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), u4.v);
+                        vst1q_f64(chunk.get_unchecked_mut(5..).as_mut_ptr().cast(), u5.v);
 
-                        vst1q_f64(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), u6);
-                        vst1q_f64(chunk.get_unchecked_mut(7..).as_mut_ptr().cast(), u7);
+                        vst1q_f64(chunk.get_unchecked_mut(6..).as_mut_ptr().cast(), u6.v);
+                        vst1q_f64(chunk.get_unchecked_mut(7..).as_mut_ptr().cast(), u7.v);
 
-                        vst1q_f64(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), u8);
-                        vst1q_f64(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), u9);
+                        vst1q_f64(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), u8.v);
+                        vst1q_f64(chunk.get_unchecked_mut(9..).as_mut_ptr().cast(), u9.v);
 
-                        vst1q_f64(chunk.get_unchecked_mut(10..).as_mut_ptr().cast(), u10);
-                        vst1q_f64(chunk.get_unchecked_mut(11..).as_mut_ptr().cast(), u11);
+                        vst1q_f64(chunk.get_unchecked_mut(10..).as_mut_ptr().cast(), u10.v);
+                        vst1q_f64(chunk.get_unchecked_mut(11..).as_mut_ptr().cast(), u11.v);
 
-                        vst1q_f64(chunk.get_unchecked_mut(12..).as_mut_ptr().cast(), u12);
-                        vst1q_f64(chunk.get_unchecked_mut(13..).as_mut_ptr().cast(), u13);
+                        vst1q_f64(chunk.get_unchecked_mut(12..).as_mut_ptr().cast(), u12.v);
+                        vst1q_f64(chunk.get_unchecked_mut(13..).as_mut_ptr().cast(), u13.v);
 
-                        vst1q_f64(chunk.get_unchecked_mut(14..).as_mut_ptr().cast(), u14);
-                        vst1q_f64(chunk.get_unchecked_mut(15..).as_mut_ptr().cast(), u15);
+                        vst1q_f64(chunk.get_unchecked_mut(14..).as_mut_ptr().cast(), u14.v);
+                        vst1q_f64(chunk.get_unchecked_mut(15..).as_mut_ptr().cast(), u15.v);
 
-                        vst1q_f64(chunk.get_unchecked_mut(16..).as_mut_ptr().cast(), u16);
-                        vst1q_f64(chunk.get_unchecked_mut(17..).as_mut_ptr().cast(), u17);
+                        vst1q_f64(chunk.get_unchecked_mut(16..).as_mut_ptr().cast(), u16.v);
+                        vst1q_f64(chunk.get_unchecked_mut(17..).as_mut_ptr().cast(), u17.v);
                     }
                 }
                 Ok(())
@@ -140,11 +158,9 @@ macro_rules! butterfly18d {
     };
 }
 
-butterfly18d!(NeonButterfly18d, NeonFastButterfly9d);
-#[cfg(feature = "fcma")]
-use crate::neon::butterflies::fast_bf9d::NeonFcmaFastButterfly9d;
+butterfly18d!(NeonButterfly18d, ColumnButterfly9d);
 use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
-use crate::neon::mixed::NeonStoreF;
+use crate::neon::mixed::{NeonStoreD, NeonStoreF};
 use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
 
 #[inline(always)]
@@ -174,7 +190,7 @@ pub(crate) fn transpose_9x2(
 }
 
 #[cfg(feature = "fcma")]
-butterfly18d!(NeonFcmaButterfly18d, NeonFcmaFastButterfly9d);
+butterfly18d!(NeonFcmaButterfly18d, ColumnFcmaButterfly9d);
 
 use crate::neon::mixed::ColumnButterfly2f;
 

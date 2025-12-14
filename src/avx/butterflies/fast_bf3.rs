@@ -83,27 +83,6 @@ impl AvxFastButterfly3<f32> {
 impl AvxFastButterfly3<f64> {
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
-    pub(crate) fn exec_m128(
-        &self,
-        u0: __m128d,
-        u1: __m128d,
-        u2: __m128d,
-    ) -> (__m128d, __m128d, __m128d) {
-        let xp = _mm_add_pd(u1, u2);
-        let xn = _mm_sub_pd(u1, u2);
-        let sum = _mm_add_pd(u0, xp);
-
-        let w_1 = _mm_fmadd_pd(_mm256_castpd256_pd128(self.twiddle_re), xp, u0);
-        let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
-
-        let y0 = sum;
-        let y1 = _mm_fmadd_pd(_mm256_castpd256_pd128(self.twiddle_im), xn_rot, w_1);
-        let y2 = _mm_fnmadd_pd(_mm256_castpd256_pd128(self.twiddle_im), xn_rot, w_1);
-        (y0, y1, y2)
-    }
-
-    #[target_feature(enable = "avx", enable = "fma")]
-    #[inline]
     pub(crate) fn exec(
         &self,
         u0: __m256d,
@@ -125,35 +104,6 @@ impl AvxFastButterfly3<f64> {
 }
 
 impl AvxFastButterfly3<f32> {
-    #[target_feature(enable = "avx", enable = "fma")]
-    #[inline]
-    pub(crate) fn exec_m128(&self, u0: __m128, u1: __m128, u2: __m128) -> (__m128, __m128, __m128) {
-        let xp = _mm_add_ps(u1, u2);
-        let xn = _mm_sub_ps(u1, u2);
-        let sum = _mm_add_ps(u0, xp);
-
-        const SH: i32 = shuffle(2, 3, 0, 1);
-        let w_1 = _mm_fmadd_ps(
-            _mm256_castps256_ps128(_mm256_castpd_ps(self.twiddle_re)),
-            xp,
-            u0,
-        );
-        let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
-
-        let y0 = sum;
-        let y1 = _mm_fmadd_ps(
-            _mm256_castps256_ps128(_mm256_castpd_ps(self.twiddle_im)),
-            xn_rot,
-            w_1,
-        );
-        let y2 = _mm_fnmadd_ps(
-            _mm256_castps256_ps128(_mm256_castpd_ps(self.twiddle_im)),
-            xn_rot,
-            w_1,
-        );
-        (y0, y1, y2)
-    }
-
     #[target_feature(enable = "avx", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, u0: __m256, u1: __m256, u2: __m256) -> (__m256, __m256, __m256) {
