@@ -806,6 +806,9 @@ impl Zaft {
             72 => {
                 return T::butterfly72(fft_direction).map(Ok);
             }
+            78 => {
+                return T::butterfly78(fft_direction).map(Ok);
+            }
             81 => {
                 return T::butterfly81(fft_direction).map(|x| Ok(x.into_fft_executor()));
             }
