@@ -73,7 +73,7 @@ macro_rules! gen_bf35d {
         impl $name {
             #[target_feature(enable = $feature)]
             fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if in_place.len() % 35 != 0 {
+                if !in_place.len().is_multiple_of(35) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),

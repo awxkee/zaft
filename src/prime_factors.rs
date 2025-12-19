@@ -50,7 +50,7 @@ pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
     }
 
     // factor out 3s
-    while n % 3 == 0 {
+    while n.is_multiple_of(3) {
         res.push(3);
         n /= 3;
     }
@@ -58,12 +58,12 @@ pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
     // trial divide by 6k - 1 and 6k + 1
     let mut p: u64 = 5;
     while (p as u128) * (p as u128) <= n as u128 {
-        while n % p == 0 {
+        while n.is_multiple_of(p) {
             res.push(p);
             n /= p;
         }
         let q = p + 2; // p = 6k-1, q = 6k+1
-        while n % q == 0 {
+        while n.is_multiple_of(q) {
             res.push(q);
             n /= q;
         }
@@ -358,7 +358,7 @@ pub(crate) fn can_be_two_factors(factors: &[(u64, u32)]) -> Option<(u64, u64)> {
 
     // Try all pairs of allowed numbers
     for &a in ALLOWED.iter() {
-        if total % a != 0 {
+        if !total.is_multiple_of(a) {
             continue;
         }
         let b = total / a;
@@ -379,7 +379,7 @@ pub(crate) fn try_greedy_pure_power_split(factors: &[(u64, u32)]) -> Option<(u64
     fn max_power(n: u64, base: u64) -> (u64, u64) {
         let mut power = 1;
         let mut rem = n;
-        while rem % base == 0 {
+        while rem.is_multiple_of(base) {
             rem /= base;
             power *= base;
         }

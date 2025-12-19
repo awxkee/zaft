@@ -106,7 +106,7 @@ impl R2CTwiddlesHandler<f32> for C2RNeonTwiddles {
             let dup_first_f32 = vld1q_u8(DUP_FIRST_F32.as_ptr().cast());
 
             let right_len = right.len();
-            let rls2 = &mut right[if right_len % 2 != 0 { 1 } else { 0 }..];
+            let rls2 = &mut right[if !right_len.is_multiple_of(2) { 1 } else { 0 }..];
 
             for ((twiddle, s_out), s_out_rev) in twiddles
                 .chunks_exact(2)
@@ -160,7 +160,7 @@ impl R2CTwiddlesHandler<f32> for C2RNeonTwiddles {
                 );
             }
 
-            if twiddles.len() % 2 != 0 {
+            if !twiddles.len().is_multiple_of(2) {
                 let rem_twiddles = twiddles.chunks_exact(2).remainder();
                 let min_length = left.len().min(right.len());
                 let rem_left = left.chunks_exact_mut(2).into_remainder();

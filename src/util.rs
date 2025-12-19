@@ -70,7 +70,7 @@ pub(crate) fn is_power_of_three(n: u64) -> bool {
     }
     let mut i = n;
     while i > 1 {
-        if i % 3 != 0 {
+        if !i.is_multiple_of(3) {
             return false;
         }
         i /= 3;
@@ -122,7 +122,7 @@ pub(crate) fn is_power_of_five(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 5 == 0 {
+    while n.is_multiple_of(5) {
         n /= 5;
     }
     n == 1
@@ -146,7 +146,7 @@ pub(crate) fn is_power_of_six(n: u64) -> bool {
     if n < 1 {
         return false;
     }
-    while n % 6 == 0 {
+    while n.is_multiple_of(6) {
         n /= 6;
     }
     n == 1
@@ -157,7 +157,7 @@ pub(crate) fn is_power_of_seven(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 7 == 0 {
+    while n.is_multiple_of(7) {
         n /= 7;
     }
     n == 1
@@ -168,7 +168,7 @@ pub(crate) fn is_power_of_ten(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 10 == 0 {
+    while n.is_multiple_of(10) {
         n /= 10;
     }
     n == 1
@@ -179,7 +179,7 @@ pub(crate) fn is_power_of_eleven(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 11 == 0 {
+    while n.is_multiple_of(11) {
         n /= 11;
     }
     n == 1
@@ -190,7 +190,7 @@ pub(crate) fn is_power_of_thirteen(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 13 == 0 {
+    while n.is_multiple_of(13) {
         n /= 13;
     }
     n == 1
@@ -275,7 +275,7 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
     }
 
     // Let's make sure the arguments are ok
-    assert!(D > 1 && input.len() % height == 0 && input.len() == output.len());
+    assert!(D > 1 && input.len().is_multiple_of(height) && input.len() == output.len());
 
     let strided_width = width / D;
     let rev_digits = if D.is_power_of_two() {
@@ -283,7 +283,7 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
         let d_bits = D.trailing_zeros();
 
         // verify that width is a power of d
-        assert!(width_bits % d_bits == 0);
+        assert!(width_bits.is_multiple_of(d_bits));
         width_bits / d_bits
     } else {
         compute_logarithm::<D>(width).unwrap()
@@ -405,7 +405,7 @@ pub(crate) fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
     let mut current_exponent = 0;
     let mut current_value = value;
 
-    while current_value % D == 0 {
+    while current_value.is_multiple_of(D) {
         current_exponent += 1;
         current_value /= D;
     }

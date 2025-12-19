@@ -123,7 +123,7 @@ impl C2RAvxTwiddles {
             let rotate = AvxRotate::<f32>::new(FftDirection::Forward);
 
             let right_len = right.len();
-            let rls2 = &mut right[if right_len % 2 != 0 { 1 } else { 0 }..];
+            let rls2 = &mut right[if !right_len.is_multiple_of(2) { 1 } else { 0 }..];
 
             for ((twiddle, s_out), s_out_rev) in twiddles
                 .chunks_exact(2)
@@ -177,7 +177,7 @@ impl C2RAvxTwiddles {
                 );
             }
 
-            if twiddles.len() % 2 != 0 {
+            if !twiddles.len().is_multiple_of(2) {
                 let rem_twiddles = twiddles.chunks_exact(2).remainder();
                 let min_length = left.len().min(right.len());
                 let rem_left = left.chunks_exact_mut(2).into_remainder();

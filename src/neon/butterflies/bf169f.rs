@@ -73,7 +73,7 @@ macro_rules! gen_bf169f {
         impl $name {
             #[target_feature(enable = $feature)]
             fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if in_place.len() % 169 != 0 {
+                if !in_place.len().is_multiple_of(169) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -193,10 +193,10 @@ macro_rules! gen_bf169f {
                 src: &[Complex<f32>],
                 dst: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-                if src.len() % 169 != 0 {
+                if !src.len().is_multiple_of(169) {
                     return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
                 }
-                if dst.len() % 169 != 0 {
+                if !dst.len().is_multiple_of(169) {
                     return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
                 }
 

@@ -27,7 +27,6 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(
-    clippy::manual_is_multiple_of,
     clippy::assign_op_pattern,
     clippy::only_used_in_recursion,
     clippy::too_many_arguments,
@@ -812,11 +811,17 @@ impl Zaft {
             81 => {
                 return T::butterfly81(fft_direction).map(|x| Ok(x.into_fft_executor()));
             }
+            88 => {
+                return T::butterfly88(fft_direction).map(Ok);
+            }
             96 => {
                 return T::butterfly96(fft_direction).map(Ok);
             }
             100 => {
                 return T::butterfly100(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            108 => {
+                return T::butterfly108(fft_direction).map(Ok);
             }
             121 => {
                 return T::butterfly121(fft_direction).map(|x| Ok(x.into_fft_executor()));

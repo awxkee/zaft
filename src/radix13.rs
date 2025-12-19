@@ -145,7 +145,7 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

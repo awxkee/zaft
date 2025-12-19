@@ -232,7 +232,7 @@ where
 impl AvxButterfly11<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 11 != 0 {
+        if !in_place.len().is_multiple_of(11) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -502,10 +502,10 @@ impl AvxButterfly11<f32> {
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
         unsafe {
-            if src.len() % 11 != 0 {
+            if !src.len().is_multiple_of(11) {
                 return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
             }
-            if dst.len() % 11 != 0 {
+            if !dst.len().is_multiple_of(11) {
                 return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
             }
 

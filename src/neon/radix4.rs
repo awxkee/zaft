@@ -96,7 +96,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix4(
     let width_bits = width.trailing_zeros();
     let d_bits = WIDTH.trailing_zeros();
 
-    assert!(width_bits % d_bits == 0);
+    assert!(width_bits.is_multiple_of(d_bits));
     let rev_digits = width_bits / d_bits;
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
@@ -143,7 +143,7 @@ pub(crate) fn neon_bitreversed_transpose_f64_radix4(
     let width_bits = width.trailing_zeros();
     let d_bits = WIDTH.trailing_zeros();
 
-    assert!(width_bits % d_bits == 0);
+    assert!(width_bits.is_multiple_of(d_bits));
     let rev_digits = width_bits / d_bits;
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
@@ -246,7 +246,7 @@ where
 
 impl FftExecutor<f64> for NeonRadix4<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -348,7 +348,7 @@ impl FftExecutor<f64> for NeonRadix4<f64> {
 
 impl FftExecutor<f32> for NeonRadix4<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

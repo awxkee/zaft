@@ -137,10 +137,10 @@ macro_rules! gen_bf256 {
                 src: &[Complex<f64>],
                 dst: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                if src.len() % 256 != 0 {
+                if !src.len().is_multiple_of(256) {
                     return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
                 }
-                if dst.len() % 256 != 0 {
+                if !dst.len().is_multiple_of(256) {
                     return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
                 }
 
@@ -158,10 +158,7 @@ macro_rules! gen_bf256 {
                             rows = self.bf16.exec(rows);
 
                             for i in 1..16 {
-                                rows[i] = NeonStoreD::mul_by_complex(
-                                    rows[i],
-                                    self.twiddles[i - 1 + 15 * k],
-                                );
+                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 15 * k]);
                             }
 
                             for i in 0..16 {

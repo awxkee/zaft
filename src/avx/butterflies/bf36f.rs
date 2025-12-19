@@ -140,7 +140,7 @@ impl FftExecutor<f32> for AvxButterfly36f {
 impl AvxButterfly36f {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 36 != 0 {
+        if !in_place.len().is_multiple_of(36) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -209,10 +209,10 @@ impl AvxButterfly36f {
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 36 != 0 {
+        if !src.len().is_multiple_of(36) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 36 != 0 {
+        if !dst.len().is_multiple_of(36) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 

@@ -72,7 +72,7 @@ macro_rules! gen_bf49d {
         impl $name {
             #[target_feature(enable = $feature)]
             fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if in_place.len() % 49 != 0 {
+                if !in_place.len().is_multiple_of(49) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -94,10 +94,7 @@ macro_rules! gen_bf49d {
                             rows = self.bf7.exec(rows);
 
                             for i in 1..7 {
-                                rows[i] = NeonStoreD::mul_by_complex(
-                                    rows[i],
-                                    self.twiddles[i - 1 + 6 * k],
-                                );
+                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 6 * k]);
                             }
 
                             for i in 0..7 {
@@ -140,10 +137,10 @@ macro_rules! gen_bf49d {
                 src: &[Complex<f64>],
                 dst: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                if src.len() % 49 != 0 {
+                if !src.len().is_multiple_of(49) {
                     return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
                 }
-                if dst.len() % 49 != 0 {
+                if !dst.len().is_multiple_of(49) {
                     return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
                 }
 

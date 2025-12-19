@@ -74,7 +74,7 @@ macro_rules! gen_bf54d {
         impl $name {
             #[target_feature(enable = $feature)]
             fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if in_place.len() % 54 != 0 {
+                if !in_place.len().is_multiple_of(54) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),
@@ -97,10 +97,7 @@ macro_rules! gen_bf54d {
                             rows = self.bf6.exec(rows);
 
                             for i in 1..6 {
-                                rows[i] = NeonStoreD::mul_by_complex(
-                                    rows[i],
-                                    self.twiddles[i - 1 + 5 * k],
-                                );
+                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 5 * k]);
                             }
 
                             for i in 0..6 {
