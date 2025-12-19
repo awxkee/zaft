@@ -304,6 +304,7 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly66(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly70(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly72(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly78(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly81(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
@@ -547,9 +548,9 @@ impl AlgorithmFactory<f32> for f32 {
         make_composite_butterfly!(
             fft_direction,
             Butterfly6,
-            AvxButterfly6,
-            NeonButterfly6,
-            NeonFcmaButterfly6
+            AvxButterfly6f,
+            NeonButterfly6f,
+            NeonFcmaButterfly6f
         )
     }
 
@@ -571,9 +572,9 @@ impl AlgorithmFactory<f32> for f32 {
         make_composite_butterfly!(
             fft_direction,
             Butterfly8,
-            AvxButterfly8,
-            NeonButterfly8,
-            NeonFcmaButterfly8
+            AvxButterfly8f,
+            NeonButterfly8f,
+            NeonFcmaButterfly8f
         )
     }
 
@@ -740,8 +741,8 @@ impl AlgorithmFactory<f32> for f32 {
             fft_direction,
             Butterfly23,
             AvxButterfly23,
-            NeonButterfly23,
-            NeonFcmaButterfly23
+            NeonButterfly23f,
+            NeonFcmaButterfly23f
         )
     }
 
@@ -968,6 +969,18 @@ impl AlgorithmFactory<f32> for f32 {
             AvxButterfly72f,
             NeonButterfly72f,
             NeonFcmaButterfly72f
+        )
+    }
+
+    fn butterfly78(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly78f,
+            NeonButterfly78f,
+            NeonFcmaButterfly78f
         )
     }
 

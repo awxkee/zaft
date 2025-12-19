@@ -275,51 +275,6 @@ impl AvxButterfly {
 
     #[target_feature(enable = "avx")]
     #[inline]
-    pub(crate) fn butterfly4h_f64(
-        a: __m128d,
-        b: __m128d,
-        c: __m128d,
-        d: __m128d,
-        rotate: __m128d,
-    ) -> (__m128d, __m128d, __m128d, __m128d) {
-        let t0 = _mm_add_pd(a, c);
-        let t1 = _mm_sub_pd(a, c);
-        let t2 = _mm_add_pd(b, d);
-        let mut t3 = _mm_sub_pd(b, d);
-        t3 = _mm_xor_pd(_mm_shuffle_pd::<0b01>(t3, t3), rotate);
-        (
-            _mm_add_pd(t0, t2),
-            _mm_add_pd(t1, t3),
-            _mm_sub_pd(t0, t2),
-            _mm_sub_pd(t1, t3),
-        )
-    }
-
-    #[target_feature(enable = "avx")]
-    #[inline]
-    pub(crate) fn butterfly4h_f32(
-        a: __m128,
-        b: __m128,
-        c: __m128,
-        d: __m128,
-        rotate: __m128,
-    ) -> (__m128, __m128, __m128, __m128) {
-        let t0 = _mm_add_ps(a, c);
-        let t1 = _mm_sub_ps(a, c);
-        let t2 = _mm_add_ps(b, d);
-        let mut t3 = _mm_sub_ps(b, d);
-        const SH: i32 = shuffle(2, 3, 0, 1);
-        t3 = _mm_xor_ps(_mm_shuffle_ps::<SH>(t3, t3), rotate);
-        (
-            _mm_add_ps(t0, t2),
-            _mm_add_ps(t1, t3),
-            _mm_sub_ps(t0, t2),
-            _mm_sub_ps(t1, t3),
-        )
-    }
-
-    #[target_feature(enable = "avx")]
-    #[inline]
     pub(crate) fn butterfly4_f32(
         a: __m256,
         b: __m256,
