@@ -202,7 +202,7 @@ impl AvxButterfly18f {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe {
-            if in_place.len() % 18 != 0 {
+            if !in_place.len().is_multiple_of(18) {
                 return Err(ZaftError::InvalidSizeMultiplier(
                     in_place.len(),
                     self.length(),

@@ -59,11 +59,12 @@ pub(crate) use butterflies::{
     AvxButterfly49f, AvxButterfly54d, AvxButterfly54f, AvxButterfly63d, AvxButterfly63f,
     AvxButterfly64d, AvxButterfly64f, AvxButterfly66d, AvxButterfly66f, AvxButterfly70d,
     AvxButterfly70f, AvxButterfly72d, AvxButterfly72f, AvxButterfly78d, AvxButterfly78f,
-    AvxButterfly81d, AvxButterfly81f, AvxButterfly96d, AvxButterfly96f, AvxButterfly100d,
-    AvxButterfly100f, AvxButterfly121d, AvxButterfly121f, AvxButterfly125d, AvxButterfly125f,
-    AvxButterfly128d, AvxButterfly128f, AvxButterfly144d, AvxButterfly144f, AvxButterfly169d,
-    AvxButterfly169f, AvxButterfly243d, AvxButterfly243f, AvxButterfly256d, AvxButterfly256f,
-    AvxButterfly512d, AvxButterfly512f,
+    AvxButterfly81d, AvxButterfly81f, AvxButterfly88d, AvxButterfly88f, AvxButterfly96d,
+    AvxButterfly96f, AvxButterfly100d, AvxButterfly100f, AvxButterfly108d, AvxButterfly108f,
+    AvxButterfly121d, AvxButterfly121f, AvxButterfly125d, AvxButterfly125f, AvxButterfly128d,
+    AvxButterfly128f, AvxButterfly144d, AvxButterfly144f, AvxButterfly169d, AvxButterfly169f,
+    AvxButterfly243d, AvxButterfly243f, AvxButterfly256d, AvxButterfly256f, AvxButterfly512d,
+    AvxButterfly512f,
 };
 pub(crate) use c2r::C2RAvxTwiddles;
 pub(crate) use mixed::{

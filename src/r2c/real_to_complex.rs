@@ -99,7 +99,7 @@ where
             "Underlying interceptor must have a half-length of real values"
         );
 
-        let twiddles_count = if length % 4 == 0 {
+        let twiddles_count = if length.is_multiple_of(4) {
             length / 4
         } else {
             length / 4 + 1
@@ -133,10 +133,10 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if input.len() % self.length != 0 {
+        if !input.len().is_multiple_of(self.length) {
             return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
         }
-        if output.len() % self.complex_length != 0 {
+        if !output.len().is_multiple_of(self.complex_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 output.len(),
                 self.complex_length,
@@ -253,10 +253,10 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if input.len() % self.length != 0 {
+        if !input.len().is_multiple_of(self.length) {
             return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
         }
-        if output.len() % self.complex_length != 0 {
+        if !output.len().is_multiple_of(self.complex_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 output.len(),
                 self.complex_length,

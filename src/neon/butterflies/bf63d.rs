@@ -97,10 +97,7 @@ macro_rules! gen_bf64d {
                             rows = self.bf7.exec(rows);
 
                             for i in 1..7 {
-                                rows[i] = NeonStoreD::mul_by_complex(
-                                    rows[i],
-                                    self.twiddles[i - 1 + 6 * k],
-                                );
+                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 6 * k]);
                             }
 
                             for i in 0..7 {

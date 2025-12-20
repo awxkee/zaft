@@ -220,7 +220,7 @@ where
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
         let length = self.execution_length as usize;
-        if in_place.len() % length != 0 {
+        if !in_place.len().is_multiple_of(length) {
             return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), length));
         }
 

@@ -88,7 +88,7 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.length() != 0 {
+        if !in_place.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -253,10 +253,10 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if src.len() % self.length() != 0 {
+        if !src.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % self.length() != 0 {
+        if !dst.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 

@@ -120,7 +120,7 @@ pub(crate) fn transpose_7x3(
 impl AvxButterfly21d {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 21 != 0 {
+        if !in_place.len().is_multiple_of(21) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),

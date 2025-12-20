@@ -75,7 +75,7 @@ macro_rules! gen_bf128f {
         impl $name {
             #[target_feature(enable = $feature)]
             fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if in_place.len() % 144 != 0 {
+                if !in_place.len().is_multiple_of(144) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.length(),

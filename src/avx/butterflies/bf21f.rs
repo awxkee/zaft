@@ -93,7 +93,7 @@ fn transpose_7x3(rows0: [AvxStoreF; 3], rows1: [AvxStoreF; 3]) -> [AvxStoreF; 7]
 impl AvxButterfly21f {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 21 != 0 {
+        if !in_place.len().is_multiple_of(21) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),

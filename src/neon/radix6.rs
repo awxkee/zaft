@@ -110,7 +110,7 @@ where
 
 impl FftExecutor<f64> for NeonRadix6<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -281,7 +281,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix6(
 
 impl FftExecutor<f32> for NeonRadix6<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

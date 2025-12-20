@@ -619,7 +619,7 @@ pub(crate) fn avx_bitreversed_transpose<T: Copy, const D: usize>(
     }
 
     // Let's make sure the arguments are ok
-    assert!(D > 1 && input.len() % height == 0 && input.len() == output.len());
+    assert!(D > 1 && input.len().is_multiple_of(height) && input.len() == output.len());
 
     let strided_width = width / D;
     let rev_digits = if D.is_power_of_two() {
@@ -627,7 +627,7 @@ pub(crate) fn avx_bitreversed_transpose<T: Copy, const D: usize>(
         let d_bits = D.trailing_zeros();
 
         // verify that width is a power of d
-        assert!(width_bits % d_bits == 0);
+        assert!(width_bits.is_multiple_of(d_bits));
         width_bits / d_bits
     } else {
         compute_logarithm::<D>(width).unwrap()

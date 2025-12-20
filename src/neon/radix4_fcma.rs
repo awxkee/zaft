@@ -116,7 +116,7 @@ where
 impl NeonFcmaRadix4<f64> {
     #[target_feature(enable = "fcma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -274,7 +274,7 @@ impl FftExecutor<f64> for NeonFcmaRadix4<f64> {
 impl NeonFcmaRadix4<f32> {
     #[target_feature(enable = "fcma")]
     fn execute_impl_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

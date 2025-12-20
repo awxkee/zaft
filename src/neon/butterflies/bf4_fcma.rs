@@ -74,7 +74,7 @@ impl FftExecutor<f32> for NeonFcmaButterfly4<f32> {
 impl NeonFcmaButterfly4<f32> {
     #[target_feature(enable = "fcma")]
     unsafe fn execute_forward(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 4 != 0 {
+        if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -186,10 +186,10 @@ impl NeonFcmaButterfly4<f32> {
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 4 != 0 {
+        if !src.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 4 != 0 {
+        if !dst.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -296,7 +296,7 @@ impl NeonFcmaButterfly4<f32> {
 
     #[target_feature(enable = "fcma")]
     unsafe fn execute_backward(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 4 != 0 {
+        if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -408,10 +408,10 @@ impl NeonFcmaButterfly4<f32> {
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 4 != 0 {
+        if !src.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 4 != 0 {
+        if !dst.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -561,7 +561,7 @@ impl CompositeFftExecutor<f32> for NeonFcmaButterfly4<f32> {
 impl NeonFcmaButterfly4<f64> {
     #[target_feature(enable = "fcma")]
     unsafe fn execute_forward(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 4 != 0 {
+        if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -607,10 +607,10 @@ impl NeonFcmaButterfly4<f64> {
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 4 != 0 {
+        if !src.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 4 != 0 {
+        if !dst.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -649,7 +649,7 @@ impl NeonFcmaButterfly4<f64> {
 
     #[target_feature(enable = "fcma")]
     unsafe fn execute_backward(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 4 != 0 {
+        if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -695,10 +695,10 @@ impl NeonFcmaButterfly4<f64> {
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 4 != 0 {
+        if !src.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 4 != 0 {
+        if !dst.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 

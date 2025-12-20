@@ -290,7 +290,7 @@ fn avx_bitreversed_transpose_f64_radix10(
 impl AvxFmaRadix10d {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -850,7 +850,7 @@ impl AvxFmaRadix10f {
 impl AvxFmaRadix10f {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

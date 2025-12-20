@@ -104,7 +104,7 @@ fn transpose_12x4_to_4x12_f32(
 impl AvxButterfly48f {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 48 != 0 {
+        if !in_place.len().is_multiple_of(48) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
