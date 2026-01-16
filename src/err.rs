@@ -37,6 +37,7 @@ pub enum ZaftError {
     InvalidSizeMultiplier(usize, usize),
     ZeroSizedFft,
     ScratchBufferIsTooSmall(usize, usize),
+    InvalidSamplesCount(usize, usize),
 }
 
 impl Error for ZaftError {}
@@ -59,6 +60,9 @@ impl std::fmt::Display for ZaftError {
             ZaftError::ZeroSizedFft => f.write_str("Cannot execute FFT on zero-sized buffers"),
             ZaftError::ScratchBufferIsTooSmall(current, required) => f.write_fmt(format_args!(
                 "Scratch buffer size must be at least {required} but it is {current}"
+            )),
+            ZaftError::InvalidSamplesCount(u0, u1) => f.write_fmt(format_args!(
+                "Amount of samples aren't matching ({u0}, {u1})"
             )),
         }
     }

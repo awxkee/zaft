@@ -555,7 +555,7 @@ macro_rules! test_avx_butterfly {
                 let mut ref_src = src.to_vec();
                 reference_forward.execute(&mut ref_src).unwrap();
 
-                radix_forward.execute(&mut input).unwrap();
+                FftExecutor::execute(&radix_forward, &mut input).unwrap();
 
                 input
                     .iter()
@@ -578,7 +578,7 @@ macro_rules! test_avx_butterfly {
                         );
                     });
 
-                radix_inverse.execute(&mut input).unwrap();
+                FftExecutor::execute(&radix_inverse, &mut input).unwrap();
 
                 let val = $scale as $data_type;
                 input = input.iter().map(|&x| x * (1.0 / val)).collect();
@@ -697,3 +697,68 @@ use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::util::compute_twiddle;
 #[cfg(test)]
 pub(crate) use test_oof_avx_butterfly;
+
+#[cfg(test)]
+macro_rules! test_r2c_avx_butterfly {
+    ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
+        #[test]
+        fn $method_name() {
+            use crate::util::has_valid_avx;
+            use rand::Rng;
+            if !has_valid_avx() {
+                return;
+            }
+            let radix_forward = $butterfly::new(FftDirection::Forward);
+            assert_eq!(radix_forward.real_length(), $scale);
+            assert_eq!(radix_forward.complex_length(), $scale / 2 + 1);
+            for i in 1..20 {
+                let val = $scale as usize;
+                let size = val * i;
+                let mut input = vec![$data_type::default(); size];
+                for z in input.iter_mut() {
+                    *z = rand::rng().random();
+                }
+                let src = input.to_vec();
+                use crate::dft::Dft;
+                use crate::{FftDirection, FftExecutor};
+                let reference_forward = Dft::new($scale, FftDirection::Forward).unwrap();
+
+                let mut ref_src = src.iter().map(|x| Complex::new(*x, 0.)).collect::<Vec<_>>();
+                reference_forward.execute(&mut ref_src).unwrap();
+
+                let mut output = vec![Complex::<$data_type>::default(); ($scale / 2 + 1) * i];
+
+                R2CFftExecutor::execute(&radix_forward, &input, &mut output).unwrap();
+
+                let ref_src = ref_src
+                    .chunks_exact($scale)
+                    .flat_map(|x| (&x[..$scale / 2 + 1]).to_vec())
+                    .collect::<Vec<_>>();
+
+                output
+                    .iter()
+                    .zip(ref_src.iter())
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < $tol,
+                            "a_re {} != b_re {} for size {} at {idx}",
+                            a.re,
+                            b.re,
+                            size
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < $tol,
+                            "a_im {} != b_im {} for size {} at {idx}",
+                            a.im,
+                            b.im,
+                            size
+                        );
+                    });
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+pub(crate) use test_r2c_avx_butterfly;

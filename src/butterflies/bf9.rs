@@ -26,14 +26,16 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::butterflies::Butterfly3;
 use crate::butterflies::short_butterflies::FastButterfly3;
 use crate::complex_fma::c_mul_fast;
-use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -42,10 +44,11 @@ pub(crate) struct Butterfly9<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     twiddle4: Complex<T>,
+    bf3: Butterfly3<T>,
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static> Butterfly9<T>
+impl<T: FftSample> Butterfly9<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -55,23 +58,12 @@ where
             twiddle1: compute_twiddle(1, 9, fft_direction),
             twiddle2: compute_twiddle(2, 9, fft_direction),
             twiddle4: compute_twiddle(4, 9, fft_direction),
+            bf3: Butterfly3::new(fft_direction),
         }
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Butterfly9<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly9<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -82,8 +74,6 @@ where
                 self.length(),
             ));
         }
-
-        let bf3 = FastButterfly3::new(self.direction);
 
         for chunk in in_place.chunks_exact_mut(9) {
             let u0 = chunk[0];
@@ -98,18 +88,18 @@ where
 
             // Radix-9 butterfly
 
-            let (u0, u3, u6) = bf3.butterfly3(u0, u3, u6);
-            let (u1, mut u4, mut u7) = bf3.butterfly3(u1, u4, u7);
-            let (u2, mut u5, mut u8) = bf3.butterfly3(u2, u5, u8);
+            let [u0, u3, u6] = self.bf3.exec(&[u0, u3, u6]);
+            let [u1, mut u4, mut u7] = self.bf3.exec(&[u1, u4, u7]);
+            let [u2, mut u5, mut u8] = self.bf3.exec(&[u2, u5, u8]);
 
             u4 = c_mul_fast(u4, self.twiddle1);
             u7 = c_mul_fast(u7, self.twiddle2);
             u5 = c_mul_fast(u5, self.twiddle2);
             u8 = c_mul_fast(u8, self.twiddle4);
 
-            let (zu0, zu3, zu6) = bf3.butterfly3(u0, u1, u2);
-            let (zu1, zu4, zu7) = bf3.butterfly3(u3, u4, u5);
-            let (zu2, zu5, zu8) = bf3.butterfly3(u6, u7, u8);
+            let [zu0, zu3, zu6] = self.bf3.exec(&[u0, u1, u2]);
+            let [zu1, zu4, zu7] = self.bf3.exec(&[u3, u4, u5]);
+            let [zu2, zu5, zu8] = self.bf3.exec(&[u6, u7, u8]);
 
             chunk[0] = zu0;
             chunk[1] = zu1;
@@ -136,19 +126,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutorOutOfPlace<T> for Butterfly9<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly9<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -208,21 +186,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly9<T>
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly9<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -231,11 +195,67 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly9<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(9) {
+            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 9));
+        }
+        if !output.len().is_multiple_of(5) {
+            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 5));
+        }
+
+        for (input, complex) in input.chunks_exact(9).zip(output.chunks_exact_mut(5)) {
+            let u0 = input[0];
+            let u1 = input[1];
+            let u2 = input[2];
+            let u3 = input[3];
+            let u4 = input[4];
+            let u5 = input[5];
+            let u6 = input[6];
+            let u7 = input[7];
+            let u8 = input[8];
+
+            // Radix-9 butterfly, R2C
+
+            let [u0, u3] = self.bf3.r_exec(&[u0, u3, u6]);
+            let [u1, mut u4] = self.bf3.r_exec(&[u1, u4, u7]);
+            let [u2, mut u5] = self.bf3.r_exec(&[u2, u5, u8]);
+
+            u4 = c_mul_fast(u4, self.twiddle1);
+            u5 = c_mul_fast(u5, self.twiddle2);
+
+            let [zu0, zu3, _] = self.bf3.exec(&[u0, u1, u2]);
+            let [zu1, zu4, zu7] = self.bf3.exec(&[u3, u4, u5]);
+
+            complex[0] = zu0;
+            complex[1] = zu1;
+            complex[2] = zu7.conj();
+
+            complex[3] = zu3;
+            complex[4] = zu4;
+        }
+        Ok(())
+    }
+
+    fn real_length(&self) -> usize {
+        9
+    }
+
+    fn complex_length(&self) -> usize {
+        5
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly9, f32, Butterfly9, 9, 1e-5);
     test_butterfly!(test_butterfly9, f32, Butterfly9, 9, 1e-5);
     test_oof_butterfly!(test_oof_butterfly9, f32, Butterfly9, 9, 1e-5);
 }

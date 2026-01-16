@@ -41,7 +41,7 @@ use crate::avx::util::{
 };
 use crate::err::try_vec;
 use crate::factory::AlgorithmFactory;
-use crate::util::{compute_logarithm, is_power_of_ten, reverse_bits};
+use crate::util::{int_logarithm, is_power_of_ten, reverse_bits};
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::*;
@@ -63,7 +63,7 @@ impl AvxFmaRadix10d {
             "Input length must be a power of 10"
         );
 
-        let log10 = compute_logarithm::<10>(size).unwrap();
+        let log10 = int_logarithm::<10>(size).unwrap();
         let butterfly = match log10 {
             0 => f64::butterfly1(fft_direction)?,
             1 => f64::butterfly10(fft_direction)?,
@@ -116,7 +116,7 @@ fn avx_bitreversed_transpose_f64_radix10(
     const WIDTH: usize = 10;
     const HEIGHT: usize = 10;
 
-    let rev_digits = compute_logarithm::<10>(width).unwrap();
+    let rev_digits = int_logarithm::<10>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -647,7 +647,7 @@ fn avx_bitreversed_transpose_f32_radix10(
     const WIDTH: usize = 10;
     const HEIGHT: usize = 10;
 
-    let rev_digits = compute_logarithm::<10>(width).unwrap();
+    let rev_digits = int_logarithm::<10>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -824,7 +824,7 @@ impl AvxFmaRadix10f {
             "Input length must be a power of 10"
         );
 
-        let log10 = compute_logarithm::<10>(size).unwrap();
+        let log10 = int_logarithm::<10>(size).unwrap();
         let butterfly = match log10 {
             0 => f32::butterfly1(fft_direction)?,
             1 => f32::butterfly10(fft_direction)?,

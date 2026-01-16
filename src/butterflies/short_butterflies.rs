@@ -178,7 +178,7 @@ impl<
 where
     f64: AsPrimitive<T>,
 {
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly4(
         &self,
         a: Complex<T>,

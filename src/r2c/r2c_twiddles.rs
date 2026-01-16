@@ -26,10 +26,10 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::FftSample;
 use num_complex::Complex;
-use num_traits::{AsPrimitive, MulAdd, Num};
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Neg, Sub};
 use std::sync::{Arc, OnceLock};
 
 pub(crate) trait R2CTwiddlesFactory<T> {
@@ -51,13 +51,6 @@ impl R2CTwiddlesFactory<f32> for f32 {
         Q.get_or_init(|| {
             #[cfg(all(target_arch = "aarch64", feature = "neon"))]
             {
-                #[cfg(feature = "fcma")]
-                {
-                    if std::arch::is_aarch64_feature_detected!("fcma") {
-                        use crate::neon::R2CNeonFcmaTwiddles;
-                        return Arc::new(R2CNeonFcmaTwiddles {});
-                    }
-                }
                 use crate::neon::R2CNeonTwiddles;
                 Arc::new(R2CNeonTwiddles {})
             }
@@ -86,13 +79,6 @@ impl R2CTwiddlesFactory<f64> for f64 {
         Q.get_or_init(|| {
             #[cfg(all(target_arch = "aarch64", feature = "neon"))]
             {
-                #[cfg(feature = "fcma")]
-                {
-                    if std::arch::is_aarch64_feature_detected!("fcma") {
-                        use crate::neon::R2CNeonFcmaTwiddles;
-                        return Arc::new(R2CNeonFcmaTwiddles {});
-                    }
-                }
                 use crate::neon::R2CNeonTwiddles;
                 Arc::new(R2CNeonTwiddles {})
             }
@@ -115,15 +101,7 @@ impl R2CTwiddlesFactory<f64> for f64 {
     }
 }
 
-impl<
-    T: Copy
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + MulAdd<T, Output = T>
-        + Neg<Output = T>
-        + 'static
-        + Num,
-> R2CTwiddlesHandler<T> for R2CHandler<T>
+impl<T: FftSample> R2CTwiddlesHandler<T> for R2CHandler<T>
 where
     f64: AsPrimitive<T>,
 {

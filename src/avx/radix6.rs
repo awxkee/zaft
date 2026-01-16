@@ -36,17 +36,12 @@ use crate::avx::util::{
     create_avx4_twiddles,
 };
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::radix6::Radix6Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{compute_logarithm, compute_twiddle, is_power_of_six, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{compute_twiddle, int_logarithm, is_power_of_six, reverse_bits};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct AvxFmaRadix6<T> {
@@ -59,22 +54,7 @@ pub(crate) struct AvxFmaRadix6<T> {
     butterfly_length: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix6Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> AvxFmaRadix6<T>
+impl<T: FftSample + Radix6Twiddles> AvxFmaRadix6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -84,7 +64,7 @@ where
             "Input length must be a power of 6"
         );
 
-        let exponent = compute_logarithm::<6>(size).unwrap_or_else(|| {
+        let exponent = int_logarithm::<6>(size).unwrap_or_else(|| {
             panic!("Neon Fcma Radix6 length must be power of 6, but got {size}",)
         });
 
@@ -160,7 +140,7 @@ pub(crate) fn avx_bitreversed_transpose_f64_radix5(
     const WIDTH: usize = 6;
     const HEIGHT: usize = 6;
 
-    let rev_digits = compute_logarithm::<6>(width).unwrap();
+    let rev_digits = int_logarithm::<6>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -486,7 +466,7 @@ pub(crate) fn avx_bitreversed_transpose_f32_radix6(
     const WIDTH: usize = 6;
     const HEIGHT: usize = 6;
 
-    let rev_digits = compute_logarithm::<6>(width).unwrap();
+    let rev_digits = int_logarithm::<6>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 

@@ -40,6 +40,8 @@ mod f64x2_2xn;
 mod f64x2_4x4;
 mod f64x2_6x6;
 mod transpose_5x5;
+mod transpose_real_d;
+mod transpose_real_s;
 
 pub(crate) use block::{
     AvxTransposeF323x8, AvxTransposeF325x5, AvxTransposeF327x2, AvxTransposeF327x3,
@@ -81,3 +83,5 @@ pub(crate) use f64x2_2xn::{
 pub(crate) use f64x2_4x4::{avx_transpose_f64x2_4x4, avx_transpose_f64x2_4x4_impl};
 pub(crate) use f64x2_6x6::avx_transpose_f64x2_6x6_impl;
 pub(crate) use transpose_5x5::{block_transpose_f32x2_5x5, transpose_5x5_f32, transpose_5x5_f64};
+pub(crate) use transpose_real_d::AvxTransposeDReal4x4;
+pub(crate) use transpose_real_s::AvxTransposeFReal4x4;

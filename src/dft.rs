@@ -30,10 +30,9 @@ use crate::complex_fma::c_mul_add_fast;
 use crate::err::try_vec;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Sub};
+use num_traits::{AsPrimitive, Float};
 
 pub(crate) struct Dft<T> {
     size: usize,
@@ -41,7 +40,7 @@ pub(crate) struct Dft<T> {
     direction: FftDirection,
 }
 
-impl<T: Copy + Float + FftTrigonometry + 'static + AsPrimitive<f64> + Default> Dft<T>
+impl<T: FftSample> Dft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -68,19 +67,7 @@ where
     Ok(twiddles)
 }
 
-impl<
-    T: Copy
-        + Float
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Mul<T, Output = T>
-        + Num
-        + Default
-        + FftTrigonometry
-        + 'static
-        + AsPrimitive<f64>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for Dft<T>
+impl<T: FftSample> FftExecutor<T> for Dft<T>
 where
     f64: AsPrimitive<T>,
 {

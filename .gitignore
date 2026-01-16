@@ -2,3 +2,4 @@
 .idea
 app/target
 Cargo.lock
+docs

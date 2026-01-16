@@ -27,12 +27,10 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 
 #[allow(unused)]
 pub(crate) struct Butterfly31<T> {
@@ -55,7 +53,7 @@ pub(crate) struct Butterfly31<T> {
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static + Default> Butterfly31<T>
+impl<T: FftSample> Butterfly31<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -96,19 +94,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Butterfly31<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly31<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -1337,10 +1323,690 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly31<T> {
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(self.real_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.real_length(),
+            ));
+        }
+        if !output.len().is_multiple_of(self.complex_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.complex_length(),
+            ));
+        }
+
+        for (chunk, dst) in input.chunks_exact(31).zip(output.chunks_exact_mut(16)) {
+            let u0 = chunk[0];
+            let u1 = chunk[1];
+            let u2 = chunk[2];
+            let u3 = chunk[3];
+
+            let u4 = chunk[4];
+            let u5 = chunk[5];
+            let u6 = chunk[6];
+            let u7 = chunk[7];
+
+            let u8 = chunk[8];
+            let u9 = chunk[9];
+            let u10 = chunk[10];
+            let u11 = chunk[11];
+            let u12 = chunk[12];
+
+            let u13 = chunk[13];
+            let u14 = chunk[14];
+            let u15 = chunk[15];
+            let u16 = chunk[16];
+
+            let u17 = chunk[17];
+            let u18 = chunk[18];
+
+            let u19 = chunk[19];
+            let u20 = chunk[20];
+
+            let u21 = chunk[21];
+            let u22 = chunk[22];
+
+            let u23 = chunk[23];
+            let u24 = chunk[24];
+
+            let u25 = chunk[25];
+            let u26 = chunk[26];
+
+            let u27 = chunk[27];
+            let u28 = chunk[28];
+
+            let u29 = chunk[29];
+            let u30 = chunk[30];
+
+            let x130p = u1 + u30;
+            let x130n = u1 - u30;
+            let x229p = u2 + u29;
+            let x229n = u2 - u29;
+            let x328p = u3 + u28;
+            let x328n = u3 - u28;
+            let x427p = u4 + u27;
+            let x427n = u4 - u27;
+            let x526p = u5 + u26;
+            let x526n = u5 - u26;
+            let x625p = u6 + u25;
+            let x625n = u6 - u25;
+            let x724p = u7 + u24;
+            let x724n = u7 - u24;
+            let x823p = u8 + u23;
+            let x823n = u8 - u23;
+            let x922p = u9 + u22;
+            let x922n = u9 - u22;
+            let x1021p = u10 + u21;
+            let x1021n = u10 - u21;
+            let x1120p = u11 + u20;
+            let x1120n = u11 - u20;
+            let x1219p = u12 + u19;
+            let x1219n = u12 - u19;
+            let x1318p = u13 + u18;
+            let x1318n = u13 - u18;
+            let x1417p = u14 + u17;
+            let x1417n = u14 - u17;
+            let x1516p = u15 + u16;
+            let x1516n = u15 - u16;
+            let sum = u0
+                + x130p
+                + x229p
+                + x328p
+                + x427p
+                + x526p
+                + x625p
+                + x724p
+                + x823p
+                + x922p
+                + x1021p
+                + x1120p
+                + x1219p
+                + x1318p
+                + x1417p
+                + x1516p;
+            dst[0] = Complex::new(sum, T::zero());
+            let b130re_a = u0
+                + self.twiddle1.re * x130p
+                + self.twiddle2.re * x229p
+                + self.twiddle3.re * x328p
+                + self.twiddle4.re * x427p
+                + self.twiddle5.re * x526p
+                + self.twiddle6.re * x625p
+                + self.twiddle7.re * x724p
+                + self.twiddle8.re * x823p
+                + self.twiddle9.re * x922p
+                + self.twiddle10.re * x1021p
+                + self.twiddle11.re * x1120p
+                + self.twiddle12.re * x1219p
+                + self.twiddle13.re * x1318p
+                + self.twiddle14.re * x1417p
+                + self.twiddle15.re * x1516p;
+            let b229re_a = u0
+                + self.twiddle2.re * x130p
+                + self.twiddle4.re * x229p
+                + self.twiddle6.re * x328p
+                + self.twiddle8.re * x427p
+                + self.twiddle10.re * x526p
+                + self.twiddle12.re * x625p
+                + self.twiddle14.re * x724p
+                + self.twiddle15.re * x823p
+                + self.twiddle13.re * x922p
+                + self.twiddle11.re * x1021p
+                + self.twiddle9.re * x1120p
+                + self.twiddle7.re * x1219p
+                + self.twiddle5.re * x1318p
+                + self.twiddle3.re * x1417p
+                + self.twiddle1.re * x1516p;
+            let b328re_a = u0
+                + self.twiddle3.re * x130p
+                + self.twiddle6.re * x229p
+                + self.twiddle9.re * x328p
+                + self.twiddle12.re * x427p
+                + self.twiddle15.re * x526p
+                + self.twiddle13.re * x625p
+                + self.twiddle10.re * x724p
+                + self.twiddle7.re * x823p
+                + self.twiddle4.re * x922p
+                + self.twiddle1.re * x1021p
+                + self.twiddle2.re * x1120p
+                + self.twiddle5.re * x1219p
+                + self.twiddle8.re * x1318p
+                + self.twiddle11.re * x1417p
+                + self.twiddle14.re * x1516p;
+            let b427re_a = u0
+                + self.twiddle4.re * x130p
+                + self.twiddle8.re * x229p
+                + self.twiddle12.re * x328p
+                + self.twiddle15.re * x427p
+                + self.twiddle11.re * x526p
+                + self.twiddle7.re * x625p
+                + self.twiddle3.re * x724p
+                + self.twiddle1.re * x823p
+                + self.twiddle5.re * x922p
+                + self.twiddle9.re * x1021p
+                + self.twiddle13.re * x1120p
+                + self.twiddle14.re * x1219p
+                + self.twiddle10.re * x1318p
+                + self.twiddle6.re * x1417p
+                + self.twiddle2.re * x1516p;
+            let b526re_a = u0
+                + self.twiddle5.re * x130p
+                + self.twiddle10.re * x229p
+                + self.twiddle15.re * x328p
+                + self.twiddle11.re * x427p
+                + self.twiddle6.re * x526p
+                + self.twiddle1.re * x625p
+                + self.twiddle4.re * x724p
+                + self.twiddle9.re * x823p
+                + self.twiddle14.re * x922p
+                + self.twiddle12.re * x1021p
+                + self.twiddle7.re * x1120p
+                + self.twiddle2.re * x1219p
+                + self.twiddle3.re * x1318p
+                + self.twiddle8.re * x1417p
+                + self.twiddle13.re * x1516p;
+            let b625re_a = u0
+                + self.twiddle6.re * x130p
+                + self.twiddle12.re * x229p
+                + self.twiddle13.re * x328p
+                + self.twiddle7.re * x427p
+                + self.twiddle1.re * x526p
+                + self.twiddle5.re * x625p
+                + self.twiddle11.re * x724p
+                + self.twiddle14.re * x823p
+                + self.twiddle8.re * x922p
+                + self.twiddle2.re * x1021p
+                + self.twiddle4.re * x1120p
+                + self.twiddle10.re * x1219p
+                + self.twiddle15.re * x1318p
+                + self.twiddle9.re * x1417p
+                + self.twiddle3.re * x1516p;
+            let b724re_a = u0
+                + self.twiddle7.re * x130p
+                + self.twiddle14.re * x229p
+                + self.twiddle10.re * x328p
+                + self.twiddle3.re * x427p
+                + self.twiddle4.re * x526p
+                + self.twiddle11.re * x625p
+                + self.twiddle13.re * x724p
+                + self.twiddle6.re * x823p
+                + self.twiddle1.re * x922p
+                + self.twiddle8.re * x1021p
+                + self.twiddle15.re * x1120p
+                + self.twiddle9.re * x1219p
+                + self.twiddle2.re * x1318p
+                + self.twiddle5.re * x1417p
+                + self.twiddle12.re * x1516p;
+            let b823re_a = u0
+                + self.twiddle8.re * x130p
+                + self.twiddle15.re * x229p
+                + self.twiddle7.re * x328p
+                + self.twiddle1.re * x427p
+                + self.twiddle9.re * x526p
+                + self.twiddle14.re * x625p
+                + self.twiddle6.re * x724p
+                + self.twiddle2.re * x823p
+                + self.twiddle10.re * x922p
+                + self.twiddle13.re * x1021p
+                + self.twiddle5.re * x1120p
+                + self.twiddle3.re * x1219p
+                + self.twiddle11.re * x1318p
+                + self.twiddle12.re * x1417p
+                + self.twiddle4.re * x1516p;
+            let b922re_a = u0
+                + self.twiddle9.re * x130p
+                + self.twiddle13.re * x229p
+                + self.twiddle4.re * x328p
+                + self.twiddle5.re * x427p
+                + self.twiddle14.re * x526p
+                + self.twiddle8.re * x625p
+                + self.twiddle1.re * x724p
+                + self.twiddle10.re * x823p
+                + self.twiddle12.re * x922p
+                + self.twiddle3.re * x1021p
+                + self.twiddle6.re * x1120p
+                + self.twiddle15.re * x1219p
+                + self.twiddle7.re * x1318p
+                + self.twiddle2.re * x1417p
+                + self.twiddle11.re * x1516p;
+            let b1021re_a = u0
+                + self.twiddle10.re * x130p
+                + self.twiddle11.re * x229p
+                + self.twiddle1.re * x328p
+                + self.twiddle9.re * x427p
+                + self.twiddle12.re * x526p
+                + self.twiddle2.re * x625p
+                + self.twiddle8.re * x724p
+                + self.twiddle13.re * x823p
+                + self.twiddle3.re * x922p
+                + self.twiddle7.re * x1021p
+                + self.twiddle14.re * x1120p
+                + self.twiddle4.re * x1219p
+                + self.twiddle6.re * x1318p
+                + self.twiddle15.re * x1417p
+                + self.twiddle5.re * x1516p;
+            let b1120re_a = u0
+                + self.twiddle11.re * x130p
+                + self.twiddle9.re * x229p
+                + self.twiddle2.re * x328p
+                + self.twiddle13.re * x427p
+                + self.twiddle7.re * x526p
+                + self.twiddle4.re * x625p
+                + self.twiddle15.re * x724p
+                + self.twiddle5.re * x823p
+                + self.twiddle6.re * x922p
+                + self.twiddle14.re * x1021p
+                + self.twiddle3.re * x1120p
+                + self.twiddle8.re * x1219p
+                + self.twiddle12.re * x1318p
+                + self.twiddle1.re * x1417p
+                + self.twiddle10.re * x1516p;
+            let b1219re_a = u0
+                + self.twiddle12.re * x130p
+                + self.twiddle7.re * x229p
+                + self.twiddle5.re * x328p
+                + self.twiddle14.re * x427p
+                + self.twiddle2.re * x526p
+                + self.twiddle10.re * x625p
+                + self.twiddle9.re * x724p
+                + self.twiddle3.re * x823p
+                + self.twiddle15.re * x922p
+                + self.twiddle4.re * x1021p
+                + self.twiddle8.re * x1120p
+                + self.twiddle11.re * x1219p
+                + self.twiddle1.re * x1318p
+                + self.twiddle13.re * x1417p
+                + self.twiddle6.re * x1516p;
+            let b1318re_a = u0
+                + self.twiddle13.re * x130p
+                + self.twiddle5.re * x229p
+                + self.twiddle8.re * x328p
+                + self.twiddle10.re * x427p
+                + self.twiddle3.re * x526p
+                + self.twiddle15.re * x625p
+                + self.twiddle2.re * x724p
+                + self.twiddle11.re * x823p
+                + self.twiddle7.re * x922p
+                + self.twiddle6.re * x1021p
+                + self.twiddle12.re * x1120p
+                + self.twiddle1.re * x1219p
+                + self.twiddle14.re * x1318p
+                + self.twiddle4.re * x1417p
+                + self.twiddle9.re * x1516p;
+            let b1417re_a = u0
+                + self.twiddle14.re * x130p
+                + self.twiddle3.re * x229p
+                + self.twiddle11.re * x328p
+                + self.twiddle6.re * x427p
+                + self.twiddle8.re * x526p
+                + self.twiddle9.re * x625p
+                + self.twiddle5.re * x724p
+                + self.twiddle12.re * x823p
+                + self.twiddle2.re * x922p
+                + self.twiddle15.re * x1021p
+                + self.twiddle1.re * x1120p
+                + self.twiddle13.re * x1219p
+                + self.twiddle4.re * x1318p
+                + self.twiddle10.re * x1417p
+                + self.twiddle7.re * x1516p;
+            let b1516re_a = u0
+                + self.twiddle15.re * x130p
+                + self.twiddle1.re * x229p
+                + self.twiddle14.re * x328p
+                + self.twiddle2.re * x427p
+                + self.twiddle13.re * x526p
+                + self.twiddle3.re * x625p
+                + self.twiddle12.re * x724p
+                + self.twiddle4.re * x823p
+                + self.twiddle11.re * x922p
+                + self.twiddle5.re * x1021p
+                + self.twiddle10.re * x1120p
+                + self.twiddle6.re * x1219p
+                + self.twiddle9.re * x1318p
+                + self.twiddle7.re * x1417p
+                + self.twiddle8.re * x1516p;
+
+            let b130im_b = self.twiddle1.im * x130n
+                + self.twiddle2.im * x229n
+                + self.twiddle3.im * x328n
+                + self.twiddle4.im * x427n
+                + self.twiddle5.im * x526n
+                + self.twiddle6.im * x625n
+                + self.twiddle7.im * x724n
+                + self.twiddle8.im * x823n
+                + self.twiddle9.im * x922n
+                + self.twiddle10.im * x1021n
+                + self.twiddle11.im * x1120n
+                + self.twiddle12.im * x1219n
+                + self.twiddle13.im * x1318n
+                + self.twiddle14.im * x1417n
+                + self.twiddle15.im * x1516n;
+            let b229im_b = self.twiddle2.im * x130n
+                + self.twiddle4.im * x229n
+                + self.twiddle6.im * x328n
+                + self.twiddle8.im * x427n
+                + self.twiddle10.im * x526n
+                + self.twiddle12.im * x625n
+                + self.twiddle14.im * x724n
+                + -self.twiddle15.im * x823n
+                + -self.twiddle13.im * x922n
+                + -self.twiddle11.im * x1021n
+                + -self.twiddle9.im * x1120n
+                + -self.twiddle7.im * x1219n
+                + -self.twiddle5.im * x1318n
+                + -self.twiddle3.im * x1417n
+                + -self.twiddle1.im * x1516n;
+            let b328im_b = self.twiddle3.im * x130n
+                + self.twiddle6.im * x229n
+                + self.twiddle9.im * x328n
+                + self.twiddle12.im * x427n
+                + self.twiddle15.im * x526n
+                + -self.twiddle13.im * x625n
+                + -self.twiddle10.im * x724n
+                + -self.twiddle7.im * x823n
+                + -self.twiddle4.im * x922n
+                + -self.twiddle1.im * x1021n
+                + self.twiddle2.im * x1120n
+                + self.twiddle5.im * x1219n
+                + self.twiddle8.im * x1318n
+                + self.twiddle11.im * x1417n
+                + self.twiddle14.im * x1516n;
+            let b427im_b = self.twiddle4.im * x130n
+                + self.twiddle8.im * x229n
+                + self.twiddle12.im * x328n
+                + -self.twiddle15.im * x427n
+                + -self.twiddle11.im * x526n
+                + -self.twiddle7.im * x625n
+                + -self.twiddle3.im * x724n
+                + self.twiddle1.im * x823n
+                + self.twiddle5.im * x922n
+                + self.twiddle9.im * x1021n
+                + self.twiddle13.im * x1120n
+                + -self.twiddle14.im * x1219n
+                + -self.twiddle10.im * x1318n
+                + -self.twiddle6.im * x1417n
+                + -self.twiddle2.im * x1516n;
+            let b526im_b = self.twiddle5.im * x130n
+                + self.twiddle10.im * x229n
+                + self.twiddle15.im * x328n
+                + -self.twiddle11.im * x427n
+                + -self.twiddle6.im * x526n
+                + -self.twiddle1.im * x625n
+                + self.twiddle4.im * x724n
+                + self.twiddle9.im * x823n
+                + self.twiddle14.im * x922n
+                + -self.twiddle12.im * x1021n
+                + -self.twiddle7.im * x1120n
+                + -self.twiddle2.im * x1219n
+                + self.twiddle3.im * x1318n
+                + self.twiddle8.im * x1417n
+                + self.twiddle13.im * x1516n;
+            let b625im_b = self.twiddle6.im * x130n
+                + self.twiddle12.im * x229n
+                + -self.twiddle13.im * x328n
+                + -self.twiddle7.im * x427n
+                + -self.twiddle1.im * x526n
+                + self.twiddle5.im * x625n
+                + self.twiddle11.im * x724n
+                + -self.twiddle14.im * x823n
+                + -self.twiddle8.im * x922n
+                + -self.twiddle2.im * x1021n
+                + self.twiddle4.im * x1120n
+                + self.twiddle10.im * x1219n
+                + -self.twiddle15.im * x1318n
+                + -self.twiddle9.im * x1417n
+                + -self.twiddle3.im * x1516n;
+            let b724im_b = self.twiddle7.im * x130n
+                + self.twiddle14.im * x229n
+                + -self.twiddle10.im * x328n
+                + -self.twiddle3.im * x427n
+                + self.twiddle4.im * x526n
+                + self.twiddle11.im * x625n
+                + -self.twiddle13.im * x724n
+                + -self.twiddle6.im * x823n
+                + self.twiddle1.im * x922n
+                + self.twiddle8.im * x1021n
+                + self.twiddle15.im * x1120n
+                + -self.twiddle9.im * x1219n
+                + -self.twiddle2.im * x1318n
+                + self.twiddle5.im * x1417n
+                + self.twiddle12.im * x1516n;
+            let b823im_b = self.twiddle8.im * x130n
+                + -self.twiddle15.im * x229n
+                + -self.twiddle7.im * x328n
+                + self.twiddle1.im * x427n
+                + self.twiddle9.im * x526n
+                + -self.twiddle14.im * x625n
+                + -self.twiddle6.im * x724n
+                + self.twiddle2.im * x823n
+                + self.twiddle10.im * x922n
+                + -self.twiddle13.im * x1021n
+                + -self.twiddle5.im * x1120n
+                + self.twiddle3.im * x1219n
+                + self.twiddle11.im * x1318n
+                + -self.twiddle12.im * x1417n
+                + -self.twiddle4.im * x1516n;
+            let b922im_b = self.twiddle9.im * x130n
+                + -self.twiddle13.im * x229n
+                + -self.twiddle4.im * x328n
+                + self.twiddle5.im * x427n
+                + self.twiddle14.im * x526n
+                + -self.twiddle8.im * x625n
+                + self.twiddle1.im * x724n
+                + self.twiddle10.im * x823n
+                + -self.twiddle12.im * x922n
+                + -self.twiddle3.im * x1021n
+                + self.twiddle6.im * x1120n
+                + self.twiddle15.im * x1219n
+                + -self.twiddle7.im * x1318n
+                + self.twiddle2.im * x1417n
+                + self.twiddle11.im * x1516n;
+            let b1021im_b = self.twiddle10.im * x130n
+                + -self.twiddle11.im * x229n
+                + -self.twiddle1.im * x328n
+                + self.twiddle9.im * x427n
+                + -self.twiddle12.im * x526n
+                + -self.twiddle2.im * x625n
+                + self.twiddle8.im * x724n
+                + -self.twiddle13.im * x823n
+                + -self.twiddle3.im * x922n
+                + self.twiddle7.im * x1021n
+                + -self.twiddle14.im * x1120n
+                + -self.twiddle4.im * x1219n
+                + self.twiddle6.im * x1318n
+                + -self.twiddle15.im * x1417n
+                + -self.twiddle5.im * x1516n;
+            let b1120im_b = self.twiddle11.im * x130n
+                + -self.twiddle9.im * x229n
+                + self.twiddle2.im * x328n
+                + self.twiddle13.im * x427n
+                + -self.twiddle7.im * x526n
+                + self.twiddle4.im * x625n
+                + self.twiddle15.im * x724n
+                + -self.twiddle5.im * x823n
+                + self.twiddle6.im * x922n
+                + -self.twiddle14.im * x1021n
+                + -self.twiddle3.im * x1120n
+                + self.twiddle8.im * x1219n
+                + -self.twiddle12.im * x1318n
+                + -self.twiddle1.im * x1417n
+                + self.twiddle10.im * x1516n;
+            let b1219im_b = self.twiddle12.im * x130n
+                + -self.twiddle7.im * x229n
+                + self.twiddle5.im * x328n
+                + -self.twiddle14.im * x427n
+                + -self.twiddle2.im * x526n
+                + self.twiddle10.im * x625n
+                + -self.twiddle9.im * x724n
+                + self.twiddle3.im * x823n
+                + self.twiddle15.im * x922n
+                + -self.twiddle4.im * x1021n
+                + self.twiddle8.im * x1120n
+                + -self.twiddle11.im * x1219n
+                + self.twiddle1.im * x1318n
+                + self.twiddle13.im * x1417n
+                + -self.twiddle6.im * x1516n;
+            let b1318im_b = self.twiddle13.im * x130n
+                + -self.twiddle5.im * x229n
+                + self.twiddle8.im * x328n
+                + -self.twiddle10.im * x427n
+                + self.twiddle3.im * x526n
+                + -self.twiddle15.im * x625n
+                + -self.twiddle2.im * x724n
+                + self.twiddle11.im * x823n
+                + -self.twiddle7.im * x922n
+                + self.twiddle6.im * x1021n
+                + -self.twiddle12.im * x1120n
+                + self.twiddle1.im * x1219n
+                + self.twiddle14.im * x1318n
+                + -self.twiddle4.im * x1417n
+                + self.twiddle9.im * x1516n;
+            let b1417im_b = self.twiddle14.im * x130n
+                + -self.twiddle3.im * x229n
+                + self.twiddle11.im * x328n
+                + -self.twiddle6.im * x427n
+                + self.twiddle8.im * x526n
+                + -self.twiddle9.im * x625n
+                + self.twiddle5.im * x724n
+                + -self.twiddle12.im * x823n
+                + self.twiddle2.im * x922n
+                + -self.twiddle15.im * x1021n
+                + -self.twiddle1.im * x1120n
+                + self.twiddle13.im * x1219n
+                + -self.twiddle4.im * x1318n
+                + self.twiddle10.im * x1417n
+                + -self.twiddle7.im * x1516n;
+            let b1516im_b = self.twiddle15.im * x130n
+                + -self.twiddle1.im * x229n
+                + self.twiddle14.im * x328n
+                + -self.twiddle2.im * x427n
+                + self.twiddle13.im * x526n
+                + -self.twiddle3.im * x625n
+                + self.twiddle12.im * x724n
+                + -self.twiddle4.im * x823n
+                + self.twiddle11.im * x922n
+                + -self.twiddle5.im * x1021n
+                + self.twiddle10.im * x1120n
+                + -self.twiddle6.im * x1219n
+                + self.twiddle9.im * x1318n
+                + -self.twiddle7.im * x1417n
+                + self.twiddle8.im * x1516n;
+
+            let out1re = b130re_a;
+            let out1im = b130im_b;
+            let out2re = b229re_a;
+            let out2im = b229im_b;
+            let out3re = b328re_a;
+            let out3im = b328im_b;
+            let out4re = b427re_a;
+            let out4im = b427im_b;
+            let out5re = b526re_a;
+            let out5im = b526im_b;
+            let out6re = b625re_a;
+            let out6im = b625im_b;
+            let out7re = b724re_a;
+            let out7im = b724im_b;
+            let out8re = b823re_a;
+            let out8im = b823im_b;
+            let out9re = b922re_a;
+            let out9im = b922im_b;
+            let out10re = b1021re_a;
+            let out10im = b1021im_b;
+            let out11re = b1120re_a;
+            let out11im = b1120im_b;
+            let out12re = b1219re_a;
+            let out12im = b1219im_b;
+            let out13re = b1318re_a;
+            let out13im = b1318im_b;
+            let out14re = b1417re_a;
+            let out14im = b1417im_b;
+            let out15re = b1516re_a;
+            let out15im = b1516im_b;
+
+            dst[1] = Complex {
+                re: out1re,
+                im: out1im,
+            };
+            dst[2] = Complex {
+                re: out2re,
+                im: out2im,
+            };
+            dst[3] = Complex {
+                re: out3re,
+                im: out3im,
+            };
+            dst[4] = Complex {
+                re: out4re,
+                im: out4im,
+            };
+            dst[5] = Complex {
+                re: out5re,
+                im: out5im,
+            };
+            dst[6] = Complex {
+                re: out6re,
+                im: out6im,
+            };
+            dst[7] = Complex {
+                re: out7re,
+                im: out7im,
+            };
+            dst[8] = Complex {
+                re: out8re,
+                im: out8im,
+            };
+            dst[9] = Complex {
+                re: out9re,
+                im: out9im,
+            };
+            dst[10] = Complex {
+                re: out10re,
+                im: out10im,
+            };
+            dst[11] = Complex {
+                re: out11re,
+                im: out11im,
+            };
+            dst[12] = Complex {
+                re: out12re,
+                im: out12im,
+            };
+            dst[13] = Complex {
+                re: out13re,
+                im: out13im,
+            };
+            dst[14] = Complex {
+                re: out14re,
+                im: out14im,
+            };
+            dst[15] = Complex {
+                re: out15re,
+                im: out15im,
+            };
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn real_length(&self) -> usize {
+        31
+    }
+
+    #[inline]
+    fn complex_length(&self) -> usize {
+        16
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly31, f32, Butterfly31, 31, 1e-5);
     test_butterfly!(test_butterfly31, f32, Butterfly31, 31, 1e-5);
 }

@@ -27,22 +27,17 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::transpose::neon_transpose_f32x2_6x6;
 use crate::neon::util::{create_neon_twiddles, vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use crate::radix6::Radix6Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
 use crate::util::{
-    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_six, reverse_bits,
+    bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_six, reverse_bits,
 };
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct NeonRadix6<T> {
@@ -55,22 +50,7 @@ pub(crate) struct NeonRadix6<T> {
     butterfly_len: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix6Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> NeonRadix6<T>
+impl<T: FftSample + Radix6Twiddles> NeonRadix6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -82,7 +62,7 @@ where
 
         let twiddle = compute_twiddle::<T>(1, 3, fft_direction);
 
-        let exponent = compute_logarithm::<6>(size).unwrap_or_else(|| {
+        let exponent = int_logarithm::<6>(size).unwrap_or_else(|| {
             panic!("Neon Fcma Radix6 length must be power of 6, but got {size}",)
         });
 
@@ -242,7 +222,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix6(
     const WIDTH: usize = 6;
     const HEIGHT: usize = 6;
 
-    let rev_digits = compute_logarithm::<6>(width).unwrap();
+    let rev_digits = int_logarithm::<6>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 

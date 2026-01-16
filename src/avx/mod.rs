@@ -91,18 +91,18 @@ pub(crate) use radix13::AvxFmaRadix13;
 #[allow(unused)]
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;
 pub(crate) use transpose::{
-    AvxTransposeF323x8, AvxTransposeF325x5, AvxTransposeF327x2, AvxTransposeF327x3,
-    AvxTransposeF327x5, AvxTransposeF327x6, AvxTransposeF327x7, AvxTransposeF328x3,
-    AvxTransposeF644x4, AvxTransposeNx2F32, AvxTransposeNx2F64, AvxTransposeNx3F32,
-    AvxTransposeNx3F64, AvxTransposeNx4F32, AvxTransposeNx4F64, AvxTransposeNx5F32,
-    AvxTransposeNx5F64, AvxTransposeNx6F32, AvxTransposeNx6F64, AvxTransposeNx7F32,
-    AvxTransposeNx7F64, AvxTransposeNx8F32, AvxTransposeNx8F64, AvxTransposeNx9F32,
-    AvxTransposeNx9F64, AvxTransposeNx10F32, AvxTransposeNx10F64, AvxTransposeNx11F32,
-    AvxTransposeNx11F64, AvxTransposeNx12F32, AvxTransposeNx12F64, AvxTransposeNx13F32,
-    AvxTransposeNx13F64, AvxTransposeNx14F32, AvxTransposeNx14F64, AvxTransposeNx15F32,
-    AvxTransposeNx15F64, AvxTransposeNx16F32, AvxTransposeNx16F64, avx_transpose_f32x2_2x2,
-    avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4, avx_transpose_f64x2_6x6_impl,
-    avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
+    AvxTransposeDReal4x4, AvxTransposeF323x8, AvxTransposeF325x5, AvxTransposeF327x2,
+    AvxTransposeF327x3, AvxTransposeF327x5, AvxTransposeF327x6, AvxTransposeF327x7,
+    AvxTransposeF328x3, AvxTransposeF644x4, AvxTransposeFReal4x4, AvxTransposeNx2F32,
+    AvxTransposeNx2F64, AvxTransposeNx3F32, AvxTransposeNx3F64, AvxTransposeNx4F32,
+    AvxTransposeNx4F64, AvxTransposeNx5F32, AvxTransposeNx5F64, AvxTransposeNx6F32,
+    AvxTransposeNx6F64, AvxTransposeNx7F32, AvxTransposeNx7F64, AvxTransposeNx8F32,
+    AvxTransposeNx8F64, AvxTransposeNx9F32, AvxTransposeNx9F64, AvxTransposeNx10F32,
+    AvxTransposeNx10F64, AvxTransposeNx11F32, AvxTransposeNx11F64, AvxTransposeNx12F32,
+    AvxTransposeNx12F64, AvxTransposeNx13F32, AvxTransposeNx13F64, AvxTransposeNx14F32,
+    AvxTransposeNx14F64, AvxTransposeNx15F32, AvxTransposeNx15F64, AvxTransposeNx16F32,
+    AvxTransposeNx16F64, avx_transpose_f32x2_2x2, avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4,
+    avx_transpose_f64x2_6x6_impl, avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
 };
 
 #[cfg(test)]

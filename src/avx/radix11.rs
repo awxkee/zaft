@@ -41,17 +41,12 @@ use crate::avx::util::{
     create_avx4_twiddles,
 };
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::radix11::Radix11Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{compute_logarithm, compute_twiddle, is_power_of_eleven, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{compute_twiddle, int_logarithm, is_power_of_eleven, reverse_bits};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct AvxFmaRadix11<T> {
@@ -67,22 +62,7 @@ pub(crate) struct AvxFmaRadix11<T> {
     butterfly_length: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix11Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> AvxFmaRadix11<T>
+impl<T: FftSample + Radix11Twiddles> AvxFmaRadix11<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -92,7 +72,7 @@ where
             "Input length must be a power of 11"
         );
 
-        let log11 = compute_logarithm::<11>(size).unwrap();
+        let log11 = int_logarithm::<11>(size).unwrap();
         let butterfly = match log11 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly11(fft_direction)?,
@@ -136,7 +116,7 @@ fn avx_bitreversed_transpose_f64_radix11(
     const WIDTH: usize = 11;
     const HEIGHT: usize = 11;
 
-    let rev_digits = compute_logarithm::<11>(width).unwrap();
+    let rev_digits = int_logarithm::<11>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -888,7 +868,7 @@ fn avx_bitreversed_transpose_f32_radix11(
     const WIDTH: usize = 11;
     const HEIGHT: usize = 11;
 
-    let rev_digits = compute_logarithm::<11>(width).unwrap();
+    let rev_digits = int_logarithm::<11>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 

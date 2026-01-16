@@ -35,17 +35,12 @@ use crate::avx::util::{
     create_avx4_twiddles, shuffle,
 };
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::radix5::Radix5Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{compute_logarithm, compute_twiddle, is_power_of_five, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{compute_twiddle, int_logarithm, is_power_of_five, reverse_bits};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct AvxFmaRadix5<T> {
@@ -62,22 +57,7 @@ pub(crate) struct AvxFmaRadix5<T> {
     butterfly_length: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix5Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> AvxFmaRadix5<T>
+impl<T: FftSample + Radix5Twiddles> AvxFmaRadix5<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -87,7 +67,7 @@ where
             "Input length must be a power of 5"
         );
 
-        let log5 = compute_logarithm::<5>(size).unwrap();
+        let log5 = int_logarithm::<5>(size).unwrap();
         let butterfly = match log5 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly5(fft_direction)?,
@@ -163,7 +143,7 @@ pub(crate) fn avx_bitreversed_transpose_f64_radix5(
     const WIDTH: usize = 5;
     const HEIGHT: usize = 5;
 
-    let rev_digits = compute_logarithm::<5>(width).unwrap();
+    let rev_digits = int_logarithm::<5>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -504,7 +484,7 @@ pub(crate) fn avx_bitreversed_transpose_f32_radix5(
     const WIDTH: usize = 5;
     const HEIGHT: usize = 5;
 
-    let rev_digits = compute_logarithm::<5>(width).unwrap();
+    let rev_digits = int_logarithm::<5>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 

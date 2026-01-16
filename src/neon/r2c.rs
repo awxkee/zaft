@@ -26,9 +26,10 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::util::{v_rotate90_f32, v_rotate90_f64, vh_rotate90_f32};
+use crate::neon::mixed::{NeonStoreD, NeonStoreF};
 use crate::r2c::R2CTwiddlesHandler;
 use num_complex::Complex;
+use num_traits::MulAdd;
 use std::arch::aarch64::*;
 
 pub(crate) struct R2CNeonTwiddles {}
@@ -40,55 +41,36 @@ impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
         left: &mut [Complex<f64>],
         right: &mut [Complex<f64>],
     ) {
-        unsafe {
-            static ROT_270: [f64; 2] = [0.0, -0.0];
-            let rot_270 = vld1q_f64(ROT_270.as_ptr().cast());
-            static ROT_90: [f64; 2] = [-0.0, 0.0];
-            let rot_90 = vld1q_f64(ROT_90.as_ptr().cast());
+        let conj = NeonStoreD::set_values(0.0, -0.0);
 
-            for ((twiddle, s_out), s_out_rev) in twiddles
-                .iter()
-                .zip(left.iter_mut())
-                .zip(right.iter_mut().rev())
-            {
-                let twiddle = vld1q_f64(twiddle as *const Complex<f64> as *const f64);
-                let out = vld1q_f64(s_out as *const Complex<f64> as *const f64);
-                let out_rev = vld1q_f64(s_out_rev as *const Complex<f64> as *const f64);
+        let blend_mask = NeonStoreD::set_values(f64::from_bits(0xFFFF_FFFF_FFFF_FFFFu64), 0.0);
 
-                let sum = vaddq_f64(out, out_rev);
-                let diff = vsubq_f64(out, out_rev);
+        for ((twiddle, s_out), s_out_rev) in twiddles
+            .iter()
+            .zip(left.iter_mut())
+            .zip(right.iter_mut().rev())
+        {
+            let [twiddle_re, twiddle_im] = NeonStoreD::from_complex(twiddle).dup_even_odds();
+            let twiddle_re = twiddle_re.xor(conj);
+            let out = NeonStoreD::from_complex(s_out);
+            let out_rev = NeonStoreD::from_complex(s_out_rev);
 
-                let twiddled_diff = vmulq_f64(
-                    vcombine_f64(vget_low_f64(diff), vget_low_f64(diff)),
-                    twiddle,
-                );
+            let sum = out + out_rev;
+            let diff = out - out_rev;
 
-                let sum_diff = vcombine_f64(vget_low_f64(sum), vget_high_f64(diff));
+            let sumdiff_blended = sum.select(diff, blend_mask);
+            let diffsum_blended = diff.select(sum, blend_mask);
+            let diffsum_swapped = diffsum_blended.reverse_complex_elements();
 
-                let rot_270_half_sum = vreinterpretq_f64_u64(veorq_u64(
-                    vreinterpretq_u64_f64(sum_diff),
-                    vreinterpretq_u64_f64(rot_270),
-                ));
+            let twiddled_output = diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
 
-                let rot_diff = v_rotate90_f64(twiddled_diff, rot_270);
+            let out_fwd = sumdiff_blended.mul_add(NeonStoreD::dup(0.5), twiddled_output);
+            let out_rev = sumdiff_blended
+                .mul_add(NeonStoreD::dup(0.5), -twiddled_output)
+                .xor(conj);
 
-                let output_twiddled = vfmaq_f64(
-                    rot_diff,
-                    vcombine_f64(vget_high_f64(sum), vget_high_f64(sum)),
-                    twiddle,
-                );
-                let output_rot90 = vreinterpretq_f64_u64(veorq_u64(
-                    vreinterpretq_u64_f64(output_twiddled),
-                    vreinterpretq_u64_f64(rot_90),
-                ));
-
-                // We finally have all the data we need to write the transformed data back out where we found it.
-                let v_out = vfmaq_n_f64(output_twiddled, sum_diff, 0.5);
-                let v_out_rev = vfmaq_n_f64(output_rot90, rot_270_half_sum, 0.5);
-
-                vst1q_f64(s_out as *mut Complex<f64> as *mut f64, v_out);
-                vst1q_f64(s_out_rev as *mut Complex<f64> as *mut f64, v_out_rev);
-            }
+            out_fwd.write_single(s_out);
+            out_rev.write_single(s_out_rev);
         }
     }
 }
@@ -102,66 +84,44 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
     ) {
         unsafe {
             static ROT_270: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
-            let rot_270 = vld1q_f32(ROT_270.as_ptr().cast());
-            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            let rot_90 = vld1q_f32(ROT_90.as_ptr().cast());
+            let conj = NeonStoreF::raw(vld1q_f32(ROT_270.as_ptr().cast()));
 
-            static DUP_FIRST_F32: [u8; 16] = [0, 1, 2, 3, 0, 1, 2, 3, 8, 9, 10, 11, 8, 9, 10, 11];
-            let dup_first_f32 = vld1q_u8(DUP_FIRST_F32.as_ptr().cast());
-
+            let blend_mask = NeonStoreF::raw(vreinterpretq_f32_u32(vld1q_u32(
+                [0xFFFFFFFFu32, 0, 0xFFFFFFFF, 0].as_ptr(),
+            )));
             let right_len = right.len();
             let rls2 = &mut right[if !right_len.is_multiple_of(2) { 1 } else { 0 }..];
 
             for ((twiddle, s_out), s_out_rev) in twiddles
                 .chunks_exact(2)
                 .zip(left.chunks_exact_mut(2))
-                .zip(rls2.chunks_exact_mut(2).rev())
+                .zip(rls2.rchunks_exact_mut(2))
             {
-                let twiddle = vld1q_f32(twiddle.as_ptr().cast());
-                let out = vld1q_f32(s_out.as_ptr().cast());
-                let mut out_rev = vld1q_f32(s_out_rev.as_ptr().cast());
-                out_rev = vcombine_f32(vget_high_f32(out_rev), vget_low_f32(out_rev));
+                let [twiddle_re, twiddle_im] =
+                    NeonStoreF::from_complex_ref(twiddle).dup_even_odds();
+                let twiddle_re = twiddle_re.xor(conj);
+                let out = NeonStoreF::from_complex_ref(s_out);
+                let out_rev = NeonStoreF::from_complex_ref(s_out_rev).reverse_complex();
 
-                let sum = vaddq_f32(out, out_rev);
-                let diff = vsubq_f32(out, out_rev);
+                let sum = out + out_rev;
+                let diff = out - out_rev;
 
-                let diff_re_re =
-                    vreinterpretq_f32_u8(vqtbl1q_u8(vreinterpretq_u8_f32(diff), dup_first_f32));
-                let twiddled_diff = vmulq_f32(diff_re_re, twiddle);
+                let sumdiff_blended = sum.select(diff, blend_mask);
+                let diffsum_blended = diff.select(sum, blend_mask);
+                let diffsum_swapped = diffsum_blended.reverse_complex_elements();
 
-                let diff_sum = vcombine_f32(
-                    vext_f32::<1>(vget_low_f32(diff), vget_low_f32(sum)),
-                    vext_f32::<1>(vget_high_f32(diff), vget_high_f32(sum)),
-                );
-                let sum_diff = vrev64q_f32(diff_sum);
+                let twiddled_output =
+                    diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
 
-                let rot_270_half_sum = vreinterpretq_f32_u32(veorq_u32(
-                    vreinterpretq_u32_f32(sum_diff),
-                    vreinterpretq_u32_f32(rot_270),
-                ));
+                let out_fwd = sumdiff_blended.mul_add(NeonStoreF::dup(0.5), twiddled_output);
+                let out_rev = sumdiff_blended
+                    .mul_add(NeonStoreF::dup(0.5), -twiddled_output)
+                    .xor(conj);
 
-                let rot_diff = v_rotate90_f32(twiddled_diff, rot_270);
+                let out_rev = out_rev.reverse_complex();
 
-                let sum_im = vtrn2q_f32(sum, sum);
-
-                let output_twiddled = vfmaq_f32(
-                    rot_diff, sum_im, // [im, im]
-                    twiddle,
-                );
-                let output_rot90 = vreinterpretq_f32_u32(veorq_u32(
-                    vreinterpretq_u32_f32(output_twiddled),
-                    vreinterpretq_u32_f32(rot_90),
-                ));
-
-                // We finally have all the data we need to write the transformed data back out where we found it.
-                let v_out = vfmaq_n_f32(output_twiddled, sum_diff, 0.5);
-                let v_out_rev = vfmaq_n_f32(output_rot90, rot_270_half_sum, 0.5);
-
-                vst1q_f32(s_out.as_mut_ptr().cast(), v_out);
-                vst1q_f32(
-                    s_out_rev.as_mut_ptr().cast(),
-                    vcombine_f32(vget_high_f32(v_out_rev), vget_low_f32(v_out_rev)),
-                );
+                out_fwd.write(s_out);
+                out_rev.write(s_out_rev);
             }
 
             if !twiddles.len().is_multiple_of(2) {
@@ -176,45 +136,29 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
                     .zip(rem_left.iter_mut())
                     .zip(rem_right.iter_mut().rev())
                 {
-                    let twiddle = vld1_f32(twiddle as *const Complex<f32> as *const f32);
-                    let out = vld1_f32(s_out as *const Complex<f32> as *const f32);
-                    let out_rev = vld1_f32(s_out_rev as *const Complex<f32> as *const f32);
+                    let [twiddle_re, twiddle_im] =
+                        NeonStoreF::from_complex(twiddle).dup_even_odds();
+                    let twiddle_re = twiddle_re.xor(conj);
+                    let out = NeonStoreF::from_complex(s_out);
+                    let out_rev = NeonStoreF::from_complex(s_out_rev);
 
-                    let sum = vadd_f32(out, out_rev);
-                    let diff = vsub_f32(out, out_rev);
+                    let sum = out + out_rev;
+                    let diff = out - out_rev;
 
-                    let diff_re_re = vreinterpret_f32_u8(vqtbl1_u8(
-                        vreinterpretq_u8_f32(vcombine_f32(diff, diff)),
-                        vget_low_u8(dup_first_f32),
-                    ));
-                    let twiddled_diff = vmul_f32(diff_re_re, twiddle);
+                    let sumdiff_blended = sum.select(diff, blend_mask);
+                    let diffsum_blended = diff.select(sum, blend_mask);
+                    let diffsum_swapped = diffsum_blended.reverse_complex_elements();
 
-                    let diff_sum = vext_f32::<1>(diff, sum);
-                    let sum_diff = vrev64_f32(diff_sum);
+                    let twiddled_output =
+                        diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
 
-                    let rot_270_half_sum = vreinterpret_f32_u32(veor_u32(
-                        vreinterpret_u32_f32(sum_diff),
-                        vreinterpret_u32_f32(vget_low_f32(rot_270)),
-                    ));
+                    let out_fwd = sumdiff_blended.mul_add(NeonStoreF::dup(0.5), twiddled_output);
+                    let out_rev = sumdiff_blended
+                        .mul_add(NeonStoreF::dup(0.5), -twiddled_output)
+                        .xor(conj);
 
-                    let rot_diff = vh_rotate90_f32(twiddled_diff, vget_low_f32(rot_270));
-
-                    let output_twiddled = vfma_f32(
-                        rot_diff,
-                        vtrn2_f32(sum, sum), // [im, im]
-                        twiddle,
-                    );
-                    let output_rot90 = vreinterpret_f32_u32(veor_u32(
-                        vreinterpret_u32_f32(output_twiddled),
-                        vreinterpret_u32_f32(vget_low_f32(rot_90)),
-                    ));
-
-                    // We finally have all the data we need to write the transformed data back out where we found it.
-                    let v_out = vfma_n_f32(output_twiddled, sum_diff, 0.5);
-                    let v_out_rev = vfma_n_f32(output_rot90, rot_270_half_sum, 0.5);
-
-                    vst1_f32(s_out as *mut Complex<f32> as *mut f32, v_out);
-                    vst1_f32(s_out_rev as *mut Complex<f32> as *mut f32, v_out_rev);
+                    out_fwd.write_single(s_out);
+                    out_rev.write_single(s_out_rev);
                 }
             }
         }

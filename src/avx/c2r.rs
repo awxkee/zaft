@@ -26,15 +26,10 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::FftDirection;
-use crate::avx::rotate::AvxRotate;
-use crate::avx::util::{
-    _m128s_load_f32x2, _m128s_store_f32x2, _mm_unpackhi_ps64, _mm_unpackhilo_ps64,
-    _mm_unpacklo_ps64, shuffle,
-};
+use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::r2c::R2CTwiddlesHandler;
 use num_complex::Complex;
-use std::arch::x86_64::*;
+use num_traits::MulAdd;
 
 pub(crate) struct C2RAvxTwiddles {}
 
@@ -59,40 +54,68 @@ impl C2RAvxTwiddles {
         left: &mut [Complex<f64>],
         right: &mut [Complex<f64>],
     ) {
-        unsafe {
-            let rotate = AvxRotate::<f64>::new(FftDirection::Forward);
+        let conj = AvxStoreD::set_values(0.0, -0.0, 0.0, -0.0);
 
-            for ((twiddle, s_out), s_out_rev) in twiddles
+        for ((twiddle, s_out), s_out_rev) in twiddles
+            .chunks_exact(2)
+            .zip(left.chunks_exact_mut(2))
+            .zip(right.rchunks_exact_mut(2))
+        {
+            let [twiddle_re, twiddle_im] = AvxStoreD::from_complex_ref(twiddle).dup_even_odds();
+            let twiddle_re = twiddle_re.xor(conj);
+            let out = AvxStoreD::from_complex_ref(s_out);
+            let out_rev = AvxStoreD::from_complex_ref(s_out_rev).reverse_complex();
+
+            let sum = out + out_rev;
+            let diff = out - out_rev;
+
+            let sumdiff_blended = sum.blend_real_img(diff);
+            let diffsum_blended = diff.blend_real_img(sum);
+            let diffsum_swapped = diffsum_blended.reverse_complex_elements();
+
+            let twiddled_output = diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
+
+            let out_fwd = sumdiff_blended - twiddled_output;
+            let out_rev = sumdiff_blended.xor(conj) + twiddled_output.xor(conj);
+
+            let out_rev = out_rev.reverse_complex();
+
+            out_fwd.write(s_out);
+            out_rev.write(s_out_rev);
+        }
+
+        if !twiddles.len().is_multiple_of(2) {
+            let rem_twiddles = twiddles.chunks_exact(2).remainder();
+            let min_length = left.len().min(right.len());
+            let rem_left = left.chunks_exact_mut(2).into_remainder();
+            let full_right_chunks = right.len() - (min_length / 2) * 2;
+            let rem_right = &mut right[..full_right_chunks];
+
+            for ((twiddle, s_out), s_out_rev) in rem_twiddles
                 .iter()
-                .zip(left.iter_mut())
-                .zip(right.iter_mut().rev())
+                .zip(rem_left.iter_mut())
+                .zip(rem_right.iter_mut().rev())
             {
-                let twiddle = _mm_loadu_pd(twiddle as *const Complex<f64> as *const f64);
-                let out = _mm_loadu_pd(s_out as *const Complex<f64> as *const f64);
-                let out_rev = _mm_loadu_pd(s_out_rev as *const Complex<f64> as *const f64);
+                let [twiddle_re, twiddle_im] = AvxStoreD::from_complex(twiddle).dup_even_odds();
+                let twiddle_re = twiddle_re.xor(conj);
+                let out = AvxStoreD::from_complex(s_out);
+                let out_rev = AvxStoreD::from_complex(s_out_rev);
 
-                let sum = _mm_add_pd(out, out_rev);
-                let diff = _mm_sub_pd(out, out_rev);
+                let sum = out + out_rev;
+                let diff = out - out_rev;
 
-                let twiddled_diff = _mm_mul_pd(_mm_permute_pd::<0>(diff), twiddle);
+                let sumdiff_blended = sum.blend_real_img(diff);
+                let diffsum_blended = diff.blend_real_img(sum);
+                let diffsum_swapped = diffsum_blended.reverse_complex_elements();
 
-                let sum_diff = _mm_shuffle_pd::<0b10>(sum, diff);
+                let twiddled_output =
+                    diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
 
-                let rot_270_half_sum =
-                    _mm_xor_pd(sum_diff, _mm256_castpd256_pd128(rotate.rot_flag));
+                let out_fwd = sumdiff_blended - twiddled_output;
+                let out_rev = sumdiff_blended.xor(conj) + twiddled_output.xor(conj);
 
-                let rot_diff = rotate.rotate_m128d(twiddled_diff);
-
-                let output_twiddled = _mm_fmadd_pd(_mm_permute_pd::<0b11>(sum), twiddle, rot_diff);
-                let output_rot270 =
-                    _mm_xor_pd(output_twiddled, _mm256_castpd256_pd128(rotate.rot_flag));
-
-                // We finally have all the data we need to write the transformed data back out where we found it.
-                let v_out = _mm_sub_pd(sum_diff, output_twiddled);
-                let v_out_rev = _mm_add_pd(output_rot270, rot_270_half_sum);
-
-                _mm_storeu_pd(s_out as *mut Complex<f64> as *mut f64, v_out);
-                _mm_storeu_pd(s_out_rev as *mut Complex<f64> as *mut f64, v_out_rev);
+                out_fwd.write_single(s_out);
+                out_rev.write_single(s_out_rev);
             }
         }
     }
@@ -119,113 +142,68 @@ impl C2RAvxTwiddles {
         left: &mut [Complex<f32>],
         right: &mut [Complex<f32>],
     ) {
-        unsafe {
-            let rotate = AvxRotate::<f32>::new(FftDirection::Forward);
+        let conj = AvxStoreF::set_values8(0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0);
 
-            let right_len = right.len();
-            let rls2 = &mut right[if !right_len.is_multiple_of(2) { 1 } else { 0 }..];
+        for ((twiddle, s_out), s_out_rev) in twiddles
+            .chunks_exact(4)
+            .zip(left.chunks_exact_mut(4))
+            .zip(right.rchunks_exact_mut(4))
+        {
+            let [twiddle_re, twiddle_im] = AvxStoreF::from_complex_ref(twiddle).dup_even_odds();
+            let twiddle_re = twiddle_re.xor(conj);
+            let out = AvxStoreF::from_complex_ref(s_out);
+            let out_rev = AvxStoreF::from_complex_ref(s_out_rev).reverse_complex();
 
-            for ((twiddle, s_out), s_out_rev) in twiddles
-                .chunks_exact(2)
-                .zip(left.chunks_exact_mut(2))
-                .zip(rls2.chunks_exact_mut(2).rev())
+            let sum = out + out_rev;
+            let diff = out - out_rev;
+
+            let sumdiff_blended = sum.blend_real_img(diff);
+            let diffsum_blended = diff.blend_real_img(sum);
+            let diffsum_swapped = diffsum_blended.reverse_complex_elements();
+
+            let twiddled_output = diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
+
+            let out_fwd = sumdiff_blended - twiddled_output;
+            let out_rev = sumdiff_blended.xor(conj) + twiddled_output.xor(conj);
+
+            let out_rev = out_rev.reverse_complex();
+
+            out_fwd.write(s_out);
+            out_rev.write(s_out_rev);
+        }
+
+        if !twiddles.len().is_multiple_of(4) {
+            let rem_twiddles = twiddles.chunks_exact(4).remainder();
+            let min_length = left.len().min(right.len());
+            let rem_left = left.chunks_exact_mut(4).into_remainder();
+            let full_right_chunks = right.len() - (min_length / 4) * 4;
+            let rem_right = &mut right[..full_right_chunks];
+
+            for ((twiddle, s_out), s_out_rev) in rem_twiddles
+                .iter()
+                .zip(rem_left.iter_mut())
+                .zip(rem_right.iter_mut().rev())
             {
-                let twiddle = _mm_loadu_ps(twiddle.as_ptr().cast());
-                let out = _mm_loadu_ps(s_out.as_ptr().cast());
-                let mut out_rev = _mm_loadu_ps(s_out_rev.as_ptr().cast());
-                out_rev = _mm_unpackhilo_ps64(out_rev, out_rev);
+                let [twiddle_re, twiddle_im] = AvxStoreF::from_complex(twiddle).dup_even_odds();
+                let twiddle_re = twiddle_re.xor(conj);
+                let out = AvxStoreF::from_complex(s_out);
+                let out_rev = AvxStoreF::from_complex(s_out_rev);
 
-                let sum = _mm_add_ps(out, out_rev);
-                let diff = _mm_sub_ps(out, out_rev);
+                let sum = out + out_rev;
+                let diff = out - out_rev;
 
-                let diff_re_re = _mm_shuffle_ps::<{ shuffle(2, 2, 0, 0) }>(diff, diff);
-                let twiddled_diff = _mm_mul_ps(diff_re_re, twiddle);
+                let sumdiff_blended = sum.blend_real_img(diff);
+                let diffsum_blended = diff.blend_real_img(sum);
+                let diffsum_swapped = diffsum_blended.reverse_complex_elements();
 
-                let perm_lo = _mm_unpacklo_ps64(diff, sum);
-                let perm_hi = _mm_unpackhi_ps64(diff, sum);
-                let diff_sw = _mm_unpacklo_ps64(
-                    _mm_shuffle_ps::<{ shuffle(2, 0, 2, 1) }>(perm_lo, perm_lo),
-                    _mm_shuffle_ps::<{ shuffle(2, 0, 2, 1) }>(perm_hi, perm_hi),
-                );
-                let sum_diff = _mm_shuffle_ps::<{ shuffle(2, 3, 0, 1) }>(diff_sw, diff_sw);
+                let twiddled_output =
+                    diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
 
-                let rot_270_half_sum = _mm_xor_ps(
-                    sum_diff,
-                    _mm256_castps256_ps128(_mm256_castpd_ps(rotate.rot_flag)),
-                );
+                let out_fwd = sumdiff_blended - twiddled_output;
+                let out_rev = sumdiff_blended.xor(conj) + twiddled_output.xor(conj);
 
-                let rot_diff = rotate.rotate_m128(twiddled_diff);
-
-                let output_twiddled = _mm_fmadd_ps(
-                    _mm_shuffle_ps::<{ shuffle(3, 3, 1, 1) }>(sum, sum), // [im, im]
-                    twiddle,
-                    rot_diff,
-                );
-                let output_rot270 = _mm_xor_ps(
-                    output_twiddled,
-                    _mm256_castps256_ps128(_mm256_castpd_ps(rotate.rot_flag)),
-                );
-
-                // We finally have all the data we need to write the transformed data back out where we found it.
-                let v_out = _mm_sub_ps(sum_diff, output_twiddled);
-                let v_out_rev = _mm_add_ps(output_rot270, rot_270_half_sum);
-
-                _mm_storeu_ps(s_out.as_mut_ptr().cast(), v_out);
-                _mm_storeu_ps(
-                    s_out_rev.as_mut_ptr().cast(),
-                    _mm_unpackhilo_ps64(v_out_rev, v_out_rev),
-                );
-            }
-
-            if !twiddles.len().is_multiple_of(2) {
-                let rem_twiddles = twiddles.chunks_exact(2).remainder();
-                let min_length = left.len().min(right.len());
-                let rem_left = left.chunks_exact_mut(2).into_remainder();
-                let full_right_chunks = right.len() - (min_length / 2) * 2;
-                let rem_right = &mut right[..full_right_chunks];
-
-                for ((twiddle, s_out), s_out_rev) in rem_twiddles
-                    .iter()
-                    .zip(rem_left.iter_mut())
-                    .zip(rem_right.iter_mut().rev())
-                {
-                    let twiddle = _m128s_load_f32x2(twiddle as *const Complex<f32>);
-                    let out = _m128s_load_f32x2(s_out as *const Complex<f32>);
-                    let out_rev = _m128s_load_f32x2(s_out_rev as *const Complex<f32>);
-
-                    let sum = _mm_add_ps(out, out_rev);
-                    let diff = _mm_sub_ps(out, out_rev);
-
-                    let diff_re_re = _mm_shuffle_ps::<{ shuffle(2, 2, 0, 0) }>(diff, diff);
-                    let twiddled_diff = _mm_mul_ps(diff_re_re, twiddle);
-
-                    let diff_sum = _mm_unpacklo_ps64(diff, sum);
-                    let sum_diff = _mm_shuffle_ps::<{ shuffle(2, 0, 1, 2) }>(diff_sum, diff_sum);
-
-                    let rot_270_half_sum = _mm_xor_ps(
-                        sum_diff,
-                        _mm256_castps256_ps128(_mm256_castpd_ps(rotate.rot_flag)),
-                    );
-
-                    let rot_diff = rotate.rotate_m128(twiddled_diff);
-
-                    let output_twiddled = _mm_fmadd_ps(
-                        _mm_shuffle_ps::<{ shuffle(3, 3, 1, 1) }>(sum, sum), // [im, im]
-                        twiddle,
-                        rot_diff,
-                    );
-                    let output_rot270 = _mm_xor_ps(
-                        output_twiddled,
-                        _mm_castpd_ps(_mm256_castpd256_pd128(rotate.rot_flag)),
-                    );
-
-                    // We finally have all the data we need to write the transformed data back out where we found it.
-                    let v_out = _mm_sub_ps(sum_diff, output_twiddled);
-                    let v_out_rev = _mm_add_ps(output_rot270, rot_270_half_sum);
-
-                    _m128s_store_f32x2(s_out as *mut Complex<f32>, v_out);
-                    _m128s_store_f32x2(s_out_rev as *mut Complex<f32>, v_out_rev);
-                }
+                out_fwd.write_single(s_out);
+                out_rev.write_single(s_out_rev);
             }
         }
     }

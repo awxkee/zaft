@@ -26,16 +26,17 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 use crate::butterflies::fast_bf16::FastButterfly16;
 use crate::butterflies::rotate_90;
 use crate::complex_fma::{c_mul_fast, c_mul_fast_conj};
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Float};
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -71,19 +72,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Butterfly32<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly32<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -232,19 +221,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutorOutOfPlace<T> for Butterfly32<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly32<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -388,21 +365,138 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly32<T>
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly32<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(self.real_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.real_length(),
+            ));
+        }
+        if !output.len().is_multiple_of(self.complex_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                output.len(),
+                self.complex_length(),
+            ));
+        }
+
+        for (dst, src) in output.chunks_exact_mut(17).zip(input.chunks_exact(32)) {
+            let u0 = Complex::new(src[0], T::zero());
+            let u1 = Complex::new(src[1], T::zero());
+            let u2 = Complex::new(src[2], T::zero());
+            let u3 = Complex::new(src[3], T::zero());
+
+            let u4 = Complex::new(src[4], T::zero());
+            let u5 = Complex::new(src[5], T::zero());
+            let u6 = Complex::new(src[6], T::zero());
+            let u7 = Complex::new(src[7], T::zero());
+
+            let u8 = Complex::new(src[8], T::zero());
+            let u9 = Complex::new(src[9], T::zero());
+            let u10 = Complex::new(src[10], T::zero());
+            let u11 = Complex::new(src[11], T::zero());
+            let u12 = Complex::new(src[12], T::zero());
+
+            let u13 = Complex::new(src[13], T::zero());
+            let u14 = Complex::new(src[14], T::zero());
+            let u15 = Complex::new(src[15], T::zero());
+            let u16 = Complex::new(src[16], T::zero());
+
+            let u17 = Complex::new(src[17], T::zero());
+            let u18 = Complex::new(src[18], T::zero());
+
+            let u19 = Complex::new(src[19], T::zero());
+            let u20 = Complex::new(src[20], T::zero());
+            let u21 = Complex::new(src[21], T::zero());
+            let u22 = Complex::new(src[22], T::zero());
+            let u23 = Complex::new(src[23], T::zero());
+            let u24 = Complex::new(src[24], T::zero());
+            let u25 = Complex::new(src[25], T::zero());
+            let u26 = Complex::new(src[26], T::zero());
+            let u27 = Complex::new(src[27], T::zero());
+            let u28 = Complex::new(src[28], T::zero());
+            let u29 = Complex::new(src[29], T::zero());
+            let u30 = Complex::new(src[30], T::zero());
+            let u31 = Complex::new(src[31], T::zero());
+
+            let s_evens = self.bf16.exec(
+                u0, u2, u4, u6, u8, u10, u12, u14, u16, u18, u20, u22, u24, u26, u28, u30,
+            );
+            let mut odds1 = self.bf16.bf8.exec(u1, u5, u9, u13, u17, u21, u25, u29);
+            let mut odds2 = self.bf16.bf8.exec(u31, u3, u7, u11, u15, u19, u23, u27);
+
+            odds1.1 = c_mul_fast(odds1.1, self.twiddle1);
+            odds2.1 = c_mul_fast_conj(odds2.1, self.twiddle1);
+
+            odds1.2 = c_mul_fast(odds1.2, self.twiddle2);
+            odds2.2 = c_mul_fast_conj(odds2.2, self.twiddle2);
+
+            odds1.3 = c_mul_fast(odds1.3, self.twiddle3);
+            odds2.3 = c_mul_fast_conj(odds2.3, self.twiddle3);
+
+            odds1.4 = c_mul_fast(odds1.4, self.twiddle4);
+            odds2.4 = c_mul_fast_conj(odds2.4, self.twiddle4);
+
+            odds1.5 = c_mul_fast(odds1.5, self.twiddle5);
+            odds2.5 = c_mul_fast_conj(odds2.5, self.twiddle5);
+
+            odds1.6 = c_mul_fast(odds1.6, self.twiddle6);
+            odds2.6 = c_mul_fast_conj(odds2.6, self.twiddle6);
+
+            odds1.7 = c_mul_fast(odds1.7, self.twiddle7);
+            odds2.7 = c_mul_fast_conj(odds2.7, self.twiddle7);
+
+            let mut q0 = self.bf16.bf2.butterfly2(odds1.0, odds2.0);
+            let mut q1 = self.bf16.bf2.butterfly2(odds1.1, odds2.1);
+            let mut q2 = self.bf16.bf2.butterfly2(odds1.2, odds2.2);
+            let mut q3 = self.bf16.bf2.butterfly2(odds1.3, odds2.3);
+            let mut q4 = self.bf16.bf2.butterfly2(odds1.4, odds2.4);
+            let mut q5 = self.bf16.bf2.butterfly2(odds1.5, odds2.5);
+            let mut q6 = self.bf16.bf2.butterfly2(odds1.6, odds2.6);
+            let mut q7 = self.bf16.bf2.butterfly2(odds1.7, odds2.7);
+
+            q0.1 = rotate_90(q0.1, self.direction);
+            q1.1 = rotate_90(q1.1, self.direction);
+            q2.1 = rotate_90(q2.1, self.direction);
+            q3.1 = rotate_90(q3.1, self.direction);
+            q4.1 = rotate_90(q4.1, self.direction);
+            q5.1 = rotate_90(q5.1, self.direction);
+            q6.1 = rotate_90(q6.1, self.direction);
+            q7.1 = rotate_90(q7.1, self.direction);
+
+            dst[0] = s_evens.0 + q0.0;
+            dst[1] = s_evens.1 + q1.0;
+            dst[2] = s_evens.2 + q2.0;
+            dst[3] = s_evens.3 + q3.0;
+            dst[4] = s_evens.4 + q4.0;
+            dst[5] = s_evens.5 + q5.0;
+            dst[6] = s_evens.6 + q6.0;
+            dst[7] = s_evens.7 + q7.0;
+            dst[8] = s_evens.8 + q0.1;
+            dst[9] = s_evens.9 + q1.1;
+            dst[10] = s_evens.10 + q2.1;
+            dst[11] = s_evens.11 + q3.1;
+            dst[12] = s_evens.12 + q4.1;
+            dst[13] = s_evens.13 + q5.1;
+            dst[14] = s_evens.14 + q6.1;
+            dst[15] = s_evens.15 + q7.1;
+            dst[16] = s_evens.0 - q0.0;
+        }
+        Ok(())
+    }
+    fn real_length(&self) -> usize {
+        32
+    }
+
+    fn complex_length(&self) -> usize {
+        17
+    }
+}
+
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly32<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -415,7 +509,9 @@ where
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly32, f32, Butterfly32, 32, 1e-5);
     test_butterfly!(test_butterfly32, f32, Butterfly32, 32, 1e-5);
     test_oof_butterfly!(test_oof_butterfly32, f32, Butterfly32, 32, 1e-5);
 }

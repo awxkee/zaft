@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::traits::FftTrigonometry;
-use crate::util::{compute_logarithm, compute_twiddle, reverse_bits};
+use crate::util::{compute_twiddle, int_logarithm, reverse_bits};
 use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
@@ -630,7 +630,7 @@ pub(crate) fn avx_bitreversed_transpose<T: Copy, const D: usize>(
         assert!(width_bits.is_multiple_of(d_bits));
         width_bits / d_bits
     } else {
-        compute_logarithm::<D>(width).unwrap()
+        int_logarithm::<D>(width).unwrap()
     };
 
     if strided_width == 0 {

@@ -29,7 +29,10 @@
 use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::neon::mixed::{NeonStoreD, NeonStoreF};
 use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, R2CFftExecutor,
+    ZaftError,
+};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 use std::sync::Arc;
@@ -122,6 +125,60 @@ macro_rules! gen_bf9d {
                     }
                 }
                 Ok(())
+            }
+
+            #[target_feature(enable = $features)]
+            fn execute_r2c(&self, src: &[f64], dst: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                if !src.len().is_multiple_of(9) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        src.len(),
+                        self.real_length(),
+                    ));
+                }
+                if !dst.len().is_multiple_of(5) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        dst.len(),
+                        self.complex_length(),
+                    ));
+                }
+
+                unsafe {
+                    let mut rows = [NeonStoreD::default(); 9];
+
+                    for (dst, src) in dst.chunks_exact_mut(5).zip(src.chunks_exact(9)) {
+                        for i in 0..4 {
+                            let q = NeonStoreD::load(src.get_unchecked(i * 2..));
+                            let [v0, v1] = q.to_complex();
+                            rows[i * 2] = v0;
+                            rows[i * 2 + 1] = v1;
+                        }
+
+                        rows[8] = NeonStoreD::load1(src.get_unchecked(8..));
+
+                        rows = self.bf9.exec(rows);
+
+                        for i in 0..5 {
+                            rows[i].write(dst.get_unchecked_mut(i..));
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl R2CFftExecutor<f64> for $name {
+            fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_r2c(input, output) }
+            }
+
+            #[inline]
+            fn real_length(&self) -> usize {
+                9
+            }
+
+            #[inline]
+            fn complex_length(&self) -> usize {
+                5
             }
         }
 
@@ -297,6 +354,76 @@ macro_rules! gen_bf9f {
                 }
                 Ok(())
             }
+
+            #[target_feature(enable = $features)]
+            fn execute_r2c(&self, src: &[f32], dst: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                if !src.len().is_multiple_of(9) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        src.len(),
+                        self.real_length(),
+                    ));
+                }
+                if !dst.len().is_multiple_of(5) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        dst.len(),
+                        self.complex_length(),
+                    ));
+                }
+                if src.len() / 9 != dst.len() / 5 {
+                    return Err(ZaftError::InvalidSamplesCount(src.len() / 9, dst.len() / 5));
+                }
+
+                unsafe {
+                    let mut rows0: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
+                    let mut rows1: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
+
+                    for (dst, src) in dst.chunks_exact_mut(5).zip(src.chunks_exact(9)) {
+                        // columns
+                        for i in 0..3 {
+                            let q = NeonStoreF::load3(src.get_unchecked(i * 3..));
+                            let [v0, v1] = q.to_complex();
+                            rows0[i] = v0;
+                            rows1[i] = v1;
+                        }
+
+                        rows0 = self.bf3.exec(rows0);
+                        rows1 = self.bf3.exec(rows1);
+
+                        for i in 1..3 {
+                            rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
+                            rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i - 1 + 2]);
+                        }
+
+                        (rows0, rows1) = transpose_f32x2_3x3(rows0, rows1);
+
+                        // rows
+
+                        rows0 = self.bf3.exec(rows0);
+                        rows1 = self.bf3.exec(rows1);
+
+                        rows0[0].write(dst);
+                        rows1[0].write_lo(dst.get_unchecked_mut(2..));
+                        rows0[1].write(dst.get_unchecked_mut(3..));
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl R2CFftExecutor<f32> for $name {
+            fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_r2c(input, output) }
+            }
+
+            #[inline]
+            fn real_length(&self) -> usize {
+                9
+            }
+
+            #[inline]
+            fn complex_length(&self) -> usize {
+                5
+            }
         }
 
         impl FftExecutorOutOfPlace<f32> for $name {
@@ -332,7 +459,10 @@ mod tests {
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
     #[cfg(feature = "fcma")]
     use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_neon_r2c_butterfly9, f32, NeonButterfly9f, 9, 1e-5);
+    test_r2c_butterfly!(test_neon_r2c_butterfly9d, f64, NeonButterfly9d, 9, 1e-7);
     test_butterfly!(test_neon_butterfly9, f32, NeonButterfly9f, 9, 1e-5);
     #[cfg(feature = "fcma")]
     test_fcma_butterfly!(test_fcma_butterfly9, f32, NeonFcmaButterfly9f, 9, 1e-5);

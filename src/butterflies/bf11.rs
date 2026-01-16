@@ -27,12 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::mla::fmla;
-use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -46,7 +47,7 @@ pub(crate) struct Butterfly11<T> {
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static> Butterfly11<T>
+impl<T: FftSample> Butterfly11<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -62,19 +63,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Butterfly11<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly11<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -405,19 +394,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutorOutOfPlace<T> for Butterfly11<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly11<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -743,21 +720,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly11<T>
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly11<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -766,11 +729,204 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly11<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(11) {
+            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 11));
+        }
+        if !output.len().is_multiple_of(6) {
+            return Err(ZaftError::InvalidSizeMultiplier(output.len(), 6));
+        }
+
+        for (input, complex) in input.chunks_exact(11).zip(output.chunks_exact_mut(6)) {
+            let u0 = input[0];
+            let u1 = input[1];
+            let u2 = input[2];
+            let u3 = input[3];
+
+            let u4 = input[4];
+            let u5 = input[5];
+            let u6 = input[6];
+            let u7 = input[7];
+
+            let u8 = input[8];
+            let u9 = input[9];
+            let u10 = input[10];
+
+            let x110p = u1 + u10;
+            let x110n = u1 - u10;
+            let x29p = u2 + u9;
+            let x29n = u2 - u9;
+            let x38p = u3 + u8;
+            let x38n = u3 - u8;
+            let x47p = u4 + u7;
+            let x47n = u4 - u7;
+            let x56p = u5 + u6;
+            let x56n = u5 - u6;
+
+            let y0 = u0 + x110p + x29p + x38p + x47p + x56p;
+            complex[0] = Complex::new(y0, T::zero());
+            let b110re_a = fmla(
+                self.twiddle1.re,
+                x110p,
+                fmla(
+                    self.twiddle2.re,
+                    x29p,
+                    fmla(self.twiddle3.re, x38p, u0)
+                        + fmla(self.twiddle4.re, x47p, self.twiddle5.re * x56p),
+                ),
+            );
+            let b29re_a = fmla(
+                self.twiddle2.re,
+                x110p,
+                fmla(
+                    self.twiddle4.re,
+                    x29p,
+                    fmla(self.twiddle5.re, x38p, u0)
+                        + fmla(self.twiddle3.re, x47p, self.twiddle1.re * x56p),
+                ),
+            );
+            let b38re_a = fmla(
+                self.twiddle3.re,
+                x110p,
+                fmla(
+                    self.twiddle5.re,
+                    x29p,
+                    fmla(self.twiddle2.re, x38p, u0)
+                        + fmla(self.twiddle1.re, x47p, self.twiddle4.re * x56p),
+                ),
+            );
+            let b47re_a = fmla(
+                self.twiddle4.re,
+                x110p,
+                fmla(self.twiddle3.re, x29p, u0)
+                    + fmla(
+                        self.twiddle5.re,
+                        x47p,
+                        fmla(self.twiddle2.re, x56p, self.twiddle1.re * x38p),
+                    ),
+            );
+            let b56re_a = fmla(
+                self.twiddle5.re,
+                x110p,
+                fmla(
+                    self.twiddle1.re,
+                    x29p,
+                    fmla(self.twiddle4.re, x38p, u0)
+                        + fmla(self.twiddle2.re, x47p, self.twiddle3.re * x56p),
+                ),
+            );
+
+            let b110im_b = fmla(
+                self.twiddle1.im,
+                x110n,
+                fmla(
+                    self.twiddle2.im,
+                    x29n,
+                    fmla(
+                        self.twiddle3.im,
+                        x38n,
+                        fmla(self.twiddle4.im, x47n, self.twiddle5.im * x56n),
+                    ),
+                ),
+            );
+            let b29im_b = fmla(
+                self.twiddle2.im,
+                x110n,
+                fmla(
+                    self.twiddle4.im,
+                    x29n,
+                    fmla(
+                        -self.twiddle5.im,
+                        x38n,
+                        -self.twiddle3.im * x47n + -self.twiddle1.im * x56n,
+                    ),
+                ),
+            );
+            let b38im_b = fmla(
+                self.twiddle3.im,
+                x110n,
+                fmla(
+                    -self.twiddle5.im,
+                    x29n,
+                    fmla(
+                        -self.twiddle2.im,
+                        x38n,
+                        self.twiddle1.im * x47n + self.twiddle4.im * x56n,
+                    ),
+                ),
+            );
+            let b47im_b = fmla(
+                self.twiddle4.im,
+                x110n,
+                fmla(
+                    -self.twiddle3.im,
+                    x29n,
+                    self.twiddle1.im * x38n + self.twiddle5.im * x47n + -self.twiddle2.im * x56n,
+                ),
+            );
+            let b56im_b = fmla(
+                self.twiddle5.im,
+                x110n,
+                fmla(
+                    -self.twiddle1.im,
+                    x29n,
+                    fmla(
+                        self.twiddle4.im,
+                        x38n,
+                        fmla(-self.twiddle2.im, x47n, self.twiddle3.im * x56n),
+                    ),
+                ),
+            );
+
+            let y1 = Complex {
+                re: b110re_a,
+                im: b110im_b,
+            };
+            let y2 = Complex {
+                re: b29re_a,
+                im: b29im_b,
+            };
+            let y3 = Complex {
+                re: b38re_a,
+                im: b38im_b,
+            };
+            let y4 = Complex {
+                re: b47re_a,
+                im: b47im_b,
+            };
+            let y5 = Complex {
+                re: b56re_a,
+                im: b56im_b,
+            };
+            complex[1] = y1;
+            complex[2] = y2;
+            complex[3] = y3;
+            complex[4] = y4;
+            complex[5] = y5;
+        }
+        Ok(())
+    }
+
+    fn real_length(&self) -> usize {
+        11
+    }
+
+    fn complex_length(&self) -> usize {
+        6
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly11, f32, Butterfly11, 11, 1e-5);
     test_butterfly!(test_butterfly11, f32, Butterfly11, 11, 1e-5);
     test_oof_butterfly!(test_oof_butterfly11, f32, Butterfly11, 11, 1e-5);
 }

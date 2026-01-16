@@ -27,21 +27,16 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::{NeonButterfly, NeonFastButterfly5};
 use crate::neon::radix4::{complex4_load_f32, complex4_store_f32};
 use crate::neon::transpose::{neon_transpose_f32x2_2x2_impl, transpose_f32x2_4x4};
 use crate::neon::util::{create_neon_twiddles, vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use crate::radix10::Radix10Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{bitreversed_transpose, compute_logarithm, is_power_of_ten, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{bitreversed_transpose, int_logarithm, is_power_of_ten, reverse_bits};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct NeonRadix10<T> {
@@ -53,22 +48,7 @@ pub(crate) struct NeonRadix10<T> {
     butterfly_length: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix10Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> NeonRadix10<T>
+impl<T: FftSample + Radix10Twiddles> NeonRadix10<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -78,7 +58,7 @@ where
             "Input length must be a power of 10"
         );
 
-        let log10 = compute_logarithm::<10>(size).unwrap();
+        let log10 = int_logarithm::<10>(size).unwrap();
         let butterfly = match log10 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly10(fft_direction)?,
@@ -278,7 +258,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix10(
     const WIDTH: usize = 10;
     const HEIGHT: usize = 10;
 
-    let rev_digits = compute_logarithm::<10>(width).unwrap();
+    let rev_digits = int_logarithm::<10>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 

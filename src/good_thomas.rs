@@ -28,12 +28,10 @@
  */
 use crate::err::try_vec;
 use crate::fast_divider::DividerUsize;
-use crate::traits::FftTrigonometry;
-use crate::transpose::{TransposeExecutor, TransposeFactory};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeExecutor;
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 pub(crate) struct GoodThomasFft<T> {
@@ -50,17 +48,7 @@ pub(crate) struct GoodThomasFft<T> {
     transpose_ops: Box<dyn TransposeExecutor<T> + Send + Sync>,
 }
 
-impl<
-    T: Copy
-        + Default
-        + Clone
-        + FftTrigonometry
-        + Float
-        + Zero
-        + Default
-        + TransposeFactory<T>
-        + 'static,
-> GoodThomasFft<T>
+impl<T: FftSample> GoodThomasFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -203,16 +191,7 @@ impl<T: Copy> GoodThomasFft<T> {
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for GoodThomasFft<T>
+impl<T: FftSample> FftExecutor<T> for GoodThomasFft<T>
 where
     f64: AsPrimitive<T>,
 {

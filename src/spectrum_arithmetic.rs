@@ -26,25 +26,35 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::FftSample;
 use crate::complex_fma::{c_conj_mul_fast, c_mul_fast};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, MulAdd, Num};
-use std::fmt::Display;
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::{Arc, OnceLock};
 
-pub(crate) trait SpectrumOps<T> {
+pub(crate) trait ComplexArith<T> {
     // a * b
     fn mul(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
+    // for each chunk(a, cut_width) * chunk(b, cut_width)
+    fn mul_and_cut(
+        &self,
+        a: &[Complex<T>],
+        original_width: usize,
+        b: &[Complex<T>],
+        cut_width: usize,
+        dst: &mut [Complex<T>],
+    );
+    // complex(a * b)
+    fn mul_expand_to_complex(&self, a: &[T], b: &[Complex<T>], dst: &mut [Complex<T>]);
     // (a*b).conj()
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
     // a.conj() * b
     fn conjugate_mul_by_b(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
 }
 
-pub(crate) trait SpectrumOpsFactory<T> {
-    fn make_spectrum_arithmetic() -> Arc<dyn SpectrumOps<T> + Send + Sync>;
+pub(crate) trait ComplexArithFactory<T> {
+    fn make_complex_arith() -> Arc<dyn ComplexArith<T> + Send + Sync>;
 }
 
 macro_rules! default_arith_module {
@@ -83,9 +93,9 @@ macro_rules! default_arith_module {
     }};
 }
 
-impl SpectrumOpsFactory<f32> for f32 {
-    fn make_spectrum_arithmetic() -> Arc<dyn SpectrumOps<f32> + Send + Sync> {
-        static ARITHMETIC_MODULE_SINGLE: OnceLock<Arc<dyn SpectrumOps<f32> + Send + Sync>> =
+impl ComplexArithFactory<f32> for f32 {
+    fn make_complex_arith() -> Arc<dyn ComplexArith<f32> + Send + Sync> {
+        static ARITHMETIC_MODULE_SINGLE: OnceLock<Arc<dyn ComplexArith<f32> + Send + Sync>> =
             OnceLock::new();
         ARITHMETIC_MODULE_SINGLE
             .get_or_init(|| default_arith_module!())
@@ -93,9 +103,9 @@ impl SpectrumOpsFactory<f32> for f32 {
     }
 }
 
-impl SpectrumOpsFactory<f64> for f64 {
-    fn make_spectrum_arithmetic() -> Arc<dyn SpectrumOps<f64> + Send + Sync> {
-        static ARITHMETIC_MODULE_DOUBLE: OnceLock<Arc<dyn SpectrumOps<f64> + Send + Sync>> =
+impl ComplexArithFactory<f64> for f64 {
+    fn make_complex_arith() -> Arc<dyn ComplexArith<f64> + Send + Sync> {
+        static ARITHMETIC_MODULE_DOUBLE: OnceLock<Arc<dyn ComplexArith<f64> + Send + Sync>> =
             OnceLock::new();
         ARITHMETIC_MODULE_DOUBLE
             .get_or_init(|| default_arith_module!())
@@ -109,23 +119,39 @@ pub(crate) struct ScalarSpectrumArithmetic<T: Clone> {
     phantom_data: PhantomData<T>,
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Display,
-> SpectrumOps<T> for ScalarSpectrumArithmetic<T>
+impl<T: FftSample> ComplexArith<T> for ScalarSpectrumArithmetic<T>
 where
     f64: AsPrimitive<T>,
 {
     fn mul(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]) {
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
             *dst = c_mul_fast(*src, *twiddle);
+        }
+    }
+
+    fn mul_and_cut(
+        &self,
+        a: &[Complex<T>],
+        original_width: usize,
+        b: &[Complex<T>],
+        cut_width: usize,
+        dst: &mut [Complex<T>],
+    ) {
+        for ((source, twiddle), dst) in b
+            .chunks_exact(cut_width)
+            .zip(a.chunks_exact(original_width))
+            .zip(dst.chunks_exact_mut(cut_width))
+        {
+            for ((&source, &twiddle), dst) in source.iter().zip(twiddle.iter()).zip(dst.iter_mut())
+            {
+                *dst = c_mul_fast(source, twiddle);
+            }
+        }
+    }
+
+    fn mul_expand_to_complex(&self, a: &[T], b: &[Complex<T>], dst: &mut [Complex<T>]) {
+        for ((dst, &src), &twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
+            *dst = c_mul_fast(Complex::new(src, T::zero()), twiddle);
         }
     }
 

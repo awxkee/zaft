@@ -29,12 +29,10 @@
 use crate::err::try_vec;
 use crate::r2c::R2CTwiddlesHandler;
 use crate::r2c::c2r_twiddles::C2RTwiddlesFactory;
-use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 pub trait C2RFftExecutor<T> {
@@ -66,17 +64,7 @@ pub(crate) struct C2RFftEvenInterceptor<T> {
     twiddles_handler: Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>,
 }
 
-impl<
-    T: Copy
-        + Clone
-        + FftTrigonometry
-        + Mul<T, Output = T>
-        + 'static
-        + Zero
-        + Num
-        + Float
-        + C2RTwiddlesFactory<T>,
-> C2RFftEvenInterceptor<T>
+impl<T: FftSample + C2RTwiddlesFactory<T>> C2RFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -115,16 +103,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> C2RFftExecutor<T> for C2RFftEvenInterceptor<T>
+impl<T: FftSample> C2RFftExecutor<T> for C2RFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -206,8 +185,7 @@ pub(crate) struct C2RFftOddInterceptor<T> {
     complex_length: usize,
 }
 
-impl<T: Copy + Clone + FftTrigonometry + Mul<T, Output = T> + 'static + Zero + Num + Float>
-    C2RFftOddInterceptor<T>
+impl<T: FftSample> C2RFftOddInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -235,16 +213,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> C2RFftExecutor<T> for C2RFftOddInterceptor<T>
+impl<T: FftSample> C2RFftExecutor<T> for C2RFftOddInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {

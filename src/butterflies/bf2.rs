@@ -26,11 +26,13 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, MulAdd, Num};
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -49,16 +51,7 @@ impl<T> Butterfly2<T> {
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for Butterfly2<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly2<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -93,16 +86,22 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutorOutOfPlace<T> for Butterfly2<T>
+impl<T: FftSample> Butterfly2<T>
+where
+    f64: AsPrimitive<T>,
+{
+    pub(crate) fn exec(data: &[Complex<T>; 2]) -> [Complex<T>; 2] {
+        let u0 = data[0];
+        let u1 = data[1];
+
+        let y0 = u0 + u1;
+        let y1 = u0 - u1;
+
+        [y0, y1]
+    }
+}
+
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly2<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -132,18 +131,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly2<T>
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly2<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -152,11 +140,47 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly2<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(2) {
+            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 2));
+        }
+        if !output.len().is_multiple_of(2) {
+            return Err(ZaftError::InvalidSizeMultiplier(output.len(), 2));
+        }
+
+        for (input, complex) in input.chunks_exact(2).zip(output.chunks_exact_mut(2)) {
+            let u0 = input[0];
+            let u1 = input[1];
+
+            let y0 = u0 + u1;
+            let y1 = u0 - u1;
+
+            complex[0] = Complex::new(y0, T::zero());
+            complex[1] = Complex::new(y1, T::zero());
+        }
+        Ok(())
+    }
+
+    fn real_length(&self) -> usize {
+        2
+    }
+
+    fn complex_length(&self) -> usize {
+        2
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly2, f32, Butterfly2, 2, 1e-5);
     test_butterfly!(test_butterfly2, f32, Butterfly2, 2, 1e-5);
     test_oof_butterfly!(test_oof_butterfly2, f32, Butterfly2, 2, 1e-5);
 }

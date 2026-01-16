@@ -27,22 +27,15 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::radix13::neon_bitreversed_transpose_f32_radix13;
 use crate::neon::util::{create_neon_twiddles, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix13::Radix13Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{
-    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_thirteen,
-};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_thirteen};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct NeonFcmaRadix13<T> {
@@ -59,22 +52,7 @@ pub(crate) struct NeonFcmaRadix13<T> {
     butterfly_length: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix13Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> NeonFcmaRadix13<T>
+impl<T: FftSample + Radix13Twiddles> NeonFcmaRadix13<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -84,7 +62,7 @@ where
             "Input length must be a power of 13"
         );
 
-        let log13 = compute_logarithm::<13>(size).unwrap();
+        let log13 = int_logarithm::<13>(size).unwrap();
         let butterfly = match log13 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly13(fft_direction)?,
