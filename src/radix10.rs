@@ -26,16 +26,14 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly5};
+use crate::butterflies::Butterfly2;
+use crate::butterflies::short_butterflies::FastButterfly5;
 use crate::complex_fma::c_mul_fast;
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
-use crate::traits::FftTrigonometry;
 use crate::util::{bitreversed_transpose, is_power_of_ten, radixn_floating_twiddles_from_base};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -85,16 +83,7 @@ impl Radix10Twiddles for f32 {
 }
 
 #[allow(dead_code)]
-impl<
-    T: Default
-        + Clone
-        + Radix10Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + AlgorithmFactory<T>,
-> Radix10<T>
+impl<T: FftSample + Radix10Twiddles> Radix10<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -116,18 +105,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Default
-        + Float,
-> FftExecutor<T> for Radix10<T>
+impl<T: FftSample> FftExecutor<T> for Radix10<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -138,8 +116,6 @@ where
                 self.execution_length,
             ));
         }
-
-        let bf2 = FastButterfly2::new(self.direction);
 
         let mut scratch = try_vec![Complex::<T>::default(); self.execution_length];
 
@@ -205,11 +181,11 @@ where
                             let mid1 = self.bf5.bf5(u5, u7, u9, u1, u3);
 
                             // Since this is good-thomas algorithm, we don't need twiddle factors
-                            let (y0, y5) = bf2.butterfly2(mid0.0, mid1.0); // (y0, y5)
-                            let (y6, y1) = bf2.butterfly2(mid0.1, mid1.1); // (y6, y1)
-                            let (y2, y7) = bf2.butterfly2(mid0.2, mid1.2); // (y2, y7)
-                            let (y8, y3) = bf2.butterfly2(mid0.3, mid1.3); // (y8, y3)
-                            let (y4, y9) = bf2.butterfly2(mid0.4, mid1.4); // (y4, y9)
+                            let [y0, y5] = Butterfly2::exec(&[mid0.0, mid1.0]); // (y0, y5)
+                            let [y6, y1] = Butterfly2::exec(&[mid0.1, mid1.1]); // (y6, y1)
+                            let [y2, y7] = Butterfly2::exec(&[mid0.2, mid1.2]); // (y2, y7)
+                            let [y8, y3] = Butterfly2::exec(&[mid0.3, mid1.3]); // (y8, y3)
+                            let [y4, y9] = Butterfly2::exec(&[mid0.4, mid1.4]); // (y4, y9)
 
                             // Store results
                             *data.get_unchecked_mut(j) = y0;

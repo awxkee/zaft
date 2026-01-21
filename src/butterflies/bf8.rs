@@ -26,13 +26,15 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::butterflies::rotate_90;
 use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly4};
+use crate::butterflies::{Butterfly2, rotate_90};
 use crate::traits::FftTrigonometry;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Float};
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -56,18 +58,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default,
-> FftExecutor<T> for Butterfly8<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly8<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -126,18 +117,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default,
-> FftExecutorOutOfPlace<T> for Butterfly8<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly8<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -191,20 +171,76 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + Sync
-        + Send,
-> CompositeFftExecutor<T> for Butterfly8<T>
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly8<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(8) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.real_length(),
+            ));
+        }
+
+        if !output.len().is_multiple_of(5) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.complex_length(),
+            ));
+        }
+        for (input, complex) in input.chunks_exact(8).zip(output.chunks_exact_mut(5)) {
+            let u0 = input[0];
+            let u1 = input[1];
+            let u2 = input[2];
+            let u3 = input[3];
+            let u4 = input[4];
+            let u5 = input[5];
+            let u6 = input[6];
+            let u7 = input[7];
+
+            // Radix-8 butterfly
+            let (u0, u2, u4, u6) = self.bf4.butterfly4(
+                Complex::new(u0, T::zero()),
+                Complex::new(u2, T::zero()),
+                Complex::new(u4, T::zero()),
+                Complex::new(u6, T::zero()),
+            );
+            let (u1, mut u3, mut u5, mut u7) = self.bf4.butterfly4(
+                Complex::new(u1, T::zero()),
+                Complex::new(u3, T::zero()),
+                Complex::new(u5, T::zero()),
+                Complex::new(u7, T::zero()),
+            );
+
+            u3 = (rotate_90(u3, self.direction) + u3) * self.root2;
+            u5 = rotate_90(u5, self.direction);
+            u7 = (rotate_90(u7, self.direction) - u7) * self.root2;
+
+            let [u0, u1] = Butterfly2::exec(&[u0, u1]);
+            let [u2, _] = Butterfly2::exec(&[u2, u3]);
+            let [u4, _] = Butterfly2::exec(&[u4, u5]);
+            let [u6, _] = Butterfly2::exec(&[u6, u7]);
+
+            complex[0] = u0;
+            complex[1] = u2;
+            complex[2] = u4;
+            complex[3] = u6;
+            complex[4] = u1;
+        }
+        Ok(())
+    }
+
+    fn real_length(&self) -> usize {
+        8
+    }
+
+    fn complex_length(&self) -> usize {
+        5
+    }
+}
+
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly8<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -217,7 +253,9 @@ where
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly8, f32, Butterfly8, 8, 1e-5);
     test_butterfly!(test_butterfly8, f32, Butterfly8, 8, 1e-5);
     test_oof_butterfly!(test_oof_butterfly8, f32, Butterfly8, 8, 1e-5);
 }

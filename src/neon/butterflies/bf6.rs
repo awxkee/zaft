@@ -29,7 +29,10 @@
 use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::neon::mixed::{ColumnButterfly2f, NeonStoreD, NeonStoreF};
 use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, R2CFftExecutor,
+    ZaftError,
+};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 use std::sync::Arc;
@@ -78,26 +81,21 @@ macro_rules! gen_bf6d {
 
                 unsafe {
                     for chunk in in_place.chunks_exact_mut(6) {
-                        let u0 = NeonStoreD::raw(vld1q_f64(chunk.as_ptr().cast()));
-                        let u1 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast()));
-                        let u2 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast()));
-                        let u3 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(3..).as_ptr().cast()));
-                        let u4 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(4..).as_ptr().cast()));
-                        let u5 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(5..).as_ptr().cast()));
+                        let u0 = NeonStoreD::from_complex_ref(chunk);
+                        let u1 = NeonStoreD::from_complex_ref(chunk.get_unchecked(1..));
+                        let u2 = NeonStoreD::from_complex_ref(chunk.get_unchecked(2..));
+                        let u3 = NeonStoreD::from_complex_ref(chunk.get_unchecked(3..));
+                        let u4 = NeonStoreD::from_complex_ref(chunk.get_unchecked(4..));
+                        let u5 = NeonStoreD::from_complex_ref(chunk.get_unchecked(5..));
 
                         let [y0, y1, y2, y3, y4, y5] = self.bf.exec([u0, u1, u2, u3, u4, u5]);
 
-                        vst1q_f64(chunk.as_mut_ptr().cast(), y0.v);
-                        vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1.v);
-                        vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2.v);
-                        vst1q_f64(chunk.get_unchecked_mut(3..).as_mut_ptr().cast(), y3.v);
-                        vst1q_f64(chunk.get_unchecked_mut(4..).as_mut_ptr().cast(), y4.v);
-                        vst1q_f64(chunk.get_unchecked_mut(5..).as_mut_ptr().cast(), y5.v);
+                        y0.write(chunk);
+                        y1.write(chunk.get_unchecked_mut(1..));
+                        y2.write(chunk.get_unchecked_mut(2..));
+                        y3.write(chunk.get_unchecked_mut(3..));
+                        y4.write(chunk.get_unchecked_mut(4..));
+                        y5.write(chunk.get_unchecked_mut(5..));
                     }
                 }
                 Ok(())
@@ -130,24 +128,75 @@ macro_rules! gen_bf6d {
 
                 unsafe {
                     for (dst, src) in dst.chunks_exact_mut(6).zip(src.chunks_exact(6)) {
-                        let u0 = NeonStoreD::raw(vld1q_f64(src.as_ptr().cast()));
-                        let u1 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(1..).as_ptr().cast()));
-                        let u2 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(2..).as_ptr().cast()));
-                        let u3 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(3..).as_ptr().cast()));
-                        let u4 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(4..).as_ptr().cast()));
-                        let u5 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(5..).as_ptr().cast()));
+                        let u0 = NeonStoreD::from_complex_ref(src);
+                        let u1 = NeonStoreD::from_complex_ref(src.get_unchecked(1..));
+                        let u2 = NeonStoreD::from_complex_ref(src.get_unchecked(2..));
+                        let u3 = NeonStoreD::from_complex_ref(src.get_unchecked(3..));
+                        let u4 = NeonStoreD::from_complex_ref(src.get_unchecked(4..));
+                        let u5 = NeonStoreD::from_complex_ref(src.get_unchecked(5..));
 
                         let [y0, y1, y2, y3, y4, y5] = self.bf.exec([u0, u1, u2, u3, u4, u5]);
 
-                        vst1q_f64(dst.as_mut_ptr().cast(), y0.v);
-                        vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1.v);
-                        vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2.v);
-                        vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), y3.v);
-                        vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), y4.v);
-                        vst1q_f64(dst.get_unchecked_mut(5..).as_mut_ptr().cast(), y5.v);
+                        y0.write(dst);
+                        y1.write(dst.get_unchecked_mut(1..));
+                        y2.write(dst.get_unchecked_mut(2..));
+                        y3.write(dst.get_unchecked_mut(3..));
+                        y4.write(dst.get_unchecked_mut(4..));
+                        y5.write(dst.get_unchecked_mut(5..));
                     }
                 }
                 Ok(())
+            }
+
+            #[target_feature(enable = $features)]
+            fn execute_r2c(&self, src: &[f64], dst: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                if !src.len().is_multiple_of(6) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        src.len(),
+                        self.real_length(),
+                    ));
+                }
+                if !dst.len().is_multiple_of(4) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        dst.len(),
+                        self.complex_length(),
+                    ));
+                }
+                if src.len() / 6 != dst.len() / 4 {
+                    return Err(ZaftError::InvalidSamplesCount(src.len() / 6, dst.len() / 4));
+                }
+
+                unsafe {
+                    for (dst, src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(6)) {
+                        let [u0, u1] = NeonStoreD::load(src).to_complex();
+                        let [u2, u3] = NeonStoreD::load(src.get_unchecked(2..)).to_complex();
+                        let [u4, u5] = NeonStoreD::load(src.get_unchecked(4..)).to_complex();
+
+                        let [y0, y1, y2, y3, _, _] = self.bf.exec([u0, u1, u2, u3, u4, u5]);
+
+                        y0.write(dst);
+                        y1.write(dst.get_unchecked_mut(1..));
+                        y2.write(dst.get_unchecked_mut(2..));
+                        y3.write(dst.get_unchecked_mut(3..));
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl R2CFftExecutor<f64> for $name {
+            fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_r2c(input, output) }
+            }
+
+            #[inline]
+            fn real_length(&self) -> usize {
+                6
+            }
+
+            #[inline]
+            fn complex_length(&self) -> usize {
+                4
             }
         }
 
@@ -292,8 +341,8 @@ macro_rules! gen_bf6f {
                         rows0 = self.bf2.exec(rows0);
                         rows1 = self.bf2.exec(rows1);
 
-                        rows0[1] = NeonStoreF::mul_by_complex(rows0[1], self.twiddles[0]);
-                        rows1[1] = NeonStoreF::mul_by_complex(rows1[1], self.twiddles[1]);
+                        rows0[1] = NeonStoreF::$mul(rows0[1], self.twiddles[0]);
+                        rows1[1] = NeonStoreF::$mul(rows1[1], self.twiddles[1]);
 
                         let transposed = transpose_f32x2_3x2(rows0, rows1);
 
@@ -305,6 +354,71 @@ macro_rules! gen_bf6f {
                     }
                 }
                 Ok(())
+            }
+
+            #[target_feature(enable = $features)]
+            fn execute_r2c(&self, src: &[f32], dst: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                if !src.len().is_multiple_of(6) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        src.len(),
+                        self.real_length(),
+                    ));
+                }
+                if !dst.len().is_multiple_of(4) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        dst.len(),
+                        self.complex_length(),
+                    ));
+                }
+                if src.len() / 6 != dst.len() / 4 {
+                    return Err(ZaftError::InvalidSamplesCount(src.len() / 6, dst.len() / 4));
+                }
+
+                unsafe {
+                    let mut rows0: [NeonStoreF; 2] = [NeonStoreF::default(); 2];
+                    let mut rows1: [NeonStoreF; 2] = [NeonStoreF::default(); 2];
+
+                    for (dst, src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(6)) {
+                        // columns
+                        for i in 0..2 {
+                            let [u0, u1] =
+                                NeonStoreF::load3(src.get_unchecked(i * 3..)).to_complex();
+                            rows0[i] = u0;
+                            rows1[i] = u1;
+                        }
+
+                        rows0 = self.bf2.exec(rows0);
+                        rows1 = self.bf2.exec(rows1);
+
+                        rows0[1] = NeonStoreF::$mul(rows0[1], self.twiddles[0]);
+                        rows1[1] = NeonStoreF::$mul(rows1[1], self.twiddles[1]);
+
+                        let transposed = transpose_f32x2_3x2(rows0, rows1);
+
+                        let q0 = self.bf3.exec(transposed);
+
+                        for i in 0..2 {
+                            q0[i].write(dst.get_unchecked_mut(i * 2..));
+                        }
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl R2CFftExecutor<f32> for $name {
+            fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_r2c(input, output) }
+            }
+
+            #[inline]
+            fn real_length(&self) -> usize {
+                6
+            }
+
+            #[inline]
+            fn complex_length(&self) -> usize {
+                4
             }
         }
 
@@ -338,9 +452,13 @@ mod test {
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
     #[cfg(feature = "fcma")]
     use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
     test_butterfly!(test_neon_butterfly6, f32, NeonButterfly6f, 6, 1e-5);
     test_butterfly!(test_neon_butterfly6_f64, f64, NeonButterfly6d, 6, 1e-7);
+
+    test_r2c_butterfly!(test_neon_r2c_butterfly6, f32, NeonButterfly6f, 6, 1e-5);
+    test_r2c_butterfly!(test_neon_r2c_butterfly6d, f64, NeonButterfly6d, 6, 1e-5);
 
     #[cfg(feature = "fcma")]
     test_fcma_butterfly!(test_fcma_butterfly6, f32, NeonFcmaButterfly6f, 6, 1e-5);

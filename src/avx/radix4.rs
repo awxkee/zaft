@@ -33,13 +33,11 @@ use crate::avx::util::{
     create_avx4_twiddles, shuffle,
 };
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::radix4::Radix4Twiddles;
-use crate::traits::FftTrigonometry;
 use crate::util::reverse_bits;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
 use std::sync::Arc;
 
@@ -201,8 +199,7 @@ pub(crate) fn avx_bitreversed_transpose_f64_radix4(
     }
 }
 
-impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + Float + 'static>
-    AvxFmaRadix4<T>
+impl<T: FftSample + Radix4Twiddles> AvxFmaRadix4<T>
 where
     f64: AsPrimitive<T>,
 {

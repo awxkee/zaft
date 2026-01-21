@@ -431,7 +431,7 @@ macro_rules! test_fcma_butterfly {
                 let mut ref_src = src.to_vec();
                 reference_forward.execute(&mut ref_src).unwrap();
 
-                radix_forward.execute(&mut input).unwrap();
+                FftExecutor::execute(&radix_forward, &mut input).unwrap();
 
                 input
                     .iter()
@@ -454,7 +454,7 @@ macro_rules! test_fcma_butterfly {
                         );
                     });
 
-                radix_inverse.execute(&mut input).unwrap();
+                FftExecutor::execute(&radix_inverse, &mut input).unwrap();
 
                 let val = $scale as $data_type;
                 input = input.iter().map(|&x| x * (1.0 / val)).collect();

@@ -29,7 +29,7 @@
 use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::neon::mixed::{NeonStoreD, NeonStoreF};
 use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
@@ -267,6 +267,84 @@ macro_rules! gen_bf15f {
                 }
                 Ok(())
             }
+
+            #[target_feature(enable = $features)]
+            fn execute_r2c(&self, src: &[f32], dst: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                if !src.len().is_multiple_of(15) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        src.len(),
+                        self.real_length(),
+                    ));
+                }
+                if !dst.len().is_multiple_of(8) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        dst.len(),
+                        self.complex_length(),
+                    ));
+                }
+                if src.len() / 15 != dst.len() / 8 {
+                    return Err(ZaftError::InvalidSamplesCount(
+                        src.len() / 15,
+                        dst.len() / 8,
+                    ));
+                }
+
+                unsafe {
+                    let mut rows0: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
+                    let mut rows1: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
+                    let mut rows2: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
+
+                    for (chunk, dst) in src.chunks_exact(15).zip(dst.chunks_exact_mut(8)) {
+                        // columns
+                        for i in 0..3 {
+                            let q0 = NeonStoreF::load(chunk.get_unchecked(i * 5..));
+                            let q1 = NeonStoreF::load1(chunk.get_unchecked(i * 5 + 4..));
+                            let [v0, v1] = q0.to_complex();
+                            rows0[i] = v0;
+                            rows1[i] = v1;
+                            rows2[i] = q1;
+                        }
+
+                        rows0 = self.bf3.exec(rows0);
+                        rows1 = self.bf3.exec(rows1);
+                        rows2 = self.bf3.exec(rows2);
+
+                        for i in 1..3 {
+                            rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
+                            rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i - 1 + 2]);
+                            rows2[i] = NeonStoreF::$mul(rows2[i], self.twiddles[i - 1 + 4]);
+                        }
+
+                        let transposed = transpose_f32x2_5x3(rows0, rows1, rows2);
+
+                        let q0 = self.bf5.exec(transposed.0);
+                        let q1 = self.bf5.exec(transposed.1);
+
+                        for i in 0..2 {
+                            q0[i].write(dst.get_unchecked_mut(i * 3..));
+                            q1[i].write_lo(dst.get_unchecked_mut(i * 3 + 2..));
+                        }
+
+                        q0[2].write(dst.get_unchecked_mut(6..));
+                    }
+                }
+                Ok(())
+            }
+        }
+
+        impl R2CFftExecutor<f32> for $name {
+            fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                unsafe { self.execute_r2c(input, output) }
+            }
+            #[inline]
+            fn real_length(&self) -> usize {
+                15
+            }
+
+            #[inline]
+            fn complex_length(&self) -> usize {
+                8
+            }
         }
     };
 }
@@ -293,7 +371,9 @@ mod tests {
     use crate::butterflies::test_butterfly;
     #[cfg(feature = "fcma")]
     use crate::neon::butterflies::test_fcma_butterfly;
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_neon_r2c_butterfly15, f32, NeonButterfly15f, 15, 1e-5);
     test_butterfly!(test_neon_butterfly15, f32, NeonButterfly15f, 15, 1e-5);
     #[cfg(feature = "fcma")]
     test_fcma_butterfly!(test_fcma_butterfly15, f32, NeonFcmaButterfly15f, 15, 1e-5);

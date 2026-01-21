@@ -331,7 +331,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    // check_power_group(c, 70, "70".to_string());
+    check_power_group(c, 1803, "1803".to_string());
+    check_power_group(c, 901, "901".to_string());
     check_power_groups(c, 63, "63".to_string());
     // check_power_group(c, 1920, "Full HD".to_string());
     // check_power_group(c, 1000, "power 10".to_string());

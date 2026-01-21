@@ -27,13 +27,14 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::mla::fmla;
-use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -44,7 +45,7 @@ pub(crate) struct Butterfly3<T> {
 }
 
 #[allow(unused)]
-impl<T: Default + Clone + 'static + Copy + FftTrigonometry + Float> Butterfly3<T>
+impl<T: FftSample> Butterfly3<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -57,16 +58,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for Butterfly3<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly3<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -119,16 +111,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutorOutOfPlace<T> for Butterfly3<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly3<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -176,18 +159,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly3<T>
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly3<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -196,11 +168,102 @@ where
     }
 }
 
+impl<T: FftSample> Butterfly3<T>
+where
+    f64: AsPrimitive<T>,
+{
+    pub(crate) fn r_exec(&self, data: &[T; 3]) -> [Complex<T>; 2] {
+        let a = data[0];
+        let b = data[1];
+        let c = data[2];
+
+        let w1 = b + c;
+        let w2 = b - c;
+        let x0 = w1 + a;
+        let x1 = fmla(w1, -T::HALF, a);
+
+        [
+            Complex::new(x0, T::zero()),
+            Complex::new(x1, w2 * -T::SQRT_3_OVER_2),
+        ]
+    }
+}
+
+impl<T: FftSample> Butterfly3<T>
+where
+    f64: AsPrimitive<T>,
+{
+    pub(crate) fn exec(&self, data: &[Complex<T>; 3]) -> [Complex<T>; 3] {
+        let u0 = data[0];
+        let u1 = data[1];
+        let u2 = data[2];
+
+        let xp = u1 + u2;
+        let xn = u1 - u2;
+        let sum = u0 + xp;
+
+        let w_1 = Complex {
+            re: fmla(self.twiddle.re, xp.re, u0.re),
+            im: fmla(self.twiddle.re, xp.im, u0.im),
+        };
+
+        let y0 = sum;
+        let y1 = Complex {
+            re: fmla(-self.twiddle.im, xn.im, w_1.re),
+            im: fmla(self.twiddle.im, xn.re, w_1.im),
+        };
+        let y2 = Complex {
+            re: fmla(self.twiddle.im, xn.im, w_1.re),
+            im: fmla(-self.twiddle.im, xn.re, w_1.im),
+        };
+        [y0, y1, y2]
+    }
+}
+
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly3<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(3) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.real_length(),
+            ));
+        }
+
+        if !output.len().is_multiple_of(2) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.complex_length(),
+            ));
+        }
+
+        for (real, complex) in input.chunks_exact(3).zip(output.chunks_exact_mut(2)) {
+            let [q0, q1] = self.r_exec((&real[..3]).try_into().unwrap());
+
+            complex[0] = q0;
+            complex[1] = q1;
+        }
+        Ok(())
+    }
+
+    fn real_length(&self) -> usize {
+        3
+    }
+
+    fn complex_length(&self) -> usize {
+        2
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly3, f32, Butterfly3, 3, 1e-5);
     test_butterfly!(test_butterfly3, f32, Butterfly3, 3, 1e-5);
     test_oof_butterfly!(test_oof_butterfly3, f32, Butterfly3, 3, 1e-5);
 }

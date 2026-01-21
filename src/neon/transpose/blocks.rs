@@ -29,6 +29,7 @@
 use crate::neon::mixed::{NeonStoreD, NeonStoreF};
 use crate::transpose::TransposeExecutor;
 use num_complex::Complex;
+use std::mem::MaybeUninit;
 
 // assumes that execution block is exactly divisible by executor
 pub(crate) fn transpose_fixed_block_executor2d<
@@ -233,7 +234,7 @@ pub(crate) fn transpose_height_block_executor2_f64<
 ) -> usize {
     let mut y = start_y;
     unsafe {
-        let mut store = [NeonStoreD::default(); Y_BLOCK_SIZE];
+        let mut store = [MaybeUninit::<NeonStoreD>::uninit(); Y_BLOCK_SIZE];
         while y + Y_BLOCK_SIZE <= height {
             let input_y = y;
 
@@ -248,11 +249,13 @@ pub(crate) fn transpose_height_block_executor2_f64<
                 let dst = output.get_unchecked_mut(y + output_stride * output_x..);
 
                 for i in 0..Y_BLOCK_SIZE {
-                    store[i] = NeonStoreD::from_complex_ref(src.get_unchecked(i * input_stride..));
+                    store[i] = MaybeUninit::new(NeonStoreD::from_complex_ref(
+                        src.get_unchecked(i * input_stride..),
+                    ));
                 }
 
                 for i in 0..Y_BLOCK_SIZE {
-                    store[i].write(dst.get_unchecked_mut(i..));
+                    store[i].assume_init().write(dst.get_unchecked_mut(i..));
                 }
 
                 x += 1;
@@ -282,13 +285,34 @@ macro_rules! define_transpose {
                 width: usize,
                 height: usize,
             ) {
+                self.transpose_strided(input, width, output, height, width, height);
+            }
+
+            fn transpose_strided(
+                &self,
+                input: &[Complex<$complex_type>],
+                input_stride: usize,
+                output: &mut [Complex<$complex_type>],
+                output_stride: usize,
+                width: usize,
+                height: usize,
+            ) {
                 use crate::neon::transpose::$rot_name;
                 transpose_fixed_block_executor2d::<
                     $complex_type,
                     $block_width,
                     $block_height,
                     Function<$complex_type>,
-                >(input, width, output, height, width, height, 0, $rot_name);
+                >(
+                    input,
+                    input_stride,
+                    output,
+                    output_stride,
+                    width,
+                    height,
+                    0,
+                    $rot_name,
+                );
             }
         }
     };
@@ -307,12 +331,33 @@ macro_rules! define_transpose_evenf {
                 width: usize,
                 height: usize,
             ) {
+                self.transpose_strided(input, width, output, height, width, height);
+            }
+
+            fn transpose_strided(
+                &self,
+                input: &[Complex<$complex_type>],
+                input_stride: usize,
+                output: &mut [Complex<$complex_type>],
+                output_stride: usize,
+                width: usize,
+                height: usize,
+            ) {
                 use crate::neon::transpose::$rot_name;
                 transpose_height_block_executor2_f32::<
                     $block_width,
                     $block_height,
                     FunctionEvenF<$block_height>,
-                >(input, width, output, height, width, height, 0, $rot_name);
+                >(
+                    input,
+                    input_stride,
+                    output,
+                    output_stride,
+                    width,
+                    height,
+                    0,
+                    $rot_name,
+                );
             }
         }
     };
@@ -331,6 +376,18 @@ macro_rules! define_transpose_oddf {
                 width: usize,
                 height: usize,
             ) {
+                self.transpose_strided(input, width, output, height, width, height);
+            }
+
+            fn transpose_strided(
+                &self,
+                input: &[Complex<$complex_type>],
+                input_stride: usize,
+                output: &mut [Complex<$complex_type>],
+                output_stride: usize,
+                width: usize,
+                height: usize,
+            ) {
                 use crate::neon::transpose::$rot_name;
                 const R: usize = $block_height + 1;
                 transpose_height_block_executor2_f32_odd::<
@@ -338,7 +395,16 @@ macro_rules! define_transpose_oddf {
                     $block_height,
                     R,
                     FunctionOddF<$block_height, R>,
-                >(input, width, output, height, width, height, 0, $rot_name);
+                >(
+                    input,
+                    input_stride,
+                    output,
+                    output_stride,
+                    width,
+                    height,
+                    0,
+                    $rot_name,
+                );
             }
         }
     };
@@ -357,8 +423,26 @@ macro_rules! define_transposed {
                 width: usize,
                 height: usize,
             ) {
+                self.transpose_strided(input, width, output, height, width, height);
+            }
+
+            fn transpose_strided(
+                &self,
+                input: &[Complex<$complex_type>],
+                input_stride: usize,
+                output: &mut [Complex<$complex_type>],
+                output_stride: usize,
+                width: usize,
+                height: usize,
+            ) {
                 transpose_height_block_executor2_f64::<$block_width, $block_height>(
-                    input, width, output, height, width, height, 0,
+                    input,
+                    input_stride,
+                    output,
+                    output_stride,
+                    width,
+                    height,
+                    0,
                 );
             }
         }

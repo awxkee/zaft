@@ -86,8 +86,7 @@ macro_rules! gen_bf36f {
                     for chunk in in_place.chunks_exact_mut(36) {
                         // Mixed Radix 6x6
                         for i in 0..6 {
-                            rows0[i] =
-                                NeonStoreF::load(chunk.get_unchecked(i * 6..).as_ptr().cast());
+                            rows0[i] = NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 6..));
                         }
                         rows0 = self.bf6_column.exec(rows0);
                         for i in 1..6 {
@@ -96,7 +95,7 @@ macro_rules! gen_bf36f {
 
                         for i in 0..6 {
                             rows1[i] =
-                                NeonStoreF::load(chunk.get_unchecked(i * 6 + 2..).as_ptr().cast());
+                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 6 + 2..));
                         }
                         rows1 = self.bf6_column.exec(rows1);
                         for i in 1..6 {
@@ -105,7 +104,7 @@ macro_rules! gen_bf36f {
 
                         for i in 0..6 {
                             rows2[i] =
-                                NeonStoreF::load(chunk.get_unchecked(i * 6 + 4..).as_ptr().cast());
+                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 6 + 4..));
                         }
                         rows2 = self.bf6_column.exec(rows2);
                         for i in 1..6 {
@@ -188,7 +187,7 @@ macro_rules! gen_bf36f {
                     for (dst, src) in dst.chunks_exact_mut(36).zip(src.chunks_exact(36)) {
                         // Mixed Radix 6x6
                         for i in 0..6 {
-                            rows0[i] = NeonStoreF::load(src.get_unchecked(i * 6..).as_ptr().cast());
+                            rows0[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 6..));
                         }
                         rows0 = self.bf6_column.exec(rows0);
                         for i in 1..6 {
@@ -196,8 +195,7 @@ macro_rules! gen_bf36f {
                         }
 
                         for i in 0..6 {
-                            rows1[i] =
-                                NeonStoreF::load(src.get_unchecked(i * 6 + 2..).as_ptr().cast());
+                            rows1[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 6 + 2..));
                         }
                         rows1 = self.bf6_column.exec(rows1);
                         for i in 1..6 {
@@ -205,8 +203,7 @@ macro_rules! gen_bf36f {
                         }
 
                         for i in 0..6 {
-                            rows2[i] =
-                                NeonStoreF::load(src.get_unchecked(i * 6 + 4..).as_ptr().cast());
+                            rows2[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 6 + 4..));
                         }
                         rows2 = self.bf6_column.exec(rows2);
                         for i in 1..6 {

@@ -26,14 +26,13 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::butterflies::Butterfly2;
 use crate::butterflies::fast_bf7::FastButterfly7;
 use crate::butterflies::short_butterflies::FastButterfly2;
-use crate::traits::FftTrigonometry;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
 
 #[allow(unused)]
 pub(crate) struct Butterfly14<T> {
@@ -43,7 +42,7 @@ pub(crate) struct Butterfly14<T> {
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static + Default> Butterfly14<T>
+impl<T: FftSample> Butterfly14<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -56,18 +55,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default,
-> FftExecutor<T> for Butterfly14<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly14<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -147,10 +135,91 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly14<T>
+where
+    f64: AsPrimitive<T>,
+{
+    #[inline]
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(14) {
+            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 14));
+        }
+        if !output.len().is_multiple_of(8) {
+            return Err(ZaftError::InvalidSizeMultiplier(output.len(), 8));
+        }
+        if input.len() / 14 != output.len() / 8 {
+            return Err(ZaftError::InvalidSamplesCount(
+                input.len() / 14,
+                output.len() / 8,
+            ));
+        }
+
+        for (chunk, complex) in input.chunks_exact(14).zip(output.chunks_exact_mut(8)) {
+            let u0 = Complex::new(chunk[0], T::zero());
+            let u1 = Complex::new(chunk[7], T::zero());
+
+            let u2 = Complex::new(chunk[8], T::zero());
+            let u3 = Complex::new(chunk[1], T::zero());
+
+            let u4 = Complex::new(chunk[2], T::zero());
+            let u5 = Complex::new(chunk[9], T::zero());
+
+            let u6 = Complex::new(chunk[10], T::zero());
+            let u7 = Complex::new(chunk[3], T::zero());
+
+            let u8 = Complex::new(chunk[4], T::zero());
+            let u9 = Complex::new(chunk[11], T::zero());
+
+            let u10 = Complex::new(chunk[12], T::zero());
+            let u11 = Complex::new(chunk[5], T::zero());
+
+            let u12 = Complex::new(chunk[6], T::zero());
+            let u13 = Complex::new(chunk[13], T::zero());
+
+            // Good-Thomas algorithm
+
+            // Inner 2-point butterflies
+            let [u0, u1] = Butterfly2::exec(&[u0, u1]);
+            let [u2, u3] = Butterfly2::exec(&[u2, u3]);
+            let [u4, u5] = Butterfly2::exec(&[u4, u5]);
+            let [u6, u7] = Butterfly2::exec(&[u6, u7]);
+            let [u8, u9] = Butterfly2::exec(&[u8, u9]);
+            let [u10, u11] = Butterfly2::exec(&[u10, u11]);
+            let [u12, u13] = Butterfly2::exec(&[u12, u13]);
+
+            // Outer 7-point butterflies
+            let (v0, v2, v4, v6, _, _, _) = self.bf7.exec(u0, u2, u4, u6, u8, u10, u12); // (v0, v1, v2, v3, v4, v5, v6)
+            let (v7, _, _, _, v1, v3, v5) = self.bf7.exec(u1, u3, u5, u7, u9, u11, u13); // (v7, v8, v9, v10, v11, v12, v13)
+
+            // // Map back to natural order
+            complex[0] = v0;
+            complex[1] = v1;
+            complex[2] = v2;
+            complex[3] = v3;
+            complex[4] = v4;
+            complex[5] = v5;
+            complex[6] = v6;
+            complex[7] = v7;
+        }
+        Ok(())
+    }
+
+    fn real_length(&self) -> usize {
+        14
+    }
+
+    #[inline]
+    fn complex_length(&self) -> usize {
+        8
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly14, f32, Butterfly14, 14, 1e-5);
     test_butterfly!(test_butterfly14, f32, Butterfly14, 14, 1e-5);
 }

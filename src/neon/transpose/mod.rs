@@ -46,6 +46,8 @@ mod f32x2_9x2;
 mod f64x2_2x2;
 mod f64x2_4x3;
 mod f64x2_4x4;
+mod transpose_real_d;
+mod transpose_real_s;
 
 pub(crate) use blocks::{
     NeonTranspose2x2F32, NeonTranspose2x2F64, NeonTranspose4x3F64, NeonTranspose4x4F32,
@@ -88,3 +90,5 @@ pub(crate) use f32x2_11x2::block_transpose_f32x2_11x2;
 pub(crate) use f64x2_2x2::{neon_transpose_f64x2_2x2, neon_transpose_f64x2_4x4_impl};
 pub(crate) use f64x2_4x3::block_transpose_f64x2_4x3;
 pub(crate) use f64x2_4x4::block_transpose_f64x2_4x4;
+pub(crate) use transpose_real_d::NeonTransposeDReal4x4;
+pub(crate) use transpose_real_s::NeonTransposeReal4x4;

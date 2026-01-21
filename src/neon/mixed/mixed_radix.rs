@@ -442,7 +442,7 @@ macro_rules! define_mixed_radix_neon_f {
                             let twiddle = &twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR..];
                             let output = NeonStoreF::mul_by_complex(
                                 output[i],
-                                NeonStoreF::load(twiddle.as_ptr().cast()),
+                                NeonStoreF::from_complex_ref(twiddle),
                             );
                             unsafe {
                                 output.write(scratch.get_unchecked_mut(index_base + len_per_row * i..))
@@ -631,7 +631,7 @@ macro_rules! define_mixed_radix_neon_f_fcma {
                             unsafe {
                                 let output = NeonStoreF::fcmul_fcma(
                                     output[i],
-                                    NeonStoreF::load(twiddle.as_ptr().cast()),
+                                    NeonStoreF::from_complex_ref(twiddle),
                                 );
                                 output.write(scratch.get_unchecked_mut(index_base + len_per_row * i..))
                             }
@@ -648,11 +648,9 @@ macro_rules! define_mixed_radix_neon_f_fcma {
                         let mut columns = [NeonStoreFh::default(); ROW_COUNT];
                         for i in 0..ROW_COUNT {
                             unsafe {
-                                columns[i] = NeonStoreFh::load(
+                                columns[i] = NeonStoreFh::from_complex(
                                     chunk
-                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                        .as_ptr()
-                                        .cast(),
+                                        .get_unchecked(partial_remainder_base + len_per_row * i)
                                 );
                             }
                         }

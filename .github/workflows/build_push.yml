@@ -99,6 +99,7 @@ jobs:
       - run: cargo fuzz run double_precision --no-default-features --features "${{ matrix.feature }}" -- -max_total_time=10
       - run: cargo fuzz run single_precision --no-default-features --features "${{ matrix.feature }}" -- -max_total_time=12
       - run: cargo fuzz run single_real_complex --no-default-features --features "${{ matrix.feature }}" -- -max_total_time=12
+      - run: cargo fuzz run double_real_complex --no-default-features --features "${{ matrix.feature }}" -- -max_total_time=12
 
   fuzz_x86_64:
     name: Fuzzing x86_64
@@ -113,3 +114,4 @@ jobs:
       - run: cargo fuzz run double_precision --no-default-features --features "${{ matrix.feature }}" -- -max_total_time=10
       - run: cargo fuzz run single_precision --no-default-features --features "${{ matrix.feature }}" -- -max_total_time=12
       - run: cargo fuzz run single_real_complex --no-default-features --features "${{ matrix.feature }}" -- -max_total_time=12
+      - run: cargo fuzz run double_real_complex --no-default-features --features "${{ matrix.feature }}" -- -max_total_time=12

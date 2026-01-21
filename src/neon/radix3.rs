@@ -27,19 +27,14 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::neon::transpose::{neon_transpose_f64x2_4x4_impl, transpose_f32x2_4x4};
 use crate::neon::util::{create_neon_twiddles, vfcmulq_f32, vfcmulq_f64};
 use crate::radix3::Radix3Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{compute_logarithm, compute_twiddle, is_power_of_three, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{compute_twiddle, int_logarithm, is_power_of_three, reverse_bits};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 #[inline]
@@ -102,7 +97,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix3(
     const WIDTH: usize = 3;
     const HEIGHT: usize = 3;
 
-    let rev_digits = compute_logarithm::<3>(width).unwrap();
+    let rev_digits = int_logarithm::<3>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -146,7 +141,7 @@ pub(crate) fn neon_bitreversed_transpose_f64_radix3(
     const WIDTH: usize = 3;
     const HEIGHT: usize = 3;
 
-    let rev_digits = compute_logarithm::<3>(width).unwrap();
+    let rev_digits = int_logarithm::<3>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -190,22 +185,7 @@ pub(crate) struct NeonRadix3<T> {
     base_len: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix3Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> NeonRadix3<T>
+impl<T: FftSample + Radix3Twiddles> NeonRadix3<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -215,7 +195,7 @@ where
             "Input length must be power of 3"
         );
 
-        let exponent = compute_logarithm::<3>(size).unwrap_or_else(|| {
+        let exponent = int_logarithm::<3>(size).unwrap_or_else(|| {
             panic!("Neon Fcma Radix3 length must be power of 3, but got {size}",)
         });
 

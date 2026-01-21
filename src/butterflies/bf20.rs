@@ -27,12 +27,10 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::butterflies::short_butterflies::{FastButterfly4, FastButterfly5};
-use crate::traits::FftTrigonometry;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
 
 #[allow(unused)]
 pub(crate) struct Butterfly20<T> {
@@ -43,7 +41,7 @@ pub(crate) struct Butterfly20<T> {
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static + Default> Butterfly20<T>
+impl<T: FftSample> Butterfly20<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -57,19 +55,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Butterfly20<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly20<T>
 where
     f64: AsPrimitive<T>,
 {

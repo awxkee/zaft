@@ -35,17 +35,12 @@ use crate::avx::util::{
     avx_bitreversed_transpose, create_avx4_twiddles,
 };
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::radix7::Radix7Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{compute_logarithm, compute_twiddle, is_power_of_seven, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{compute_twiddle, int_logarithm, is_power_of_seven, reverse_bits};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct AvxFmaRadix7<T> {
@@ -59,22 +54,7 @@ pub(crate) struct AvxFmaRadix7<T> {
     butterfly_length: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix7Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> AvxFmaRadix7<T>
+impl<T: FftSample + Radix7Twiddles> AvxFmaRadix7<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -84,7 +64,7 @@ where
             "Input length must be a power of 7"
         );
 
-        let log7 = compute_logarithm::<7>(size).unwrap();
+        let log7 = int_logarithm::<7>(size).unwrap();
         let butterfly = match log7 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly7(fft_direction)?,
@@ -504,7 +484,7 @@ pub(crate) fn avx_bitreversed_transpose_f32_radix7(
     const WIDTH: usize = 7;
     const HEIGHT: usize = 7;
 
-    let rev_digits = compute_logarithm::<7>(width).unwrap();
+    let rev_digits = int_logarithm::<7>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 

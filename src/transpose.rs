@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use num_complex::Complex;
+use num_traits::Zero;
 use std::marker::PhantomData;
 
 pub(crate) trait TransposeExecutor<T> {
@@ -37,6 +38,19 @@ pub(crate) trait TransposeExecutor<T> {
         width: usize,
         height: usize,
     );
+    fn transpose_strided(
+        &self,
+        input: &[Complex<T>],
+        input_stride: usize,
+        output: &mut [Complex<T>],
+        output_stride: usize,
+        width: usize,
+        height: usize,
+    );
+}
+
+pub(crate) trait TransposeExecutorReal<T> {
+    fn transpose(&self, input: &[T], output: &mut [Complex<T>], width: usize, height: usize);
 }
 
 pub(crate) trait TransposeFactory<T> {
@@ -44,6 +58,10 @@ pub(crate) trait TransposeFactory<T> {
         width: usize,
         height: usize,
     ) -> Box<dyn TransposeExecutor<T> + Send + Sync>;
+    fn transpose_strategy_real(
+        width: usize,
+        height: usize,
+    ) -> Box<dyn TransposeExecutorReal<T> + Send + Sync>;
 }
 
 impl TransposeFactory<f32> for f32 {
@@ -307,6 +325,36 @@ impl TransposeFactory<f32> for f32 {
             })
         }
     }
+
+    fn transpose_strategy_real(
+        _width: usize,
+        _height: usize,
+    ) -> Box<dyn TransposeExecutorReal<f32> + Send + Sync> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonTransposeReal4x4;
+            Box::new(NeonTransposeReal4x4 {})
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2") {
+                use crate::avx::AvxTransposeFReal4x4;
+                return Box::new(AvxTransposeFReal4x4 {});
+            }
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            if _width > 31 && _height > 31 {
+                use crate::transpose_arbitrary::TransposeArbitrary;
+                return Box::new(TransposeArbitrary {
+                    phantom_data: Default::default(),
+                });
+            }
+            Box::new(TransposeTiny {
+                phantom_data: Default::default(),
+            })
+        }
+    }
 }
 
 impl TransposeFactory<f64> for f64 {
@@ -316,7 +364,7 @@ impl TransposeFactory<f64> for f64 {
     ) -> Box<dyn TransposeExecutor<f64> + Send + Sync> {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
-            if std::arch::is_x86_feature_detected!("avx") {
+            if std::arch::is_x86_feature_detected!("avx2") {
                 if _height.is_multiple_of(16) {
                     use crate::avx::AvxTransposeNx16F64;
                     return Box::new(AvxTransposeNx16F64::default());
@@ -487,6 +535,36 @@ impl TransposeFactory<f64> for f64 {
             phantom_data: Default::default(),
         })
     }
+
+    fn transpose_strategy_real(
+        _width: usize,
+        _height: usize,
+    ) -> Box<dyn TransposeExecutorReal<f64> + Send + Sync> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonTransposeDReal4x4;
+            Box::new(NeonTransposeDReal4x4 {})
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2") {
+                use crate::avx::AvxTransposeDReal4x4;
+                return Box::new(AvxTransposeDReal4x4 {});
+            }
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            if _width > 31 && _height > 31 {
+                use crate::transpose_arbitrary::TransposeArbitrary;
+                return Box::new(TransposeArbitrary {
+                    phantom_data: Default::default(),
+                });
+            }
+            Box::new(TransposeTiny {
+                phantom_data: Default::default(),
+            })
+        }
+    }
 }
 
 struct TransposeTiny<T> {
@@ -508,6 +586,43 @@ impl<T: Copy> TransposeExecutor<T> for TransposeTiny<T> {
 
                 unsafe {
                     *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
+                }
+            }
+        }
+    }
+
+    fn transpose_strided(
+        &self,
+        input: &[Complex<T>],
+        input_stride: usize,
+        output: &mut [Complex<T>],
+        output_stride: usize,
+        width: usize,
+        height: usize,
+    ) {
+        for x in 0..width {
+            for y in 0..height {
+                let input_index = x + y * input_stride;
+                let output_index = y + x * output_stride;
+
+                unsafe {
+                    *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
+                }
+            }
+        }
+    }
+}
+
+impl<T: Copy + Zero> TransposeExecutorReal<T> for TransposeTiny<T> {
+    fn transpose(&self, input: &[T], output: &mut [Complex<T>], width: usize, height: usize) {
+        for x in 0..width {
+            for y in 0..height {
+                let input_index = x + y * width;
+                let output_index = y + x * height;
+
+                unsafe {
+                    *output.get_unchecked_mut(output_index) =
+                        Complex::new(*input.get_unchecked(input_index), T::zero());
                 }
             }
         }
@@ -925,10 +1040,19 @@ impl TransposeExecutor<f32> for NeonDefaultExecutorSingle {
         width: usize,
         height: usize,
     ) {
-        let mut y = 0usize;
+        self.transpose_strided(input, width, output, height, width, height);
+    }
 
-        let input_stride = width;
-        let output_stride = height;
+    fn transpose_strided(
+        &self,
+        input: &[Complex<f32>],
+        input_stride: usize,
+        output: &mut [Complex<f32>],
+        output_stride: usize,
+        width: usize,
+        height: usize,
+    ) {
+        let mut y = 0usize;
 
         y = transpose_executor::<f32, 4>(
             input,
@@ -976,10 +1100,19 @@ impl TransposeExecutor<f64> for NeonDefaultExecutorDouble {
         width: usize,
         height: usize,
     ) {
-        let mut y = 0usize;
+        self.transpose_strided(input, width, output, height, width, height);
+    }
 
-        let input_stride = width;
-        let output_stride = height;
+    fn transpose_strided(
+        &self,
+        input: &[Complex<f64>],
+        input_stride: usize,
+        output: &mut [Complex<f64>],
+        output_stride: usize,
+        width: usize,
+        height: usize,
+    ) {
+        let mut y = 0usize;
 
         y = transpose_executor::<f64, 2>(
             input,
@@ -1016,10 +1149,19 @@ impl TransposeExecutor<f32> for AvxDefaultExecutorSingle {
         width: usize,
         height: usize,
     ) {
-        let mut y = 0usize;
+        self.transpose_strided(input, width, output, height, width, height);
+    }
 
-        let input_stride = width;
-        let output_stride = height;
+    fn transpose_strided(
+        &self,
+        input: &[Complex<f32>],
+        input_stride: usize,
+        output: &mut [Complex<f32>],
+        output_stride: usize,
+        width: usize,
+        height: usize,
+    ) {
+        let mut y = 0usize;
 
         unsafe {
             y = transpose_executor2d::<f32, 8, 4>(
@@ -1122,10 +1264,19 @@ impl TransposeExecutor<f64> for AvxDefaultExecutorDouble {
         width: usize,
         height: usize,
     ) {
-        let mut y = 0usize;
+        self.transpose_strided(input, width, output, height, width, height);
+    }
 
-        let input_stride = width;
-        let output_stride = height;
+    fn transpose_strided(
+        &self,
+        input: &[Complex<f64>],
+        input_stride: usize,
+        output: &mut [Complex<f64>],
+        output_stride: usize,
+        width: usize,
+        height: usize,
+    ) {
+        let mut y = 0usize;
 
         unsafe {
             y = transpose_executor::<f64, 4>(

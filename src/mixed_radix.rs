@@ -27,15 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
-use crate::traits::FftTrigonometry;
-use crate::transpose::{TransposeExecutor, TransposeFactory};
+use crate::spectrum_arithmetic::ComplexArith;
+use crate::transpose::TransposeExecutor;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
-use std::fmt::Display;
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 pub(crate) struct MixedRadix<T> {
@@ -46,13 +43,12 @@ pub(crate) struct MixedRadix<T> {
     width: usize,
     height_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     height: usize,
-    spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
+    spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
     width_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
     height_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
 }
 
-impl<T: Copy + 'static + FftTrigonometry + Float + SpectrumOpsFactory<T> + TransposeFactory<T>>
-    MixedRadix<T>
+impl<T: FftSample> MixedRadix<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -75,8 +71,11 @@ where
 
         let len = width * height;
 
-        let mut twiddles = try_vec![Complex::zero(); len];
+        let twiddles_len = width * height - height;
+
+        let mut twiddles = try_vec![Complex::zero(); twiddles_len];
         for (x, row) in twiddles.chunks_exact_mut(height).enumerate() {
+            let x = x + 1;
             for (y, dst) in row.iter_mut().enumerate() {
                 *dst = compute_twiddle(x * y, len, direction);
             }
@@ -90,24 +89,14 @@ where
             height,
             direction,
             twiddles,
-            spectrum_ops: T::make_spectrum_arithmetic(),
+            spectrum_ops: T::make_complex_arith(),
             width_transpose: T::transpose_strategy(width, height),
             height_transpose: T::transpose_strategy(height, width),
         })
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Display,
-> FftExecutor<T> for MixedRadix<T>
+impl<T: FftSample> FftExecutor<T> for MixedRadix<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -130,7 +119,17 @@ where
             self.height_executor.execute(&mut scratch)?;
 
             // STEP 3: Apply twiddle factors
-            self.spectrum_ops.mul(&scratch, &self.twiddles, chunk);
+            for (dst, &src) in chunk[..self.height]
+                .iter_mut()
+                .zip(scratch[..self.height].iter())
+            {
+                *dst = src;
+            }
+            self.spectrum_ops.mul(
+                &scratch[self.height..],
+                &self.twiddles,
+                &mut chunk[self.height..],
+            );
 
             // STEP 4: transpose again
             self.height_transpose

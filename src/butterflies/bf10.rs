@@ -28,10 +28,11 @@
  */
 use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly5};
 use crate::traits::FftTrigonometry;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Float};
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -53,18 +54,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default,
-> FftExecutor<T> for Butterfly10<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly10<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -128,18 +118,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default,
-> FftExecutorOutOfPlace<T> for Butterfly10<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly10<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -198,20 +177,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly10<T>
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly10<T>
 where
     f64: AsPrimitive<T>,
 {

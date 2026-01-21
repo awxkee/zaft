@@ -28,11 +28,9 @@
  */
 
 use crate::butterflies::short_butterflies::{FastButterfly3, FastButterfly5};
-use crate::traits::FftTrigonometry;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 
 #[allow(unused)]
 pub(crate) struct Butterfly15<T> {
@@ -42,7 +40,7 @@ pub(crate) struct Butterfly15<T> {
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static + Default> Butterfly15<T>
+impl<T: FftSample> Butterfly15<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -55,19 +53,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Butterfly15<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly15<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -149,10 +135,90 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly15<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(15) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.real_length(),
+            ));
+        }
+        if !output.len().is_multiple_of(8) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                output.len(),
+                self.real_length(),
+            ));
+        }
+
+        for (chunk, complex) in input.chunks_exact(15).zip(output.chunks_exact_mut(8)) {
+            let u0 = Complex::from(chunk[0]);
+            let u1 = Complex::from(chunk[1]);
+            let u2 = Complex::from(chunk[2]);
+            let u3 = Complex::from(chunk[3]);
+
+            let u4 = Complex::from(chunk[4]);
+            let u5 = Complex::from(chunk[5]);
+            let u6 = Complex::from(chunk[6]);
+            let u7 = Complex::from(chunk[7]);
+
+            let u8 = Complex::from(chunk[8]);
+            let u9 = Complex::from(chunk[9]);
+            let u10 = Complex::from(chunk[10]);
+            let u11 = Complex::from(chunk[11]);
+            let u12 = Complex::from(chunk[12]);
+
+            let u13 = Complex::from(chunk[13]);
+            let u14 = Complex::from(chunk[14]);
+
+            // Size-5 FFTs down the columns of our reordered array
+            let mid0 = self.bf5.bf5(u0, u3, u6, u9, u12);
+            let mid1 = self.bf5.bf5(u5, u8, u11, u14, u2);
+            let mid2 = self.bf5.bf5(u10, u13, u1, u4, u7);
+
+            // Since this is good-thomas algorithm, we don't need twiddle factors
+
+            // Transpose the data and do size-3 FFTs down the columns
+            let (y0, _, y2) = self.bf3.butterfly3(mid0.0, mid1.0, mid2.0);
+            let (y3, y4, _) = self.bf3.butterfly3(mid0.1, mid1.1, mid2.1);
+            let (_, y7, y8) = self.bf3.butterfly3(mid0.2, mid1.2, mid2.2);
+            let (y9, _, _) = self.bf3.butterfly3(mid0.3, mid1.3, mid2.3);
+            let (_, y13, _) = self.bf3.butterfly3(mid0.4, mid1.4, mid2.4);
+
+            complex[0] = y0;
+            complex[1] = y4;
+
+            complex[2] = y8;
+            complex[3] = y9;
+
+            complex[4] = y13;
+            complex[5] = y2;
+
+            complex[6] = y3;
+            complex[7] = y7;
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn real_length(&self) -> usize {
+        15
+    }
+
+    #[inline]
+    fn complex_length(&self) -> usize {
+        8
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly15, f32, Butterfly15, 15, 1e-5);
     test_butterfly!(test_butterfly15, f32, Butterfly15, 15, 1e-5);
 }

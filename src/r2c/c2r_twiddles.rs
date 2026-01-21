@@ -26,11 +26,11 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::FftSample;
 use crate::r2c::R2CTwiddlesHandler;
 use num_complex::Complex;
-use num_traits::{AsPrimitive, MulAdd, Num};
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Neg, Sub};
 use std::sync::{Arc, OnceLock};
 
 pub(crate) trait C2RTwiddlesFactory<T> {
@@ -48,11 +48,6 @@ impl C2RTwiddlesFactory<f32> for f32 {
         Q.get_or_init(|| {
             #[cfg(all(target_arch = "aarch64", feature = "neon"))]
             {
-                #[cfg(feature = "fcma")]
-                if std::arch::is_aarch64_feature_detected!("fcma") {
-                    use crate::neon::C2RNeonFcmaTwiddles;
-                    return Arc::new(C2RNeonFcmaTwiddles {});
-                }
                 use crate::neon::C2RNeonTwiddles;
                 Arc::new(C2RNeonTwiddles {})
             }
@@ -81,11 +76,6 @@ impl C2RTwiddlesFactory<f64> for f64 {
         Q.get_or_init(|| {
             #[cfg(all(target_arch = "aarch64", feature = "neon"))]
             {
-                #[cfg(feature = "fcma")]
-                if std::arch::is_aarch64_feature_detected!("fcma") {
-                    use crate::neon::C2RNeonFcmaTwiddles;
-                    return Arc::new(C2RNeonFcmaTwiddles {});
-                }
                 use crate::neon::C2RNeonTwiddles;
                 Arc::new(C2RNeonTwiddles {})
             }
@@ -108,15 +98,7 @@ impl C2RTwiddlesFactory<f64> for f64 {
     }
 }
 
-impl<
-    T: Copy
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + MulAdd<T, Output = T>
-        + Neg<Output = T>
-        + 'static
-        + Num,
-> R2CTwiddlesHandler<T> for C2RHandler<T>
+impl<T: FftSample> R2CTwiddlesHandler<T> for C2RHandler<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -129,10 +111,6 @@ where
             let sum = *fft_input + *fft_input_rev;
             let diff = *fft_input - *fft_input_rev;
 
-            // Apply twiddle factors. Theoretically we'd have to load 2 separate twiddle factors here, one for the beginning
-            // and one for the end. But the twiddle factor for the end is just the twiddle for the beginning, with the
-            // real part negated. Since it's the same twiddle, we can factor out a ton of math ops and cut the number of
-            // multiplications in half.
             let twiddled_re_sum = sum.im * twiddle.re;
             let twiddled_im_sum = sum.im * twiddle.im;
             let twiddled_re_diff = diff.re * twiddle.re;
