@@ -28,44 +28,9 @@
  */
 
 use crate::avx::mixed::AvxStoreF;
+use crate::avx::util::shuffle;
 use num_complex::Complex;
 use std::arch::x86_64::*;
-
-#[inline]
-#[target_feature(enable = "avx2")]
-pub(crate) unsafe fn avx_transpose_u64_4x4_impl(
-    v0: (__m256i, __m256i, __m256i, __m256i),
-) -> (__m256i, __m256i, __m256i, __m256i) {
-    // Unpack 32 bit elements. Goes from:
-    // in[0]: 00 01 02 03
-    // in[1]: 10 11 12 13
-    // in[2]: 20 21 22 23
-    // in[3]: 30 31 32 33
-    // to:
-    // a0:    00 10 02 12
-    // a1:    20 30 22 32
-    // a2:    01 11 03 13
-    // a3:    21 31 23 33
-    let a0 = _mm256_unpacklo_epi64(v0.0, v0.1);
-    let a1 = _mm256_unpacklo_epi64(v0.2, v0.3);
-    let a2 = _mm256_unpackhi_epi64(v0.0, v0.1);
-    let a3 = _mm256_unpackhi_epi64(v0.2, v0.3);
-
-    // Unpack 64 bit elements resulting in:
-    // out[0]: 00 10 20 30
-    // out[1]: 01 11 21 31
-    // out[2]: 02 12 22 32
-    // out[3]: 03 13 23 33
-
-    const HI_HI: i32 = 0b0011_0001;
-    const LO_LO: i32 = 0b0010_0000;
-
-    let o0 = _mm256_permute2f128_si256::<LO_LO>(a0, a1);
-    let o1 = _mm256_permute2f128_si256::<LO_LO>(a2, a3);
-    let o2 = _mm256_permute2f128_si256::<HI_HI>(a0, a1);
-    let o3 = _mm256_permute2f128_si256::<HI_HI>(a2, a3);
-    (o0, o1, o2, o3)
-}
 
 #[inline]
 #[target_feature(enable = "avx")]
@@ -80,8 +45,8 @@ pub(crate) fn transpose_f32x2_4x2(v0: __m256, v1: __m256) -> (__m256, __m256) {
     // a1:    20 30 22 32
     // a2:    01 11 03 13
     // a3:    21 31 23 33
-    let a0 = _mm256_unpacklo_pd(_mm256_castps_pd(v0), _mm256_castps_pd(v1));
-    let a2 = _mm256_unpackhi_pd(_mm256_castps_pd(v0), _mm256_castps_pd(v1));
+    let a0 = _mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(v0, v1);
+    let a2 = _mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(v0, v1);
 
     // Unpack 64 bit elements resulting in:
     // out[0]: 00 10 20 30
@@ -92,8 +57,8 @@ pub(crate) fn transpose_f32x2_4x2(v0: __m256, v1: __m256) -> (__m256, __m256) {
     const HI_HI: i32 = 0b0011_0001;
     const LO_LO: i32 = 0b0010_0000;
 
-    let o0 = _mm256_castpd_ps(_mm256_permute2f128_pd::<LO_LO>(a0, a2));
-    let o2 = _mm256_castpd_ps(_mm256_permute2f128_pd::<HI_HI>(a0, a2));
+    let o0 = _mm256_permute2f128_ps::<LO_LO>(a0, a2);
+    let o2 = _mm256_permute2f128_ps::<HI_HI>(a0, a2);
     (o0, o2)
 }
 
@@ -115,10 +80,10 @@ pub(crate) fn avx_transpose_f32x2_4x4_impl(
     // a1:    20 30 22 32
     // a2:    01 11 03 13
     // a3:    21 31 23 33
-    let a0 = _mm256_unpacklo_pd(_mm256_castps_pd(v0), _mm256_castps_pd(v1));
-    let a1 = _mm256_unpacklo_pd(_mm256_castps_pd(v2), _mm256_castps_pd(v3));
-    let a2 = _mm256_unpackhi_pd(_mm256_castps_pd(v0), _mm256_castps_pd(v1));
-    let a3 = _mm256_unpackhi_pd(_mm256_castps_pd(v2), _mm256_castps_pd(v3));
+    let a0 = _mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(v0, v1);
+    let a1 = _mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(v2, v3);
+    let a2 = _mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(v0, v1);
+    let a3 = _mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(v2, v3);
 
     // Unpack 64 bit elements resulting in:
     // out[0]: 00 10 20 30
@@ -129,10 +94,10 @@ pub(crate) fn avx_transpose_f32x2_4x4_impl(
     const HI_HI: i32 = 0b0011_0001;
     const LO_LO: i32 = 0b0010_0000;
 
-    let o0 = _mm256_castpd_ps(_mm256_permute2f128_pd::<LO_LO>(a0, a1));
-    let o1 = _mm256_castpd_ps(_mm256_permute2f128_pd::<LO_LO>(a2, a3));
-    let o2 = _mm256_castpd_ps(_mm256_permute2f128_pd::<HI_HI>(a0, a1));
-    let o3 = _mm256_castpd_ps(_mm256_permute2f128_pd::<HI_HI>(a2, a3));
+    let o0 = _mm256_permute2f128_ps::<LO_LO>(a0, a1);
+    let o1 = _mm256_permute2f128_ps::<LO_LO>(a2, a3);
+    let o2 = _mm256_permute2f128_ps::<HI_HI>(a0, a1);
+    let o3 = _mm256_permute2f128_ps::<HI_HI>(a2, a3);
     (o0, o1, o2, o3)
 }
 
@@ -149,10 +114,10 @@ pub(crate) fn transpose_f32x2_4x4_aos(v: [AvxStoreF; 4]) -> [AvxStoreF; 4] {
     // a1:    20 30 22 32
     // a2:    01 11 03 13
     // a3:    21 31 23 33
-    let a0 = _mm256_unpacklo_pd(_mm256_castps_pd(v[0].v), _mm256_castps_pd(v[1].v));
-    let a1 = _mm256_unpacklo_pd(_mm256_castps_pd(v[2].v), _mm256_castps_pd(v[3].v));
-    let a2 = _mm256_unpackhi_pd(_mm256_castps_pd(v[0].v), _mm256_castps_pd(v[1].v));
-    let a3 = _mm256_unpackhi_pd(_mm256_castps_pd(v[2].v), _mm256_castps_pd(v[3].v));
+    let a0 = _mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(v[0].v, v[1].v);
+    let a1 = _mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(v[2].v, v[3].v);
+    let a2 = _mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(v[0].v, v[1].v);
+    let a3 = _mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(v[2].v, v[3].v);
 
     // Unpack 64 bit elements resulting in:
     // out[0]: 00 10 20 30
@@ -163,10 +128,10 @@ pub(crate) fn transpose_f32x2_4x4_aos(v: [AvxStoreF; 4]) -> [AvxStoreF; 4] {
     const HI_HI: i32 = 0b0011_0001;
     const LO_LO: i32 = 0b0010_0000;
 
-    let o0 = _mm256_castpd_ps(_mm256_permute2f128_pd::<LO_LO>(a0, a1));
-    let o1 = _mm256_castpd_ps(_mm256_permute2f128_pd::<LO_LO>(a2, a3));
-    let o2 = _mm256_castpd_ps(_mm256_permute2f128_pd::<HI_HI>(a0, a1));
-    let o3 = _mm256_castpd_ps(_mm256_permute2f128_pd::<HI_HI>(a2, a3));
+    let o0 = _mm256_permute2f128_ps::<LO_LO>(a0, a1);
+    let o1 = _mm256_permute2f128_ps::<LO_LO>(a2, a3);
+    let o2 = _mm256_permute2f128_ps::<HI_HI>(a0, a1);
+    let o3 = _mm256_permute2f128_ps::<HI_HI>(a2, a3);
     [
         AvxStoreF::raw(o0),
         AvxStoreF::raw(o1),
@@ -184,23 +149,23 @@ pub(crate) fn avx2_transpose_f32x2_4x4(
     dst_stride: usize,
 ) {
     unsafe {
-        let row0 = _mm256_loadu_si256(src.as_ptr().cast());
-        let row1 = _mm256_loadu_si256(src.get_unchecked(src_stride..).as_ptr().cast());
-        let row2 = _mm256_loadu_si256(src.get_unchecked(2 * src_stride..).as_ptr().cast());
-        let row3 = _mm256_loadu_si256(src.get_unchecked(3 * src_stride..).as_ptr().cast());
+        let row0 = _mm256_loadu_ps(src.as_ptr().cast());
+        let row1 = _mm256_loadu_ps(src.get_unchecked(src_stride..).as_ptr().cast());
+        let row2 = _mm256_loadu_ps(src.get_unchecked(2 * src_stride..).as_ptr().cast());
+        let row3 = _mm256_loadu_ps(src.get_unchecked(3 * src_stride..).as_ptr().cast());
 
-        let v0 = avx_transpose_u64_4x4_impl((row0, row1, row2, row3));
+        let v0 = avx_transpose_f32x2_4x4_impl(row0, row1, row2, row3);
 
-        _mm256_storeu_si256(dst.as_mut_ptr().cast(), v0.0);
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(dst.as_mut_ptr().cast(), v0.0);
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
             v0.1,
         );
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(2 * dst_stride..).as_mut_ptr().cast(),
             v0.2,
         );
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(3 * dst_stride..).as_mut_ptr().cast(),
             v0.3,
         );

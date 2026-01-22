@@ -28,8 +28,10 @@
  */
 #![allow(clippy::needless_range_loop)]
 mod bf10;
-mod bf100;
 mod bf100d;
+mod bf100f;
+mod bf108d;
+mod bf108f;
 mod bf11;
 mod bf12;
 mod bf121d;
@@ -47,18 +49,12 @@ mod bf16;
 mod bf169d;
 mod bf169f;
 mod bf17;
-#[cfg(feature = "fcma")]
-mod bf17_fcma;
 mod bf18;
 mod bf19;
-#[cfg(feature = "fcma")]
-mod bf19_fcma;
 mod bf2;
 mod bf20;
 mod bf21;
 mod bf23;
-#[cfg(feature = "fcma")]
-mod bf23_fcma;
 mod bf24;
 mod bf243d;
 mod bf243f;
@@ -67,14 +63,10 @@ mod bf256d;
 mod bf256f;
 mod bf27;
 mod bf29;
-#[cfg(feature = "fcma")]
-mod bf29_fcma;
 mod bf3;
 mod bf30d;
 mod bf30f;
 mod bf31d;
-#[cfg(feature = "fcma")]
-mod bf31d_fcma;
 mod bf31f;
 mod bf32;
 mod bf35d;
@@ -105,25 +97,21 @@ mod bf64d;
 mod bf64f;
 mod bf66d;
 mod bf66f;
-#[cfg(feature = "fcma")]
-mod bf6_fcma;
 mod bf7;
 mod bf70d;
 mod bf70f;
 mod bf72d;
 mod bf72f;
-#[cfg(feature = "fcma")]
-mod bf7_fcma;
+mod bf78d;
+mod bf78f;
 mod bf8;
 mod bf81d;
 mod bf81f;
-#[cfg(feature = "fcma")]
-mod bf8_fcma;
+mod bf88d;
+mod bf88f;
 mod bf9;
 mod bf96d;
 mod bf96f;
-#[cfg(feature = "fcma")]
-mod bf9_fcma;
 mod fast_bf5;
 mod fast_bf8;
 mod shared;
@@ -136,18 +124,18 @@ pub(crate) use bf4_fcma::NeonFcmaButterfly4;
 pub(crate) use bf5::NeonButterfly5;
 #[cfg(feature = "fcma")]
 pub(crate) use bf5_fcma::NeonFcmaButterfly5;
-pub(crate) use bf6::NeonButterfly6;
+pub(crate) use bf6::{NeonButterfly6d, NeonButterfly6f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf6_fcma::NeonFcmaButterfly6;
-pub(crate) use bf7::NeonButterfly7;
+pub(crate) use bf6::{NeonFcmaButterfly6d, NeonFcmaButterfly6f};
+pub(crate) use bf7::{NeonButterfly7d, NeonButterfly7f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf7_fcma::NeonFcmaButterfly7;
-pub(crate) use bf8::NeonButterfly8;
+pub(crate) use bf7::{NeonFcmaButterfly7d, NeonFcmaButterfly7f};
+pub(crate) use bf8::{NeonButterfly8d, NeonButterfly8f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf8_fcma::NeonFcmaButterfly8;
-pub(crate) use bf9::NeonButterfly9;
+pub(crate) use bf8::{NeonFcmaButterfly8d, NeonFcmaButterfly8f};
+pub(crate) use bf9::{NeonButterfly9d, NeonButterfly9f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf9_fcma::NeonFcmaButterfly9;
+pub(crate) use bf9::{NeonFcmaButterfly9d, NeonFcmaButterfly9f};
 pub(crate) use bf10::{NeonButterfly10d, NeonButterfly10f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf10::{NeonFcmaButterfly10d, NeonFcmaButterfly10f};
@@ -169,24 +157,24 @@ pub(crate) use bf15::{NeonFcmaButterfly15d, NeonFcmaButterfly15f};
 pub(crate) use bf16::{NeonButterfly16d, NeonButterfly16f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf16::{NeonFcmaButterfly16d, NeonFcmaButterfly16f};
-pub(crate) use bf17::NeonButterfly17;
+pub(crate) use bf17::{NeonButterfly17d, NeonButterfly17f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf17_fcma::NeonFcmaButterfly17;
+pub(crate) use bf17::{NeonFcmaButterfly17d, NeonFcmaButterfly17f};
 pub(crate) use bf18::{NeonButterfly18d, NeonButterfly18f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf18::{NeonFcmaButterfly18d, NeonFcmaButterfly18f};
-pub(crate) use bf19::NeonButterfly19;
+pub(crate) use bf19::{NeonButterfly19d, NeonButterfly19f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf19_fcma::NeonFcmaButterfly19;
+pub(crate) use bf19::{NeonFcmaButterfly19d, NeonFcmaButterfly19f};
 pub(crate) use bf20::{NeonButterfly20d, NeonButterfly20f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf20::{NeonFcmaButterfly20d, NeonFcmaButterfly20f};
 pub(crate) use bf21::{NeonButterfly21d, NeonButterfly21f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf21::{NeonFcmaButterfly21d, NeonFcmaButterfly21f};
-pub(crate) use bf23::NeonButterfly23;
+pub(crate) use bf23::{NeonButterfly23d, NeonButterfly23f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf23_fcma::NeonFcmaButterfly23;
+pub(crate) use bf23::{NeonFcmaButterfly23d, NeonFcmaButterfly23f};
 pub(crate) use bf24::{NeonButterfly24d, NeonButterfly24f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf24::{NeonFcmaButterfly24d, NeonFcmaButterfly24f};
@@ -196,11 +184,9 @@ pub(crate) use bf25::{NeonFcmaButterfly25d, NeonFcmaButterfly25f};
 pub(crate) use bf27::{NeonButterfly27d, NeonButterfly27f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf27::{NeonFcmaButterfly27d, NeonFcmaButterfly27f};
+pub(crate) use bf29::{NeonButterfly29d, NeonButterfly29f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf29::NeonFcmaButterfly29f;
-pub(crate) use bf29::{NeonButterfly29, NeonButterfly29f};
-#[cfg(feature = "fcma")]
-pub(crate) use bf29_fcma::NeonFcmaButterfly29;
+pub(crate) use bf29::{NeonFcmaButterfly29d, NeonFcmaButterfly29f};
 pub(crate) use bf30d::NeonButterfly30d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf30d::NeonFcmaButterfly30d;
@@ -209,7 +195,7 @@ pub(crate) use bf30f::NeonButterfly30f;
 pub(crate) use bf30f::NeonFcmaButterfly30f;
 pub(crate) use bf31d::NeonButterfly31d;
 #[cfg(feature = "fcma")]
-pub(crate) use bf31d_fcma::NeonFcmaButterfly31d;
+pub(crate) use bf31d::NeonFcmaButterfly31d;
 pub(crate) use bf31f::NeonButterfly31f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf31f::NeonFcmaButterfly31f;
@@ -288,24 +274,42 @@ pub(crate) use bf72d::NeonFcmaButterfly72d;
 pub(crate) use bf72f::NeonButterfly72f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf72f::NeonFcmaButterfly72f;
+pub(crate) use bf78d::NeonButterfly78d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf78d::NeonFcmaButterfly78d;
+pub(crate) use bf78f::NeonButterfly78f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf78f::NeonFcmaButterfly78f;
 pub(crate) use bf81d::NeonButterfly81d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf81d::NeonFcmaButterfly81d;
 pub(crate) use bf81f::NeonButterfly81f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf81f::NeonFcmaButterfly81f;
+pub(crate) use bf88d::NeonButterfly88d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf88d::NeonFcmaButterfly88d;
+pub(crate) use bf88f::NeonButterfly88f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf88f::NeonFcmaButterfly88f;
 pub(crate) use bf96d::NeonButterfly96d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf96d::NeonFcmaButterfly96d;
 pub(crate) use bf96f::NeonButterfly96f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf96f::NeonFcmaButterfly96f;
-pub(crate) use bf100::NeonButterfly100f;
-#[cfg(feature = "fcma")]
-pub(crate) use bf100::NeonFcmaButterfly100f;
 pub(crate) use bf100d::NeonButterfly100d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf100d::NeonFcmaButterfly100d;
+pub(crate) use bf100f::NeonButterfly100f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf100f::NeonFcmaButterfly100f;
+pub(crate) use bf108d::NeonButterfly108d;
+#[cfg(feature = "fcma")]
+pub(crate) use bf108d::NeonFcmaButterfly108d;
+pub(crate) use bf108f::NeonButterfly108f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf108f::NeonFcmaButterfly108f;
 pub(crate) use bf121d::NeonButterfly121d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf121d::NeonFcmaButterfly121d;
@@ -407,6 +411,9 @@ macro_rules! test_fcma_butterfly {
                 return;
             }
             use rand::Rng;
+            let radix_forward = $butterfly::new(FftDirection::Forward);
+            let radix_inverse = $butterfly::new(FftDirection::Inverse);
+            assert_eq!(radix_forward.length(), $scale);
             for i in 1..20 {
                 let val = $scale as usize;
                 let size = val * i;
@@ -424,9 +431,7 @@ macro_rules! test_fcma_butterfly {
                 let mut ref_src = src.to_vec();
                 reference_forward.execute(&mut ref_src).unwrap();
 
-                let radix_forward = $butterfly::new(FftDirection::Forward);
-                let radix_inverse = $butterfly::new(FftDirection::Inverse);
-                radix_forward.execute(&mut input).unwrap();
+                FftExecutor::execute(&radix_forward, &mut input).unwrap();
 
                 input
                     .iter()
@@ -449,7 +454,7 @@ macro_rules! test_fcma_butterfly {
                         );
                     });
 
-                radix_inverse.execute(&mut input).unwrap();
+                FftExecutor::execute(&radix_inverse, &mut input).unwrap();
 
                 let val = $scale as $data_type;
                 input = input.iter().map(|&x| x * (1.0 / val)).collect();

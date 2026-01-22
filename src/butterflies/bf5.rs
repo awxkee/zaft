@@ -29,10 +29,12 @@
 use crate::mla::fmla;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Float};
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -56,21 +58,12 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for Butterfly5<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly5<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.length() != 0 {
+        if !in_place.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -154,16 +147,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutorOutOfPlace<T> for Butterfly5<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly5<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -172,10 +156,10 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if src.len() % self.length() != 0 {
+        if !src.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % self.length() != 0 {
+        if !dst.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -247,18 +231,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly5<T>
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly5<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -267,11 +240,70 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly5<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(5) {
+            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 5));
+        }
+        if !output.len().is_multiple_of(3) {
+            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 3));
+        }
+
+        for (input, complex) in input.chunks_exact(5).zip(output.chunks_exact_mut(3)) {
+            let u0 = input[0];
+            let u1 = input[1];
+            let u2 = input[2];
+            let u3 = input[3];
+            let u4 = input[4];
+
+            // Radix-5 butterfly, R2C
+
+            let x14p = u1 + u4;
+            let x14n = u1 - u4;
+            let x23p = u2 + u3;
+            let x23n = u2 - u3;
+            let y0 = u0 + x14p + x23p;
+
+            let b14re_a = fmla(self.twiddle2.re, x23p, fmla(self.twiddle1.re, x14p, u0));
+            let b23re_a = fmla(self.twiddle1.re, x23p, fmla(self.twiddle2.re, x14p, u0));
+
+            let b23im_b = fmla(self.twiddle2.im, x14n, -self.twiddle1.im * x23n);
+            let b14im_b = fmla(self.twiddle1.im, x14n, self.twiddle2.im * x23n);
+
+            let y1 = Complex {
+                re: b14re_a,
+                im: b14im_b,
+            };
+            let y2 = Complex {
+                re: b23re_a,
+                im: b23im_b,
+            };
+
+            complex[0] = Complex::new(y0, T::zero());
+            complex[1] = y1;
+            complex[2] = y2;
+        }
+        Ok(())
+    }
+
+    fn complex_length(&self) -> usize {
+        3
+    }
+
+    fn real_length(&self) -> usize {
+        5
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
 
+    test_butterfly!(test_r2c_butterfly5, f32, Butterfly5, 5, 1e-5);
     test_butterfly!(test_butterfly5, f32, Butterfly5, 5, 1e-5);
     test_oof_butterfly!(test_oof_butterfly5, f32, Butterfly5, 5, 1e-5);
 }

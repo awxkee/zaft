@@ -28,16 +28,13 @@
  */
 use crate::complex_fma::c_mul_fast;
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::mla::fmla;
-use crate::traits::FftTrigonometry;
 use crate::util::{
     bitreversed_transpose, compute_twiddle, is_power_of_seven, radixn_floating_twiddles_from_base,
 };
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -89,16 +86,7 @@ impl Radix7Twiddles for f32 {
 }
 
 #[allow(dead_code)]
-impl<
-    T: Default
-        + Clone
-        + Radix7Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + AlgorithmFactory<T>,
-> Radix7<T>
+impl<T: FftSample + Radix7Twiddles> Radix7<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -122,23 +110,12 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Radix7<T>
+impl<T: FftSample> FftExecutor<T> for Radix7<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

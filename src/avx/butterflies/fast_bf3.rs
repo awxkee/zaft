@@ -94,7 +94,7 @@ impl AvxFastButterfly3<f64> {
         let sum = _mm256_add_pd(u0, xp);
 
         let w_1 = _mm256_fmadd_pd(self.twiddle_re, xp, u0);
-        let xn_rot = _mm256_permute_pd::<0b0101>(xn);
+        let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
 
         let y0 = sum;
         let y1 = _mm256_fmadd_pd(self.twiddle_im, xn_rot, w_1);

@@ -27,23 +27,18 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::neon::transpose::neon_transpose_f32x2_6x6;
 use crate::neon::util::{
     create_neon_twiddles, v_rotate90_f32, v_rotate90_f64, vfcmulq_f32, vfcmulq_f64,
 };
 use crate::radix5::Radix5Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
 use crate::util::{
-    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_five, reverse_bits,
+    bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_five, reverse_bits,
 };
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct NeonRadix5<T> {
@@ -56,22 +51,7 @@ pub(crate) struct NeonRadix5<T> {
     butterfly_length: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix5Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> NeonRadix5<T>
+impl<T: FftSample + Radix5Twiddles> NeonRadix5<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -81,7 +61,7 @@ where
             "Input length must be a power of 5"
         );
 
-        let log5 = compute_logarithm::<5>(size).unwrap();
+        let log5 = int_logarithm::<5>(size).unwrap();
         let butterfly = match log5 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly5(fft_direction)?,
@@ -109,7 +89,7 @@ where
 
 impl FftExecutor<f64> for NeonRadix5<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -262,7 +242,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix5(
     const WIDTH: usize = 5;
     const HEIGHT: usize = 5;
 
-    let rev_digits = compute_logarithm::<5>(width).unwrap();
+    let rev_digits = int_logarithm::<5>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -300,7 +280,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix5(
 
 impl FftExecutor<f32> for NeonRadix5<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

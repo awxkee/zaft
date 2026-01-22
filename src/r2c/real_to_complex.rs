@@ -27,14 +27,11 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::r2c::r2c_twiddles::{R2CTwiddlesFactory, R2CTwiddlesHandler};
-use crate::traits::FftTrigonometry;
+use crate::r2c::r2c_twiddles::R2CTwiddlesHandler;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
-use std::fmt::Debug;
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 pub trait R2CFftExecutor<T> {
@@ -69,17 +66,7 @@ pub(crate) struct R2CFftEvenInterceptor<T> {
     twiddles_handler: Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>,
 }
 
-impl<
-    T: Copy
-        + Clone
-        + FftTrigonometry
-        + Mul<T, Output = T>
-        + 'static
-        + Zero
-        + Num
-        + Float
-        + R2CTwiddlesFactory<T>,
-> R2CFftEvenInterceptor<T>
+impl<T: FftSample> R2CFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -99,7 +86,7 @@ where
             "Underlying interceptor must have a half-length of real values"
         );
 
-        let twiddles_count = if length % 4 == 0 {
+        let twiddles_count = if length.is_multiple_of(4) {
             length / 4
         } else {
             length / 4 + 1
@@ -118,25 +105,15 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Debug,
-> R2CFftExecutor<T> for R2CFftEvenInterceptor<T>
+impl<T: FftSample> R2CFftExecutor<T> for R2CFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if input.len() % self.length != 0 {
+        if !input.len().is_multiple_of(self.length) {
             return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
         }
-        if output.len() % self.complex_length != 0 {
+        if !output.len().is_multiple_of(self.complex_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 output.len(),
                 self.complex_length,
@@ -189,98 +166,6 @@ where
                 if let Some(center_element) = output.get_mut(output.len() / 2) {
                     center_element.im = -center_element.im;
                 }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn real_length(&self) -> usize {
-        self.length
-    }
-
-    fn complex_length(&self) -> usize {
-        self.complex_length
-    }
-}
-
-pub(crate) struct R2CFftOddInterceptor<T> {
-    intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
-    length: usize,
-    complex_length: usize,
-}
-
-impl<T: Copy + Clone + FftTrigonometry + Mul<T, Output = T> + 'static + Zero + Num + Float>
-    R2CFftOddInterceptor<T>
-where
-    f64: AsPrimitive<T>,
-{
-    pub(crate) fn install(
-        length: usize,
-        intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Self, ZaftError> {
-        assert_eq!(
-            intercept.direction(),
-            FftDirection::Forward,
-            "Complex to real fft must be inverse"
-        );
-        assert_ne!(length % 2, 0, "R2C must be even in even interceptor");
-        assert_eq!(
-            intercept.length(),
-            length,
-            "Underlying interceptor must have full length of real values"
-        );
-
-        Ok(Self {
-            intercept,
-            length,
-            complex_length: length / 2 + 1,
-        })
-    }
-}
-
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> R2CFftExecutor<T> for R2CFftOddInterceptor<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if input.len() % self.length != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
-        }
-        if output.len() % self.complex_length != 0 {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                output.len(),
-                self.complex_length,
-            ));
-        }
-
-        let mut scratch = try_vec![Complex::<T>::zero(); input.len()];
-
-        for (input, output) in input
-            .chunks_exact(self.length)
-            .zip(output.chunks_exact_mut(self.complex_length))
-        {
-            for (dst, input_pair) in output.iter_mut().zip(input.chunks_exact(2)) {
-                *dst = Complex::new(input_pair[0], input_pair[1]);
-            }
-
-            for (val, buf) in input.iter().zip(scratch.iter_mut()) {
-                *buf = Complex::new(*val, T::zero());
-            }
-            // FFT and store result in buffer_out
-            self.intercept.execute(&mut scratch)?;
-            output.copy_from_slice(&scratch[..self.complex_length()]);
-            if let Some(elem) = output.first_mut() {
-                elem.im = T::zero();
             }
         }
 

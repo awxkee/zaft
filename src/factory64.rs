@@ -285,9 +285,9 @@ impl AlgorithmFactory<f64> for f64 {
         make_composite_butterfly!(
             fft_direction,
             Butterfly6,
-            AvxButterfly6,
-            NeonButterfly6,
-            NeonFcmaButterfly6
+            AvxButterfly6d,
+            NeonButterfly6d,
+            NeonFcmaButterfly6d
         )
     }
 
@@ -298,8 +298,8 @@ impl AlgorithmFactory<f64> for f64 {
             fft_direction,
             Butterfly7,
             AvxButterfly7,
-            NeonButterfly7,
-            NeonFcmaButterfly7
+            NeonButterfly7d,
+            NeonFcmaButterfly7d
         )
     }
 
@@ -309,9 +309,9 @@ impl AlgorithmFactory<f64> for f64 {
         make_composite_butterfly!(
             fft_direction,
             Butterfly8,
-            AvxButterfly8,
-            NeonButterfly8,
-            NeonFcmaButterfly8
+            AvxButterfly8d,
+            NeonButterfly8d,
+            NeonFcmaButterfly8d
         )
     }
 
@@ -321,9 +321,9 @@ impl AlgorithmFactory<f64> for f64 {
         make_composite_butterfly!(
             fft_direction,
             Butterfly9,
-            AvxButterfly9,
-            NeonButterfly9,
-            NeonFcmaButterfly9
+            AvxButterfly9d,
+            NeonButterfly9d,
+            NeonFcmaButterfly9d
         )
     }
 
@@ -418,8 +418,8 @@ impl AlgorithmFactory<f64> for f64 {
             fft_direction,
             Butterfly17,
             AvxButterfly17,
-            NeonButterfly17,
-            NeonFcmaButterfly17
+            NeonButterfly17d,
+            NeonFcmaButterfly17d
         )
     }
 
@@ -442,8 +442,8 @@ impl AlgorithmFactory<f64> for f64 {
             fft_direction,
             Butterfly19,
             AvxButterfly19,
-            NeonButterfly19,
-            NeonFcmaButterfly19
+            NeonButterfly19d,
+            NeonFcmaButterfly19d
         )
     }
 
@@ -478,8 +478,8 @@ impl AlgorithmFactory<f64> for f64 {
             fft_direction,
             Butterfly23,
             AvxButterfly23,
-            NeonButterfly23,
-            NeonFcmaButterfly23
+            NeonButterfly23d,
+            NeonFcmaButterfly23d
         )
     }
 
@@ -526,8 +526,8 @@ impl AlgorithmFactory<f64> for f64 {
             fft_direction,
             Butterfly29,
             AvxButterfly29,
-            NeonButterfly29,
-            NeonFcmaButterfly29
+            NeonButterfly29d,
+            NeonFcmaButterfly29d
         )
     }
 
@@ -709,6 +709,18 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    fn butterfly78(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly78d,
+            NeonButterfly78d,
+            NeonFcmaButterfly78d
+        )
+    }
+
     fn butterfly81(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
@@ -718,6 +730,18 @@ impl AlgorithmFactory<f64> for f64 {
             AvxButterfly81d,
             NeonButterfly81d,
             NeonFcmaButterfly81d
+        )
+    }
+
+    fn butterfly88(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly88d,
+            NeonButterfly88d,
+            NeonFcmaButterfly88d
         )
     }
 
@@ -742,6 +766,18 @@ impl AlgorithmFactory<f64> for f64 {
             AvxButterfly100d,
             NeonButterfly100d,
             NeonFcmaButterfly100d
+        )
+    }
+
+    fn butterfly108(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly108d,
+            NeonButterfly108d,
+            NeonFcmaButterfly108d
         )
     }
 

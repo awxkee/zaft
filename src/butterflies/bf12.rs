@@ -28,17 +28,17 @@
  */
 use crate::butterflies::short_butterflies::{FastButterfly3, FastButterfly4};
 use crate::traits::FftTrigonometry;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
+use num_traits::{AsPrimitive, Float};
 use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
 
 #[allow(unused)]
 pub(crate) struct Butterfly12<T> {
     direction: FftDirection,
     phantom_data: PhantomData<T>,
     bf3: FastButterfly3<T>,
+    bf4: FastButterfly4<T>,
 }
 
 #[allow(unused)]
@@ -51,34 +51,22 @@ where
             direction: fft_direction,
             phantom_data: PhantomData,
             bf3: FastButterfly3::new(fft_direction),
+            bf4: FastButterfly4::new(fft_direction),
         }
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default,
-> FftExecutor<T> for Butterfly12<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly12<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.length() != 0 {
+        if !in_place.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
             ));
         }
-
-        let bf4 = FastButterfly4::new(self.direction);
 
         for chunk in in_place.chunks_exact_mut(12) {
             let u0 = chunk[0];
@@ -96,9 +84,9 @@ where
             let u10 = chunk[2];
             let u11 = chunk[5];
 
-            let (u0, u1, u2, u3) = bf4.butterfly4(u0, u1, u2, u3);
-            let (u4, u5, u6, u7) = bf4.butterfly4(u4, u5, u6, u7);
-            let (u8, u9, u10, u11) = bf4.butterfly4(u8, u9, u10, u11);
+            let (u0, u1, u2, u3) = self.bf4.butterfly4(u0, u1, u2, u3);
+            let (u4, u5, u6, u7) = self.bf4.butterfly4(u4, u5, u6, u7);
+            let (u8, u9, u10, u11) = self.bf4.butterfly4(u8, u9, u10, u11);
 
             let (v0, v4, v8) = self.bf3.butterfly3(u0, u4, u8); // (v0, v4, v8)
             let (v9, v1, v5) = self.bf3.butterfly3(u1, u5, u9); // (v9, v1, v5)
@@ -133,10 +121,78 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly12<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(12) {
+            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 12));
+        }
+        if !output.len().is_multiple_of(7) {
+            return Err(ZaftError::InvalidSizeMultiplier(output.len(), 7));
+        }
+        if input.len() / 12 != output.len() / 7 {
+            return Err(ZaftError::InvalidSamplesCount(
+                input.len() / 12,
+                output.len() / 7,
+            ));
+        }
+
+        for (chunk, complex) in input.chunks_exact(12).zip(output.chunks_exact_mut(7)) {
+            let u0 = Complex::new(chunk[0], T::zero());
+            let u1 = Complex::new(chunk[3], T::zero());
+            let u2 = Complex::new(chunk[6], T::zero());
+            let u3 = Complex::new(chunk[9], T::zero());
+
+            let u4 = Complex::new(chunk[4], T::zero());
+            let u5 = Complex::new(chunk[7], T::zero());
+            let u6 = Complex::new(chunk[10], T::zero());
+            let u7 = Complex::new(chunk[1], T::zero());
+
+            let u8 = Complex::new(chunk[8], T::zero());
+            let u9 = Complex::new(chunk[11], T::zero());
+            let u10 = Complex::new(chunk[2], T::zero());
+            let u11 = Complex::new(chunk[5], T::zero());
+
+            let (u0, u1, u2, u3) = self.bf4.butterfly4(u0, u1, u2, u3);
+            let (u4, u5, u6, u7) = self.bf4.butterfly4(u4, u5, u6, u7);
+            let (u8, u9, u10, u11) = self.bf4.butterfly4(u8, u9, u10, u11);
+
+            let (v0, v4, _) = self.bf3.butterfly3(u0, u4, u8); // (v0, v4, v8)
+            let (_, v1, v5) = self.bf3.butterfly3(u1, u5, u9); // (v9, v1, v5)
+            let (v6, _, v2) = self.bf3.butterfly3(u2, u6, u10); // (v6, v10, v2)
+            let (v3, _, _) = self.bf3.butterfly3(u3, u7, u11); // (v3, v7, v11)
+
+            complex[0] = v0;
+            complex[1] = v1;
+            complex[2] = v2;
+            complex[3] = v3;
+
+            complex[4] = v4;
+            complex[5] = v5;
+            complex[6] = v6;
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn real_length(&self) -> usize {
+        12
+    }
+
+    #[inline]
+    fn complex_length(&self) -> usize {
+        7
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
+    use crate::r2c::test_r2c_butterfly;
 
     test_butterfly!(test_butterfly12, f32, Butterfly12, 12, 1e-5);
+    test_r2c_butterfly!(test_r2c_butterfly12, f32, Butterfly12, 12, 1e-5);
 }

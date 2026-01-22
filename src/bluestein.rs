@@ -28,13 +28,13 @@
  */
 use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
-use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
+use crate::spectrum_arithmetic::ComplexArith;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
-use std::ops::{Add, Mul, Neg, Rem, Sub};
+use num_traits::{AsPrimitive, Float, Zero};
+use std::ops::Rem;
 use std::sync::Arc;
 
 pub(crate) struct BluesteinFft<T> {
@@ -43,10 +43,10 @@ pub(crate) struct BluesteinFft<T> {
     twiddles: Vec<Complex<T>>,
     execution_length: usize,
     direction: FftDirection,
-    spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
+    spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
 }
 
-fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
+pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
     destination: &mut [Complex<T>],
     direction: FftDirection,
 ) where
@@ -77,17 +77,7 @@ fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
     }
 }
 
-impl<
-    T: Copy
-        + Default
-        + Clone
-        + FftTrigonometry
-        + Float
-        + Zero
-        + Default
-        + SpectrumOpsFactory<T>
-        + 'static,
-> BluesteinFft<T>
+impl<T: FftSample> BluesteinFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -104,7 +94,6 @@ where
             convolve_fft_len
         );
 
-        // when computing FFTs, we're going to run our inner multiply pairwise by some precomputed data, then run an inverse inner FFT. We need to precompute that inner data here
         let inner_fft_scale = (1f64 / convolve_fft_len as f64).as_();
         let direction = convolve_fft.direction();
         assert_eq!(
@@ -112,7 +101,6 @@ where
             "Convolve FFT may not go with other direction"
         );
 
-        // Compute twiddle factors that we'll run our inner FFT on
         let mut convolve_fft_twiddles = try_vec![Complex::zero(); convolve_fft_len];
         make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse());
 
@@ -137,26 +125,17 @@ where
             twiddles,
             execution_length: size,
             direction,
-            spectrum_ops: T::make_spectrum_arithmetic(),
+            spectrum_ops: T::make_complex_arith(),
         })
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for BluesteinFft<T>
+impl<T: FftSample> FftExecutor<T> for BluesteinFft<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

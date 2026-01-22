@@ -104,13 +104,21 @@ macro_rules! gen_bf72f {
 
                             let transposed = transpose_2x8(rows);
 
-                            for i in 0..4 {
-                                transposed[i * 2]
-                                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
-                                transposed[i * 2 + 1].write_uninit(
-                                    scratch.get_unchecked_mut((k * 2 + 1) * 8 + i * 2..),
-                                );
-                            }
+                            transposed[0].write_uninit(scratch.get_unchecked_mut(k * 2 * 8..));
+                            transposed[1]
+                                .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 8..));
+
+                            transposed[2].write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + 2..));
+                            transposed[3]
+                                .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 8 + 2..));
+
+                            transposed[4].write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + 4..));
+                            transposed[5]
+                                .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 8 + 4..));
+
+                            transposed[6].write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + 6..));
+                            transposed[7]
+                                .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 8 + 6..));
                         }
 
                         {
@@ -128,10 +136,10 @@ macro_rules! gen_bf72f {
 
                             let transposed = transpose_2x8(rows);
 
-                            for i in 0..4 {
-                                transposed[i * 2]
-                                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
-                            }
+                            transposed[0].write_uninit(scratch.get_unchecked_mut(k * 2 * 8..));
+                            transposed[2].write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + 2..));
+                            transposed[4].write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + 4..));
+                            transposed[6].write_uninit(scratch.get_unchecked_mut(k * 2 * 8 + 6..));
                         }
 
                         // rows

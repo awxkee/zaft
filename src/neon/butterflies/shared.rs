@@ -519,3 +519,42 @@ impl NeonFcmaRotate90F {
         vcaddq_rot90_f32(vdupq_n_f32(0.), values)
     }
 }
+
+pub(crate) struct NeonRotate90D {
+    sign: float64x2_t,
+}
+
+impl NeonRotate90D {
+    pub(crate) fn new() -> Self {
+        Self {
+            sign: unsafe { vld1q_f64([-0.0, 0.0].as_ptr()) },
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn rot(&self, values: float64x2_t) -> float64x2_t {
+        unsafe {
+            let temp = vextq_f64::<1>(values, values);
+            vreinterpretq_f64_u64(veorq_u64(
+                vreinterpretq_u64_f64(temp),
+                vreinterpretq_u64_f64(self.sign),
+            ))
+        }
+    }
+}
+
+#[cfg(feature = "fcma")]
+pub(crate) struct NeonFcmaRotate90D {}
+
+#[cfg(feature = "fcma")]
+impl NeonFcmaRotate90D {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rot(&self, values: float64x2_t) -> float64x2_t {
+        vcaddq_rot90_f64(vdupq_n_f64(0.), values)
+    }
+}

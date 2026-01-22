@@ -29,7 +29,10 @@
 use crate::avx::butterflies::{AvxButterfly, gen_butterfly_twiddles_interleaved_columns_f32};
 use crate::avx::mixed::{AvxStoreF, ColumnButterfly8f};
 use crate::avx::transpose::avx_transpose_f32x2_4x4_impl;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, R2CFftExecutor,
+    ZaftError,
+};
 use num_complex::Complex;
 use std::arch::x86_64::*;
 use std::sync::Arc;
@@ -72,8 +75,8 @@ impl AvxButterfly32f {
 
 impl AvxButterfly32f {
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 32 != 0 {
+    fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        if !in_place.len().is_multiple_of(32) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -125,15 +128,15 @@ impl AvxButterfly32f {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_out_of_place_f32(
+    fn execute_out_of_place_f32(
         &self,
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 32 != 0 {
+        if !src.len().is_multiple_of(32) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 32 != 0 {
+        if !dst.len().is_multiple_of(32) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -180,6 +183,83 @@ impl AvxButterfly32f {
         }
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_r2c(&self, src: &[f32], dst: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        if !src.len().is_multiple_of(32) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                src.len(),
+                self.real_length(),
+            ));
+        }
+        if !dst.len().is_multiple_of(17) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                dst.len(),
+                self.complex_length(),
+            ));
+        }
+        if src.len() / 32 != dst.len() / 17 {
+            return Err(ZaftError::InvalidSamplesCount(
+                src.len() / 32,
+                dst.len() / 17,
+            ));
+        }
+
+        unsafe {
+            let mut rows0 = [AvxStoreF::zero(); 4];
+            let mut rows1 = [AvxStoreF::zero(); 4];
+            for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
+                for r in 0..4 {
+                    let [u0, u1] = AvxStoreF::load(src.get_unchecked(8 * r..)).to_complex();
+                    rows0[r] = u0;
+                    rows1[r] = u1;
+                }
+
+                let mut mid0 = AvxButterfly::qbutterfly4_f32(
+                    rows0,
+                    _mm256_castpd_ps(self.bf8_column.rotate.rot_flag),
+                );
+                let mut mid1 = AvxButterfly::qbutterfly4_f32(
+                    rows1,
+                    _mm256_castpd_ps(self.bf8_column.rotate.rot_flag),
+                );
+
+                // apply twiddle factors
+                for r in 1..4 {
+                    mid0[r] =
+                        AvxStoreF::mul_by_complex(mid0[r], *self.twiddles.get_unchecked(2 * r - 2));
+                    mid1[r] =
+                        AvxStoreF::mul_by_complex(mid1[r], *self.twiddles.get_unchecked(2 * r - 1));
+                }
+
+                // Transpose our 8x4 array to an 4x8 array
+                let transposed = transpose_8x4_to_4x8_f32(mid0, mid1);
+
+                let output_rows = self.bf8_column.exec(transposed);
+
+                output_rows[0].write(dst);
+                output_rows[1].write(dst.get_unchecked_mut(4..));
+                output_rows[2].write(dst.get_unchecked_mut(8..));
+                output_rows[3].write(dst.get_unchecked_mut(12..));
+                output_rows[4].write_lo1(dst.get_unchecked_mut(16..));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl R2CFftExecutor<f32> for AvxButterfly32f {
+    fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_r2c(input, output) }
+    }
+
+    fn real_length(&self) -> usize {
+        32
+    }
+
+    fn complex_length(&self) -> usize {
+        17
+    }
 }
 
 impl FftExecutor<f32> for AvxButterfly32f {
@@ -215,7 +295,11 @@ impl CompositeFftExecutor<f32> for AvxButterfly32f {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
+    use crate::avx::butterflies::{
+        test_avx_butterfly, test_oof_avx_butterfly, test_r2c_avx_butterfly,
+    };
+
+    test_r2c_avx_butterfly!(test_avx_r2c_butterfly32, f32, AvxButterfly32f, 32, 1e-5);
 
     test_avx_butterfly!(test_avx_butterfly32, f32, AvxButterfly32f, 32, 1e-5);
     test_oof_avx_butterfly!(test_oof_avx_butterfly32, f32, AvxButterfly32f, 32, 1e-5);

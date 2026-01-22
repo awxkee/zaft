@@ -27,21 +27,16 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::neon::radix3::{
     neon_bitreversed_transpose_f32_radix3, neon_bitreversed_transpose_f64_radix3,
 };
 use crate::neon::util::{create_neon_twiddles, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix3::Radix3Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{compute_logarithm, compute_twiddle, is_power_of_three};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{compute_twiddle, int_logarithm, is_power_of_three};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct NeonFcmaRadix3<T> {
@@ -54,22 +49,7 @@ pub(crate) struct NeonFcmaRadix3<T> {
     base_len: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix3Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> NeonFcmaRadix3<T>
+impl<T: FftSample + Radix3Twiddles> NeonFcmaRadix3<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -79,7 +59,7 @@ where
             "Neon Fcma Radix3 length must be power of 3"
         );
 
-        let exponent = compute_logarithm::<3>(size).unwrap_or_else(|| {
+        let exponent = int_logarithm::<3>(size).unwrap_or_else(|| {
             panic!("Neon Fcma Radix3 length must be power of 3, but got {size}",)
         });
 
@@ -114,7 +94,7 @@ where
 impl NeonFcmaRadix3<f64> {
     #[target_feature(enable = "fcma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -263,7 +243,7 @@ impl FftExecutor<f64> for NeonFcmaRadix3<f64> {
 impl NeonFcmaRadix3<f32> {
     #[target_feature(enable = "fcma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

@@ -32,11 +32,11 @@ use std::arch::x86_64::*;
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn transpose_u64_2x2_impl(v0: (__m128i, __m128i)) -> (__m128i, __m128i) {
-    let l = _mm_unpacklo_epi64(v0.0, v0.1);
-    let h = _mm_unpackhi_epi64(v0.0, v0.1);
+pub(crate) unsafe fn transpose_u64_2x2_impl(v0: __m128, v1: __m128) -> (__m128, __m128) {
+    let l = _mm_shuffle_pd::<0b00>(_mm_castps_pd(v0), _mm_castps_pd(v1));
+    let h = _mm_shuffle_pd::<0b11>(_mm_castps_pd(v0), _mm_castps_pd(v1));
 
-    (l, h)
+    (_mm_castpd_ps(l), _mm_castpd_ps(h))
 }
 
 #[inline]
@@ -48,13 +48,13 @@ pub(crate) fn avx_transpose_f32x2_2x2(
     dst_stride: usize,
 ) {
     unsafe {
-        let row0 = _mm_loadu_si128(src.as_ptr().cast());
-        let row1 = _mm_loadu_si128(src.get_unchecked(src_stride..).as_ptr().cast());
+        let row0 = _mm_loadu_ps(src.as_ptr().cast());
+        let row1 = _mm_loadu_ps(src.get_unchecked(src_stride..).as_ptr().cast());
 
-        let v0 = transpose_u64_2x2_impl((row0, row1));
+        let v0 = transpose_u64_2x2_impl(row0, row1);
 
-        _mm_storeu_si128(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), v0.0);
-        _mm_storeu_si128(
+        _mm_storeu_ps(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), v0.0);
+        _mm_storeu_ps(
             dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
             v0.1,
         );
@@ -64,11 +64,11 @@ pub(crate) fn avx_transpose_f32x2_2x2(
 #[inline]
 #[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f32_2x2_impl(v0: (__m256, __m256)) -> (__m256, __m256) {
-    let l = _mm_unpacklo_pd(
+    let l = _mm_shuffle_pd::<0b00>(
         _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
         _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
     );
-    let h = _mm_unpackhi_pd(
+    let h = _mm_shuffle_pd::<0b11>(
         _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
         _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
     );

@@ -29,18 +29,27 @@
 
 mod c2r;
 mod c2r_twiddles;
+mod factory_d;
+mod factory_f;
+mod mixed_radix_r2c_odd;
 mod r2c_twiddles;
+mod real_factory;
 mod real_to_complex;
+mod rfft_bluestein;
+mod rfft_raders;
+mod strategy;
 
 use crate::ZaftError;
 pub use c2r::C2RFftExecutor;
 pub(crate) use c2r::{C2RFftEvenInterceptor, C2RFftOddInterceptor};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
-pub(crate) use r2c_twiddles::R2CTwiddlesHandler;
+pub(crate) use r2c_twiddles::{R2CTwiddlesFactory, R2CTwiddlesHandler};
+pub(crate) use real_factory::R2cAlgorithmFactory;
+pub(crate) use real_to_complex::R2CFftEvenInterceptor;
 pub use real_to_complex::R2CFftExecutor;
-pub(crate) use real_to_complex::{R2CFftEvenInterceptor, R2CFftOddInterceptor};
 use std::marker::PhantomData;
+pub(crate) use strategy::strategy_r2c;
 
 pub(crate) struct OneSizedRealFft<T> {
     pub(crate) phantom_data: PhantomData<T>,
@@ -96,13 +105,74 @@ impl<T: Copy + 'static> C2RFftExecutor<T> for OneSizedRealFft<T> {
 }
 
 #[cfg(test)]
+macro_rules! test_r2c_butterfly {
+    ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
+        #[test]
+        fn $method_name() {
+            use rand::Rng;
+            let radix_forward = $butterfly::new(FftDirection::Forward);
+            assert_eq!(radix_forward.real_length(), $scale);
+            assert_eq!(radix_forward.complex_length(), $scale / 2 + 1);
+            for i in 1..20 {
+                let val = $scale as usize;
+                let size = val * i;
+                let mut input = vec![$data_type::default(); size];
+                for z in input.iter_mut() {
+                    *z = rand::rng().random();
+                }
+                let src = input.to_vec();
+                use crate::dft::Dft;
+                use crate::{FftDirection, FftExecutor};
+                let reference_forward = Dft::new($scale, FftDirection::Forward).unwrap();
+
+                let mut ref_src = src.iter().map(|x| Complex::new(*x, 0.)).collect::<Vec<_>>();
+                reference_forward.execute(&mut ref_src).unwrap();
+
+                let mut output = vec![Complex::<$data_type>::default(); ($scale / 2 + 1) * i];
+
+                R2CFftExecutor::execute(&radix_forward, &input, &mut output).unwrap();
+
+                let ref_src = ref_src
+                    .chunks_exact($scale)
+                    .flat_map(|x| (&x[..$scale / 2 + 1]).to_vec())
+                    .collect::<Vec<_>>();
+
+                output
+                    .iter()
+                    .zip(ref_src.iter())
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < $tol,
+                            "a_re {} != b_re {} for size {} at {idx}",
+                            a.re,
+                            b.re,
+                            size
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < $tol,
+                            "a_im {} != b_im {} for size {} at {idx}",
+                            a.im,
+                            b.im,
+                            size
+                        );
+                    });
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+pub(crate) use test_r2c_butterfly;
+
+#[cfg(test)]
 mod tests {
     use crate::*;
     use rand::Rng;
 
     #[test]
     fn test_r2c_and_c2r() {
-        for i in 1..60 {
+        for i in 1..180 {
             let data = (0..i)
                 .map(|_| {
                     Complex::<f32>::new(
@@ -145,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_r2c_and_c2r_f64() {
-        for i in 1..60 {
+        for i in 1..128 {
             let data = (0..i)
                 .map(|_| {
                     Complex::<f64>::new(

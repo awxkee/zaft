@@ -30,15 +30,13 @@ use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
 use crate::neon::util::{conj_f64, conjq_f32};
 use crate::prime_factors::{PrimeFactors, primitive_root};
-use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
-use crate::traits::FftTrigonometry;
+use crate::spectrum_arithmetic::ComplexArith;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_integer::Integer;
-use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
+use num_traits::{AsPrimitive, Zero};
 use std::arch::aarch64::*;
-use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 pub(crate) struct NeonRadersFft<T> {
@@ -48,7 +46,7 @@ pub(crate) struct NeonRadersFft<T> {
     direction: FftDirection,
     input_indices: Vec<u32>,
     output_indices: Vec<u32>,
-    spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
+    spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
 }
 
 pub(crate) trait RadersIndicer<T> {
@@ -313,17 +311,7 @@ impl RadersIndicer<f64> for f64 {
     }
 }
 
-impl<
-    T: Copy
-        + Default
-        + Clone
-        + FftTrigonometry
-        + Float
-        + Zero
-        + Default
-        + SpectrumOpsFactory<T>
-        + 'static,
-> NeonRadersFft<T>
+impl<T: FftSample> NeonRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -391,27 +379,17 @@ where
             direction: fft_direction,
             input_indices,
             output_indices,
-            spectrum_ops: T::make_spectrum_arithmetic(),
+            spectrum_ops: T::make_complex_arith(),
         })
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + RadersIndicer<T>,
-> FftExecutor<T> for NeonRadersFft<T>
+impl<T: FftSample + RadersIndicer<T>> FftExecutor<T> for NeonRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

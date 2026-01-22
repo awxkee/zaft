@@ -35,17 +35,12 @@ use crate::avx::util::{
     create_avx4_twiddles, shuffle,
 };
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::radix5::Radix5Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{compute_logarithm, compute_twiddle, is_power_of_five, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{compute_twiddle, int_logarithm, is_power_of_five, reverse_bits};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) struct AvxFmaRadix5<T> {
@@ -62,22 +57,7 @@ pub(crate) struct AvxFmaRadix5<T> {
     butterfly_length: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix5Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> AvxFmaRadix5<T>
+impl<T: FftSample + Radix5Twiddles> AvxFmaRadix5<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -87,7 +67,7 @@ where
             "Input length must be a power of 5"
         );
 
-        let log5 = compute_logarithm::<5>(size).unwrap();
+        let log5 = int_logarithm::<5>(size).unwrap();
         let butterfly = match log5 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly5(fft_direction)?,
@@ -163,7 +143,7 @@ pub(crate) fn avx_bitreversed_transpose_f64_radix5(
     const WIDTH: usize = 5;
     const HEIGHT: usize = 5;
 
-    let rev_digits = compute_logarithm::<5>(width).unwrap();
+    let rev_digits = int_logarithm::<5>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -228,7 +208,7 @@ pub(crate) fn avx_bitreversed_transpose_f64_radix5(
 impl AvxFmaRadix5<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -318,10 +298,14 @@ impl AvxFmaRadix5<f64> {
                             let temp_b1 = _mm256_fmadd_pd(tw2_im, x23n, temp_b1_1);
                             let temp_b2 = _mm256_fnmadd_pd(tw1_im, x23n, temp_b2_1);
 
-                            let temp_b1_rot =
-                                _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b1), rot_sign);
-                            let temp_b2_rot =
-                                _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b2), rot_sign);
+                            let temp_b1_rot = _mm256_xor_pd(
+                                _mm256_shuffle_pd::<0b0101>(temp_b1, temp_b1),
+                                rot_sign,
+                            );
+                            let temp_b2_rot = _mm256_xor_pd(
+                                _mm256_shuffle_pd::<0b0101>(temp_b2, temp_b2),
+                                rot_sign,
+                            );
 
                             let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
                             let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);
@@ -504,7 +488,7 @@ pub(crate) fn avx_bitreversed_transpose_f32_radix5(
     const WIDTH: usize = 5;
     const HEIGHT: usize = 5;
 
-    let rev_digits = compute_logarithm::<5>(width).unwrap();
+    let rev_digits = int_logarithm::<5>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -582,7 +566,7 @@ pub(crate) fn avx_bitreversed_transpose_f32_radix5(
 impl AvxFmaRadix5<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

@@ -26,23 +26,26 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly3};
-use crate::traits::FftTrigonometry;
+use crate::butterflies::Butterfly3;
+use crate::butterflies::short_butterflies::FastButterfly2;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) struct Butterfly6<T> {
     direction: FftDirection,
     twiddle: Complex<T>,
+    bf3: Butterfly3<T>,
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static> Butterfly6<T>
+impl<T: FftSample> Butterfly6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -50,35 +53,23 @@ where
         Butterfly6 {
             direction: fft_direction,
             twiddle: compute_twiddle(1, 3, fft_direction),
+            bf3: Butterfly3::new(fft_direction),
         }
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + FftTrigonometry
-        + Float
-        + Default,
-> FftExecutor<T> for Butterfly6<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly6<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.length() != 0 {
+        if !in_place.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
             ));
         }
 
-        let fast_butterfly3 = FastButterfly3::new(self.direction);
         let fast_butterfly2 = FastButterfly2::new(self.direction);
 
         for chunk in in_place.chunks_exact_mut(6) {
@@ -91,8 +82,8 @@ where
 
             // Radix-6 butterfly
 
-            let (t0, t2, t4) = fast_butterfly3.butterfly3(u0, u2, u4);
-            let (t1, t3, t5) = fast_butterfly3.butterfly3(u3, u5, u1);
+            let [t0, t2, t4] = self.bf3.exec(&[u0, u2, u4]);
+            let [t1, t3, t5] = self.bf3.exec(&[u3, u5, u1]);
             let (y0, y3) = fast_butterfly2.butterfly2(t0, t1);
             let (y4, y1) = fast_butterfly2.butterfly2(t2, t3);
             let (y2, y5) = fast_butterfly2.butterfly2(t4, t5);
@@ -117,19 +108,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + FftTrigonometry
-        + Float
-        + Default,
-> FftExecutorOutOfPlace<T> for Butterfly6<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -138,14 +117,13 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if src.len() % self.length() != 0 {
+        if !src.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % self.length() != 0 {
+        if !dst.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
-        let fast_butterfly3 = FastButterfly3::new(self.direction);
         let fast_butterfly2 = FastButterfly2::new(self.direction);
 
         for (dst, src) in dst.chunks_exact_mut(6).zip(src.chunks_exact(6)) {
@@ -158,8 +136,8 @@ where
 
             // Radix-6 butterfly
 
-            let (t0, t2, t4) = fast_butterfly3.butterfly3(u0, u2, u4);
-            let (t1, t3, t5) = fast_butterfly3.butterfly3(u3, u5, u1);
+            let [t0, t2, t4] = self.bf3.exec(&[u0, u2, u4]);
+            let [t1, t3, t5] = self.bf3.exec(&[u3, u5, u1]);
             let (y0, y3) = fast_butterfly2.butterfly2(t0, t1);
             let (y4, y1) = fast_butterfly2.butterfly2(t2, t3);
             let (y2, y5) = fast_butterfly2.butterfly2(t4, t5);
@@ -175,21 +153,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + FftTrigonometry
-        + Float
-        + Default
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly6<T>
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -198,11 +162,68 @@ where
     }
 }
 
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly6<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(self.real_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.real_length(),
+            ));
+        }
+        if !output.len().is_multiple_of(self.complex_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                output.len(),
+                self.complex_length(),
+            ));
+        }
+
+        let fast_butterfly2 = FastButterfly2::new(self.direction);
+
+        for (dst, src) in output.chunks_exact_mut(4).zip(input.chunks_exact(6)) {
+            let u0 = Complex::new(src[0], T::zero());
+            let u1 = Complex::new(src[1], T::zero());
+            let u2 = Complex::new(src[2], T::zero());
+            let u3 = Complex::new(src[3], T::zero());
+            let u4 = Complex::new(src[4], T::zero());
+            let u5 = Complex::new(src[5], T::zero());
+
+            // Radix-6 butterfly
+
+            let [t0, t2, t4] = self.bf3.exec(&[u0, u2, u4]);
+            let [t1, t3, t5] = self.bf3.exec(&[u3, u5, u1]);
+            let (y0, y3) = fast_butterfly2.butterfly2(t0, t1);
+            let (_, y1) = fast_butterfly2.butterfly2(t2, t3);
+            let (y2, _) = fast_butterfly2.butterfly2(t4, t5);
+
+            dst[0] = y0;
+            dst[1] = y1;
+            dst[2] = y2;
+            dst[3] = y3;
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn real_length(&self) -> usize {
+        6
+    }
+
+    #[inline]
+    fn complex_length(&self) -> usize {
+        4
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly6, f32, Butterfly6, 6, 1e-5);
     test_butterfly!(test_butterfly6, f32, Butterfly6, 6, 1e-5);
     test_oof_butterfly!(test_oof_butterfly6, f32, Butterfly6, 6, 1e-5);
 }

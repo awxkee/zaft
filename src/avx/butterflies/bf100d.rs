@@ -75,7 +75,7 @@ impl FftExecutor<f64> for AvxButterfly100d {
 impl AvxButterfly100d {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 100 != 0 {
+        if !in_place.len().is_multiple_of(100) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -152,10 +152,10 @@ impl AvxButterfly100d {
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 100 != 0 {
+        if !src.len().is_multiple_of(100) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 100 != 0 {
+        if !dst.len().is_multiple_of(100) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 

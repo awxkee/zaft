@@ -30,12 +30,13 @@ use crate::butterflies::fast_bf8::FastButterfly8;
 use crate::butterflies::rotate_90;
 use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly4};
 use crate::complex_fma::{c_mul_fast, c_mul_fast_conj};
-use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
+    R2CFftExecutor, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -49,7 +50,7 @@ pub(crate) struct Butterfly16<T> {
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static + Default> Butterfly16<T>
+impl<T: FftSample> Butterfly16<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -65,24 +66,12 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Butterfly16<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly16<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.length() != 0 {
+        if !in_place.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -177,19 +166,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutorOutOfPlace<T> for Butterfly16<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly16<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -198,10 +175,10 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if src.len() % self.length() != 0 {
+        if !src.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % self.length() != 0 {
+        if !dst.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -284,21 +261,105 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly16<T>
+impl<T: FftSample> R2CFftExecutor<T> for Butterfly16<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !input.len().is_multiple_of(self.real_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.real_length(),
+            ));
+        }
+        if !output.len().is_multiple_of(self.complex_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                input.len(),
+                self.complex_length(),
+            ));
+        }
+
+        let bf2 = FastButterfly2::new(self.direction);
+
+        for (dst, src) in output.chunks_exact_mut(9).zip(input.chunks_exact(16)) {
+            let u0 = Complex::new(src[0], T::zero());
+            let u1 = Complex::new(src[1], T::zero());
+            let u2 = Complex::new(src[2], T::zero());
+            let u3 = Complex::new(src[3], T::zero());
+
+            let u4 = Complex::new(src[4], T::zero());
+            let u5 = Complex::new(src[5], T::zero());
+            let u6 = Complex::new(src[6], T::zero());
+            let u7 = Complex::new(src[7], T::zero());
+
+            let u8 = Complex::new(src[8], T::zero());
+            let u9 = Complex::new(src[9], T::zero());
+            let u10 = Complex::new(src[10], T::zero());
+            let u11 = Complex::new(src[11], T::zero());
+            let u12 = Complex::new(src[12], T::zero());
+
+            let u13 = Complex::new(src[13], T::zero());
+            let u14 = Complex::new(src[14], T::zero());
+            let u15 = Complex::new(src[15], T::zero());
+
+            let evens = self.bf8.exec(u0, u2, u4, u6, u8, u10, u12, u14);
+
+            let mut odds_1 = self.bf4.butterfly4(u1, u5, u9, u13);
+            let mut odds_2 = self.bf4.butterfly4(u15, u3, u7, u11);
+
+            odds_1.1 = c_mul_fast(odds_1.1, self.twiddle1);
+            odds_2.1 = c_mul_fast_conj(odds_2.1, self.twiddle1);
+
+            odds_1.2 = c_mul_fast(odds_1.2, self.twiddle2);
+            odds_2.2 = c_mul_fast_conj(odds_2.2, self.twiddle2);
+
+            odds_1.3 = c_mul_fast(odds_1.3, self.twiddle3);
+            odds_2.3 = c_mul_fast_conj(odds_2.3, self.twiddle3);
+
+            // step 4: cross FFTs
+            let (o01, o02) = bf2.butterfly2(odds_1.0, odds_2.0);
+            odds_1.0 = o01;
+            odds_2.0 = o02;
+
+            let (o03, o04) = bf2.butterfly2(odds_1.1, odds_2.1);
+            odds_1.1 = o03;
+            odds_2.1 = o04;
+            let (o05, o06) = bf2.butterfly2(odds_1.2, odds_2.2);
+            odds_1.2 = o05;
+            odds_2.2 = o06;
+            let (o07, o08) = bf2.butterfly2(odds_1.3, odds_2.3);
+            odds_1.3 = o07;
+            odds_2.3 = o08;
+
+            // apply the butterfly 4 twiddle factor, which is just a rotation
+            odds_2.0 = rotate_90(odds_2.0, self.direction);
+            odds_2.1 = rotate_90(odds_2.1, self.direction);
+            odds_2.2 = rotate_90(odds_2.2, self.direction);
+            odds_2.3 = rotate_90(odds_2.3, self.direction);
+
+            dst[0] = evens.0 + odds_1.0;
+            dst[1] = evens.1 + odds_1.1;
+            dst[2] = evens.2 + odds_1.2;
+            dst[3] = evens.3 + odds_1.3;
+            dst[4] = evens.4 + odds_2.0;
+            dst[5] = evens.5 + odds_2.1;
+            dst[6] = evens.6 + odds_2.2;
+            dst[7] = evens.7 + odds_2.3;
+            dst[8] = evens.0 - odds_1.0;
+        }
+        Ok(())
+    }
+
+    fn complex_length(&self) -> usize {
+        9
+    }
+
+    fn real_length(&self) -> usize {
+        16
+    }
+}
+
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly16<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -311,7 +372,9 @@ where
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::r2c::test_r2c_butterfly;
 
+    test_r2c_butterfly!(test_r2c_butterfly16, f32, Butterfly16, 16, 1e-5);
     test_butterfly!(test_butterfly16, f32, Butterfly16, 16, 1e-5);
     test_oof_butterfly!(test_oof_butterfly16, f32, Butterfly16, 16, 1e-5);
 }

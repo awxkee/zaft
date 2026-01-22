@@ -29,7 +29,10 @@
 use crate::avx::butterflies::{AvxButterfly, gen_butterfly_twiddles_interleaved_columns_f64};
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly8d};
 use crate::avx::transpose::transpose_f64x2_2x2;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, R2CFftExecutor,
+    ZaftError,
+};
 use num_complex::Complex;
 use std::sync::Arc;
 
@@ -94,8 +97,8 @@ impl AvxButterfly32d {
 
 impl AvxButterfly32d {
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 32 != 0 {
+    fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        if !in_place.len().is_multiple_of(32) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -158,15 +161,15 @@ impl AvxButterfly32d {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_out_of_place_f64(
+    fn execute_out_of_place_f64(
         &self,
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 32 != 0 {
+        if !src.len().is_multiple_of(32) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 32 != 0 {
+        if !dst.len().is_multiple_of(32) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -223,6 +226,100 @@ impl AvxButterfly32d {
             Ok(())
         }
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_r2c(&self, src: &[f64], dst: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        if !src.len().is_multiple_of(32) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                src.len(),
+                self.real_length(),
+            ));
+        }
+        if !dst.len().is_multiple_of(17) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                dst.len(),
+                self.complex_length(),
+            ));
+        }
+        if src.len() / 32 != dst.len() / 17 {
+            return Err(ZaftError::InvalidSamplesCount(
+                src.len() / 32,
+                dst.len() / 17,
+            ));
+        }
+
+        unsafe {
+            let mut rows0 = [AvxStoreD::zero(); 4];
+            let mut rows1 = [AvxStoreD::zero(); 4];
+            for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
+                for r in 0..4 {
+                    let q = AvxStoreD::load(src.get_unchecked(8 * r..));
+                    let [v0, v1] = q.to_complex();
+                    rows0[r] = v0;
+                    rows1[r] = v1;
+                }
+                let mut mid0 =
+                    AvxButterfly::qbutterfly4_f64(rows0, self.bf8_column.rotate.rot_flag);
+                let mut mid1 =
+                    AvxButterfly::qbutterfly4_f64(rows1, self.bf8_column.rotate.rot_flag);
+                for r in 1..4 {
+                    mid0[r] =
+                        AvxStoreD::mul_by_complex(mid0[r], *self.twiddles.get_unchecked(4 * r - 4));
+                    mid1[r] =
+                        AvxStoreD::mul_by_complex(mid1[r], *self.twiddles.get_unchecked(4 * r - 3));
+                }
+
+                let mut rows2 = [AvxStoreD::zero(); 4];
+                let mut rows3 = [AvxStoreD::zero(); 4];
+                for r in 0..4 {
+                    let q = AvxStoreD::load(src.get_unchecked(8 * r + 4..));
+                    let [v0, v1] = q.to_complex();
+                    rows2[r] = v0;
+                    rows3[r] = v1;
+                }
+                let mut mid2 =
+                    AvxButterfly::qbutterfly4_f64(rows2, self.bf8_column.rotate.rot_flag);
+                let mut mid3 =
+                    AvxButterfly::qbutterfly4_f64(rows3, self.bf8_column.rotate.rot_flag);
+                for r in 1..4 {
+                    mid2[r] = AvxStoreD::mul_by_complex(mid2[r], self.twiddles[4 * r - 2]);
+                    mid3[r] = AvxStoreD::mul_by_complex(mid3[r], self.twiddles[4 * r - 1]);
+                }
+
+                // Transpose our 8x4 array to a 4x8 array
+                let (transposed0, transposed1) = transpose_8x4_to_4x8_f64(mid0, mid1, mid2, mid3);
+
+                // Do 4 butterfly 8's down columns of the transposed array
+                let output0 = self.bf8_column.exec(transposed0);
+                #[allow(clippy::needless_range_loop)]
+                for r in 0..4 {
+                    output0[r].write(dst.get_unchecked_mut(4 * r..));
+                }
+                output0[4].write_lo(dst.get_unchecked_mut(16..));
+                let output1 = self.bf8_column.exec(transposed1);
+                #[allow(clippy::needless_range_loop)]
+                for r in 0..4 {
+                    output1[r].write(dst.get_unchecked_mut(4 * r + 2..));
+                }
+            }
+
+            Ok(())
+        }
+    }
+}
+
+impl R2CFftExecutor<f64> for AvxButterfly32d {
+    fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_r2c(input, output) }
+    }
+
+    fn real_length(&self) -> usize {
+        32
+    }
+
+    fn complex_length(&self) -> usize {
+        17
+    }
 }
 
 impl FftExecutorOutOfPlace<f64> for AvxButterfly32d {
@@ -258,7 +355,11 @@ impl FftExecutor<f64> for AvxButterfly32d {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
+    use crate::avx::butterflies::{
+        test_avx_butterfly, test_oof_avx_butterfly, test_r2c_avx_butterfly,
+    };
+
+    test_r2c_avx_butterfly!(test_avx_r2c_butterfly32_f64, f64, AvxButterfly32d, 32, 1e-7);
 
     test_avx_butterfly!(test_avx_butterfly32_f64, f64, AvxButterfly32d, 32, 1e-7);
     test_oof_avx_butterfly!(test_oof_avx_butterfly32_f64, f64, AvxButterfly32d, 32, 1e-7);

@@ -31,6 +31,45 @@ use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 
+pub(crate) static ALWAYS_BLUESTEIN_1000: [usize; 63] = [
+    47, 53, 59, 61, 83, 103, 107, 149, 167, 173, 179, 223, 227, 233, 263, 269, 283, 317, 347, 359,
+    367, 383, 389, 431, 439, 461, 467, 479, 499, 503, 509, 557, 563, 569, 587, 619, 643, 647, 653,
+    659, 709, 719, 733, 739, 743, 787, 797, 821, 823, 827, 839, 853, 857, 863, 877, 887, 907, 941,
+    947, 971, 977, 983, 997,
+];
+pub(crate) static ALWAYS_BLUESTEIN_2000: [usize; 66] = [
+    1019, 1039, 1061, 1069, 1097, 1129, 1163, 1181, 1187, 1193, 1223, 1229, 1231, 1237, 1259, 1279,
+    1307, 1319, 1367, 1399, 1423, 1427, 1433, 1439, 1487, 1493, 1499, 1511, 1523, 1553, 1559, 1579,
+    1583, 1609, 1619, 1627, 1637, 1663, 1669, 1693, 1697, 1699, 1709, 1723, 1747, 1753, 1759, 1787,
+    1789, 1811, 1823, 1831, 1847, 1867, 1877, 1879, 1889, 1907, 1913, 1949, 1973, 1979, 1987, 1993,
+    1997, 1999,
+];
+pub(crate) static ALWAYS_BLUESTEIN_3000: [usize; 49] = [
+    2011, 2027, 2039, 2063, 2069, 2083, 2087, 2099, 2153, 2207, 2297, 2339, 2351, 2371, 2423, 2447,
+    2459, 2473, 2477, 2539, 2543, 2557, 2579, 2617, 2633, 2657, 2659, 2671, 2677, 2683, 2687, 2699,
+    2707, 2713, 2767, 2777, 2789, 2797, 2803, 2833, 2837, 2879, 2903, 2939, 2953, 2957, 2963, 2969,
+    2999,
+];
+pub(crate) static ALWAYS_BLUESTEIN_4000: [usize; 80] = [
+    3019, 3023, 3049, 3083, 3119, 3163, 3167, 3181, 3187, 3203, 3217, 3229, 3253, 3257, 3259, 3271,
+    3299, 3307, 3319, 3323, 3343, 3347, 3359, 3391, 3407, 3413, 3449, 3461, 3463, 3467, 3491, 3499,
+    3517, 3527, 3533, 3539, 3541, 3547, 3557, 3559, 3581, 3583, 3593, 3607, 3613, 3617, 3623, 3643,
+    3659, 3671, 3677, 3691, 3709, 3733, 3739, 3761, 3767, 3769, 3779, 3793, 3797, 3803, 3821, 3833,
+    3847, 3853, 3863, 3877, 3881, 3907, 3911, 3917, 3919, 3923, 3929, 3931, 3943, 3947, 3967, 3989,
+];
+pub(crate) static ALWAYS_BLUESTEIN_5000: [usize; 47] = [
+    4003, 4007, 4013, 4019, 4021, 4027, 4073, 4079, 4091, 4099, 4127, 4133, 4139, 4153, 4157, 4231,
+    4253, 4283, 4297, 4349, 4391, 4423, 4457, 4463, 4483, 4507, 4513, 4517, 4547, 4567, 4583, 4597,
+    4637, 4639, 4649, 4679, 4703, 4723, 4783, 4787, 4793, 4799, 4877, 4889, 4903, 4919, 4957,
+];
+pub(crate) static ALWAYS_BLUESTEIN_6000: [usize; 69] = [
+    5003, 5011, 5077, 5087, 5099, 5107, 5113, 5119, 5147, 5167, 5171, 5179, 5227, 5231, 5261, 5273,
+    5309, 5323, 5333, 5351, 5381, 5387, 5399, 5407, 5413, 5417, 5443, 5449, 5477, 5479, 5483, 5503,
+    5507, 5519, 5527, 5531, 5563, 5623, 5639, 5641, 5647, 5659, 5669, 5683, 5689, 5693, 5711, 5717,
+    5737, 5741, 5749, 5779, 5783, 5807, 5821, 5827, 5839, 5843, 5849, 5857, 5861, 5867, 5879, 5897,
+    5903, 5923, 5927, 5939, 5987,
+];
+
 // Digit-reversal permutation in base `radix`
 // pub(crate) fn digit_reverse_indices(n: usize, radix: usize) -> Result<Vec<usize>, ZaftError> {
 //     assert!(radix >= 2, "radix must be at least 2");
@@ -70,7 +109,7 @@ pub(crate) fn is_power_of_three(n: u64) -> bool {
     }
     let mut i = n;
     while i > 1 {
-        if i % 3 != 0 {
+        if !i.is_multiple_of(3) {
             return false;
         }
         i /= 3;
@@ -122,7 +161,7 @@ pub(crate) fn is_power_of_five(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 5 == 0 {
+    while n.is_multiple_of(5) {
         n /= 5;
     }
     n == 1
@@ -146,7 +185,7 @@ pub(crate) fn is_power_of_six(n: u64) -> bool {
     if n < 1 {
         return false;
     }
-    while n % 6 == 0 {
+    while n.is_multiple_of(6) {
         n /= 6;
     }
     n == 1
@@ -157,7 +196,7 @@ pub(crate) fn is_power_of_seven(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 7 == 0 {
+    while n.is_multiple_of(7) {
         n /= 7;
     }
     n == 1
@@ -168,7 +207,7 @@ pub(crate) fn is_power_of_ten(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 10 == 0 {
+    while n.is_multiple_of(10) {
         n /= 10;
     }
     n == 1
@@ -179,7 +218,7 @@ pub(crate) fn is_power_of_eleven(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 11 == 0 {
+    while n.is_multiple_of(11) {
         n /= 11;
     }
     n == 1
@@ -190,7 +229,7 @@ pub(crate) fn is_power_of_thirteen(n: u64) -> bool {
     if n == 0 {
         return false;
     }
-    while n % 13 == 0 {
+    while n.is_multiple_of(13) {
         n /= 13;
     }
     n == 1
@@ -275,7 +314,7 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
     }
 
     // Let's make sure the arguments are ok
-    assert!(D > 1 && input.len() % height == 0 && input.len() == output.len());
+    assert!(D > 1 && input.len().is_multiple_of(height) && input.len() == output.len());
 
     let strided_width = width / D;
     let rev_digits = if D.is_power_of_two() {
@@ -283,10 +322,10 @@ pub(crate) fn bitreversed_transpose<T: Copy, const D: usize>(
         let d_bits = D.trailing_zeros();
 
         // verify that width is a power of d
-        assert!(width_bits % d_bits == 0);
+        assert!(width_bits.is_multiple_of(d_bits));
         width_bits / d_bits
     } else {
-        compute_logarithm::<D>(width).unwrap()
+        int_logarithm::<D>(width).unwrap()
     };
 
     if strided_width == 0 {
@@ -397,7 +436,7 @@ pub(crate) fn reverse_bits<const D: usize>(value: usize, rev_digits: u32) -> usi
 }
 
 // computes `n` such that `D ^ n == value`. Returns `None` if `value` is not a perfect power of `D`, otherwise returns `Some(n)`
-pub(crate) fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
+pub(crate) fn int_logarithm<const D: usize>(value: usize) -> Option<u32> {
     if value == 0 || D < 2 {
         return None;
     }
@@ -405,7 +444,7 @@ pub(crate) fn compute_logarithm<const D: usize>(value: usize) -> Option<u32> {
     let mut current_exponent = 0;
     let mut current_value = value;
 
-    while current_value % D == 0 {
+    while current_value.is_multiple_of(D) {
         current_exponent += 1;
         current_value /= D;
     }

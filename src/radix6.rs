@@ -26,18 +26,15 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::butterflies::{Butterfly2, Butterfly3};
 use crate::complex_fma::c_mul_fast;
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
-use crate::mla::fmla;
-use crate::traits::FftTrigonometry;
 use crate::util::{
     bitreversed_transpose, compute_twiddle, is_power_of_six, radixn_floating_twiddles_from_base,
 };
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -46,6 +43,7 @@ pub(crate) struct Radix6<T> {
     execution_length: usize,
     twiddle: Complex<T>,
     direction: FftDirection,
+    bf3: Butterfly3<T>,
     butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
@@ -87,16 +85,7 @@ impl Radix6Twiddles for f32 {
 }
 
 #[allow(dead_code)]
-impl<
-    T: Default
-        + Clone
-        + Radix6Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + AlgorithmFactory<T>,
-> Radix6<T>
+impl<T: FftSample + Radix6Twiddles> Radix6<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -114,80 +103,17 @@ where
             twiddle: compute_twiddle(1, 3, fft_direction),
             direction: fft_direction,
             butterfly: T::butterfly6(fft_direction)?,
+            bf3: Butterfly3::new(fft_direction),
         })
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Default
-        + FftTrigonometry,
-> Radix6<T>
-where
-    f64: AsPrimitive<T>,
-{
-    #[inline]
-    fn butterfly3(
-        &self,
-        u0: Complex<T>,
-        u1: Complex<T>,
-        u2: Complex<T>,
-    ) -> (Complex<T>, Complex<T>, Complex<T>) {
-        let xp = u1 + u2;
-        let xn = u1 - u2;
-        let sum = u0 + xp;
-
-        let w_1 = Complex {
-            re: fmla(self.twiddle.re, xp.re, u0.re),
-            im: fmla(self.twiddle.re, xp.im, u0.im),
-        };
-
-        let y0 = sum;
-        let y1 = Complex {
-            re: fmla(-self.twiddle.im, xn.im, w_1.re),
-            im: fmla(self.twiddle.im, xn.re, w_1.im),
-        };
-        let y2 = Complex {
-            re: fmla(self.twiddle.im, xn.im, w_1.re),
-            im: fmla(-self.twiddle.im, xn.re, w_1.im),
-        };
-        (y0, y1, y2)
-    }
-
-    #[inline]
-    fn butterfly2(&self, u0: Complex<T>, u1: Complex<T>) -> (Complex<T>, Complex<T>) {
-        let t = u0 + u1;
-
-        let y1 = u0 - u1;
-        let y0 = t;
-        (y0, y1)
-    }
-}
-
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Radix6<T>
+impl<T: FftSample> FftExecutor<T> for Radix6<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -235,11 +161,11 @@ where
                                 *m_twiddles.get_unchecked(5 * j + 4),
                             );
 
-                            let (t0, t2, t4) = self.butterfly3(u0, u2, u4);
-                            let (t1, t3, t5) = self.butterfly3(u3, u5, u1);
-                            let (y0, y3) = self.butterfly2(t0, t1);
-                            let (y4, y1) = self.butterfly2(t2, t3);
-                            let (y2, y5) = self.butterfly2(t4, t5);
+                            let [t0, t2, t4] = self.bf3.exec(&[u0, u2, u4]);
+                            let [t1, t3, t5] = self.bf3.exec(&[u3, u5, u1]);
+                            let [y0, y3] = Butterfly2::exec(&[t0, t1]);
+                            let [y4, y1] = Butterfly2::exec(&[t2, t3]);
+                            let [y2, y5] = Butterfly2::exec(&[t4, t5]);
 
                             // Store results
                             *data.get_unchecked_mut(j) = y0;

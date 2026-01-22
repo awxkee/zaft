@@ -28,12 +28,10 @@
  */
 use crate::err::try_vec;
 use crate::fast_divider::DividerU16;
-use crate::traits::FftTrigonometry;
-use crate::transpose::{TransposeExecutor, TransposeFactory};
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::transpose::TransposeExecutor;
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 pub(crate) struct GoodThomasSmallFft<T> {
@@ -50,17 +48,7 @@ pub(crate) struct GoodThomasSmallFft<T> {
     transpose_ops: Box<dyn TransposeExecutor<T> + Send + Sync>,
 }
 
-impl<
-    T: Copy
-        + Default
-        + Clone
-        + FftTrigonometry
-        + Float
-        + Zero
-        + Default
-        + TransposeFactory<T>
-        + 'static,
-> GoodThomasSmallFft<T>
+impl<T: FftSample> GoodThomasSmallFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -205,22 +193,13 @@ impl<T: Copy> GoodThomasSmallFft<T> {
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for GoodThomasSmallFft<T>
+impl<T: FftSample> FftExecutor<T> for GoodThomasSmallFft<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
         let length = self.execution_length as usize;
-        if in_place.len() % length != 0 {
+        if !in_place.len().is_multiple_of(length) {
             return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), length));
         }
 

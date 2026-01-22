@@ -27,7 +27,6 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::neon::butterflies::FastFcmaBf4f;
 use crate::neon::radix4::{
     neon_bitreversed_transpose_f32_radix4, neon_bitreversed_transpose_f64_radix4,
@@ -36,10 +35,9 @@ use crate::neon::util::vfcmulq_fcma_f32;
 use crate::neon::util::vfcmulq_fcma_f64;
 use crate::neon::util::{create_neon_twiddles, vfcmul_fcma_f32};
 use crate::radix4::Radix4Twiddles;
-use crate::traits::FftTrigonometry;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
 use std::sync::Arc;
 
@@ -51,8 +49,7 @@ pub(crate) struct NeonFcmaRadix4<T> {
     base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + Float + 'static>
-    NeonFcmaRadix4<T>
+impl<T: FftSample + Radix4Twiddles> NeonFcmaRadix4<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -116,7 +113,7 @@ where
 impl NeonFcmaRadix4<f64> {
     #[target_feature(enable = "fcma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -274,7 +271,7 @@ impl FftExecutor<f64> for NeonFcmaRadix4<f64> {
 impl NeonFcmaRadix4<f32> {
     #[target_feature(enable = "fcma")]
     fn execute_impl_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

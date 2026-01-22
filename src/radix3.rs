@@ -28,20 +28,14 @@
  */
 use crate::complex_fma::c_mul_fast;
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::mla::fmla;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
 use crate::util::{
-    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_three,
+    bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_three,
     radixn_floating_twiddles_from_base,
 };
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::fmt::Display;
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -92,22 +86,7 @@ impl Radix3Twiddles for f32 {
 }
 
 #[allow(unused)]
-impl<
-    T: Default
-        + Clone
-        + Radix3Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + TransposeFactory<T>
-        + Send
-        + Sync
-        + Display,
-> Radix3<T>
+impl<T: FftSample + Radix3Twiddles> Radix3<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -117,7 +96,7 @@ where
             "Input length must be power of 3"
         );
 
-        let exponent = compute_logarithm::<3>(size)
+        let exponent = int_logarithm::<3>(size)
             .unwrap_or_else(|| panic!("Radix3 length must be power of 3, but got {size}",));
 
         let base_fft = match exponent {
@@ -142,24 +121,12 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Default
-        + FftTrigonometry
-        + std::fmt::Debug,
-> FftExecutor<T> for Radix3<T>
+impl<T: FftSample> FftExecutor<T> for Radix3<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -205,10 +172,6 @@ where
                                 re: fmla(self.twiddle.re, xp.re, u0.re),
                                 im: fmla(self.twiddle.re, xp.im, u0.im),
                             };
-                            // let w_2 = ZComplex {
-                            //     re: -self.twiddle.im * xn.im,
-                            //     im: self.twiddle.im * xn.re,
-                            // };
 
                             let y0 = sum;
                             let y1 = Complex {
@@ -219,7 +182,6 @@ where
                                 re: fmla(self.twiddle.im, xn.im, w_1.re),
                                 im: fmla(-self.twiddle.im, xn.re, w_1.im),
                             }; //w_1 - w_2;
-                            // let y2 = w_1 - w_2;
 
                             *data.get_unchecked_mut(j) = y0;
                             *data.get_unchecked_mut(j + third) = y1;

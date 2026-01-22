@@ -33,13 +33,11 @@ use crate::avx::util::{
     create_avx4_twiddles, shuffle,
 };
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::radix4::Radix4Twiddles;
-use crate::traits::FftTrigonometry;
 use crate::util::reverse_bits;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::AsPrimitive;
 use std::arch::x86_64::*;
 use std::sync::Arc;
 
@@ -201,8 +199,7 @@ pub(crate) fn avx_bitreversed_transpose_f64_radix4(
     }
 }
 
-impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + Float + 'static>
-    AvxFmaRadix4<T>
+impl<T: FftSample + Radix4Twiddles> AvxFmaRadix4<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -265,7 +262,7 @@ where
 impl AvxFmaRadix4<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -364,13 +361,19 @@ impl AvxFmaRadix4<f64> {
                             let t1_0 = _mm256_sub_pd(a0, c0);
                             let t2_0 = _mm256_add_pd(b0, d0);
                             let mut t3_0 = _mm256_sub_pd(b0, d0);
-                            t3_0 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3_0), v_i_multiplier);
+                            t3_0 = _mm256_xor_pd(
+                                _mm256_shuffle_pd::<0b0101>(t3_0, t3_0),
+                                v_i_multiplier,
+                            );
 
                             let t0_1 = _mm256_add_pd(a1, c1);
                             let t1_1 = _mm256_sub_pd(a1, c1);
                             let t2_1 = _mm256_add_pd(b1, d1);
                             let mut t3_1 = _mm256_sub_pd(b1, d1);
-                            t3_1 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3_1), v_i_multiplier);
+                            t3_1 = _mm256_xor_pd(
+                                _mm256_shuffle_pd::<0b0101>(t3_1, t3_1),
+                                v_i_multiplier,
+                            );
 
                             _mm256_storeu_pd(
                                 data.get_unchecked_mut(j..).as_mut_ptr().cast(),
@@ -453,7 +456,7 @@ impl AvxFmaRadix4<f64> {
                             let t1 = _mm256_sub_pd(a, c);
                             let t2 = _mm256_add_pd(b, d);
                             let mut t3 = _mm256_sub_pd(b, d);
-                            t3 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3), v_i_multiplier);
+                            t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), v_i_multiplier);
 
                             _mm256_storeu_pd(
                                 data.get_unchecked_mut(j..).as_mut_ptr().cast(),
@@ -558,7 +561,7 @@ impl FftExecutor<f64> for AvxFmaRadix4<f64> {
 impl AvxFmaRadix4<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

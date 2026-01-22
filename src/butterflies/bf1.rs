@@ -26,11 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{
+    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample, ZaftError,
+};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, MulAdd, Num};
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 pub(crate) struct Butterfly1<T> {
@@ -38,16 +39,7 @@ pub(crate) struct Butterfly1<T> {
     pub(crate) direction: FftDirection,
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for Butterfly1<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly1<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -64,16 +56,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutorOutOfPlace<T> for Butterfly1<T>
+impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly1<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -89,18 +72,7 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Send
-        + Sync,
-> CompositeFftExecutor<T> for Butterfly1<T>
+impl<T: FftSample> CompositeFftExecutor<T> for Butterfly1<T>
 where
     f64: AsPrimitive<T>,
 {

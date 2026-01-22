@@ -89,6 +89,18 @@ macro_rules! define_transpose {
                 width: usize,
                 height: usize,
             ) {
+                self.transpose_strided(input, width, output, height, width, height);
+            }
+
+            fn transpose_strided(
+                &self,
+                input: &[Complex<$complex_type>],
+                input_stride: usize,
+                output: &mut [Complex<$complex_type>],
+                output_stride: usize,
+                width: usize,
+                height: usize,
+            ) {
                 use crate::avx::transpose::$rot_name;
                 unsafe {
                     transpose_fixed_block_executor2d::<
@@ -98,9 +110,9 @@ macro_rules! define_transpose {
                         Function<$complex_type>,
                     >(
                         input,
-                        width,
+                        input_stride,
                         output,
-                        height,
+                        output_stride,
                         width,
                         height,
                         0,
@@ -499,13 +511,34 @@ macro_rules! define_transpose_evend {
                 width: usize,
                 height: usize,
             ) {
+                self.transpose_strided(input, width, output, height, width, height);
+            }
+
+            fn transpose_strided(
+                &self,
+                input: &[Complex<$complex_type>],
+                input_stride: usize,
+                output: &mut [Complex<$complex_type>],
+                output_stride: usize,
+                width: usize,
+                height: usize,
+            ) {
                 use crate::avx::transpose::$rot_name;
                 unsafe {
                     transpose_height_block_executor2_f64::<
                         $block_width,
                         $block_height,
                         FunctionEvenD<$block_height>,
-                    >(input, width, output, height, width, height, 0, $rot_name);
+                    >(
+                        input,
+                        input_stride,
+                        output,
+                        output_stride,
+                        width,
+                        height,
+                        0,
+                        $rot_name,
+                    );
                 }
             }
         }
@@ -525,6 +558,18 @@ macro_rules! define_transpose_oddd {
                 width: usize,
                 height: usize,
             ) {
+                self.transpose_strided(input, width, output, height, width, height);
+            }
+
+            fn transpose_strided(
+                &self,
+                input: &[Complex<$complex_type>],
+                input_stride: usize,
+                output: &mut [Complex<$complex_type>],
+                output_stride: usize,
+                width: usize,
+                height: usize,
+            ) {
                 use crate::avx::transpose::$rot_name;
                 const R: usize = $block_height + 1;
                 unsafe {
@@ -533,7 +578,16 @@ macro_rules! define_transpose_oddd {
                         $block_height,
                         R,
                         FunctionOddD<$block_height, R>,
-                    >(input, width, output, height, width, height, 0, $rot_name);
+                    >(
+                        input,
+                        input_stride,
+                        output,
+                        output_stride,
+                        width,
+                        height,
+                        0,
+                        $rot_name,
+                    );
                 }
             }
         }
@@ -553,6 +607,18 @@ macro_rules! define_transpose_oddf {
                 width: usize,
                 height: usize,
             ) {
+                self.transpose_strided(input, width, output, height, width, height);
+            }
+
+            fn transpose_strided(
+                &self,
+                input: &[Complex<$complex_type>],
+                input_stride: usize,
+                output: &mut [Complex<$complex_type>],
+                output_stride: usize,
+                width: usize,
+                height: usize,
+            ) {
                 use crate::avx::transpose::$rot_name;
                 const R: usize = ($block_height as usize).div_ceil(4) * 4;
                 unsafe {
@@ -561,7 +627,16 @@ macro_rules! define_transpose_oddf {
                         $block_height,
                         R,
                         FunctionOddF<$block_height, R>,
-                    >(input, width, output, height, width, height, 0, $rot_name);
+                    >(
+                        input,
+                        input_stride,
+                        output,
+                        output_stride,
+                        width,
+                        height,
+                        0,
+                        $rot_name,
+                    );
                 }
             }
         }

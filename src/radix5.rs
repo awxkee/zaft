@@ -28,17 +28,14 @@
  */
 use crate::complex_fma::c_mul_fast;
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::mla::fmla;
-use crate::traits::FftTrigonometry;
 use crate::util::{
-    bitreversed_transpose, compute_logarithm, compute_twiddle, is_power_of_five,
+    bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_five,
     radixn_floating_twiddles_from_base,
 };
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -90,16 +87,7 @@ impl Radix5Twiddles for f32 {
 }
 
 #[allow(dead_code)]
-impl<
-    T: Default
-        + Clone
-        + Radix5Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + AlgorithmFactory<T>,
-> Radix5<T>
+impl<T: FftSample + Radix5Twiddles> Radix5<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -109,7 +97,7 @@ where
             "Input length must be a power of 5"
         );
 
-        let log5 = compute_logarithm::<5>(size).unwrap();
+        let log5 = int_logarithm::<5>(size).unwrap();
         let butterfly = match log5 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly5(fft_direction)?,
@@ -132,23 +120,12 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Radix5<T>
+impl<T: FftSample> FftExecutor<T> for Radix5<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

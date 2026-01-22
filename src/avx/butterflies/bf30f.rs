@@ -153,7 +153,7 @@ pub(crate) fn transpose_6x5(
 impl AvxButterfly30f {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 30 != 0 {
+        if !in_place.len().is_multiple_of(30) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),

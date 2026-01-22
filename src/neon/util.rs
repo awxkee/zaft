@@ -201,32 +201,6 @@ pub(crate) fn conj_f32(v: float32x2_t, a: float32x2_t) -> float32x2_t {
 }
 
 #[inline(always)]
-pub(crate) fn pack_complex_lo(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
-    unsafe { vcombine_f32(vget_low_f32(lhs), vget_low_f32(rhs)) }
-}
-
-#[inline(always)]
-pub(crate) fn pack_complex_hi(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
-    unsafe { vcombine_f32(vget_high_f32(lhs), vget_high_f32(rhs)) }
-}
-
-#[inline(always)]
-pub(crate) fn vqtrnq_f32(a: float32x4_t, b: float32x4_t) -> (float32x4_t, float32x4_t) {
-    unsafe {
-        (
-            vreinterpretq_f32_f64(vtrn1q_f64(
-                vreinterpretq_f64_f32(a),
-                vreinterpretq_f64_f32(b),
-            )),
-            vreinterpretq_f32_f64(vtrn2q_f64(
-                vreinterpretq_f64_f32(a),
-                vreinterpretq_f64_f32(b),
-            )),
-        )
-    }
-}
-
-#[inline(always)]
 pub(crate) fn vfcmulq_conj_b_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
     unsafe {
         let temp1 = vtrn1q_f32(rhs, rhs);

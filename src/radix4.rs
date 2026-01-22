@@ -28,12 +28,11 @@
  */
 use crate::butterflies::rotate_90;
 use crate::complex_fma::c_mul_fast;
-use crate::factory::AlgorithmFactory;
+use crate::err::try_vec;
 use crate::util::{bitreversed_transpose, radixn_floating_twiddles_from_base};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, MulAdd, Num, Zero};
-use std::ops::{Add, Mul, Neg, Sub};
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -76,7 +75,7 @@ impl Radix4Twiddles for f32 {
 }
 
 #[allow(unused)]
-impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> Radix4<T> {
+impl<T: FftSample + Radix4Twiddles> Radix4<T> {
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<Radix4<T>, ZaftError> {
         assert!(size.is_power_of_two(), "Input length must be a power of 2");
 
@@ -107,28 +106,19 @@ impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T>> Radix4<T> {
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>,
-> FftExecutor<T> for Radix4<T>
+impl<T: FftSample> FftExecutor<T> for Radix4<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
             ));
         }
 
-        let mut scratch = vec![Complex::zero(); self.execution_length];
+        let mut scratch = try_vec![Complex::zero(); self.execution_length];
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first

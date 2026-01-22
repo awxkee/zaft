@@ -27,15 +27,16 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(unused)]
-use crate::transpose::TransposeExecutor;
+use crate::transpose::{TransposeExecutor, TransposeExecutorReal};
 use num_complex::Complex;
+use num_traits::Num;
 use std::marker::PhantomData;
 
 #[inline(always)]
-fn transpose_block<V: Copy>(
+fn transpose_block<V: Copy, Q: Copy + From<V>>(
     input: &[V],
     input_stride: usize,
-    output: &mut [V],
+    output: &mut [Q],
     output_stride: usize,
     start_x: usize,
     start_y: usize,
@@ -54,17 +55,23 @@ fn transpose_block<V: Copy>(
             let output_index = y + output_x * output_stride;
 
             unsafe {
-                *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
+                *output.get_unchecked_mut(output_index) =
+                    Q::from(*input.get_unchecked(input_index));
             }
         }
     }
 }
 
 #[inline(always)]
-fn transpose_block_segmented<T: Copy, const BLOCK_SIZE_X: usize, const BLOCK_SIZE_Y: usize>(
+fn transpose_block_segmented<
+    T: Copy,
+    Q: Copy + From<T>,
+    const BLOCK_SIZE_X: usize,
+    const BLOCK_SIZE_Y: usize,
+>(
     input: &[T],
     input_stride: usize,
-    output: &mut [T],
+    output: &mut [Q],
     output_stride: usize,
     start_x: usize,
     start_y: usize,
@@ -83,7 +90,8 @@ fn transpose_block_segmented<T: Copy, const BLOCK_SIZE_X: usize, const BLOCK_SIZ
                 let output_index = y + output_x * output_stride;
 
                 unsafe {
-                    *output.get_unchecked_mut(output_index) = *input.get_unchecked(input_index);
+                    *output.get_unchecked_mut(output_index) =
+                        Q::from(*input.get_unchecked(input_index));
                 }
             }
         }
@@ -102,16 +110,45 @@ impl<V: Copy> TransposeExecutor<V> for TransposeArbitrary<V> {
         width: usize,
         height: usize,
     ) {
+        self.transpose_strided(input, width, output, height, width, height);
+    }
+
+    fn transpose_strided(
+        &self,
+        input: &[Complex<V>],
+        input_stride: usize,
+        output: &mut [Complex<V>],
+        output_stride: usize,
+        width: usize,
+        height: usize,
+    ) {
+        transpose_arbitrary_impl(
+            input,
+            input_stride,
+            output,
+            output_stride,
+            0,
+            height,
+            0,
+            width,
+            width,
+            height,
+        )
+    }
+}
+
+impl<V: Copy + Num> TransposeExecutorReal<V> for TransposeArbitrary<V> {
+    fn transpose(&self, input: &[V], output: &mut [Complex<V>], width: usize, height: usize) {
         transpose_arbitrary_impl(
             input, width, output, height, 0, height, 0, width, width, height,
         )
     }
 }
 
-fn transpose_arbitrary_impl<V: Copy>(
+fn transpose_arbitrary_impl<V: Copy, Q: Copy + From<V>>(
     input: &[V],
     input_stride: usize,
-    output: &mut [V],
+    output: &mut [Q],
     output_stride: usize,
     start_y: usize,
     end_y: usize,
@@ -133,7 +170,7 @@ fn transpose_arbitrary_impl<V: Copy>(
 
         for y_block in 0..y_block_count {
             for x_block in 0..x_block_count {
-                transpose_block_segmented::<V, BLOCK_SIZE, BLOCK_SIZE>(
+                transpose_block_segmented::<V, Q, BLOCK_SIZE, BLOCK_SIZE>(
                     input,
                     input_stride,
                     output,
@@ -144,7 +181,7 @@ fn transpose_arbitrary_impl<V: Copy>(
             }
 
             if remainder_x > 0 {
-                transpose_block::<V>(
+                transpose_block::<V, Q>(
                     input,
                     input_stride,
                     output,
@@ -159,7 +196,7 @@ fn transpose_arbitrary_impl<V: Copy>(
 
         if remainder_y > 0 {
             for x_block in 0..x_block_count {
-                transpose_block::<V>(
+                transpose_block::<V, Q>(
                     input,
                     input_stride,
                     output,
@@ -172,7 +209,7 @@ fn transpose_arbitrary_impl<V: Copy>(
             }
 
             if remainder_x > 0 {
-                transpose_block::<V>(
+                transpose_block::<V, Q>(
                     input,
                     input_stride,
                     output,
@@ -185,7 +222,7 @@ fn transpose_arbitrary_impl<V: Copy>(
             }
         }
     } else if length_y >= length_x {
-        transpose_arbitrary_impl::<V>(
+        transpose_arbitrary_impl::<V, Q>(
             input,
             input_stride,
             output,
@@ -197,7 +234,7 @@ fn transpose_arbitrary_impl<V: Copy>(
             width,
             height,
         );
-        transpose_arbitrary_impl::<V>(
+        transpose_arbitrary_impl::<V, Q>(
             input,
             input_stride,
             output,
@@ -210,7 +247,7 @@ fn transpose_arbitrary_impl<V: Copy>(
             height,
         );
     } else {
-        transpose_arbitrary_impl::<V>(
+        transpose_arbitrary_impl::<V, Q>(
             input,
             input_stride,
             output,
@@ -222,7 +259,7 @@ fn transpose_arbitrary_impl<V: Copy>(
             width,
             height,
         );
-        transpose_arbitrary_impl::<V>(
+        transpose_arbitrary_impl::<V, Q>(
             input,
             input_stride,
             output,

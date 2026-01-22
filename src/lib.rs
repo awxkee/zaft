@@ -27,7 +27,6 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(
-    clippy::manual_is_multiple_of,
     clippy::assign_op_pattern,
     clippy::only_used_in_recursion,
     clippy::too_many_arguments,
@@ -96,18 +95,22 @@ use crate::prime_factors::{
     PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
 };
 use crate::r2c::{
-    C2RFftEvenInterceptor, C2RFftOddInterceptor, OneSizedRealFft, R2CFftEvenInterceptor,
-    R2CFftOddInterceptor,
+    C2RFftEvenInterceptor, C2RFftOddInterceptor, OneSizedRealFft, R2CTwiddlesFactory,
+    R2cAlgorithmFactory, strategy_r2c,
 };
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
+use crate::spectrum_arithmetic::ComplexArithFactory;
 use crate::td::{TwoDimensionalC2C, TwoDimensionalC2R, TwoDimensionalR2C};
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
+use crate::util::{
+    ALWAYS_BLUESTEIN_1000, ALWAYS_BLUESTEIN_2000, ALWAYS_BLUESTEIN_3000, ALWAYS_BLUESTEIN_4000,
+    ALWAYS_BLUESTEIN_5000, ALWAYS_BLUESTEIN_6000,
+};
 pub use err::ZaftError;
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 pub use r2c::{C2RFftExecutor, R2CFftExecutor};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, OnceLock, RwLock};
 pub use td::{
     ExecutorWithScratch, TwoDimensionalExecutorC2R, TwoDimensionalExecutorR2C,
@@ -122,16 +125,64 @@ pub(crate) trait FftSample:
     + Send
     + Sync
     + MulAdd<Self, Output = Self>
-    + SpectrumOpsFactory<Self>
+    + ComplexArithFactory<Self>
     + TransposeFactory<Self>
     + Copy
     + Display
     + FftPrimeCache<Self>
+    + Default
+    + Debug
+    + R2cAlgorithmFactory<Self>
+    + R2CTwiddlesFactory<Self>
 {
+    const HALF: Self;
+    const SQRT_3_OVER_2: Self;
 }
 
-impl FftSample for f64 {}
-impl FftSample for f32 {}
+impl FftSample for f64 {
+    const HALF: Self = 0.5;
+    // from sage.all import *
+    // import struct
+    //
+    // R = RealField(90)
+    //
+    // def float_to_hex(f):
+    //     packed = struct.pack('>f', float(f))
+    //     return '0x' + packed.hex()
+    //
+    // value = R(3).sqrt() / R(2)
+    //
+    // print(float_to_hex(value))
+    //
+    // def double_to_hex(f):
+    //         packed = struct.pack('>d', float(f))
+    //         return '0x' + packed.hex()
+    //
+    // print(double_to_hex(value))
+    const SQRT_3_OVER_2: Self = f64::from_bits(0x3febb67ae8584caa);
+}
+impl FftSample for f32 {
+    const HALF: Self = 0.5;
+    // from sage.all import *
+    // import struct
+    //
+    // R = RealField(90)
+    //
+    // def float_to_hex(f):
+    //     packed = struct.pack('>f', float(f))
+    //     return '0x' + packed.hex()
+    //
+    // value = R(3).sqrt() / R(2)
+    //
+    // print(float_to_hex(value))
+    //
+    // def double_to_hex(f):
+    //         packed = struct.pack('>d', float(f))
+    //         return '0x' + packed.hex()
+    //
+    // print(double_to_hex(value))
+    const SQRT_3_OVER_2: Self = f32::from_bits(0x3f5db3d7);
+}
 
 pub trait FftExecutor<T> {
     /// Executes the Complex-to-Complex FFT operation **in-place**.
@@ -628,46 +679,6 @@ impl Zaft {
             return Ok(cached);
         }
         let convolve_prime = PrimeFactors::from_number(n as u64 - 1);
-        static ALWAYS_BLUESTEIN_1000: [usize; 63] = [
-            47, 53, 59, 61, 83, 103, 107, 149, 167, 173, 179, 223, 227, 233, 263, 269, 283, 317,
-            347, 359, 367, 383, 389, 431, 439, 461, 467, 479, 499, 503, 509, 557, 563, 569, 587,
-            619, 643, 647, 653, 659, 709, 719, 733, 739, 743, 787, 797, 821, 823, 827, 839, 853,
-            857, 863, 877, 887, 907, 941, 947, 971, 977, 983, 997,
-        ];
-        static ALWAYS_BLUESTEIN_2000: [usize; 66] = [
-            1019, 1039, 1061, 1069, 1097, 1129, 1163, 1181, 1187, 1193, 1223, 1229, 1231, 1237,
-            1259, 1279, 1307, 1319, 1367, 1399, 1423, 1427, 1433, 1439, 1487, 1493, 1499, 1511,
-            1523, 1553, 1559, 1579, 1583, 1609, 1619, 1627, 1637, 1663, 1669, 1693, 1697, 1699,
-            1709, 1723, 1747, 1753, 1759, 1787, 1789, 1811, 1823, 1831, 1847, 1867, 1877, 1879,
-            1889, 1907, 1913, 1949, 1973, 1979, 1987, 1993, 1997, 1999,
-        ];
-        static ALWAYS_BLUESTEIN_3000: [usize; 49] = [
-            2011, 2027, 2039, 2063, 2069, 2083, 2087, 2099, 2153, 2207, 2297, 2339, 2351, 2371,
-            2423, 2447, 2459, 2473, 2477, 2539, 2543, 2557, 2579, 2617, 2633, 2657, 2659, 2671,
-            2677, 2683, 2687, 2699, 2707, 2713, 2767, 2777, 2789, 2797, 2803, 2833, 2837, 2879,
-            2903, 2939, 2953, 2957, 2963, 2969, 2999,
-        ];
-        static ALWAYS_BLUESTEIN_4000: [usize; 80] = [
-            3019, 3023, 3049, 3083, 3119, 3163, 3167, 3181, 3187, 3203, 3217, 3229, 3253, 3257,
-            3259, 3271, 3299, 3307, 3319, 3323, 3343, 3347, 3359, 3391, 3407, 3413, 3449, 3461,
-            3463, 3467, 3491, 3499, 3517, 3527, 3533, 3539, 3541, 3547, 3557, 3559, 3581, 3583,
-            3593, 3607, 3613, 3617, 3623, 3643, 3659, 3671, 3677, 3691, 3709, 3733, 3739, 3761,
-            3767, 3769, 3779, 3793, 3797, 3803, 3821, 3833, 3847, 3853, 3863, 3877, 3881, 3907,
-            3911, 3917, 3919, 3923, 3929, 3931, 3943, 3947, 3967, 3989,
-        ];
-        static ALWAYS_BLUESTEIN_5000: [usize; 47] = [
-            4003, 4007, 4013, 4019, 4021, 4027, 4073, 4079, 4091, 4099, 4127, 4133, 4139, 4153,
-            4157, 4231, 4253, 4283, 4297, 4349, 4391, 4423, 4457, 4463, 4483, 4507, 4513, 4517,
-            4547, 4567, 4583, 4597, 4637, 4639, 4649, 4679, 4703, 4723, 4783, 4787, 4793, 4799,
-            4877, 4889, 4903, 4919, 4957,
-        ];
-        static ALWAYS_BLUESTEIN_6000: [usize; 69] = [
-            5003, 5011, 5077, 5087, 5099, 5107, 5113, 5119, 5147, 5167, 5171, 5179, 5227, 5231,
-            5261, 5273, 5309, 5323, 5333, 5351, 5381, 5387, 5399, 5407, 5413, 5417, 5443, 5449,
-            5477, 5479, 5483, 5503, 5507, 5519, 5527, 5531, 5563, 5623, 5639, 5641, 5647, 5659,
-            5669, 5683, 5689, 5693, 5711, 5717, 5737, 5741, 5749, 5779, 5783, 5807, 5821, 5827,
-            5839, 5843, 5849, 5857, 5861, 5867, 5879, 5897, 5903, 5923, 5927, 5939, 5987,
-        ];
         if n <= 6000 {
             let bluesteins = [
                 ALWAYS_BLUESTEIN_1000.as_slice(),
@@ -806,14 +817,23 @@ impl Zaft {
             72 => {
                 return T::butterfly72(fft_direction).map(Ok);
             }
+            78 => {
+                return T::butterfly78(fft_direction).map(Ok);
+            }
             81 => {
                 return T::butterfly81(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            88 => {
+                return T::butterfly88(fft_direction).map(Ok);
             }
             96 => {
                 return T::butterfly96(fft_direction).map(Ok);
             }
             100 => {
                 return T::butterfly100(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            108 => {
+                return T::butterfly108(fft_direction).map(Ok);
             }
             121 => {
                 return T::butterfly121(fft_direction).map(|x| Ok(x.into_fft_executor()));
@@ -918,18 +938,7 @@ impl Zaft {
     pub fn make_r2c_fft_f32(
         n: usize,
     ) -> Result<Arc<dyn R2CFftExecutor<f32> + Send + Sync>, ZaftError> {
-        if n == 1 {
-            return Ok(Arc::new(OneSizedRealFft {
-                phantom_data: Default::default(),
-            }));
-        }
-        if n.is_multiple_of(2) {
-            R2CFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Forward)?)
-                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<f32> + Send + Sync>)
-        } else {
-            R2CFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Forward)?)
-                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<f32> + Send + Sync>)
-        }
+        strategy_r2c(n)
     }
 
     /// Creates a Complex-to-Real (C2R) Inverse FFT plan executor for single-precision floating-point numbers (`f32`).
@@ -1030,18 +1039,7 @@ impl Zaft {
     pub fn make_r2c_fft_f64(
         n: usize,
     ) -> Result<Arc<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
-        if n == 1 {
-            return Ok(Arc::new(OneSizedRealFft {
-                phantom_data: Default::default(),
-            }));
-        }
-        if n.is_multiple_of(2) {
-            R2CFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Forward)?)
-                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<f64> + Send + Sync>)
-        } else {
-            R2CFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Forward)?)
-                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<f64> + Send + Sync>)
-        }
+        strategy_r2c(n)
     }
 
     /// Creates a standard Complex-to-Complex Inverse FFT plan executor for single-precision floating-point numbers (`f32`).
@@ -1416,7 +1414,7 @@ mod tests {
             }
             let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
             let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
-            let rust_fft_clone = data.clone();
+            let reference_clone = data.clone();
             zaft_exec.execute(&mut data).unwrap();
             zaft_inverse.execute(&mut data).unwrap();
             let data_len = 1. / data.len() as f32;
@@ -1424,7 +1422,7 @@ mod tests {
                 *i *= data_len;
             }
             data.iter()
-                .zip(rust_fft_clone)
+                .zip(reference_clone)
                 .enumerate()
                 .for_each(|(idx, (a, b))| {
                     assert!(

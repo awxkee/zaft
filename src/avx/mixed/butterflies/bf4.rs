@@ -63,7 +63,7 @@ impl ColumnButterfly4d {
         let t1 = _mm256_sub_pd(v[0].v, v[2].v);
         let t2 = _mm256_add_pd(v[1].v, v[3].v);
         let mut t3 = _mm256_sub_pd(v[1].v, v[3].v);
-        t3 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3), self.rotate);
+        t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), self.rotate);
 
         let y0 = _mm256_add_pd(t0, t2);
         let y1 = _mm256_add_pd(t1, t3);

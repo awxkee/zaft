@@ -27,15 +27,13 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::neon::transpose::{neon_transpose_f64x2_4x4_impl, transpose_f32x2_4x4};
 use crate::neon::util::{create_neon_twiddles, vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use crate::radix4::Radix4Twiddles;
-use crate::traits::FftTrigonometry;
 use crate::util::reverse_bits;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
 use std::sync::Arc;
 
@@ -96,7 +94,7 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix4(
     let width_bits = width.trailing_zeros();
     let d_bits = WIDTH.trailing_zeros();
 
-    assert!(width_bits % d_bits == 0);
+    assert!(width_bits.is_multiple_of(d_bits));
     let rev_digits = width_bits / d_bits;
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
@@ -143,7 +141,7 @@ pub(crate) fn neon_bitreversed_transpose_f64_radix4(
     let width_bits = width.trailing_zeros();
     let d_bits = WIDTH.trailing_zeros();
 
-    assert!(width_bits % d_bits == 0);
+    assert!(width_bits.is_multiple_of(d_bits));
     let rev_digits = width_bits / d_bits;
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
@@ -182,8 +180,7 @@ pub(crate) struct NeonRadix4<T> {
     base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
 }
 
-impl<T: Default + Clone + Radix4Twiddles + AlgorithmFactory<T> + FftTrigonometry + 'static + Float>
-    NeonRadix4<T>
+impl<T: FftSample + Radix4Twiddles> NeonRadix4<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -246,7 +243,7 @@ where
 
 impl FftExecutor<f64> for NeonRadix4<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -348,7 +345,7 @@ impl FftExecutor<f64> for NeonRadix4<f64> {
 
 impl FftExecutor<f32> for NeonRadix4<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,

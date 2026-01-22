@@ -26,18 +26,17 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
 use crate::prime_factors::{PrimeFactors, primitive_root};
-use crate::spectrum_arithmetic::{SpectrumOps, SpectrumOpsFactory};
-use crate::traits::FftTrigonometry;
+use crate::spectrum_arithmetic::ComplexArith;
 use crate::util::compute_twiddle;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_integer::Integer;
-use num_traits::{AsPrimitive, Float, MulAdd, Num, Zero};
+use num_traits::{AsPrimitive, Zero};
 use std::arch::x86_64::*;
-use std::ops::{Add, Mul, Neg, Sub};
 use std::sync::Arc;
 
 pub(crate) struct AvxRadersFft<T> {
@@ -47,11 +46,12 @@ pub(crate) struct AvxRadersFft<T> {
     direction: FftDirection,
     input_indices: Vec<u32>,
     output_indices: Vec<u32>,
-    spectrum_ops: Arc<dyn SpectrumOps<T> + Send + Sync>,
+    spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
 }
 
 pub(crate) trait RadersIndicer<T> {
     unsafe fn index_inputs(buffer: &[Complex<T>], output: &mut [Complex<T>], indices: &[u32]);
+    unsafe fn index_inputs_real(buffer: &[T], output: &mut [Complex<T>], indices: &[u32]);
     unsafe fn output_indices(buffer: &mut [Complex<T>], scratch: &[Complex<T>], indices: &[u32]);
 }
 
@@ -87,6 +87,45 @@ impl RadersIndicer<f32> for f32 {
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *scratch_element = *buffer.get_unchecked(buffer_idx as usize);
+            }
+        }
+    }
+
+    unsafe fn index_inputs_real(buffer: &[f32], output: &mut [Complex<f32>], indices: &[u32]) {
+        unsafe {
+            for (scratch_element, buffer_idx) in
+                output.chunks_exact_mut(8).zip(indices.chunks_exact(8))
+            {
+                let idx = _mm256_loadu_si256(buffer_idx.as_ptr().cast());
+
+                let [v0, v1] =
+                    AvxStoreF::raw(_mm256_i32gather_ps::<4>(buffer.as_ptr().cast(), idx))
+                        .to_complex();
+
+                v0.write(scratch_element);
+                v1.write(scratch_element.get_unchecked_mut(4..));
+            }
+
+            let rem = output.chunks_exact_mut(8).into_remainder();
+            let rem_indices = indices.chunks_exact(8).remainder();
+
+            for (scratch_element, buffer_idx) in
+                rem.chunks_exact_mut(4).zip(rem_indices.chunks_exact(4))
+            {
+                let idx = _mm_loadu_si128(buffer_idx.as_ptr().cast());
+
+                let [v0, _] = AvxStoreF::raw128(_mm_i32gather_ps::<4>(buffer.as_ptr().cast(), idx))
+                    .to_complex();
+
+                v0.write(scratch_element);
+            }
+
+            let rem = rem.chunks_exact_mut(4).into_remainder();
+            let rem_indices = rem_indices.chunks_exact(4).remainder();
+
+            for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
+                *scratch_element =
+                    Complex::new(*buffer.get_unchecked(buffer_idx as usize), f32::zero());
             }
         }
     }
@@ -175,6 +214,31 @@ impl RadersIndicer<f64> for f64 {
     }
 
     #[target_feature(enable = "avx2")]
+    unsafe fn index_inputs_real(buffer: &[f64], output: &mut [Complex<f64>], indices: &[u32]) {
+        unsafe {
+            for (scratch_element, buffer_idx) in
+                output.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            {
+                let idx = _mm_loadu_si128(buffer_idx.as_ptr().cast());
+
+                let v0 = AvxStoreD::raw(_mm256_i32gather_pd::<8>(buffer.as_ptr().cast(), idx))
+                    .to_complex();
+
+                v0[0].write(scratch_element);
+                v0[1].write(scratch_element.get_unchecked_mut(2..));
+            }
+
+            let rem = output.chunks_exact_mut(4).into_remainder();
+            let rem_indices = indices.chunks_exact(4).remainder();
+
+            for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
+                *scratch_element =
+                    Complex::new(*buffer.get_unchecked(buffer_idx as usize), f64::zero());
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx2")]
     unsafe fn output_indices(
         buffer: &mut [Complex<f64>],
         scratch: &[Complex<f64>],
@@ -223,17 +287,7 @@ impl RadersIndicer<f64> for f64 {
     }
 }
 
-impl<
-    T: Copy
-        + Default
-        + Clone
-        + FftTrigonometry
-        + Float
-        + Zero
-        + Default
-        + SpectrumOpsFactory<T>
-        + 'static,
-> AvxRadersFft<T>
+impl<T: FftSample> AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -306,28 +360,18 @@ where
             output_indices: z_output,
             convolve_fft_twiddles: inner_fft_input,
             direction: fft_direction,
-            spectrum_ops: T::make_spectrum_arithmetic(),
+            spectrum_ops: T::make_complex_arith(),
         })
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + RadersIndicer<T>,
-> AvxRadersFft<T>
+impl<T: FftSample + RadersIndicer<T>> AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_impl(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+    fn execute_impl(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -375,19 +419,67 @@ where
         }
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_r2c(&self, src: &[T], dst: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        if !src.len().is_multiple_of(self.execution_length) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                src.len(),
+                self.execution_length,
+            ));
+        }
+        if !dst.len().is_multiple_of(self.complex_length()) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                dst.len(),
+                self.complex_length(),
+            ));
+        }
+        if src.len() / self.execution_length != dst.len() / self.complex_length() {
+            return Err(ZaftError::InvalidSamplesCount(
+                src.len() / self.execution_length,
+                dst.len() / self.complex_length(),
+            ));
+        }
+
+        let mut scratch = try_vec![Complex::zero(); self.execution_length];
+
+        for (input, complex) in src
+            .chunks_exact(self.execution_length)
+            .zip(dst.chunks_exact_mut(self.complex_length()))
+        {
+            let (buffer_first, buffer) = input.split_first().unwrap();
+            let buffer_first_val = Complex::new(*buffer_first, T::zero());
+
+            let (scratch, _) = scratch.split_at_mut(self.real_length() - 1);
+
+            unsafe {
+                T::index_inputs_real(buffer, scratch, &self.input_indices);
+            }
+
+            self.convolve_fft.execute(scratch)?;
+
+            complex[0] = buffer_first_val + scratch[0];
+
+            self.spectrum_ops
+                .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
+
+            scratch[0] = scratch[0] + buffer_first_val.conj();
+
+            // execute the second FFT
+            self.convolve_fft.execute(scratch)?;
+
+            // copy the final values into the output, with reordering
+            let output = &mut complex[1..];
+            let out_len = output.len();
+            unsafe {
+                T::output_indices(output, scratch, &self.output_indices[..out_len]);
+            }
+        }
+        Ok(())
+    }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + RadersIndicer<T>,
-> FftExecutor<T> for AvxRadersFft<T>
+impl<T: FftSample + RadersIndicer<T>> FftExecutor<T> for AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -401,5 +493,24 @@ where
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+}
+
+impl<T: FftSample + RadersIndicer<T>> R2CFftExecutor<T> for AvxRadersFft<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_r2c(input, output) }
+    }
+
+    #[inline]
+    fn real_length(&self) -> usize {
+        self.execution_length
+    }
+
+    #[inline]
+    fn complex_length(&self) -> usize {
+        self.execution_length / 2 + 1
     }
 }

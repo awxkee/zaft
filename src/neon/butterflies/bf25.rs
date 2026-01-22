@@ -33,7 +33,6 @@ use crate::neon::transpose::transpose_2x5;
 use crate::util::compute_twiddle;
 use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
 use num_complex::Complex;
-use std::arch::aarch64::*;
 use std::sync::Arc;
 
 macro_rules! gen_bf25d {
@@ -92,55 +91,31 @@ macro_rules! gen_bf25d {
 
                 unsafe {
                     for chunk in in_place.chunks_exact_mut(25) {
-                        let u0 = NeonStoreD::raw(vld1q_f64(chunk.as_ptr().cast()));
-                        let u1 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast()));
-                        let u2 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast()));
-                        let u3 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(3..).as_ptr().cast()));
-                        let u4 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(4..).as_ptr().cast()));
-                        let u5 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(5..).as_ptr().cast()));
-                        let u6 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(6..).as_ptr().cast()));
-                        let u7 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(7..).as_ptr().cast()));
-                        let u8 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(8..).as_ptr().cast()));
-                        let u9 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(9..).as_ptr().cast()));
-                        let u10 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(10..).as_ptr().cast()));
-                        let u11 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(11..).as_ptr().cast()));
-                        let u12 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(12..).as_ptr().cast()));
-                        let u13 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(13..).as_ptr().cast()));
-                        let u14 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(14..).as_ptr().cast()));
-                        let u15 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(15..).as_ptr().cast()));
-                        let u16 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(16..).as_ptr().cast()));
-                        let u17 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(17..).as_ptr().cast()));
-                        let u18 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(18..).as_ptr().cast()));
-                        let u19 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(19..).as_ptr().cast()));
-                        let u20 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(20..).as_ptr().cast()));
-                        let u21 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(21..).as_ptr().cast()));
-                        let u22 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(22..).as_ptr().cast()));
-                        let u23 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(23..).as_ptr().cast()));
-                        let u24 =
-                            NeonStoreD::raw(vld1q_f64(chunk.get_unchecked(24..).as_ptr().cast()));
+                        let u0 = NeonStoreD::from_complex_ref(chunk);
+                        let u1 = NeonStoreD::from_complex_ref(chunk.get_unchecked(1..));
+                        let u2 = NeonStoreD::from_complex_ref(chunk.get_unchecked(2..));
+                        let u3 = NeonStoreD::from_complex_ref(chunk.get_unchecked(3..));
+                        let u4 = NeonStoreD::from_complex_ref(chunk.get_unchecked(4..));
+                        let u5 = NeonStoreD::from_complex_ref(chunk.get_unchecked(5..));
+                        let u6 = NeonStoreD::from_complex_ref(chunk.get_unchecked(6..));
+                        let u7 = NeonStoreD::from_complex_ref(chunk.get_unchecked(7..));
+                        let u8 = NeonStoreD::from_complex_ref(chunk.get_unchecked(8..));
+                        let u9 = NeonStoreD::from_complex_ref(chunk.get_unchecked(9..));
+                        let u10 = NeonStoreD::from_complex_ref(chunk.get_unchecked(10..));
+                        let u11 = NeonStoreD::from_complex_ref(chunk.get_unchecked(11..));
+                        let u12 = NeonStoreD::from_complex_ref(chunk.get_unchecked(12..));
+                        let u13 = NeonStoreD::from_complex_ref(chunk.get_unchecked(13..));
+                        let u14 = NeonStoreD::from_complex_ref(chunk.get_unchecked(14..));
+                        let u15 = NeonStoreD::from_complex_ref(chunk.get_unchecked(15..));
+                        let u16 = NeonStoreD::from_complex_ref(chunk.get_unchecked(16..));
+                        let u17 = NeonStoreD::from_complex_ref(chunk.get_unchecked(17..));
+                        let u18 = NeonStoreD::from_complex_ref(chunk.get_unchecked(18..));
+                        let u19 = NeonStoreD::from_complex_ref(chunk.get_unchecked(19..));
+                        let u20 = NeonStoreD::from_complex_ref(chunk.get_unchecked(20..));
+                        let u21 = NeonStoreD::from_complex_ref(chunk.get_unchecked(21..));
+                        let u22 = NeonStoreD::from_complex_ref(chunk.get_unchecked(22..));
+                        let u23 = NeonStoreD::from_complex_ref(chunk.get_unchecked(23..));
+                        let u24 = NeonStoreD::from_complex_ref(chunk.get_unchecked(24..));
 
                         let s0 = self.bf5.exec([u0, u5, u10, u15, u20]);
                         let mut s1 = self.bf5.exec([u1, u6, u11, u16, u21]);
@@ -202,46 +177,31 @@ macro_rules! gen_bf25d {
 
                 unsafe {
                     for (dst, src) in dst.chunks_exact_mut(25).zip(src.chunks_exact(25)) {
-                        let u0 = NeonStoreD::raw(vld1q_f64(src.as_ptr().cast()));
-                        let u1 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(1..).as_ptr().cast()));
-                        let u2 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(2..).as_ptr().cast()));
-                        let u3 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(3..).as_ptr().cast()));
-                        let u4 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(4..).as_ptr().cast()));
-                        let u5 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(5..).as_ptr().cast()));
-                        let u6 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(6..).as_ptr().cast()));
-                        let u7 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(7..).as_ptr().cast()));
-                        let u8 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(8..).as_ptr().cast()));
-                        let u9 = NeonStoreD::raw(vld1q_f64(src.get_unchecked(9..).as_ptr().cast()));
-                        let u10 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(10..).as_ptr().cast()));
-                        let u11 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(11..).as_ptr().cast()));
-                        let u12 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(12..).as_ptr().cast()));
-                        let u13 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(13..).as_ptr().cast()));
-                        let u14 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(14..).as_ptr().cast()));
-                        let u15 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(15..).as_ptr().cast()));
-                        let u16 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(16..).as_ptr().cast()));
-                        let u17 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(17..).as_ptr().cast()));
-                        let u18 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(18..).as_ptr().cast()));
-                        let u19 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(19..).as_ptr().cast()));
-                        let u20 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(20..).as_ptr().cast()));
-                        let u21 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(21..).as_ptr().cast()));
-                        let u22 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(22..).as_ptr().cast()));
-                        let u23 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(23..).as_ptr().cast()));
-                        let u24 =
-                            NeonStoreD::raw(vld1q_f64(src.get_unchecked(24..).as_ptr().cast()));
+                        let u0 = NeonStoreD::from_complex_ref(src);
+                        let u1 = NeonStoreD::from_complex_ref(src.get_unchecked(1..));
+                        let u2 = NeonStoreD::from_complex_ref(src.get_unchecked(2..));
+                        let u3 = NeonStoreD::from_complex_ref(src.get_unchecked(3..));
+                        let u4 = NeonStoreD::from_complex_ref(src.get_unchecked(4..));
+                        let u5 = NeonStoreD::from_complex_ref(src.get_unchecked(5..));
+                        let u6 = NeonStoreD::from_complex_ref(src.get_unchecked(6..));
+                        let u7 = NeonStoreD::from_complex_ref(src.get_unchecked(7..));
+                        let u8 = NeonStoreD::from_complex_ref(src.get_unchecked(8..));
+                        let u9 = NeonStoreD::from_complex_ref(src.get_unchecked(9..));
+                        let u10 = NeonStoreD::from_complex_ref(src.get_unchecked(10..));
+                        let u11 = NeonStoreD::from_complex_ref(src.get_unchecked(11..));
+                        let u12 = NeonStoreD::from_complex_ref(src.get_unchecked(12..));
+                        let u13 = NeonStoreD::from_complex_ref(src.get_unchecked(13..));
+                        let u14 = NeonStoreD::from_complex_ref(src.get_unchecked(14..));
+                        let u15 = NeonStoreD::from_complex_ref(src.get_unchecked(15..));
+                        let u16 = NeonStoreD::from_complex_ref(src.get_unchecked(16..));
+                        let u17 = NeonStoreD::from_complex_ref(src.get_unchecked(17..));
+                        let u18 = NeonStoreD::from_complex_ref(src.get_unchecked(18..));
+                        let u19 = NeonStoreD::from_complex_ref(src.get_unchecked(19..));
+                        let u20 = NeonStoreD::from_complex_ref(src.get_unchecked(20..));
+                        let u21 = NeonStoreD::from_complex_ref(src.get_unchecked(21..));
+                        let u22 = NeonStoreD::from_complex_ref(src.get_unchecked(22..));
+                        let u23 = NeonStoreD::from_complex_ref(src.get_unchecked(23..));
+                        let u24 = NeonStoreD::from_complex_ref(src.get_unchecked(24..));
 
                         let s0 = self.bf5.exec([u0, u5, u10, u15, u20]);
                         let mut s1 = self.bf5.exec([u1, u6, u11, u16, u21]);

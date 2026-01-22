@@ -77,7 +77,7 @@ where
 impl AvxButterfly4<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 4 != 0 {
+        if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -100,7 +100,7 @@ impl AvxButterfly4<f32> {
                 let t2 = _mm256_add_ps(b, d);
                 let mut t3 = _mm256_sub_ps(b, d);
                 const SH: i32 = shuffle(2, 3, 0, 1);
-                t3 = _mm256_xor_ps(_mm256_permute_ps::<SH>(t3), v_i_multiplier);
+                t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), v_i_multiplier);
 
                 let xy0 = _mm256_add_ps(t0, t2);
                 let xy1 = _mm256_add_ps(t1, t3);
@@ -155,10 +155,10 @@ impl AvxButterfly4<f32> {
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 4 != 0 {
+        if !src.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 4 != 0 {
+        if !dst.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -178,7 +178,7 @@ impl AvxButterfly4<f32> {
                 let t2 = _mm256_add_ps(b, d);
                 let mut t3 = _mm256_sub_ps(b, d);
                 const SH: i32 = shuffle(2, 3, 0, 1);
-                t3 = _mm256_xor_ps(_mm256_permute_ps::<SH>(t3), v_i_multiplier);
+                t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), v_i_multiplier);
 
                 let xy0 = _mm256_add_ps(t0, t2);
                 let xy1 = _mm256_add_ps(t1, t3);
@@ -248,7 +248,7 @@ impl CompositeFftExecutor<f32> for AvxButterfly4<f32> {
 impl AvxButterfly4<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 4 != 0 {
+        if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -295,10 +295,10 @@ impl AvxButterfly4<f64> {
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 4 != 0 {
+        if !src.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 4 != 0 {
+        if !dst.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 

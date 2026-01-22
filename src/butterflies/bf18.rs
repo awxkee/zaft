@@ -28,12 +28,10 @@
  */
 use crate::butterflies::fast_bf9::FastButterfly9;
 use crate::butterflies::short_butterflies::FastButterfly2;
-use crate::traits::FftTrigonometry;
-use crate::{FftDirection, FftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd, Num};
+use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::ops::{Add, Mul, Neg, Sub};
 
 #[allow(unused)]
 pub(crate) struct Butterfly18<T> {
@@ -43,7 +41,7 @@ pub(crate) struct Butterfly18<T> {
 }
 
 #[allow(unused)]
-impl<T: FftTrigonometry + Float + 'static + Default> Butterfly18<T>
+impl<T: FftSample> Butterfly18<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -56,24 +54,12 @@ where
     }
 }
 
-impl<
-    T: Copy
-        + Mul<T, Output = T>
-        + Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Num
-        + 'static
-        + Neg<Output = T>
-        + MulAdd<T, Output = T>
-        + Float
-        + Default
-        + FftTrigonometry,
-> FftExecutor<T> for Butterfly18<T>
+impl<T: FftSample> FftExecutor<T> for Butterfly18<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.length() != 0 {
+        if !in_place.len().is_multiple_of(self.length()) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),

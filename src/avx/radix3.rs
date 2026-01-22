@@ -32,18 +32,13 @@ use crate::avx::util::{
     _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_fcmul_ps, shuffle,
 };
 use crate::err::try_vec;
-use crate::factory::AlgorithmFactory;
 use crate::radix3::Radix3Twiddles;
-use crate::spectrum_arithmetic::SpectrumOpsFactory;
-use crate::traits::FftTrigonometry;
-use crate::transpose::TransposeFactory;
-use crate::util::{compute_logarithm, compute_twiddle, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::util::{compute_twiddle, int_logarithm, reverse_bits};
+use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float, MulAdd};
+use num_traits::AsPrimitive;
 use std::any::TypeId;
 use std::arch::x86_64::*;
-use std::fmt::Display;
 use std::sync::Arc;
 
 #[inline]
@@ -109,7 +104,7 @@ pub(crate) fn avx_bitreversed_transpose_f32_radix3(
     const WIDTH: usize = 3;
     const HEIGHT: usize = 3;
 
-    let rev_digits = compute_logarithm::<3>(width).unwrap();
+    let rev_digits = int_logarithm::<3>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -156,7 +151,7 @@ pub(crate) fn avx_bitreversed_transpose_f64_radix3(
     const WIDTH: usize = 3;
     const HEIGHT: usize = 3;
 
-    let rev_digits = compute_logarithm::<3>(width).unwrap();
+    let rev_digits = int_logarithm::<3>(width).unwrap();
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
@@ -203,32 +198,17 @@ pub(crate) struct AvxFmaRadix3<T> {
     base_len: usize,
 }
 
-impl<
-    T: Default
-        + Clone
-        + Radix3Twiddles
-        + 'static
-        + Copy
-        + FftTrigonometry
-        + Float
-        + Send
-        + Sync
-        + AlgorithmFactory<T>
-        + MulAdd<T, Output = T>
-        + SpectrumOpsFactory<T>
-        + Display
-        + TransposeFactory<T>,
-> AvxFmaRadix3<T>
+impl<T: FftSample + Radix3Twiddles> AvxFmaRadix3<T>
 where
     f64: AsPrimitive<T>,
 {
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<AvxFmaRadix3<T>, ZaftError> {
         assert!(
-            size.is_power_of_two() || size % 3 == 0,
+            size.is_power_of_two() || size.is_multiple_of(3),
             "Input length must be divisible by 3"
         );
 
-        let exponent = compute_logarithm::<3>(size).unwrap_or_else(|| {
+        let exponent = int_logarithm::<3>(size).unwrap_or_else(|| {
             panic!("Neon Fcma Radix3 length must be power of 3, but got {size}",)
         });
 
@@ -319,7 +299,7 @@ where
 impl AvxFmaRadix3<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -395,10 +375,10 @@ impl AvxFmaRadix3<f64> {
                             let sum_1 = _mm256_add_pd(u0_1, xp_1);
 
                             let w_0 = _mm256_fmadd_pd(twiddle_re, xp_0, u0);
-                            let xn_rot_0 = _mm256_permute_pd::<0b0101>(xn_0);
+                            let xn_rot_0 = _mm256_shuffle_pd::<0b0101>(xn_0, xn_0);
 
                             let w_1 = _mm256_fmadd_pd(twiddle_re, xp_1, u0_1);
-                            let xn_rot_1 = _mm256_permute_pd::<0b0101>(xn_1);
+                            let xn_rot_1 = _mm256_shuffle_pd::<0b0101>(xn_1, xn_1);
 
                             let vy0 = sum_0;
                             let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot_0, w_0);
@@ -460,7 +440,7 @@ impl AvxFmaRadix3<f64> {
                             let sum = _mm256_add_pd(u0, xp);
 
                             let w_1 = _mm256_fmadd_pd(twiddle_re, xp, u0);
-                            let xn_rot = _mm256_permute_pd::<0b0101>(xn);
+                            let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
 
                             let vy0 = sum;
                             let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot, w_1);
@@ -541,7 +521,7 @@ impl FftExecutor<f64> for AvxFmaRadix3<f64> {
 impl AvxFmaRadix3<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % self.execution_length != 0 {
+        if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
@@ -609,7 +589,7 @@ impl AvxFmaRadix3<f32> {
                                 const SH: i32 = shuffle(2, 3, 0, 1);
 
                                 let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
-                                let xn_rot = _mm256_permute_ps::<SH>(xn_0);
+                                let xn_rot = _mm256_shuffle_ps::<SH>(xn_0, xn_0);
 
                                 let vy0 = sum_0;
                                 let vy1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot, vw_1_1);

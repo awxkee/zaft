@@ -72,7 +72,7 @@ where
 impl AvxButterfly3<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if in_place.len() % 3 != 0 {
+        if !in_place.len().is_multiple_of(3) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -171,7 +171,7 @@ impl AvxButterfly3<f32> {
 
                 _mm_storeu_pd(
                     chunk.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                    _mm_unpacklo_pd(_mm_castps_pd(y0), _mm_castps_pd(y1)),
+                    _mm_shuffle_pd::<0b00>(_mm_castps_pd(y0), _mm_castps_pd(y1)),
                 );
                 _mm_storeu_si64(
                     chunk.get_unchecked_mut(2..).as_mut_ptr().cast(),
@@ -188,10 +188,10 @@ impl AvxButterfly3<f32> {
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 3 != 0 {
+        if !src.len().is_multiple_of(3) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 3 != 0 {
+        if !dst.len().is_multiple_of(3) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -289,7 +289,7 @@ impl AvxButterfly3<f32> {
 
                 _mm_storeu_pd(
                     dst.get_unchecked_mut(0..).as_mut_ptr().cast(),
-                    _mm_unpacklo_pd(_mm_castps_pd(y0), _mm_castps_pd(y1)),
+                    _mm_shuffle_pd::<0b00>(_mm_castps_pd(y0), _mm_castps_pd(y1)),
                 );
                 _mm_storeu_si64(
                     dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
@@ -320,7 +320,7 @@ impl CompositeFftExecutor<f32> for AvxButterfly3<f32> {
 impl AvxButterfly3<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
     unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if in_place.len() % 3 != 0 {
+        if !in_place.len().is_multiple_of(3) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.length(),
@@ -351,7 +351,7 @@ impl AvxButterfly3<f64> {
 
                 let w_1 = _mm256_fmadd_pd(twiddle_re, xp, u0);
 
-                let xn_rot = _mm256_permute_pd::<0b0101>(xn);
+                let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
 
                 let zy0 = sum;
                 let zy1 = _mm256_fmadd_pd(tw1, xn_rot, w_1);
@@ -402,10 +402,10 @@ impl AvxButterfly3<f64> {
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if src.len() % 3 != 0 {
+        if !src.len().is_multiple_of(3) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
-        if dst.len() % 3 != 0 {
+        if !dst.len().is_multiple_of(3) {
             return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
         }
 
@@ -433,7 +433,7 @@ impl AvxButterfly3<f64> {
 
                 let w_1 = _mm256_fmadd_pd(twiddle_re, xp, u0);
 
-                let xn_rot = _mm256_permute_pd::<0b0101>(xn);
+                let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
 
                 let zy0 = sum;
                 let zy1 = _mm256_fmadd_pd(tw1, xn_rot, w_1);
