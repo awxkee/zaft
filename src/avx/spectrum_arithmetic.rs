@@ -473,7 +473,7 @@ impl AvxSpectrumArithmetic<f64> {
             let b = b.chunks_exact(8).remainder();
 
             for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-                let s0 = _mm_unpacklo_pd(_mm_load_sd(src), _mm_setzero_pd());
+                let s0 = _mm_shuffle_pd::<0b00>(_mm_load_sd(src), _mm_setzero_pd());
                 let q0 = _mm_loadu_pd(twiddle as *const Complex<f64> as *const f64);
 
                 let p0 = _mm_fcmul_pd(s0, q0);

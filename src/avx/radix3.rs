@@ -375,10 +375,10 @@ impl AvxFmaRadix3<f64> {
                             let sum_1 = _mm256_add_pd(u0_1, xp_1);
 
                             let w_0 = _mm256_fmadd_pd(twiddle_re, xp_0, u0);
-                            let xn_rot_0 = _mm256_permute_pd::<0b0101>(xn_0);
+                            let xn_rot_0 = _mm256_shuffle_pd::<0b0101>(xn_0, xn_0);
 
                             let w_1 = _mm256_fmadd_pd(twiddle_re, xp_1, u0_1);
-                            let xn_rot_1 = _mm256_permute_pd::<0b0101>(xn_1);
+                            let xn_rot_1 = _mm256_shuffle_pd::<0b0101>(xn_1, xn_1);
 
                             let vy0 = sum_0;
                             let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot_0, w_0);
@@ -440,7 +440,7 @@ impl AvxFmaRadix3<f64> {
                             let sum = _mm256_add_pd(u0, xp);
 
                             let w_1 = _mm256_fmadd_pd(twiddle_re, xp, u0);
-                            let xn_rot = _mm256_permute_pd::<0b0101>(xn);
+                            let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
 
                             let vy0 = sum;
                             let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot, w_1);
@@ -589,7 +589,7 @@ impl AvxFmaRadix3<f32> {
                                 const SH: i32 = shuffle(2, 3, 0, 1);
 
                                 let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
-                                let xn_rot = _mm256_permute_ps::<SH>(xn_0);
+                                let xn_rot = _mm256_shuffle_ps::<SH>(xn_0, xn_0);
 
                                 let vy0 = sum_0;
                                 let vy1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot, vw_1_1);

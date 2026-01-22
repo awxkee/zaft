@@ -78,8 +78,8 @@ pub(crate) fn _mm256_set2_complex(v0: Complex<f32>, v1: Complex<f32>) -> __m256 
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
-    let temp1 = _mm_unpacklo_pd(b, b);
-    let mut temp2 = _mm_unpackhi_pd(b, b);
+    let temp1 = _mm_shuffle_pd::<0b00>(b, b);
+    let mut temp2 = _mm_shuffle_pd::<0b11>(b, b);
     temp2 = _mm_mul_pd(temp2, a);
     temp2 = _mm_shuffle_pd(temp2, temp2, 0x01);
     _mm_fmaddsub_pd(temp1, a, temp2)
@@ -89,11 +89,11 @@ pub(crate) fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
 #[target_feature(enable = "avx", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
-    let a_yx = _mm256_permute_pd::<0b0101>(a); // [a_im, a_re, b_im, b_re]
+    let a_yx = _mm256_shuffle_pd::<0b0101>(a, a); // [a_im, a_re, b_im, b_re]
 
     // Duplicate real and imaginary parts of 'b'
-    let b_xx = _mm256_permute_pd::<0b0000>(b); // [c_re, c_re, d_re, d_re]
-    let b_yy = _mm256_permute_pd::<0b1111>(b); // [c_im, c_im, d_im, d_im]
+    let b_xx = _mm256_shuffle_pd::<0b0000>(b, b); // [c_re, c_re, d_re, d_re]
+    let b_yy = _mm256_shuffle_pd::<0b1111>(b, b); // [c_im, c_im, d_im, d_im]
 
     // Compute (a_re*b_re - a_im*b_im) + i(a_re*b_im + a_im*b_re)
     _mm256_fmaddsub_pd(a, b_xx, _mm256_mul_pd(a_yx, b_yy))
@@ -135,7 +135,7 @@ pub(crate) fn _mm256_fcmul_ps(a: __m256, b: __m256) -> __m256 {
     let ai = _mm256_movehdup_ps(a); // duplicate odd lanes (im parts)
 
     // Swap real/imag of b for cross terms
-    let bswap = _mm256_permute_ps::<0b10110001>(b); // [im, re, im, re, ...]
+    let bswap = _mm256_shuffle_ps::<0b10110001>(b, b); // [im, re, im, re, ...]
 
     // re = ar*br - ai*bi
     // im = ar*bi + ai*br
@@ -266,17 +266,6 @@ pub(crate) fn _mm256s_deinterleave3_epi64(
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) fn _mm256s_interleave2_epi64(a: __m256, b: __m256) -> (__m256, __m256) {
-    let xy_l = _mm256_unpacklo_pd(_mm256_castps_pd(a), _mm256_castps_pd(b));
-    let xy_h = _mm256_unpackhi_pd(_mm256_castps_pd(a), _mm256_castps_pd(b));
-
-    let xy0 = _mm256_permute2f128_pd::<32>(xy_l, xy_h);
-    let xy1 = _mm256_permute2f128_pd::<49>(xy_l, xy_h);
-    (_mm256_castpd_ps(xy0), _mm256_castpd_ps(xy1))
-}
-
-#[inline]
-#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256s_interleave3_epi64(
     a: __m256,
     b: __m256,
@@ -297,39 +286,6 @@ pub(crate) fn _mm256s_interleave3_epi64(
             _mm256_castsi256_ps(xy2),
         )
     }
-}
-
-#[inline]
-#[target_feature(enable = "avx2")]
-pub(crate) fn _mm128s_deinterleave3_epi64(
-    a: __m128,
-    b: __m128,
-    c: __m128,
-) -> (__m128, __m128, __m128) {
-    let t1 = _mm_shuffle_epi32::<0x4e>(_mm_castps_si128(b)); // a1, c0
-
-    let xy0 = _mm_unpacklo_epi64(_mm_castps_si128(a), t1);
-    let xy1 = _mm_unpacklo_epi64(
-        _mm_unpackhi_epi64(_mm_castps_si128(a), _mm_castps_si128(a)),
-        _mm_castps_si128(c),
-    );
-    let xy2 = _mm_unpackhi_epi64(t1, _mm_castps_si128(c));
-
-    (
-        _mm_castsi128_ps(xy0),
-        _mm_castsi128_ps(xy1),
-        _mm_castsi128_ps(xy2),
-    )
-}
-
-#[inline]
-#[target_feature(enable = "avx2")]
-pub(crate) fn _mm256s_deinterleave2_epi64(a: __m256, b: __m256) -> (__m256, __m256) {
-    let pl = _mm256_permute2f128_pd::<32>(_mm256_castps_pd(a), _mm256_castps_pd(b));
-    let ph = _mm256_permute2f128_pd::<49>(_mm256_castps_pd(a), _mm256_castps_pd(b));
-    let a0 = _mm256_unpacklo_pd(pl, ph);
-    let b0 = _mm256_unpackhi_pd(pl, ph);
-    (_mm256_castpd_ps(a0), _mm256_castpd_ps(b0))
 }
 
 #[inline]
@@ -369,7 +325,7 @@ pub(crate) fn _mm256_create_pd(a: __m128d, b: __m128d) -> __m256d {
 #[inline]
 #[target_feature(enable = "avx")]
 pub(crate) fn _mm256_unpacklo_ps64(a: __m256, b: __m256) -> __m256 {
-    _mm256_castpd_ps(_mm256_unpacklo_pd(_mm256_castps_pd(a), _mm256_castps_pd(b)))
+    _mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(a, b)
 }
 
 #[inline]
@@ -384,7 +340,7 @@ pub(crate) fn _mm256_blend_ps64<const IMM8: i32>(a: __m256, b: __m256) -> __m256
 #[inline]
 #[target_feature(enable = "avx")]
 pub(crate) fn _mm256_unpackhi_ps64(a: __m256, b: __m256) -> __m256 {
-    _mm256_castpd_ps(_mm256_unpackhi_pd(_mm256_castps_pd(a), _mm256_castps_pd(b)))
+    _mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(a, b)
 }
 
 // a.conj() * b
@@ -396,7 +352,7 @@ pub(crate) fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
     let ai = _mm256_movehdup_ps(a); // duplicate odd lanes (im parts)
 
     // Swap real/imag of b for cross terms
-    let bswap = _mm256_permute_ps::<0b10110001>(b); // [im, re, im, re, ...]
+    let bswap = _mm256_shuffle_ps::<0b10110001>(b, b); // [im, re, im, re, ...]
 
     // re = ar*br - -ai*bi
     // im = ar*bi - ai*br
@@ -412,7 +368,7 @@ pub(crate) fn _mm256_fcmul_ps_conj_b(a: __m256, b: __m256) -> __m256 {
     let ai = _mm256_movehdup_ps(b); // duplicate odd lanes (im parts)
 
     // Swap real/imag of b for cross terms
-    let bswap = _mm256_permute_ps::<0b10110001>(a); // [im, re, im, re, ...]
+    let bswap = _mm256_shuffle_ps::<0b10110001>(a, a); // [im, re, im, re, ...]
 
     // re = ar*br - -ai*bi
     // im = ar*bi - ai*br
@@ -446,11 +402,11 @@ pub(crate) fn _mm_fcmul_ps_conj_b(a: __m128, b: __m128) -> __m128 {
 #[target_feature(enable = "avx", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
-    let a_yx = _mm256_permute_pd::<0b0101>(a); // [a_im, a_re, b_im, b_re]
+    let a_yx = _mm256_shuffle_pd::<0b0101>(a, a); // [a_im, a_re, b_im, b_re]
 
     // Duplicate real and imaginary parts of 'b'
-    let b_xx = _mm256_permute_pd::<0b0000>(b); // [c_re, c_re, d_re, d_re]
-    let b_yy = _mm256_permute_pd::<0b1111>(b); // [c_im, c_im, d_im, d_im]
+    let b_xx = _mm256_shuffle_pd::<0b0000>(b, b); // [c_re, c_re, d_re, d_re]
+    let b_yy = _mm256_shuffle_pd::<0b1111>(b, b); // [c_im, c_im, d_im, d_im]
 
     _mm256_fmsubadd_pd(a_yx, b_yy, _mm256_mul_pd(a, b_xx))
 }
@@ -460,11 +416,11 @@ pub(crate) fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
 #[target_feature(enable = "avx", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd_conj_b(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
-    let a_yx = _mm256_permute_pd::<0b0101>(b); // [a_im, a_re, b_im, b_re]
+    let a_yx = _mm256_shuffle_pd::<0b0101>(b, b); // [a_im, a_re, b_im, b_re]
 
     // Duplicate real and imaginary parts of 'b'
-    let b_xx = _mm256_permute_pd::<0b0000>(a); // [c_re, c_re, d_re, d_re]
-    let b_yy = _mm256_permute_pd::<0b1111>(a); // [c_im, c_im, d_im, d_im]
+    let b_xx = _mm256_shuffle_pd::<0b0000>(a, a); // [c_re, c_re, d_re, d_re]
+    let b_yy = _mm256_shuffle_pd::<0b1111>(a, a); // [c_im, c_im, d_im, d_im]
 
     _mm256_fmsubadd_pd(a_yx, b_yy, _mm256_mul_pd(b, b_xx))
 }
@@ -473,8 +429,8 @@ pub(crate) fn _mm256_fcmul_pd_conj_b(a: __m256d, b: __m256d) -> __m256d {
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
-    let temp1 = _mm_unpacklo_pd(a, a); // [b.re, b.re]
-    let mut temp2 = _mm_unpackhi_pd(a, a); // [b.im, b.im]
+    let temp1 = _mm_shuffle_pd::<0b00>(a, a); // [b.re, b.re]
+    let mut temp2 = _mm_shuffle_pd::<0b11>(a, a); // [b.im, b.im]
     temp2 = _mm_mul_pd(temp2, b); // [b.im * a.re, b.im * a.im]
     temp2 = _mm_shuffle_pd::<0x01>(temp2, temp2); // [b.im * a.im, b.im * a.im]
     _mm_fmsubadd_pd(temp1, b, temp2)
@@ -484,8 +440,8 @@ pub(crate) fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
 #[inline]
 #[target_feature(enable = "avx", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd_conj_b(a: __m128d, b: __m128d) -> __m128d {
-    let temp1 = _mm_unpacklo_pd(b, b); // [b.re, b.re]
-    let mut temp2 = _mm_unpackhi_pd(b, b); // [b.im, b.im]
+    let temp1 = _mm_shuffle_pd::<0b00>(b, b); // [b.re, b.re]
+    let mut temp2 = _mm_shuffle_pd::<0b11>(b, b); // [b.im, b.im]
     temp2 = _mm_mul_pd(temp2, a); // [b.im * a.re, b.im * a.im]
     temp2 = _mm_shuffle_pd::<0x01>(temp2, temp2); // [b.im * a.im, b.im * a.im]
     _mm_fmsubadd_pd(temp1, a, temp2)

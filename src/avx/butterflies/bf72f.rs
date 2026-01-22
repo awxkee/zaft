@@ -31,21 +31,17 @@
 use crate::avx::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::avx::mixed::{AvxStoreF, ColumnButterfly6f, ColumnButterfly12f};
 use crate::avx::transpose::transpose_f32x2_4x4_aos;
+use crate::avx::util::shuffle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
+#[inline]
 #[target_feature(enable = "avx2")]
 fn unpack_2(v0: AvxStoreF, v1: AvxStoreF) -> [AvxStoreF; 2] {
     [
-        AvxStoreF::raw(_mm256_castpd_ps(_mm256_unpacklo_pd(
-            _mm256_castps_pd(v0.v),
-            _mm256_castps_pd(v1.v),
-        ))),
-        AvxStoreF::raw(_mm256_castpd_ps(_mm256_unpackhi_pd(
-            _mm256_castps_pd(v0.v),
-            _mm256_castps_pd(v1.v),
-        ))),
+        AvxStoreF::raw(_mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(v0.v, v1.v)),
+        AvxStoreF::raw(_mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(v0.v, v1.v)),
     ]
 }
 

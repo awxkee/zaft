@@ -28,7 +28,7 @@
  */
 
 use crate::avx::mixed::AvxStoreF;
-use crate::avx::transpose::{avx_transpose_f32x2_4x4_impl, avx_transpose_u64_4x4_impl};
+use crate::avx::transpose::avx_transpose_f32x2_4x4_impl;
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
@@ -41,46 +41,46 @@ pub(crate) fn avx2_transpose_f32x2_8x4(
     dst_stride: usize,
 ) {
     unsafe {
-        let a0 = _mm256_loadu_si256(src.as_ptr().cast());
-        let a1 = _mm256_loadu_si256(src.get_unchecked(src_stride..).as_ptr().cast());
-        let a2 = _mm256_loadu_si256(src.get_unchecked(2 * src_stride..).as_ptr().cast());
-        let a3 = _mm256_loadu_si256(src.get_unchecked(3 * src_stride..).as_ptr().cast());
+        let a0 = _mm256_loadu_ps(src.as_ptr().cast());
+        let a1 = _mm256_loadu_ps(src.get_unchecked(src_stride..).as_ptr().cast());
+        let a2 = _mm256_loadu_ps(src.get_unchecked(2 * src_stride..).as_ptr().cast());
+        let a3 = _mm256_loadu_ps(src.get_unchecked(3 * src_stride..).as_ptr().cast());
 
-        let b0 = _mm256_loadu_si256(src.get_unchecked(4..).as_ptr().cast());
-        let b1 = _mm256_loadu_si256(src.get_unchecked(4 + src_stride..).as_ptr().cast());
-        let b2 = _mm256_loadu_si256(src.get_unchecked(4 + 2 * src_stride..).as_ptr().cast());
-        let b3 = _mm256_loadu_si256(src.get_unchecked(4 + 3 * src_stride..).as_ptr().cast());
+        let b0 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
+        let b1 = _mm256_loadu_ps(src.get_unchecked(4 + src_stride..).as_ptr().cast());
+        let b2 = _mm256_loadu_ps(src.get_unchecked(4 + 2 * src_stride..).as_ptr().cast());
+        let b3 = _mm256_loadu_ps(src.get_unchecked(4 + 3 * src_stride..).as_ptr().cast());
 
-        let v0 = avx_transpose_u64_4x4_impl((a0, a1, a2, a3));
-        let v1 = avx_transpose_u64_4x4_impl((b0, b1, b2, b3));
+        let v0 = avx_transpose_f32x2_4x4_impl(a0, a1, a2, a3);
+        let v1 = avx_transpose_f32x2_4x4_impl(b0, b1, b2, b3);
 
-        _mm256_storeu_si256(dst.as_mut_ptr().cast(), v0.0);
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(dst.as_mut_ptr().cast(), v0.0);
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(dst_stride..).as_mut_ptr().cast(),
             v0.1,
         );
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(2 * dst_stride..).as_mut_ptr().cast(),
             v0.2,
         );
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(3 * dst_stride..).as_mut_ptr().cast(),
             v0.3,
         );
 
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(4 * dst_stride..).as_mut_ptr().cast(),
             v1.0,
         );
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(5 * dst_stride..).as_mut_ptr().cast(),
             v1.1,
         );
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(6 * dst_stride..).as_mut_ptr().cast(),
             v1.2,
         );
-        _mm256_storeu_si256(
+        _mm256_storeu_ps(
             dst.get_unchecked_mut(7 * dst_stride..).as_mut_ptr().cast(),
             v1.3,
         );
