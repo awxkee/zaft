@@ -33,6 +33,7 @@ mod bf13;
 mod bf14;
 mod bf15;
 mod bf16;
+mod bf18;
 mod bf2;
 mod bf3;
 mod bf4;
@@ -81,6 +82,9 @@ pub(crate) use bf13::{ColumnFcmaButterfly13d, ColumnFcmaButterfly13f};
 pub(crate) use bf16::{ColumnButterfly16d, ColumnButterfly16f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf16::{ColumnFcmaButterfly16d, ColumnFcmaButterfly16f};
+pub(crate) use bf18::{ColumnButterfly18d, ColumnButterfly18f};
+#[cfg(feature = "fcma")]
+pub(crate) use bf18::{ColumnFcmaButterfly18d, ColumnFcmaButterfly18f};
 #[cfg(feature = "fcma")]
 pub(crate) use mixed_radix::{
     NeonFcmaMixedRadix2, NeonFcmaMixedRadix2f, NeonFcmaMixedRadix3, NeonFcmaMixedRadix3f,

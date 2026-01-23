@@ -230,8 +230,8 @@ fn check_power_groupd(c: &mut Criterion, n: usize, group: String) {
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     //     .measurement_time(Duration::from_millis(135));
-    bench_rustfft_average(c);
-    bench_zaft_average(c);
+    // bench_rustfft_average(c);
+    // bench_zaft_average(c);
     bench_rustfft_averages(c);
     bench_zaft_averages(c);
 
@@ -331,9 +331,18 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    check_power_group(c, 1803, "1803".to_string());
-    check_power_group(c, 901, "901".to_string());
-    check_power_groups(c, 63, "63".to_string());
+    check_power_group(c, 1536, "1536".to_string());
+    check_power_group(c, 1920, "1920".to_string());
+
+    check_power_group(c, 216, "216".to_string());
+    check_power_group(c, 1296, "1296".to_string());
+    check_power_group(c, 7776, "7776".to_string());
+    check_power_group(c, 46656, "46656".to_string());
+
+    check_power_group(c, 100, "100".to_string());
+    check_power_group(c, 1000, "1000".to_string());
+    check_power_group(c, 10000, "10000".to_string());
+    check_power_group(c, 100000, "100000".to_string());
     // check_power_group(c, 1920, "Full HD".to_string());
     // check_power_group(c, 1000, "power 10".to_string());
     // check_power_group(c, 11 * 11 * 11, "power 11".to_string());

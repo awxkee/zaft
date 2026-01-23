@@ -582,7 +582,7 @@ macro_rules! define_mixed_radix_neon_f_fcma {
         impl $radix_name {
             #[target_feature(enable = "fcma")]
             unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if in_place.len() % self.execution_length != 0 {
+                if !in_place.len().is_multiple_of(self.execution_length) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.execution_length,
