@@ -598,11 +598,6 @@ impl Zaft {
             let factor_of_3 = prime_factors.factor_of_3();
             let factor_of_5 = prime_factors.factor_of_5();
 
-            let product2n_3m = 2u64.pow(factor_of_2) * 3u64.pow(factor_of_3);
-            if product2n_3m == 1536 {
-                try_mixed_radix!(1536, product / 1536)
-            }
-
             if (factor_of_2 == 1 && factor_of_3 == 1 && factor_of_5 > 1)
                 && T::butterfly30(direction).is_some()
             {
@@ -668,6 +663,9 @@ impl Zaft {
             all(target_arch = "x86_64", feature = "avx")
         ))]
         {
+            if product.is_multiple_of(5) {
+                try_mixed_radix!(5, product / 5)
+            }
             match Zaft::try_split_mixed_radix_butterflies(n_length, q_length, direction) {
                 Ok(value) => match value {
                     None => {}
