@@ -332,6 +332,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     }
 
     check_power_group(c, 1536, "1536".to_string());
+    check_power_group(c, 192_000, "192_000".to_string());
     check_power_group(c, 1920, "1920".to_string());
 
     check_power_group(c, 216, "216".to_string());
