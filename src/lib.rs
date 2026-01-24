@@ -432,6 +432,16 @@ impl Zaft {
             }};
         }
 
+        macro_rules! get_mixed_butterflies {
+            ($q: expr, $p: expr) => {{
+                if let Some(executor) =
+                    Zaft::try_split_mixed_radix_butterflies($q as u64, $p as u64, direction)?
+                {
+                    return Ok(executor);
+                }
+            }};
+        }
+
         if prime_factors.is_power_of_two_and_three() {
             let product2 = prime_factors
                 .factorization
@@ -664,7 +674,25 @@ impl Zaft {
         ))]
         {
             if product.is_multiple_of(10) {
-                try_mixed_radix!(10, product / 10)
+                get_mixed_butterflies!(10, product / 10)
+            }
+            if product.is_multiple_of(14) {
+                get_mixed_butterflies!(14, product / 14)
+            }
+            if product.is_multiple_of(12) {
+                get_mixed_butterflies!(12, product / 12)
+            }
+            if product.is_multiple_of(8) {
+                get_mixed_butterflies!(8, product / 8)
+            }
+            if product.is_multiple_of(9) {
+                get_mixed_butterflies!(9, product / 9)
+            }
+            if product.is_multiple_of(7) {
+                get_mixed_butterflies!(7, product / 7)
+            }
+            if product.is_multiple_of(5) {
+                get_mixed_butterflies!(5, product / 5)
             }
             match Zaft::try_split_mixed_radix_butterflies(n_length, q_length, direction) {
                 Ok(value) => match value {
