@@ -663,6 +663,9 @@ impl Zaft {
             all(target_arch = "x86_64", feature = "avx")
         ))]
         {
+            if product.is_multiple_of(10) {
+                try_mixed_radix!(10, product / 10)
+            }
             match Zaft::try_split_mixed_radix_butterflies(n_length, q_length, direction) {
                 Ok(value) => match value {
                     None => {}
