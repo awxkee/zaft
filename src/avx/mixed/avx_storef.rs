@@ -217,14 +217,14 @@ impl AvxStoreF {
     #[inline]
     #[target_feature(enable = "avx")]
     pub(crate) fn reverse_complex(&self) -> Self {
-        let permuted = _mm256_permute_ps(self.v, 0x4E);
+        let permuted = _mm256_shuffle_ps::<0x4E>(self.v, self.v);
         AvxStoreF::raw(_mm256_permute2f128_ps(permuted, permuted, 0x01))
     }
 
     #[inline]
     #[target_feature(enable = "avx")]
     pub(crate) fn reverse_complex_elements(&self) -> Self {
-        AvxStoreF::raw(_mm256_permute_ps::<0xB1>(self.v))
+        AvxStoreF::raw(_mm256_shuffle_ps::<0xB1>(self.v, self.v))
     }
 
     #[inline]

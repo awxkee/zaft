@@ -327,6 +327,10 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly169(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
+    fn butterfly192(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly216(
+        fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
     fn butterfly243(
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<T> + Send + Sync>>;
@@ -1103,6 +1107,30 @@ impl AlgorithmFactory<f32> for f32 {
             AvxButterfly169f,
             NeonButterfly169f,
             NeonFcmaButterfly169f
+        )
+    }
+
+    fn butterfly192(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly192f,
+            NeonButterfly192f,
+            NeonFcmaButterfly192f
+        )
+    }
+
+    fn butterfly216(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly216f,
+            NeonButterfly216f,
+            NeonFcmaButterfly216f
         )
     }
 

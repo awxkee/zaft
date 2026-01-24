@@ -312,28 +312,7 @@ pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
 // }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 2565];
-    for (i, chunk) in data.iter_mut().enumerate() {
-        *chunk = Complex::new(-0.19528865 + i as f64 * 0.1, 0.);
-    }
-    let forward_q = Zaft::make_r2c_fft_f64(data.len()).unwrap();
-    let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
-    let mut out1 = vec![Complex::zero(); data.len() / 2 + 1];
-    forward_q.execute(&real_data, &mut out1).unwrap();
-
-    let mut data = vec![Complex::new(0.0019528865, 0.); 8];
-    for (i, chunk) in data.iter_mut().enumerate() {
-        *chunk = Complex::new(-0.19528865 + i as f64 * 0.1, 0.);
-    }
-
-    let forward_q = Zaft::make_forward_fft_f64(data.len()).unwrap();
-    let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
-    forward_q.execute(&mut data).unwrap();
-    let twiddles = make_twiddles(8);
-    println!("{:?}", data);
-    println!("{:?}", real_data);
-
-    let mut data = vec![Complex::new(0.0019528865, 0.); 89];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 19 * 19];
     let mut c = Criterion::default().sample_size(10);
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);

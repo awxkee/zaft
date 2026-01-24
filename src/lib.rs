@@ -453,6 +453,10 @@ impl Zaft {
                 try_mixed_radix!(54, product / 54)
             }
 
+            if product == 1536 {
+                try_mixed_radix!(8, 192)
+            }
+
             if factor3 >= 1 && factor2 >= 4 {
                 if product.is_multiple_of(36)
                     && product / 36 > 1
@@ -460,6 +464,15 @@ impl Zaft {
                     && T::butterfly36(direction).is_some()
                 {
                     try_mixed_radix!(36, product / 36)
+                }
+                if factor2 > factor3 {
+                    let mut factors_diff = 2u64.pow(factor2 - factor3);
+                    let mut remainder_factor = product / factors_diff;
+                    if remainder_factor <= 8 {
+                        remainder_factor *= 2;
+                        factors_diff /= 2;
+                    }
+                    try_mixed_radix!(factors_diff, remainder_factor)
                 }
                 if product.is_multiple_of(48)
                     && product / 48 > 1
@@ -849,6 +862,12 @@ impl Zaft {
             }
             169 => {
                 return T::butterfly169(fft_direction).map(|x| Ok(x.into_fft_executor()));
+            }
+            192 => {
+                return T::butterfly192(fft_direction).map(Ok);
+            }
+            216 => {
+                return T::butterfly216(fft_direction).map(|x| Ok(x.into_fft_executor()));
             }
             243 => {
                 return T::butterfly243(fft_direction).map(|x| Ok(x.into_fft_executor()));

@@ -361,13 +361,19 @@ impl AvxFmaRadix4<f64> {
                             let t1_0 = _mm256_sub_pd(a0, c0);
                             let t2_0 = _mm256_add_pd(b0, d0);
                             let mut t3_0 = _mm256_sub_pd(b0, d0);
-                            t3_0 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3_0), v_i_multiplier);
+                            t3_0 = _mm256_xor_pd(
+                                _mm256_shuffle_pd::<0b0101>(t3_0, t3_0),
+                                v_i_multiplier,
+                            );
 
                             let t0_1 = _mm256_add_pd(a1, c1);
                             let t1_1 = _mm256_sub_pd(a1, c1);
                             let t2_1 = _mm256_add_pd(b1, d1);
                             let mut t3_1 = _mm256_sub_pd(b1, d1);
-                            t3_1 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3_1), v_i_multiplier);
+                            t3_1 = _mm256_xor_pd(
+                                _mm256_shuffle_pd::<0b0101>(t3_1, t3_1),
+                                v_i_multiplier,
+                            );
 
                             _mm256_storeu_pd(
                                 data.get_unchecked_mut(j..).as_mut_ptr().cast(),
@@ -450,7 +456,7 @@ impl AvxFmaRadix4<f64> {
                             let t1 = _mm256_sub_pd(a, c);
                             let t2 = _mm256_add_pd(b, d);
                             let mut t3 = _mm256_sub_pd(b, d);
-                            t3 = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(t3), v_i_multiplier);
+                            t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), v_i_multiplier);
 
                             _mm256_storeu_pd(
                                 data.get_unchecked_mut(j..).as_mut_ptr().cast(),

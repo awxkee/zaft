@@ -100,7 +100,7 @@ impl AvxButterfly4<f32> {
                 let t2 = _mm256_add_ps(b, d);
                 let mut t3 = _mm256_sub_ps(b, d);
                 const SH: i32 = shuffle(2, 3, 0, 1);
-                t3 = _mm256_xor_ps(_mm256_permute_ps::<SH>(t3), v_i_multiplier);
+                t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), v_i_multiplier);
 
                 let xy0 = _mm256_add_ps(t0, t2);
                 let xy1 = _mm256_add_ps(t1, t3);
@@ -178,7 +178,7 @@ impl AvxButterfly4<f32> {
                 let t2 = _mm256_add_ps(b, d);
                 let mut t3 = _mm256_sub_ps(b, d);
                 const SH: i32 = shuffle(2, 3, 0, 1);
-                t3 = _mm256_xor_ps(_mm256_permute_ps::<SH>(t3), v_i_multiplier);
+                t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), v_i_multiplier);
 
                 let xy0 = _mm256_add_ps(t0, t2);
                 let xy1 = _mm256_add_ps(t1, t3);

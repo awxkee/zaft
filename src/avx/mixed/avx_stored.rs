@@ -50,7 +50,7 @@ impl AvxStoreD {
     pub(crate) fn dup_even_odds(&self) -> [Self; 2] {
         [
             AvxStoreD::raw(_mm256_movedup_pd(self.v)),
-            AvxStoreD::raw(_mm256_permute_pd(self.v, 0x0F)),
+            AvxStoreD::raw(_mm256_shuffle_pd::<0x0F>(self.v, self.v)),
         ]
     }
 
@@ -63,7 +63,7 @@ impl AvxStoreD {
     #[inline]
     #[target_feature(enable = "avx")]
     pub(crate) fn reverse_complex_elements(&self) -> Self {
-        AvxStoreD::raw(_mm256_permute_pd::<0x05>(self.v))
+        AvxStoreD::raw(_mm256_shuffle_pd::<0x05>(self.v, self.v))
     }
 
     #[inline]
@@ -265,8 +265,8 @@ impl AvxStoreD {
     #[inline]
     #[target_feature(enable = "avx2")]
     pub(crate) fn zip(self, other: Self) -> [Self; 2] {
-        let r0 = _mm256_unpacklo_pd(self.v, other.v);
-        let r1 = _mm256_unpackhi_pd(self.v, other.v);
+        let r0 = _mm256_shuffle_pd::<0b0000>(self.v, other.v);
+        let r1 = _mm256_shuffle_pd::<0b1111>(self.v, other.v);
         let xy0 = _mm256_permute2f128_pd::<32>(r0, r1);
         let xy1 = _mm256_permute2f128_pd::<49>(r0, r1);
         [AvxStoreD::raw(xy0), AvxStoreD::raw(xy1)]

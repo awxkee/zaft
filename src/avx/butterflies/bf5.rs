@@ -155,8 +155,10 @@ impl AvxButterfly5<f32> {
                 let temp_b2 = _mm256_fnmadd_ps(tw1_im, x23n, temp_b2_1);
 
                 const SH: i32 = shuffle(2, 3, 0, 1);
-                let temp_b1_rot = _mm256_xor_ps(_mm256_permute_ps::<SH>(temp_b1), rot_sign);
-                let temp_b2_rot = _mm256_xor_ps(_mm256_permute_ps::<SH>(temp_b2), rot_sign);
+                let temp_b1_rot =
+                    _mm256_xor_ps(_mm256_shuffle_ps::<SH>(temp_b1, temp_b1), rot_sign);
+                let temp_b2_rot =
+                    _mm256_xor_ps(_mm256_shuffle_ps::<SH>(temp_b2, temp_b2), rot_sign);
 
                 let y1 = _mm256_add_ps(temp_a1, temp_b1_rot);
                 let y2 = _mm256_add_ps(temp_a2, temp_b2_rot);
@@ -422,8 +424,10 @@ impl AvxButterfly5<f32> {
                 let temp_b2 = _mm256_fnmadd_ps(tw1_im, x23n, temp_b2_1);
 
                 const SH: i32 = shuffle(2, 3, 0, 1);
-                let temp_b1_rot = _mm256_xor_ps(_mm256_permute_ps::<SH>(temp_b1), rot_sign);
-                let temp_b2_rot = _mm256_xor_ps(_mm256_permute_ps::<SH>(temp_b2), rot_sign);
+                let temp_b1_rot =
+                    _mm256_xor_ps(_mm256_shuffle_ps::<SH>(temp_b1, temp_b1), rot_sign);
+                let temp_b2_rot =
+                    _mm256_xor_ps(_mm256_shuffle_ps::<SH>(temp_b2, temp_b2), rot_sign);
 
                 let y1 = _mm256_add_ps(temp_a1, temp_b1_rot);
                 let y2 = _mm256_add_ps(temp_a2, temp_b2_rot);
@@ -694,8 +698,10 @@ impl AvxButterfly5<f64> {
                 let temp_b1 = _mm256_fmadd_pd(tw2_im, x23n, temp_b1_1);
                 let temp_b2 = _mm256_fnmadd_pd(tw1_im, x23n, temp_b2_1);
 
-                let temp_b1_rot = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b1), rot_sign);
-                let temp_b2_rot = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b2), rot_sign);
+                let temp_b1_rot =
+                    _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(temp_b1, temp_b1), rot_sign);
+                let temp_b2_rot =
+                    _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(temp_b2, temp_b2), rot_sign);
 
                 let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
                 let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);
@@ -840,8 +846,10 @@ impl AvxButterfly5<f64> {
                 let temp_b1 = _mm256_fmadd_pd(tw2_im, x23n, temp_b1_1);
                 let temp_b2 = _mm256_fnmadd_pd(tw1_im, x23n, temp_b2_1);
 
-                let temp_b1_rot = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b1), rot_sign);
-                let temp_b2_rot = _mm256_xor_pd(_mm256_permute_pd::<0b0101>(temp_b2), rot_sign);
+                let temp_b1_rot =
+                    _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(temp_b1, temp_b1), rot_sign);
+                let temp_b2_rot =
+                    _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(temp_b2, temp_b2), rot_sign);
 
                 let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
                 let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);

@@ -841,6 +841,30 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    fn butterfly192(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly192d,
+            NeonButterfly192d,
+            NeonFcmaButterfly192d
+        )
+    }
+
+    fn butterfly216(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            CompositeFftExecutor,
+            _fft_direction,
+            AvxButterfly216d,
+            NeonButterfly216d,
+            NeonFcmaButterfly216d
+        )
+    }
+
     fn butterfly243(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn CompositeFftExecutor<f64> + Send + Sync>> {

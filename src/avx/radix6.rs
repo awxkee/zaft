@@ -71,10 +71,11 @@ where
         let butterfly = match exponent {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly6(fft_direction)?,
-            _ => match T::butterfly36(fft_direction) {
-                None => T::butterfly6(fft_direction)?,
-                Some(v) => v,
-            },
+            2 => T::butterfly36(fft_direction).map_or_else(|| T::butterfly6(fft_direction), Ok)?,
+            _ => T::butterfly216(fft_direction).map_or_else(
+                || T::butterfly36(fft_direction).map_or_else(|| T::butterfly6(fft_direction), Ok),
+                Ok,
+            )?,
         };
 
         let butterfly_length: usize = butterfly.length();

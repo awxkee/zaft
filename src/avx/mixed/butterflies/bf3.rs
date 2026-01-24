@@ -62,7 +62,7 @@ impl ColumnButterfly3d {
         let sum = _mm256_add_pd(v[0].v, xp);
 
         let w_1 = _mm256_fmadd_pd(self.twiddle_re, xp, v[0].v);
-        let xn_rot = _mm256_permute_pd::<0b0101>(xn);
+        let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
 
         let y0 = sum;
         let y1 = _mm256_fmadd_pd(self.twiddle_im, xn_rot, w_1);
