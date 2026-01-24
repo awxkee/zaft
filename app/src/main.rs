@@ -312,7 +312,7 @@ pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
 // }
 
 fn main() {
-    let mut data = vec![Complex::new(0.0019528865, 0.); 19 * 19];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 192_000];
     let mut c = Criterion::default().sample_size(10);
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);

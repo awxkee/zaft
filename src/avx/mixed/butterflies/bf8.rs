@@ -39,7 +39,7 @@ pub(crate) struct ColumnButterfly8d {
 }
 
 impl ColumnButterfly8d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly8d {
         Self {
             rotate: AvxRotate::new(direction),
@@ -49,56 +49,58 @@ impl ColumnButterfly8d {
 }
 
 impl ColumnButterfly8d {
-    #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn rotate1(&self, p0: AvxStoreD) -> AvxStoreD {
-        AvxStoreD::raw(_mm256_mul_pd(
-            _mm256_add_pd(self.rotate.rotate_m256d(p0.v), p0.v),
-            self.root2,
-        ))
+        unsafe {
+            AvxStoreD::raw(_mm256_mul_pd(
+                _mm256_add_pd(self.rotate.rotate_m256d(p0.v), p0.v),
+                self.root2,
+            ))
+        }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn rotate3(&self, p0: AvxStoreD) -> AvxStoreD {
-        AvxStoreD::raw(_mm256_mul_pd(
-            _mm256_sub_pd(self.rotate.rotate_m256d(p0.v), p0.v),
-            self.root2,
-        ))
+        unsafe {
+            AvxStoreD::raw(_mm256_mul_pd(
+                _mm256_sub_pd(self.rotate.rotate_m256d(p0.v), p0.v),
+                self.root2,
+            ))
+        }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn rotate(&self, p0: AvxStoreD) -> AvxStoreD {
-        AvxStoreD::raw(self.rotate.rotate_m256d(p0.v))
+        unsafe { AvxStoreD::raw(self.rotate.rotate_m256d(p0.v)) }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 8]) -> [AvxStoreD; 8] {
-        let (u0, u2, u4, u6) =
-            AvxButterfly::butterfly4_f64(v[0].v, v[2].v, v[4].v, v[6].v, self.rotate.rot_flag);
-        let (u1, mut u3, mut u5, mut u7) =
-            AvxButterfly::butterfly4_f64(v[1].v, v[3].v, v[5].v, v[7].v, self.rotate.rot_flag);
+        unsafe {
+            let (u0, u2, u4, u6) =
+                AvxButterfly::butterfly4_f64(v[0].v, v[2].v, v[4].v, v[6].v, self.rotate.rot_flag);
+            let (u1, mut u3, mut u5, mut u7) =
+                AvxButterfly::butterfly4_f64(v[1].v, v[3].v, v[5].v, v[7].v, self.rotate.rot_flag);
 
-        u3 = _mm256_mul_pd(_mm256_add_pd(self.rotate.rotate_m256d(u3), u3), self.root2);
-        u5 = self.rotate.rotate_m256d(u5);
-        u7 = _mm256_mul_pd(_mm256_sub_pd(self.rotate.rotate_m256d(u7), u7), self.root2);
+            u3 = _mm256_mul_pd(_mm256_add_pd(self.rotate.rotate_m256d(u3), u3), self.root2);
+            u5 = self.rotate.rotate_m256d(u5);
+            u7 = _mm256_mul_pd(_mm256_sub_pd(self.rotate.rotate_m256d(u7), u7), self.root2);
 
-        let (y0, y1) = AvxButterfly::butterfly2_f64(u0, u1);
-        let (y2, y3) = AvxButterfly::butterfly2_f64(u2, u3);
-        let (y4, y5) = AvxButterfly::butterfly2_f64(u4, u5);
-        let (y6, y7) = AvxButterfly::butterfly2_f64(u6, u7);
-        [
-            AvxStoreD::raw(y0),
-            AvxStoreD::raw(y2),
-            AvxStoreD::raw(y4),
-            AvxStoreD::raw(y6),
-            AvxStoreD::raw(y1),
-            AvxStoreD::raw(y3),
-            AvxStoreD::raw(y5),
-            AvxStoreD::raw(y7),
-        ]
+            let (y0, y1) = AvxButterfly::butterfly2_f64(u0, u1);
+            let (y2, y3) = AvxButterfly::butterfly2_f64(u2, u3);
+            let (y4, y5) = AvxButterfly::butterfly2_f64(u4, u5);
+            let (y6, y7) = AvxButterfly::butterfly2_f64(u6, u7);
+            [
+                AvxStoreD::raw(y0),
+                AvxStoreD::raw(y2),
+                AvxStoreD::raw(y4),
+                AvxStoreD::raw(y6),
+                AvxStoreD::raw(y1),
+                AvxStoreD::raw(y3),
+                AvxStoreD::raw(y5),
+                AvxStoreD::raw(y7),
+            ]
+        }
     }
 }
 
@@ -108,7 +110,7 @@ pub(crate) struct ColumnButterfly8f {
 }
 
 impl ColumnButterfly8f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly8f {
         Self {
             rotate: AvxRotate::new(direction),
@@ -118,65 +120,67 @@ impl ColumnButterfly8f {
 }
 
 impl ColumnButterfly8f {
-    #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn rotate1(&self, p0: AvxStoreF) -> AvxStoreF {
-        AvxStoreF::raw(_mm256_mul_ps(
-            _mm256_add_ps(self.rotate.rotate_m256(p0.v), p0.v),
-            self.root2,
-        ))
+        unsafe {
+            AvxStoreF::raw(_mm256_mul_ps(
+                _mm256_add_ps(self.rotate.rotate_m256(p0.v), p0.v),
+                self.root2,
+            ))
+        }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn rotate(&self, p0: AvxStoreF) -> AvxStoreF {
         AvxStoreF::raw(self.rotate.rotate_m256(p0.v))
     }
 
-    #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn rotate3(&self, p0: AvxStoreF) -> AvxStoreF {
-        AvxStoreF::raw(_mm256_mul_ps(
-            _mm256_sub_ps(self.rotate.rotate_m256(p0.v), p0.v),
-            self.root2,
-        ))
+        unsafe {
+            AvxStoreF::raw(_mm256_mul_ps(
+                _mm256_sub_ps(self.rotate.rotate_m256(p0.v), p0.v),
+                self.root2,
+            ))
+        }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 8]) -> [AvxStoreF; 8] {
-        let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f32(
-            v[0].v,
-            v[2].v,
-            v[4].v,
-            v[6].v,
-            _mm256_castpd_ps(self.rotate.rot_flag),
-        );
-        let (u1, mut u3, mut u5, mut u7) = AvxButterfly::butterfly4_f32(
-            v[1].v,
-            v[3].v,
-            v[5].v,
-            v[7].v,
-            _mm256_castpd_ps(self.rotate.rot_flag),
-        );
+        unsafe {
+            let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f32(
+                v[0].v,
+                v[2].v,
+                v[4].v,
+                v[6].v,
+                _mm256_castpd_ps(self.rotate.rot_flag),
+            );
+            let (u1, mut u3, mut u5, mut u7) = AvxButterfly::butterfly4_f32(
+                v[1].v,
+                v[3].v,
+                v[5].v,
+                v[7].v,
+                _mm256_castpd_ps(self.rotate.rot_flag),
+            );
 
-        u3 = _mm256_mul_ps(_mm256_add_ps(self.rotate.rotate_m256(u3), u3), self.root2);
-        u5 = self.rotate.rotate_m256(u5);
-        u7 = _mm256_mul_ps(_mm256_sub_ps(self.rotate.rotate_m256(u7), u7), self.root2);
+            u3 = _mm256_mul_ps(_mm256_add_ps(self.rotate.rotate_m256(u3), u3), self.root2);
+            u5 = self.rotate.rotate_m256(u5);
+            u7 = _mm256_mul_ps(_mm256_sub_ps(self.rotate.rotate_m256(u7), u7), self.root2);
 
-        let (y0, y1) = AvxButterfly::butterfly2_f32(u0, u1);
-        let (y2, y3) = AvxButterfly::butterfly2_f32(u2, u3);
-        let (y4, y5) = AvxButterfly::butterfly2_f32(u4, u5);
-        let (y6, y7) = AvxButterfly::butterfly2_f32(u6, u7);
-        [
-            AvxStoreF::raw(y0),
-            AvxStoreF::raw(y2),
-            AvxStoreF::raw(y4),
-            AvxStoreF::raw(y6),
-            AvxStoreF::raw(y1),
-            AvxStoreF::raw(y3),
-            AvxStoreF::raw(y5),
-            AvxStoreF::raw(y7),
-        ]
+            let (y0, y1) = AvxButterfly::butterfly2_f32(u0, u1);
+            let (y2, y3) = AvxButterfly::butterfly2_f32(u2, u3);
+            let (y4, y5) = AvxButterfly::butterfly2_f32(u4, u5);
+            let (y6, y7) = AvxButterfly::butterfly2_f32(u6, u7);
+            [
+                AvxStoreF::raw(y0),
+                AvxStoreF::raw(y2),
+                AvxStoreF::raw(y4),
+                AvxStoreF::raw(y6),
+                AvxStoreF::raw(y1),
+                AvxStoreF::raw(y3),
+                AvxStoreF::raw(y5),
+                AvxStoreF::raw(y7),
+            ]
+        }
     }
 }

@@ -40,7 +40,7 @@ pub(crate) struct ColumnButterfly9d {
 }
 
 impl ColumnButterfly9d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly9d {
         let tw1 = compute_twiddle::<f64>(1, 9, direction);
         let tw2 = compute_twiddle::<f64>(2, 9, direction);
@@ -55,7 +55,7 @@ impl ColumnButterfly9d {
 }
 
 impl ColumnButterfly9d {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 9]) -> [AvxStoreD; 9] {
         let [u0, u3, u6] = self.bf3.exec([v[0], v[3], v[6]]);
@@ -82,7 +82,7 @@ pub(crate) struct ColumnButterfly9f {
 }
 
 impl ColumnButterfly9f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly9f {
         let tw1 = compute_twiddle::<f32>(1, 9, direction);
         let tw2 = compute_twiddle::<f32>(2, 9, direction);
@@ -97,8 +97,7 @@ impl ColumnButterfly9f {
 }
 
 impl ColumnButterfly9f {
-    #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 9]) -> [AvxStoreF; 9] {
         let [u0, u3, u6] = self.bf3.exec([v[0], v[3], v[6]]);
         let [u1, mut u4, mut u7] = self.bf3.exec([v[1], v[4], v[7]]);

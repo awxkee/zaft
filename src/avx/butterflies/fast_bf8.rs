@@ -43,7 +43,7 @@ impl<T: Copy + FftTrigonometry + Float + 'static> AvxFastButterfly8<T>
 where
     f64: AsPrimitive<T>,
 {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) unsafe fn new(direction: FftDirection) -> Self {
         Self {
             rotate: AvxRotate::new(direction),
@@ -57,7 +57,7 @@ where
 }
 
 impl AvxFastButterfly8<f64> {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(
         &self,
@@ -96,7 +96,7 @@ impl AvxFastButterfly8<f64> {
 }
 
 impl AvxFastButterfly8<f32> {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(
         &self,

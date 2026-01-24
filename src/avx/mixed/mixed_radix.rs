@@ -52,7 +52,7 @@ macro_rules! define_mixed_radixd {
         pub(crate) struct $mx_type {
             execution_length: usize,
             direction: FftDirection,
-            twiddles: Vec<Complex<f64>>,
+            twiddles: Vec<AvxStoreD>,
             width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             width: usize,
             height: usize,
@@ -62,6 +62,13 @@ macro_rules! define_mixed_radixd {
 
         impl $mx_type {
             pub fn new(width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>) -> Result<Self, ZaftError> {
+                unsafe {
+                    Self::new_init(width_executor)
+                }
+            }
+
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn new_init(width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>) -> Result<Self, ZaftError> {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
@@ -75,8 +82,6 @@ macro_rules! define_mixed_radixd {
                 let len = len_per_row * ROW_COUNT;
                 const COMPLEX_PER_VECTOR: usize = 2;
 
-                // We're going to process each row of the FFT one AVX register at a time. We need to know how many AVX registers each row can fit,
-                // and if the last register in each row going to have partial data (ie a remainder)
                 let quotient = len_per_row / COMPLEX_PER_VECTOR;
                 let remainder = len_per_row % COMPLEX_PER_VECTOR;
 
@@ -87,13 +92,15 @@ macro_rules! define_mixed_radixd {
                     .map_err(|_| ZaftError::OutOfMemory(num_twiddle_columns * TWIDDLES_PER_COLUMN))?;
                 for x in 0..num_twiddle_columns {
                     for y in 1..ROW_COUNT {
+                        let mut data: [Complex<f64>; 2] = [Complex::zero(); 2];
                         for i in 0..COMPLEX_PER_VECTOR {
-                            twiddles.push(compute_twiddle(
+                            data[i] = compute_twiddle(
                                 y * (x * COMPLEX_PER_VECTOR + i),
                                 len,
                                 direction,
-                            ));
+                            );
                         }
+                        twiddles.push(AvxStoreD::from_complex_ref(data.as_ref()));
                     }
                 }
 
@@ -114,7 +121,7 @@ macro_rules! define_mixed_radixd {
     impl $mx_type {
         #[target_feature(enable = "avx2", enable = "fma")]
         unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-            if in_place.len() % self.execution_length != 0 {
+            if !in_place.len().is_multiple_of(self.execution_length) {
                 return Err(ZaftError::InvalidSizeMultiplier(
                     in_place.len(),
                     self.execution_length,
@@ -133,13 +140,12 @@ macro_rules! define_mixed_radixd {
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN * COMPLEX_PER_VECTOR)
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
                     .take(chunk_count)
                     .enumerate()
                 {
                     let index_base = c * COMPLEX_PER_VECTOR;
 
-                    // Load columns from the input into registers
                     let mut columns = [AvxStoreD::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
@@ -158,9 +164,8 @@ macro_rules! define_mixed_radixd {
                     }
 
                     for i in 1..ROW_COUNT {
-                        let twiddle = &twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR..];
-                        let output =
-                            AvxStoreD::mul_by_complex(output[i], AvxStoreD::from_complex_ref(twiddle));
+                        let twiddle = twiddle_chunk[i - 1];
+                        let output = AvxStoreD::mul_by_complex(output[i], twiddle);
                         unsafe {
                             output.write(scratch.get_unchecked_mut(index_base + len_per_row * i..))
                         }
@@ -170,8 +175,7 @@ macro_rules! define_mixed_radixd {
                 let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
                 if partial_remainder > 0 {
                     let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base =
-                        self.twiddles.len() - TWIDDLES_PER_COLUMN * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
                     let mut columns = [AvxStoreD::zero(); ROW_COUNT];
@@ -195,9 +199,8 @@ macro_rules! define_mixed_radixd {
 
                     // for the remaining rows, apply twiddle factors and then write back to memory
                     for i in 1..ROW_COUNT {
-                        let twiddle = final_twiddle_chunk[i*COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR];
-                        let output =
-                            AvxStoreD::mul_by_complex(output[i], AvxStoreD::from_complex(&twiddle));
+                        let twiddle = final_twiddle_chunk[i - 1];
+                        let output = AvxStoreD::mul_by_complex(output[i], twiddle);
                         unsafe {
                             output.write_lo(
                                 scratch.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
@@ -238,7 +241,7 @@ macro_rules! define_mixed_radixf {
         pub(crate) struct $mx_type {
             execution_length: usize,
             direction: FftDirection,
-            twiddles: Vec<Complex<f32>>,
+            twiddles: Vec<AvxStoreF>,
             width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             width: usize,
             height: usize,
@@ -248,6 +251,11 @@ macro_rules! define_mixed_radixf {
 
         impl $mx_type {
             pub fn new(width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>) -> Result<Self, ZaftError> {
+                unsafe { Self::new_init(width_executor) }
+            }
+
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn new_init(width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>) -> Result<Self, ZaftError> {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
@@ -261,8 +269,6 @@ macro_rules! define_mixed_radixf {
                 let len = len_per_row * ROW_COUNT;
                 const COMPLEX_PER_VECTOR: usize = 4;
 
-                // We're going to process each row of the FFT one AVX register at a time. We need to know how many AVX registers each row can fit,
-                // and if the last register in each row going to have partial data (ie a remainder)
                 let quotient = len_per_row / COMPLEX_PER_VECTOR;
                 let remainder = len_per_row % COMPLEX_PER_VECTOR;
 
@@ -273,13 +279,15 @@ macro_rules! define_mixed_radixf {
                     .map_err(|_| ZaftError::OutOfMemory(num_twiddle_columns * TWIDDLES_PER_COLUMN))?;
                 for x in 0..num_twiddle_columns {
                     for y in 1..ROW_COUNT {
+                        let mut data: [Complex<f32>; 4] = [Complex::zero(); 4];
                         for i in 0..COMPLEX_PER_VECTOR {
-                            twiddles.push(compute_twiddle(
+                            data[i] = compute_twiddle(
                                 y * (x * COMPLEX_PER_VECTOR + i),
                                 len,
                                 direction,
-                            ));
+                            );
                         }
+                        twiddles.push(AvxStoreF::from_complex_ref(data.as_ref()));
                     }
                 }
 
@@ -300,7 +308,7 @@ macro_rules! define_mixed_radixf {
         impl $mx_type {
             #[target_feature(enable = "avx2", enable = "fma")]
             unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if in_place.len() % self.execution_length != 0 {
+                if !in_place.len().is_multiple_of(self.execution_length) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         in_place.len(),
                         self.execution_length,
@@ -319,7 +327,7 @@ macro_rules! define_mixed_radixf {
                 for chunk in in_place.chunks_exact_mut(self.execution_length) {
                     for (c, twiddle_chunk) in self
                         .twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN * COMPLEX_PER_VECTOR)
+                        .chunks_exact(TWIDDLES_PER_COLUMN)
                         .take(chunk_count)
                         .enumerate()
                     {
@@ -342,10 +350,8 @@ macro_rules! define_mixed_radixf {
                         }
 
                         for i in 1..ROW_COUNT {
-                            let twiddle = &twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR..];
-                            let tw = AvxStoreF::from_complex_ref(twiddle);
-                            let output =
-                                AvxStoreF::mul_by_complex(output[i], tw);
+                            let tw = twiddle_chunk[i - 1];
+                            let output = AvxStoreF::mul_by_complex(output[i], tw);
                             unsafe {
                                 output.write(scratch.get_unchecked_mut(index_base + len_per_row * i..))
                             }
@@ -356,7 +362,7 @@ macro_rules! define_mixed_radixf {
                     if partial_remainder == 1 {
                         let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
                         let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN * COMPLEX_PER_VECTOR;
+                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
                         let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
                         let mut columns = [AvxStoreF::zero(); ROW_COUNT];
@@ -378,9 +384,8 @@ macro_rules! define_mixed_radixf {
 
                         // for the remaining rows, apply twiddle factors and then write back to memory
                         for i in 1..ROW_COUNT {
-                            let twiddle = final_twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR];
-                            let out_value =
-                                AvxStoreF::mul_by_complex(output[i], AvxStoreF::from_complex(&twiddle));
+                            let twiddle = final_twiddle_chunk[i - 1];
+                            let out_value = AvxStoreF::mul_by_complex(output[i], twiddle);
                             unsafe {
                                 out_value.write_lo1(
                                     scratch.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
@@ -389,8 +394,7 @@ macro_rules! define_mixed_radixf {
                         }
                     } else if partial_remainder == 2 {
                         let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                        let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN * COMPLEX_PER_VECTOR;
+                        let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                         let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
                         let mut columns = [AvxStoreF::zero(); ROW_COUNT];
@@ -412,10 +416,8 @@ macro_rules! define_mixed_radixf {
 
                         // for the remaining rows, apply twiddle factors and then write back to memory
                         for i in 1..ROW_COUNT {
-                            let twiddle =
-                                &final_twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR..];
-                            let out_value =
-                                AvxStoreF::mul_by_complex(output[i], AvxStoreF::from_complex2(twiddle));
+                            let twiddle = final_twiddle_chunk[i - 1];
+                            let out_value = AvxStoreF::mul_by_complex(output[i], twiddle);
                             unsafe {
                                 out_value.write_lo2(
                                     scratch.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
@@ -424,8 +426,7 @@ macro_rules! define_mixed_radixf {
                         }
                     } else if partial_remainder == 3 {
                         let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                        let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN * COMPLEX_PER_VECTOR;
+                        let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                         let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
                         let mut columns = [AvxStoreF::zero(); ROW_COUNT];
@@ -447,10 +448,8 @@ macro_rules! define_mixed_radixf {
 
                         // for the remaining rows, apply twiddle factors and then write back to memory
                         for i in 1..ROW_COUNT {
-                            let twiddle =
-                                &final_twiddle_chunk[i * COMPLEX_PER_VECTOR - COMPLEX_PER_VECTOR..];
-                            let out_value =
-                                AvxStoreF::mul_by_complex(output[i], AvxStoreF::from_complex3(twiddle));
+                            let twiddle = final_twiddle_chunk[i - 1];
+                            let out_value = AvxStoreF::mul_by_complex(output[i], twiddle);
                             unsafe {
                                 out_value.write_lo3(
                                     scratch.get_unchecked_mut(partial_remainder_base + len_per_row * i..),

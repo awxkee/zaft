@@ -30,8 +30,7 @@
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
-#[inline]
-#[target_feature(enable = "avx")]
+#[inline(always)]
 pub(crate) fn transpose_f64x2_2x2(v0: __m256d, v1: __m256d) -> (__m256d, __m256d) {
     const HI_HI: i32 = 0b0011_0001;
     const LO_LO: i32 = 0b0010_0000;
@@ -41,14 +40,15 @@ pub(crate) fn transpose_f64x2_2x2(v0: __m256d, v1: __m256d) -> (__m256d, __m256d
     // --->
     // a1 a3
     // a0 a2
-
-    let q0 = _mm256_permute2f128_pd::<LO_LO>(v0, v1);
-    let q1 = _mm256_permute2f128_pd::<HI_HI>(v0, v1);
-    (q0, q1)
+    unsafe {
+        let q0 = _mm256_permute2f128_pd::<LO_LO>(v0, v1);
+        let q1 = _mm256_permute2f128_pd::<HI_HI>(v0, v1);
+        (q0, q1)
+    }
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn avx_transpose_f64x2_2x2(
     src: &[Complex<f64>],
     src_stride: usize,
