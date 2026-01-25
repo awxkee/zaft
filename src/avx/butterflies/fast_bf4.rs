@@ -42,7 +42,7 @@ impl<T: Copy + 'static + Neg<Output = T>> AvxFastButterfly4<T>
 where
     f64: AsPrimitive<T>,
 {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) unsafe fn new(direction: FftDirection) -> Self {
         Self {
             rotate: AvxRotate::<T>::new(direction),
@@ -52,7 +52,7 @@ where
 }
 
 impl AvxFastButterfly4<f32> {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn exec(
         &self,
@@ -76,7 +76,7 @@ impl AvxFastButterfly4<f32> {
 }
 
 impl AvxFastButterfly4<f64> {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn exec(
         &self,

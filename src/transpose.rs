@@ -1220,7 +1220,7 @@ struct TransposeBlockAvx2x2F64x2 {}
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 impl TransposeBlock<f64> for TransposeBlockAvx2x2F64x2 {
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     unsafe fn transpose_block(
         &self,
         src: &[Complex<f64>],
@@ -1239,7 +1239,7 @@ struct TransposeBlockAvx4x4F64x2 {}
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 impl TransposeBlock<f64> for TransposeBlockAvx4x4F64x2 {
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     unsafe fn transpose_block(
         &self,
         src: &[Complex<f64>],

@@ -39,7 +39,7 @@ pub(crate) struct AvxFastButterfly3<T> {
 }
 
 impl AvxFastButterfly3<f64> {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) unsafe fn new(direction: FftDirection) -> Self {
         let twiddle = compute_twiddle::<f64>(1, 3, direction);
         unsafe {
@@ -55,7 +55,7 @@ impl AvxFastButterfly3<f64> {
 }
 
 impl AvxFastButterfly3<f32> {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) unsafe fn new(direction: FftDirection) -> Self {
         let twiddle = compute_twiddle::<f32>(1, 3, direction);
         unsafe {
@@ -81,7 +81,7 @@ impl AvxFastButterfly3<f32> {
 }
 
 impl AvxFastButterfly3<f64> {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(
         &self,
@@ -104,7 +104,7 @@ impl AvxFastButterfly3<f64> {
 }
 
 impl AvxFastButterfly3<f32> {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, u0: __m256, u1: __m256, u2: __m256) -> (__m256, __m256, __m256) {
         let xp = _mm256_add_ps(u1, u2);

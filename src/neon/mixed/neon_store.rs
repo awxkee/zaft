@@ -379,6 +379,11 @@ impl NeonStoreF {
         }
     }
 
+    #[inline(always)]
+    pub(crate) fn lo(self) -> NeonStoreFh {
+        unsafe { NeonStoreFh::raw(vget_low_f32(self.v)) }
+    }
+
     #[inline]
     pub(crate) fn from_complex_lou(complex: &MaybeUninit<Complex<f32>>) -> Self {
         unsafe {
@@ -472,15 +477,6 @@ impl NeonStoreFh {
     //         }
     //     }
     // }
-
-    #[inline]
-    pub(crate) fn from_complex(complex: &Complex<f32>) -> Self {
-        unsafe {
-            NeonStoreFh {
-                v: vld1_f32(complex as *const Complex<f32> as *const f32),
-            }
-        }
-    }
 
     #[inline]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f32>]) {

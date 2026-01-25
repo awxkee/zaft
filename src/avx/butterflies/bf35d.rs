@@ -75,7 +75,7 @@ impl FftExecutor<f64> for AvxButterfly35d {
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn transpose_6x5(
     rows0: [AvxStoreD; 5],
     rows1: [AvxStoreD; 5],

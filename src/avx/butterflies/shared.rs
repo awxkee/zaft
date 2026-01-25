@@ -32,7 +32,7 @@ use crate::avx::util::shuffle;
 use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
 
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn gen_butterfly_twiddles_f32<const N: usize>(
     rows: usize,
     cols: usize,
@@ -61,7 +61,7 @@ pub(crate) fn gen_butterfly_twiddles_f32<const N: usize>(
     twiddles
 }
 
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn gen_butterfly_twiddles_f64<const N: usize>(
     rows: usize,
     cols: usize,
@@ -88,7 +88,7 @@ pub(crate) fn gen_butterfly_twiddles_f64<const N: usize>(
     twiddles
 }
 
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn gen_butterfly_separate_cols_twiddles_f64<const N: usize>(
     rows: usize,
     cols: usize,
@@ -116,7 +116,7 @@ pub(crate) fn gen_butterfly_separate_cols_twiddles_f64<const N: usize>(
     twiddles
 }
 
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn gen_butterfly_separate_cols_twiddles_f32<const N: usize>(
     rows: usize,
     cols: usize,
@@ -147,8 +147,7 @@ pub(crate) fn gen_butterfly_separate_cols_twiddles_f32<const N: usize>(
 pub(crate) struct AvxButterfly {}
 
 impl AvxButterfly {
-    #[target_feature(enable = "avx", enable = "fma")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly3_f32(
         u0: __m256,
         u1: __m256,
@@ -156,31 +155,33 @@ impl AvxButterfly {
         tw_re: __m256,
         tw_w_2: __m256,
     ) -> (__m256, __m256, __m256) {
-        let xp = _mm256_add_ps(u1, u2);
-        let xn = _mm256_sub_ps(u1, u2);
-        let sum = _mm256_add_ps(u0, xp);
+        unsafe {
+            let xp = _mm256_add_ps(u1, u2);
+            let xn = _mm256_sub_ps(u1, u2);
+            let sum = _mm256_add_ps(u0, xp);
 
-        const SH: i32 = shuffle(2, 3, 0, 1);
-        let w_1 = _mm256_fmadd_ps(tw_re, xp, u0);
-        let xn_rot = _mm256_shuffle_ps::<SH>(xn, xn);
+            const SH: i32 = shuffle(2, 3, 0, 1);
+            let w_1 = _mm256_fmadd_ps(tw_re, xp, u0);
+            let xn_rot = _mm256_shuffle_ps::<SH>(xn, xn);
 
-        let y0 = sum;
-        let y1 = _mm256_fmadd_ps(xn_rot, tw_w_2, w_1);
-        let y2 = _mm256_fnmadd_ps(xn_rot, tw_w_2, w_1);
-        (y0, y1, y2)
+            let y0 = sum;
+            let y1 = _mm256_fmadd_ps(xn_rot, tw_w_2, w_1);
+            let y2 = _mm256_fnmadd_ps(xn_rot, tw_w_2, w_1);
+            (y0, y1, y2)
+        }
     }
 
-    #[target_feature(enable = "avx")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly2_f32(u0: __m256, u1: __m256) -> (__m256, __m256) {
-        let t = _mm256_add_ps(u0, u1);
-        let y1 = _mm256_sub_ps(u0, u1);
-        let y0 = t;
-        (y0, y1)
+        unsafe {
+            let t = _mm256_add_ps(u0, u1);
+            let y1 = _mm256_sub_ps(u0, u1);
+            let y0 = t;
+            (y0, y1)
+        }
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly3_f32_m128(
         u0: __m128,
         u1: __m128,
@@ -188,31 +189,33 @@ impl AvxButterfly {
         tw_re: __m128,
         tw_w_2: __m128,
     ) -> (__m128, __m128, __m128) {
-        let xp = _mm_add_ps(u1, u2);
-        let xn = _mm_sub_ps(u1, u2);
-        let sum = _mm_add_ps(u0, xp);
+        unsafe {
+            let xp = _mm_add_ps(u1, u2);
+            let xn = _mm_sub_ps(u1, u2);
+            let sum = _mm_add_ps(u0, xp);
 
-        const SH: i32 = shuffle(2, 3, 0, 1);
-        let w_1 = _mm_fmadd_ps(tw_re, xp, u0);
-        let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
+            const SH: i32 = shuffle(2, 3, 0, 1);
+            let w_1 = _mm_fmadd_ps(tw_re, xp, u0);
+            let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
 
-        let y0 = sum;
-        let y1 = _mm_fmadd_ps(tw_w_2, xn_rot, w_1);
-        let y2 = _mm_fnmadd_ps(tw_w_2, xn_rot, w_1);
-        (y0, y1, y2)
+            let y0 = sum;
+            let y1 = _mm_fmadd_ps(tw_w_2, xn_rot, w_1);
+            let y2 = _mm_fnmadd_ps(tw_w_2, xn_rot, w_1);
+            (y0, y1, y2)
+        }
     }
 
-    #[target_feature(enable = "avx")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly2_f32_m128(u0: __m128, u1: __m128) -> (__m128, __m128) {
-        let t = _mm_add_ps(u0, u1);
-        let y1 = _mm_sub_ps(u0, u1);
-        let y0 = t;
-        (y0, y1)
+        unsafe {
+            let t = _mm_add_ps(u0, u1);
+            let y1 = _mm_sub_ps(u0, u1);
+            let y0 = t;
+            (y0, y1)
+        }
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly3_f64(
         u0: __m256d,
         u1: __m256d,
@@ -220,21 +223,22 @@ impl AvxButterfly {
         tw_re: __m256d,
         tw_w_2: __m256d,
     ) -> (__m256d, __m256d, __m256d) {
-        let xp = _mm256_add_pd(u1, u2);
-        let xn = _mm256_sub_pd(u1, u2);
-        let sum = _mm256_add_pd(u0, xp);
+        unsafe {
+            let xp = _mm256_add_pd(u1, u2);
+            let xn = _mm256_sub_pd(u1, u2);
+            let sum = _mm256_add_pd(u0, xp);
 
-        let w_1 = _mm256_fmadd_pd(tw_re, xp, u0);
-        let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
+            let w_1 = _mm256_fmadd_pd(tw_re, xp, u0);
+            let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
 
-        let y0 = sum;
-        let y1 = _mm256_fmadd_pd(tw_w_2, xn_rot, w_1);
-        let y2 = _mm256_fnmadd_pd(tw_w_2, xn_rot, w_1);
-        (y0, y1, y2)
+            let y0 = sum;
+            let y1 = _mm256_fmadd_pd(tw_w_2, xn_rot, w_1);
+            let y2 = _mm256_fnmadd_pd(tw_w_2, xn_rot, w_1);
+            (y0, y1, y2)
+        }
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly3_f64_m128(
         u0: __m128d,
         u1: __m128d,
@@ -242,20 +246,22 @@ impl AvxButterfly {
         tw_re: __m128d,
         tw_w_2: __m128d,
     ) -> (__m128d, __m128d, __m128d) {
-        let xp = _mm_add_pd(u1, u2);
-        let xn = _mm_sub_pd(u1, u2);
-        let sum = _mm_add_pd(u0, xp);
+        unsafe {
+            let xp = _mm_add_pd(u1, u2);
+            let xn = _mm_sub_pd(u1, u2);
+            let sum = _mm_add_pd(u0, xp);
 
-        let w_1 = _mm_fmadd_pd(tw_re, xp, u0);
-        let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
+            let w_1 = _mm_fmadd_pd(tw_re, xp, u0);
+            let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
 
-        let y0 = sum;
-        let y1 = _mm_fmadd_pd(tw_w_2, xn_rot, w_1);
-        let y2 = _mm_fnmadd_pd(tw_w_2, xn_rot, w_1);
-        (y0, y1, y2)
+            let y0 = sum;
+            let y1 = _mm_fmadd_pd(tw_w_2, xn_rot, w_1);
+            let y2 = _mm_fnmadd_pd(tw_w_2, xn_rot, w_1);
+            (y0, y1, y2)
+        }
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn butterfly2_f64_m128(u0: __m128d, u1: __m128d) -> (__m128d, __m128d) {
         let t = _mm_add_pd(u0, u1);
@@ -264,17 +270,17 @@ impl AvxButterfly {
         (y0, y1)
     }
 
-    #[target_feature(enable = "avx")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly2_f64(u0: __m256d, u1: __m256d) -> (__m256d, __m256d) {
-        let t = _mm256_add_pd(u0, u1);
-        let y1 = _mm256_sub_pd(u0, u1);
-        let y0 = t;
-        (y0, y1)
+        unsafe {
+            let t = _mm256_add_pd(u0, u1);
+            let y1 = _mm256_sub_pd(u0, u1);
+            let y0 = t;
+            (y0, y1)
+        }
     }
 
-    #[target_feature(enable = "avx")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly4_f32(
         a: __m256,
         b: __m256,
@@ -282,39 +288,41 @@ impl AvxButterfly {
         d: __m256,
         rotate: __m256,
     ) -> (__m256, __m256, __m256, __m256) {
-        let t0 = _mm256_add_ps(a, c);
-        let t1 = _mm256_sub_ps(a, c);
-        let t2 = _mm256_add_ps(b, d);
-        let mut t3 = _mm256_sub_ps(b, d);
-        const SH: i32 = shuffle(2, 3, 0, 1);
-        t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), rotate);
-        (
-            _mm256_add_ps(t0, t2),
-            _mm256_add_ps(t1, t3),
-            _mm256_sub_ps(t0, t2),
-            _mm256_sub_ps(t1, t3),
-        )
+        unsafe {
+            let t0 = _mm256_add_ps(a, c);
+            let t1 = _mm256_sub_ps(a, c);
+            let t2 = _mm256_add_ps(b, d);
+            let mut t3 = _mm256_sub_ps(b, d);
+            const SH: i32 = shuffle(2, 3, 0, 1);
+            t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), rotate);
+            (
+                _mm256_add_ps(t0, t2),
+                _mm256_add_ps(t1, t3),
+                _mm256_sub_ps(t0, t2),
+                _mm256_sub_ps(t1, t3),
+            )
+        }
     }
 
-    #[target_feature(enable = "avx")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn qbutterfly4_f32(a: [AvxStoreF; 4], rotate: __m256) -> [AvxStoreF; 4] {
-        let t0 = _mm256_add_ps(a[0].v, a[2].v);
-        let t1 = _mm256_sub_ps(a[0].v, a[2].v);
-        let t2 = _mm256_add_ps(a[1].v, a[3].v);
-        let mut t3 = _mm256_sub_ps(a[1].v, a[3].v);
-        const SH: i32 = shuffle(2, 3, 0, 1);
-        t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), rotate);
-        [
-            AvxStoreF::raw(_mm256_add_ps(t0, t2)),
-            AvxStoreF::raw(_mm256_add_ps(t1, t3)),
-            AvxStoreF::raw(_mm256_sub_ps(t0, t2)),
-            AvxStoreF::raw(_mm256_sub_ps(t1, t3)),
-        ]
+        unsafe {
+            let t0 = _mm256_add_ps(a[0].v, a[2].v);
+            let t1 = _mm256_sub_ps(a[0].v, a[2].v);
+            let t2 = _mm256_add_ps(a[1].v, a[3].v);
+            let mut t3 = _mm256_sub_ps(a[1].v, a[3].v);
+            const SH: i32 = shuffle(2, 3, 0, 1);
+            t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), rotate);
+            [
+                AvxStoreF::raw(_mm256_add_ps(t0, t2)),
+                AvxStoreF::raw(_mm256_add_ps(t1, t3)),
+                AvxStoreF::raw(_mm256_sub_ps(t0, t2)),
+                AvxStoreF::raw(_mm256_sub_ps(t1, t3)),
+            ]
+        }
     }
 
-    #[target_feature(enable = "avx")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly4_f64(
         a: __m256d,
         b: __m256d,
@@ -322,32 +330,35 @@ impl AvxButterfly {
         d: __m256d,
         rotate: __m256d,
     ) -> (__m256d, __m256d, __m256d, __m256d) {
-        let t0 = _mm256_add_pd(a, c);
-        let t1 = _mm256_sub_pd(a, c);
-        let t2 = _mm256_add_pd(b, d);
-        let mut t3 = _mm256_sub_pd(b, d);
-        t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), rotate);
-        (
-            _mm256_add_pd(t0, t2),
-            _mm256_add_pd(t1, t3),
-            _mm256_sub_pd(t0, t2),
-            _mm256_sub_pd(t1, t3),
-        )
+        unsafe {
+            let t0 = _mm256_add_pd(a, c);
+            let t1 = _mm256_sub_pd(a, c);
+            let t2 = _mm256_add_pd(b, d);
+            let mut t3 = _mm256_sub_pd(b, d);
+            t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), rotate);
+            (
+                _mm256_add_pd(t0, t2),
+                _mm256_add_pd(t1, t3),
+                _mm256_sub_pd(t0, t2),
+                _mm256_sub_pd(t1, t3),
+            )
+        }
     }
 
-    #[target_feature(enable = "avx")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn qbutterfly4_f64(a: [AvxStoreD; 4], rotate: __m256d) -> [AvxStoreD; 4] {
-        let t0 = _mm256_add_pd(a[0].v, a[2].v);
-        let t1 = _mm256_sub_pd(a[0].v, a[2].v);
-        let t2 = _mm256_add_pd(a[1].v, a[3].v);
-        let mut t3 = _mm256_sub_pd(a[1].v, a[3].v);
-        t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), rotate);
-        [
-            AvxStoreD::raw(_mm256_add_pd(t0, t2)),
-            AvxStoreD::raw(_mm256_add_pd(t1, t3)),
-            AvxStoreD::raw(_mm256_sub_pd(t0, t2)),
-            AvxStoreD::raw(_mm256_sub_pd(t1, t3)),
-        ]
+        unsafe {
+            let t0 = _mm256_add_pd(a[0].v, a[2].v);
+            let t1 = _mm256_sub_pd(a[0].v, a[2].v);
+            let t2 = _mm256_add_pd(a[1].v, a[3].v);
+            let mut t3 = _mm256_sub_pd(a[1].v, a[3].v);
+            t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), rotate);
+            [
+                AvxStoreD::raw(_mm256_add_pd(t0, t2)),
+                AvxStoreD::raw(_mm256_add_pd(t1, t3)),
+                AvxStoreD::raw(_mm256_sub_pd(t0, t2)),
+                AvxStoreD::raw(_mm256_sub_pd(t1, t3)),
+            ]
+        }
     }
 }

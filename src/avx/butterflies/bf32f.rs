@@ -38,7 +38,7 @@ use std::arch::x86_64::*;
 use std::sync::Arc;
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 fn transpose_8x4_to_4x8_f32(rows0: [AvxStoreF; 4], rows1: [AvxStoreF; 4]) -> [AvxStoreF; 8] {
     let transposed0 = avx_transpose_f32x2_4x4_impl(rows0[0].v, rows0[1].v, rows0[2].v, rows0[3].v);
     let transposed1 = avx_transpose_f32x2_4x4_impl(rows1[0].v, rows1[1].v, rows1[2].v, rows1[3].v);

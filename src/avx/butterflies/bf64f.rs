@@ -36,7 +36,7 @@ use num_complex::Complex;
 use std::sync::Arc;
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 fn transpose_8x8_f32(
     rows0: [AvxStoreF; 8],
     rows1: [AvxStoreF; 8],

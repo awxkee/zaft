@@ -242,7 +242,7 @@ impl AvxButterfly243d {
         unsafe { Self::new_init(fft_direction) }
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
