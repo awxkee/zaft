@@ -33,7 +33,7 @@ use num_complex::Complex;
 use std::arch::x86_64::*;
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f32x2_4x2(v0: __m256, v1: __m256) -> (__m256, __m256) {
     // Unpack 32 bit elements. Goes from:
     // in[0]: 00 01 02 03
@@ -63,7 +63,7 @@ pub(crate) fn transpose_f32x2_4x2(v0: __m256, v1: __m256) -> (__m256, __m256) {
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn avx_transpose_f32x2_4x4_impl(
     v0: __m256,
     v1: __m256,
@@ -102,7 +102,7 @@ pub(crate) fn avx_transpose_f32x2_4x4_impl(
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f32x2_4x4_aos(v: [AvxStoreF; 4]) -> [AvxStoreF; 4] {
     // Unpack 32 bit elements. Goes from:
     // in[0]: 00 01 02 03

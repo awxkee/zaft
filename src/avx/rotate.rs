@@ -42,7 +42,7 @@ impl<T: Copy + 'static + Neg<Output = T>> AvxRotate<T>
 where
     f64: AsPrimitive<T>,
 {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn new(fft_direction: FftDirection) -> AvxRotate<T> {
         let rot90: [T; 8] = [
@@ -81,7 +81,7 @@ where
 }
 
 impl AvxRotate<f64> {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn rotate_m128d(&self, v: __m128d) -> __m128d {
         _mm_xor_pd(
@@ -90,7 +90,7 @@ impl AvxRotate<f64> {
         )
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn rotate_m256d(&self, v: __m256d) -> __m256d {
         _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(v, v), self.rot_flag)
@@ -98,7 +98,7 @@ impl AvxRotate<f64> {
 }
 
 impl AvxRotate<f32> {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn rotate_m128(&self, v: __m128) -> __m128 {
         const SH: i32 = shuffle(2, 3, 0, 1);
@@ -108,7 +108,7 @@ impl AvxRotate<f32> {
         )
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn rotate_m256(&self, v: __m256) -> __m256 {
         const SH: i32 = shuffle(2, 3, 0, 1);

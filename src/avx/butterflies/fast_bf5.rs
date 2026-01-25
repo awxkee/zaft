@@ -48,7 +48,7 @@ pub(crate) struct AvxFastButterfly5f {
 }
 
 impl AvxFastButterfly5d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) unsafe fn new(direction: FftDirection) -> Self {
         let tw1 = compute_twiddle(1, 5, direction);
         let tw2 = compute_twiddle(2, 5, direction);
@@ -63,7 +63,7 @@ impl AvxFastButterfly5d {
 }
 
 impl AvxFastButterfly5d {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(
         &self,
@@ -100,7 +100,7 @@ impl AvxFastButterfly5d {
 }
 
 impl AvxFastButterfly5f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) unsafe fn new(direction: FftDirection) -> Self {
         let tw1 = compute_twiddle(1, 5, direction);
         let tw2 = compute_twiddle(2, 5, direction);
@@ -115,7 +115,7 @@ impl AvxFastButterfly5f {
 }
 
 impl AvxFastButterfly5f {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn _m256_exec(
         &self,
@@ -150,7 +150,7 @@ impl AvxFastButterfly5f {
         (y0, y1, y2, y3, y4)
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(
         &self,

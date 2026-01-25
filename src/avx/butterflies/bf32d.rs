@@ -43,7 +43,7 @@ pub(crate) struct AvxButterfly32d {
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 fn transpose_8x4_to_4x8_f64(
     rows0: [AvxStoreD; 4],
     rows1: [AvxStoreD; 4],

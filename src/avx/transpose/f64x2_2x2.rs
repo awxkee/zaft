@@ -31,7 +31,7 @@ use num_complex::Complex;
 use std::arch::x86_64::*;
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f64x2_2x2(v0: __m256d, v1: __m256d) -> (__m256d, __m256d) {
     const HI_HI: i32 = 0b0011_0001;
     const LO_LO: i32 = 0b0010_0000;
@@ -48,7 +48,7 @@ pub(crate) fn transpose_f64x2_2x2(v0: __m256d, v1: __m256d) -> (__m256d, __m256d
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn avx_transpose_f64x2_2x2(
     src: &[Complex<f64>],
     src_stride: usize,

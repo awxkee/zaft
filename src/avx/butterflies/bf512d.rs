@@ -49,7 +49,7 @@ impl AvxButterfly512d {
         unsafe { Self::new_init(fft_direction) }
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,

@@ -47,7 +47,7 @@ impl AvxButterfly18d {
         unsafe { Self::new_init(fft_direction) }
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
@@ -74,7 +74,7 @@ impl FftExecutor<f64> for AvxButterfly18d {
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f64x2_9x2(
     rows0: [AvxStoreD; 2],
     rows1: [AvxStoreD; 2],
@@ -176,7 +176,7 @@ impl AvxButterfly18f {
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f32x2_9x2(
     rows0: [AvxStoreF; 2],
     rows1: [AvxStoreF; 2],

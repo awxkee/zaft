@@ -47,7 +47,7 @@ pub(crate) struct SseStoreF {
 
 impl SseStoreF {
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex_ref(complex: &[Complex<f32>]) -> Self {
         unsafe {
             SseStoreF {
@@ -57,7 +57,7 @@ impl SseStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn zero() -> Self {
         Self {
             v: _mm_setzero_ps(),
@@ -65,7 +65,7 @@ impl SseStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn raw(r: __m128) -> Self {
         Self { v: r }
     }
@@ -73,7 +73,7 @@ impl SseStoreF {
 
 impl AvxStoreF {
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn neg(&self) -> AvxStoreF {
         AvxStoreF {
             v: _mm256_xor_ps(self.v, _mm256_set1_ps(-0.0)),
@@ -81,13 +81,13 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn raw(r: __m256) -> AvxStoreF {
         AvxStoreF { v: r }
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn raw128(r: __m128) -> AvxStoreF {
         AvxStoreF {
             v: _mm256_castps128_ps256(r),
@@ -95,7 +95,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex_ref(complex: &[Complex<f32>]) -> Self {
         unsafe {
             AvxStoreF {
@@ -105,7 +105,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn load(complex: &[f32]) -> Self {
         unsafe {
             AvxStoreF {
@@ -115,7 +115,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn load2_as_complex(complex: &[f32]) -> Self {
         unsafe {
             AvxStoreF {
@@ -128,7 +128,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex_refu(complex: &[MaybeUninit<Complex<f32>>]) -> Self {
         unsafe {
             AvxStoreF {
@@ -138,7 +138,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex(complex: &Complex<f32>) -> Self {
         unsafe {
             AvxStoreF {
@@ -150,7 +150,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complexu(complex: &MaybeUninit<Complex<f32>>) -> Self {
         unsafe {
             AvxStoreF {
@@ -162,7 +162,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn set_complex4(
         v0: Complex<f32>,
         v1: Complex<f32>,
@@ -175,7 +175,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn set_values8(
         p0: f32,
         p1: f32,
@@ -190,19 +190,19 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn dup(p0: f32) -> Self {
         AvxStoreF::raw(_mm256_set1_ps(p0))
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn xor(&self, p0: AvxStoreF) -> Self {
         AvxStoreF::raw(_mm256_xor_ps(self.v, p0.v))
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn dup_even_odds(&self) -> [Self; 2] {
         [
             AvxStoreF::raw(_mm256_moveldup_ps(self.v)),
@@ -211,26 +211,26 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn blend_real_img(&self, p0: AvxStoreF) -> Self {
         AvxStoreF::raw(_mm256_blend_ps::<0xAA>(self.v, p0.v))
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn reverse_complex(&self) -> Self {
         let permuted = _mm256_shuffle_ps::<0x4E>(self.v, self.v);
         AvxStoreF::raw(_mm256_permute2f128_ps(permuted, permuted, 0x01))
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn reverse_complex_elements(&self) -> Self {
         AvxStoreF::raw(_mm256_shuffle_ps::<0xB1>(self.v, self.v))
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn set_complex(v0: Complex<f32>) -> Self {
         AvxStoreF {
             v: _mm256_setr_ps(v0.re, v0.im, v0.re, v0.im, v0.re, v0.im, v0.re, v0.im),
@@ -305,7 +305,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex2(complex: &[Complex<f32>]) -> Self {
         unsafe {
             AvxStoreF {
@@ -315,7 +315,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex2u(complex: &[MaybeUninit<Complex<f32>>]) -> Self {
         unsafe {
             AvxStoreF {
@@ -325,7 +325,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex3(complex: &[Complex<f32>]) -> Self {
         unsafe {
             let lo = _mm256_castps128_ps256(_mm_loadu_ps(complex.as_ptr().cast()));
@@ -337,7 +337,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex3u(complex: &[MaybeUninit<Complex<f32>>]) -> Self {
         unsafe {
             let lo = _mm256_castps128_ps256(_mm_loadu_ps(complex.as_ptr().cast()));
@@ -349,13 +349,13 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f32>]) {
         unsafe { _mm256_storeu_ps(to_ref.as_mut_ptr().cast(), self.v) }
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write_single(&self, to_ref: &mut Complex<f32>) {
         unsafe {
             _mm_storeu_si64(
@@ -366,13 +366,13 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write_u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
         unsafe { _mm256_storeu_ps(to_ref.as_mut_ptr().cast(), self.v) }
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write_lo1(&self, to_ref: &mut [Complex<f32>]) {
         unsafe {
             _mm_storeu_si64(
@@ -383,7 +383,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write_lo1u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
         unsafe {
             _mm_storeu_si64(
@@ -394,7 +394,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write2lo(&self, other: Self, to_ref: &mut [Complex<f32>]) {
         unsafe {
             _mm256_storeu_ps(
@@ -408,19 +408,19 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write_lo2(&self, to_ref: &mut [Complex<f32>]) {
         unsafe { _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v)) }
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write_lo2u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
         unsafe { _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v)) }
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write_lo3(&self, to_ref: &mut [Complex<f32>]) {
         unsafe {
             _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v));
@@ -432,7 +432,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn write_lo3u(&self, to_ref: &mut [MaybeUninit<Complex<f32>>]) {
         unsafe {
             _mm_storeu_ps(to_ref.as_mut_ptr().cast(), _mm256_castps256_ps128(self.v));
@@ -444,7 +444,7 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn mul_by_complex(self, other: AvxStoreF) -> Self {
         AvxStoreF {
             v: _mm256_fcmul_ps(self.v, other.v),
@@ -454,7 +454,7 @@ impl AvxStoreF {
 
 impl AvxStoreF {
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn zero() -> Self {
         Self {
             v: _mm256_setzero_ps(),
@@ -478,13 +478,13 @@ impl AvxStoreF {
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn lo(&self) -> Self {
         Self { v: self.v }
     }
 
     #[inline]
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn hi(&self) -> Self {
         Self {
             v: _mm256_castps128_ps256(_mm256_extractf128_ps::<1>(self.v)),

@@ -38,7 +38,7 @@ pub(crate) struct ColumnButterfly4d {
 }
 
 impl ColumnButterfly4d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly4d {
         unsafe {
             Self {
@@ -56,7 +56,7 @@ impl ColumnButterfly4d {
 }
 
 impl ColumnButterfly4d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
         let t0 = _mm256_add_pd(v[0].v, v[2].v);
@@ -83,7 +83,7 @@ pub(crate) struct ColumnButterfly4f {
 }
 
 impl ColumnButterfly4f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly4f {
         Self {
             rotate: AvxRotate::new(direction),
@@ -92,7 +92,7 @@ impl ColumnButterfly4f {
 }
 
 impl ColumnButterfly4f {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreF; 4]) -> [AvxStoreF; 4] {
         let t0 = _mm256_add_ps(v[0].v, v[2].v);
@@ -113,7 +113,7 @@ impl ColumnButterfly4f {
         ]
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exech(&self, v: [SseStoreF; 4]) -> [SseStoreF; 4] {
         let t0 = _mm_add_ps(v[0].v, v[2].v);

@@ -32,7 +32,7 @@ use crate::avx::util::shuffle;
 use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
 
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn gen_butterfly_twiddles_f32<const N: usize>(
     rows: usize,
     cols: usize,
@@ -61,7 +61,7 @@ pub(crate) fn gen_butterfly_twiddles_f32<const N: usize>(
     twiddles
 }
 
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn gen_butterfly_twiddles_f64<const N: usize>(
     rows: usize,
     cols: usize,
@@ -88,7 +88,7 @@ pub(crate) fn gen_butterfly_twiddles_f64<const N: usize>(
     twiddles
 }
 
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn gen_butterfly_separate_cols_twiddles_f64<const N: usize>(
     rows: usize,
     cols: usize,
@@ -116,7 +116,7 @@ pub(crate) fn gen_butterfly_separate_cols_twiddles_f64<const N: usize>(
     twiddles
 }
 
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn gen_butterfly_separate_cols_twiddles_f32<const N: usize>(
     rows: usize,
     cols: usize,
@@ -147,7 +147,7 @@ pub(crate) fn gen_butterfly_separate_cols_twiddles_f32<const N: usize>(
 pub(crate) struct AvxButterfly {}
 
 impl AvxButterfly {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn butterfly3_f32(
         u0: __m256,
@@ -170,7 +170,7 @@ impl AvxButterfly {
         (y0, y1, y2)
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn butterfly2_f32(u0: __m256, u1: __m256) -> (__m256, __m256) {
         let t = _mm256_add_ps(u0, u1);
@@ -179,7 +179,7 @@ impl AvxButterfly {
         (y0, y1)
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn butterfly3_f32_m128(
         u0: __m128,
@@ -202,7 +202,7 @@ impl AvxButterfly {
         (y0, y1, y2)
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn butterfly2_f32_m128(u0: __m128, u1: __m128) -> (__m128, __m128) {
         let t = _mm_add_ps(u0, u1);
@@ -211,7 +211,7 @@ impl AvxButterfly {
         (y0, y1)
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn butterfly3_f64(
         u0: __m256d,
@@ -233,7 +233,7 @@ impl AvxButterfly {
         (y0, y1, y2)
     }
 
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn butterfly3_f64_m128(
         u0: __m128d,
@@ -255,7 +255,7 @@ impl AvxButterfly {
         (y0, y1, y2)
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn butterfly2_f64_m128(u0: __m128d, u1: __m128d) -> (__m128d, __m128d) {
         let t = _mm_add_pd(u0, u1);
@@ -264,7 +264,7 @@ impl AvxButterfly {
         (y0, y1)
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn butterfly2_f64(u0: __m256d, u1: __m256d) -> (__m256d, __m256d) {
         let t = _mm256_add_pd(u0, u1);
@@ -273,7 +273,7 @@ impl AvxButterfly {
         (y0, y1)
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn butterfly4_f32(
         a: __m256,
@@ -296,7 +296,7 @@ impl AvxButterfly {
         )
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn qbutterfly4_f32(a: [AvxStoreF; 4], rotate: __m256) -> [AvxStoreF; 4] {
         let t0 = _mm256_add_ps(a[0].v, a[2].v);
@@ -313,7 +313,7 @@ impl AvxButterfly {
         ]
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn butterfly4_f64(
         a: __m256d,
@@ -335,7 +335,7 @@ impl AvxButterfly {
         )
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     #[inline]
     pub(crate) fn qbutterfly4_f64(a: [AvxStoreD; 4], rotate: __m256d) -> [AvxStoreD; 4] {
         let t0 = _mm256_add_pd(a[0].v, a[2].v);

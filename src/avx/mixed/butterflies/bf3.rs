@@ -39,7 +39,7 @@ pub(crate) struct ColumnButterfly3d {
 }
 
 impl ColumnButterfly3d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly3d {
         let twiddle = compute_twiddle::<f64>(1, 3, direction);
         unsafe {
@@ -54,7 +54,7 @@ impl ColumnButterfly3d {
 }
 
 impl ColumnButterfly3d {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 3]) -> [AvxStoreD; 3] {
         let xp = _mm256_add_pd(v[1].v, v[2].v);
@@ -77,7 +77,7 @@ pub(crate) struct ColumnButterfly3f {
 }
 
 impl ColumnButterfly3f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly3f {
         let twiddle = compute_twiddle::<f32>(1, 3, direction);
         unsafe {
@@ -102,7 +102,7 @@ impl ColumnButterfly3f {
 }
 
 impl ColumnButterfly3f {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreF; 3]) -> [AvxStoreF; 3] {
         let xp = _mm256_add_ps(v[1].v, v[2].v);

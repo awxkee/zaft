@@ -88,7 +88,7 @@ pub(crate) fn avx2_transpose_f32x2_8x4(
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f32x2_8x5(
     rows0: [AvxStoreF; 5],
     rows1: [AvxStoreF; 5],

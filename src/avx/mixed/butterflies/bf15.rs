@@ -42,7 +42,7 @@ impl ColumnButterfly15d {
         unsafe { Self::new_init(fft_direction) }
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             bf3: ColumnButterfly3d::new(fft_direction),
@@ -81,7 +81,7 @@ impl ColumnButterfly15f {
         unsafe { Self::new_init(fft_direction) }
     }
 
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             bf3: ColumnButterfly3f::new(fft_direction),

@@ -35,19 +35,19 @@ use std::any::TypeId;
 use std::arch::x86_64::*;
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set_complexd(v: Complex<f64>) -> __m256d {
     _mm256_setr_pd(v.re, v.im, v.re, v.im)
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm_set_complex(v: Complex<f32>) -> __m128 {
     _mm_setr_ps(v.re, v.im, v.re, v.im)
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set4_complex(
     v0: Complex<f32>,
     v1: Complex<f32>,
@@ -58,25 +58,25 @@ pub(crate) fn _mm256_set4_complex(
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set_complex(v0: Complex<f32>) -> __m256 {
     _mm256_setr_ps(v0.re, v0.im, v0.re, v0.im, v0.re, v0.im, v0.re, v0.im)
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set2_complexd(v0: Complex<f64>, v1: Complex<f64>) -> __m256d {
     _mm256_setr_pd(v0.re, v0.im, v1.re, v1.im)
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set2_complex(v0: Complex<f32>, v1: Complex<f32>) -> __m256 {
     _mm256_setr_ps(v0.re, v0.im, v0.re, v0.im, v1.re, v1.im, v1.re, v1.im)
 }
 
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_shuffle_pd::<0b00>(b, b);
     let mut temp2 = _mm_shuffle_pd::<0b11>(b, b);
@@ -86,7 +86,7 @@ pub(crate) fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
 }
 
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
     let a_yx = _mm256_shuffle_pd::<0b0101>(a, a); // [a_im, a_re, b_im, b_re]
@@ -100,7 +100,7 @@ pub(crate) fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
 }
 
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_ps(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(b, b);
     let temp2 = _mm_shuffle_ps::<0xF5>(b, b);
@@ -128,7 +128,7 @@ pub(crate) fn _m128s_storeh_f32x2(a: *mut Complex<f32>, b: __m128) {
 }
 
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_ps(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
     let ar = _mm256_moveldup_ps(a); // duplicate even lanes (re parts)
@@ -173,13 +173,13 @@ pub(crate) fn _mm_unpackhi_ps64(a: __m128, b: __m128) -> __m128 {
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_unpacklo_pd2(a: __m256d, b: __m256d) -> __m256d {
     _mm256_permute2f128_pd::<0x20>(a, b)
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_unpackhi_pd2(a: __m256d, b: __m256d) -> __m256d {
     _mm256_permute2f128_pd::<0x31>(a, b)
 }
@@ -289,7 +289,7 @@ pub(crate) fn _mm256s_interleave3_epi64(
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_load4_f32x2(
     a: &[Complex<f32>],
     b: &[Complex<f32>],
@@ -311,25 +311,25 @@ pub(crate) fn _mm256_load4_f32x2(
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_create_ps(a: __m128, b: __m128) -> __m256 {
     _mm256_insertf128_ps::<1>(_mm256_castps128_ps256(a), b)
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_create_pd(a: __m128d, b: __m128d) -> __m256d {
     _mm256_insertf128_pd::<1>(_mm256_castpd128_pd256(a), b)
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_unpacklo_ps64(a: __m256, b: __m256) -> __m256 {
     _mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(a, b)
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_blend_ps64<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
     _mm256_castpd_ps(_mm256_blend_pd::<IMM8>(
         _mm256_castps_pd(a),
@@ -338,14 +338,14 @@ pub(crate) fn _mm256_blend_ps64<const IMM8: i32>(a: __m256, b: __m256) -> __m256
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_unpackhi_ps64(a: __m256, b: __m256) -> __m256 {
     _mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(a, b)
 }
 
 // a.conj() * b
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
     let ar = _mm256_moveldup_ps(a); // duplicate even lanes (re parts)
@@ -361,7 +361,7 @@ pub(crate) fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
 
 // a * b.conj()
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_ps_conj_b(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
     let ar = _mm256_moveldup_ps(b); // duplicate even lanes (re parts)
@@ -377,7 +377,7 @@ pub(crate) fn _mm256_fcmul_ps_conj_b(a: __m256, b: __m256) -> __m256 {
 
 // a.conj() * b
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(a, a);
     let temp2 = _mm_shuffle_ps::<0xF5>(a, a);
@@ -388,7 +388,7 @@ pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
 
 // a * b.conj()
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_ps_conj_b(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(b, b);
     let temp2 = _mm_shuffle_ps::<0xF5>(b, b);
@@ -399,7 +399,7 @@ pub(crate) fn _mm_fcmul_ps_conj_b(a: __m128, b: __m128) -> __m128 {
 
 // a.conj() * b
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
     let a_yx = _mm256_shuffle_pd::<0b0101>(a, a); // [a_im, a_re, b_im, b_re]
@@ -413,7 +413,7 @@ pub(crate) fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
 
 // a * b.conj()
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd_conj_b(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
     let a_yx = _mm256_shuffle_pd::<0b0101>(b, b); // [a_im, a_re, b_im, b_re]
@@ -427,7 +427,7 @@ pub(crate) fn _mm256_fcmul_pd_conj_b(a: __m256d, b: __m256d) -> __m256d {
 
 // a.conj() * b
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_shuffle_pd::<0b00>(a, a); // [b.re, b.re]
     let mut temp2 = _mm_shuffle_pd::<0b11>(a, a); // [b.im, b.im]
@@ -438,7 +438,7 @@ pub(crate) fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
 
 // a * b.conj()
 #[inline]
-#[target_feature(enable = "avx", enable = "fma")]
+#[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd_conj_b(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_shuffle_pd::<0b00>(b, b); // [b.re, b.re]
     let mut temp2 = _mm_shuffle_pd::<0b11>(b, b); // [b.im, b.im]

@@ -35,7 +35,7 @@ use std::arch::x86_64::*;
 use std::sync::Arc;
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 fn transpose_f32x2_9x3(
     rows0: [AvxStoreF; 3],
     rows1: [AvxStoreF; 3],

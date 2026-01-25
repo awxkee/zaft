@@ -45,7 +45,7 @@ pub(crate) struct ColumnButterfly11d {
 }
 
 impl ColumnButterfly11d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly11d {
         Self {
             rotate: AvxRotate::<f64>::new(FftDirection::Inverse),
@@ -59,7 +59,7 @@ impl ColumnButterfly11d {
 }
 
 impl ColumnButterfly11d {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 11]) -> [AvxStoreD; 11] {
         let u0 = v[0].v;
@@ -166,7 +166,7 @@ pub(crate) struct ColumnButterfly11f {
 }
 
 impl ColumnButterfly11f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly11f {
         Self {
             rotate: AvxRotate::<f32>::new(FftDirection::Inverse),
@@ -180,7 +180,7 @@ impl ColumnButterfly11f {
 }
 
 impl ColumnButterfly11f {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreF; 11]) -> [AvxStoreF; 11] {
         let u0 = v[0].v;

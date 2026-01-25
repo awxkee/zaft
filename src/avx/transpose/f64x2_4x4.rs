@@ -32,7 +32,7 @@ use num_complex::Complex;
 use std::arch::x86_64::*;
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn avx_transpose_f64x2_4x4_impl(
     v0: (__m256d, __m256d),
     v1: (__m256d, __m256d),
@@ -56,7 +56,7 @@ pub(crate) fn avx_transpose_f64x2_4x4_impl(
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn avx_transpose_f64x2_4x4(
     src: &[Complex<f64>],
     src_stride: usize,

@@ -36,7 +36,7 @@ pub(crate) struct ColumnButterfly6d {
 }
 
 impl ColumnButterfly6d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly6d {
         unsafe {
             Self {
@@ -47,7 +47,7 @@ impl ColumnButterfly6d {
 }
 
 impl ColumnButterfly6d {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 6]) -> [AvxStoreD; 6] {
         let (t0, t2, t4) = self.bf3.exec(v[0].v, v[2].v, v[4].v);
@@ -72,7 +72,7 @@ pub(crate) struct ColumnButterfly6f {
 }
 
 impl ColumnButterfly6f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly6f {
         unsafe {
             Self {
@@ -83,7 +83,7 @@ impl ColumnButterfly6f {
 }
 
 impl ColumnButterfly6f {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreF; 6]) -> [AvxStoreF; 6] {
         let (t0, t2, t4) = self.bf3.exec(v[0].v, v[2].v, v[4].v);

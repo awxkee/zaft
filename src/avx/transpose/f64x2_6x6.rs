@@ -31,7 +31,7 @@ use crate::avx::mixed::AvxStoreD;
 use std::arch::x86_64::*;
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 fn transpose_f64x2_2x2(v0: (__m256d, __m256d)) -> (__m256d, __m256d) {
     const HI_HI: i32 = 0b0011_0001;
     const LO_LO: i32 = 0b0010_0000;
@@ -48,7 +48,7 @@ fn transpose_f64x2_2x2(v0: (__m256d, __m256d)) -> (__m256d, __m256d) {
 }
 
 #[inline]
-#[target_feature(enable = "avx")]
+#[target_feature(enable = "avx2")]
 pub(crate) fn avx_transpose_f64x2_6x6_impl(
     v0: [AvxStoreD; 6],
     v1: [AvxStoreD; 6],

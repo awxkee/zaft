@@ -38,7 +38,7 @@ pub(crate) struct ColumnButterfly18d {
 }
 
 impl ColumnButterfly18d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
             bf9: ColumnButterfly9d::new(fft_direction),
@@ -99,7 +99,7 @@ pub(crate) struct ColumnButterfly18f {
 }
 
 impl ColumnButterfly18f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
             bf9: ColumnButterfly9f::new(fft_direction),

@@ -46,7 +46,7 @@ pub(crate) struct ColumnButterfly16d {
 }
 
 impl ColumnButterfly16d {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly16d {
         let tw1 = compute_twiddle(1, 16, direction);
         let tw2 = compute_twiddle(2, 16, direction);
@@ -64,7 +64,7 @@ impl ColumnButterfly16d {
 }
 
 impl ColumnButterfly16d {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 16]) -> [AvxStoreD; 16] {
         let evens = self.bf8.exec(
@@ -136,7 +136,7 @@ pub(crate) struct ColumnButterfly16f {
 }
 
 impl ColumnButterfly16f {
-    #[target_feature(enable = "avx")]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly16f {
         let tw1 = compute_twiddle(1, 16, direction);
         let tw2 = compute_twiddle(2, 16, direction);
@@ -169,7 +169,7 @@ impl ColumnButterfly16f {
 }
 
 impl ColumnButterfly16f {
-    #[target_feature(enable = "avx", enable = "fma")]
+    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreF; 16]) -> [AvxStoreF; 16] {
         let evens = self.bf8.exec(
