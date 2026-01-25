@@ -49,8 +49,7 @@ impl ColumnButterfly8d {
 }
 
 impl ColumnButterfly8d {
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn rotate1(&self, p0: AvxStoreD) -> AvxStoreD {
         AvxStoreD::raw(_mm256_mul_pd(
@@ -59,8 +58,7 @@ impl ColumnButterfly8d {
         ))
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn rotate3(&self, p0: AvxStoreD) -> AvxStoreD {
         AvxStoreD::raw(_mm256_mul_pd(
@@ -69,15 +67,13 @@ impl ColumnButterfly8d {
         ))
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn rotate(&self, p0: AvxStoreD) -> AvxStoreD {
         AvxStoreD::raw(self.rotate.rotate_m256d(p0.v))
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn exec(&self, v: [AvxStoreD; 8]) -> [AvxStoreD; 8] {
         let (u0, u2, u4, u6) =
@@ -122,8 +118,7 @@ impl ColumnButterfly8f {
 }
 
 impl ColumnButterfly8f {
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn rotate1(&self, p0: AvxStoreF) -> AvxStoreF {
         AvxStoreF::raw(_mm256_mul_ps(
@@ -132,15 +127,13 @@ impl ColumnButterfly8f {
         ))
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn rotate(&self, p0: AvxStoreF) -> AvxStoreF {
         AvxStoreF::raw(self.rotate.rotate_m256(p0.v))
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn rotate3(&self, p0: AvxStoreF) -> AvxStoreF {
         AvxStoreF::raw(_mm256_mul_ps(
@@ -149,8 +142,7 @@ impl ColumnButterfly8f {
         ))
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn exec(&self, v: [AvxStoreF; 8]) -> [AvxStoreF; 8] {
         let (u0, u2, u4, u6) = AvxButterfly::butterfly4_f32(

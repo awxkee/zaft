@@ -50,8 +50,7 @@ impl ColumnButterfly15d {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn exec(&self, v: [AvxStoreD; 15]) -> [AvxStoreD; 15] {
         let mid0 = self.bf5.exec([v[0], v[3], v[6], v[9], v[12]]);
@@ -90,8 +89,7 @@ impl ColumnButterfly15f {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn exec(&self, v: [AvxStoreF; 15]) -> [AvxStoreF; 15] {
         let mid0 = self.bf5.exec([v[0], v[3], v[6], v[9], v[12]]);

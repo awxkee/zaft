@@ -42,8 +42,7 @@ impl ColumnButterfly14d {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn exec(&self, u: [AvxStoreD; 14]) -> [AvxStoreD; 14] {
         let (u0, u1) = AvxButterfly::butterfly2_f64(u[0].v, u[7].v);
@@ -90,8 +89,7 @@ impl ColumnButterfly14f {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn exec(&self, u: [AvxStoreF; 14]) -> [AvxStoreF; 14] {
         let (u0, u1) = AvxButterfly::butterfly2_f32(u[0].v, u[7].v);

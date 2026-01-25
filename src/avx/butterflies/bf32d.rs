@@ -85,15 +85,12 @@ fn transpose_8x4_to_4x8_f64(
 
 impl AvxButterfly32d {
     pub(crate) fn new(direction: FftDirection) -> AvxButterfly32d {
-        unsafe { Self::new_init(direction) }
-    }
-
-    #[target_feature(enable = "avx2", enable = "fma")]
-    fn new_init(direction: FftDirection) -> AvxButterfly32d {
         Self {
             direction,
-            twiddles: gen_butterfly_twiddles_interleaved_columns_f64!(4, 8, 0, direction),
-            bf8_column: ColumnButterfly8d::new(direction),
+            twiddles: unsafe {
+                gen_butterfly_twiddles_interleaved_columns_f64!(4, 8, 0, direction)
+            },
+            bf8_column: unsafe { ColumnButterfly8d::new(direction) },
         }
     }
 }

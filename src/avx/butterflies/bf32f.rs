@@ -63,15 +63,12 @@ pub(crate) struct AvxButterfly32f {
 
 impl AvxButterfly32f {
     pub(crate) fn new(direction: FftDirection) -> AvxButterfly32f {
-        unsafe { Self::new_init(direction) }
-    }
-
-    #[target_feature(enable = "avx2", enable = "fma")]
-    fn new_init(direction: FftDirection) -> AvxButterfly32f {
         Self {
             direction,
-            twiddles: gen_butterfly_twiddles_interleaved_columns_f32!(4, 8, 0, direction),
-            bf8_column: ColumnButterfly8f::new(direction),
+            twiddles: unsafe {
+                gen_butterfly_twiddles_interleaved_columns_f32!(4, 8, 0, direction)
+            },
+            bf8_column: unsafe { ColumnButterfly8f::new(direction) },
         }
     }
 }

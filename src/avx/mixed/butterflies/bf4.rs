@@ -57,8 +57,7 @@ impl ColumnButterfly4d {
 
 impl ColumnButterfly4d {
     #[target_feature(enable = "avx2")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
         let t0 = _mm256_add_pd(v[0].v, v[2].v);
         let t1 = _mm256_sub_pd(v[0].v, v[2].v);
@@ -94,8 +93,7 @@ impl ColumnButterfly4f {
 
 impl ColumnButterfly4f {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreF; 4]) -> [AvxStoreF; 4] {
         let t0 = _mm256_add_ps(v[0].v, v[2].v);
         let t1 = _mm256_sub_ps(v[0].v, v[2].v);
@@ -116,8 +114,7 @@ impl ColumnButterfly4f {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn exech(&self, v: [SseStoreF; 4]) -> [SseStoreF; 4] {
         let t0 = _mm_add_ps(v[0].v, v[2].v);
         let t1 = _mm_sub_ps(v[0].v, v[2].v);

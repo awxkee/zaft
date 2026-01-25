@@ -148,8 +148,7 @@ pub(crate) struct AvxButterfly {}
 
 impl AvxButterfly {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly3_f32(
         u0: __m256,
         u1: __m256,
@@ -172,8 +171,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly2_f32(u0: __m256, u1: __m256) -> (__m256, __m256) {
         let t = _mm256_add_ps(u0, u1);
         let y1 = _mm256_sub_ps(u0, u1);
@@ -182,8 +180,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly3_f32_m128(
         u0: __m128,
         u1: __m128,
@@ -206,8 +203,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly2_f32_m128(u0: __m128, u1: __m128) -> (__m128, __m128) {
         let t = _mm_add_ps(u0, u1);
         let y1 = _mm_sub_ps(u0, u1);
@@ -216,8 +212,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly3_f64(
         u0: __m256d,
         u1: __m256d,
@@ -239,8 +234,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly3_f64_m128(
         u0: __m128d,
         u1: __m128d,
@@ -262,8 +256,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly2_f64_m128(u0: __m128d, u1: __m128d) -> (__m128d, __m128d) {
         let t = _mm_add_pd(u0, u1);
         let y1 = _mm_sub_pd(u0, u1);
@@ -272,8 +265,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly2_f64(u0: __m256d, u1: __m256d) -> (__m256d, __m256d) {
         let t = _mm256_add_pd(u0, u1);
         let y1 = _mm256_sub_pd(u0, u1);
@@ -282,8 +274,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly4_f32(
         a: __m256,
         b: __m256,
@@ -323,8 +314,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn butterfly4_f64(
         a: __m256d,
         b: __m256d,
@@ -346,8 +336,7 @@ impl AvxButterfly {
     }
 
     #[target_feature(enable = "avx2")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn qbutterfly4_f64(a: [AvxStoreD; 4], rotate: __m256d) -> [AvxStoreD; 4] {
         let t0 = _mm256_add_pd(a[0].v, a[2].v);
         let t1 = _mm256_sub_pd(a[0].v, a[2].v);

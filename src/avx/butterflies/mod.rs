@@ -438,7 +438,7 @@ pub(crate) use shift_store8;
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) fn make_mixedradix_twiddle_chunk_f64(
+pub(crate) unsafe fn make_mixedradix_twiddle_chunk_f64(
     x: usize,
     y: usize,
     len: usize,
@@ -455,7 +455,7 @@ pub(crate) fn make_mixedradix_twiddle_chunk_f64(
 
 #[inline]
 #[target_feature(enable = "avx2")]
-pub(crate) fn make_mixedradix_twiddle_chunk_f32(
+pub(crate) unsafe fn make_mixedradix_twiddle_chunk_f32(
     x: usize,
     y: usize,
     len: usize,
