@@ -975,7 +975,7 @@ impl Zaft {
                             return Ok(v);
                         }
                     }
-                    let right_fft = Zaft::strategy(r, fft_direction)?;
+                    let right_fft = T::radix13(r, fft_direction)?;
                     if let Ok(Some(v)) = T::mixed_radix_butterfly13(right_fft) {
                         return Ok(v);
                     }

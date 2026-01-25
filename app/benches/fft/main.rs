@@ -232,7 +232,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     //     .measurement_time(Duration::from_millis(135));
     // bench_rustfft_average(c);
     // bench_zaft_average(c);
-    check_power_group(c, 2usize.pow(16), "2usize.pow(16)".to_string());
     bench_rustfft_averages(c);
     bench_zaft_averages(c);
 
