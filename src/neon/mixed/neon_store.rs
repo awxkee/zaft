@@ -34,19 +34,16 @@ use std::mem::MaybeUninit;
 use std::ops::{Add, Mul, Neg, Sub};
 
 #[derive(Clone, Copy)]
-#[repr(transparent)]
 pub(crate) struct NeonStoreD {
     pub(crate) v: float64x2_t,
 }
 
 #[derive(Clone, Copy)]
-#[repr(transparent)]
 pub(crate) struct NeonStoreF {
     pub(crate) v: float32x4_t,
 }
 
 #[derive(Clone, Copy)]
-#[repr(transparent)]
 pub(crate) struct NeonStoreFh {
     pub(crate) v: float32x2_t,
 }
@@ -156,7 +153,7 @@ impl NeonStoreD {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn to_complex(self) -> [Self; 2] {
         unsafe {
             let ql = vzip1q_f64(self.v, vdupq_n_f64(0.));
@@ -165,7 +162,7 @@ impl NeonStoreD {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn from_complex(complex: &Complex<f64>) -> Self {
         unsafe {
             NeonStoreD {
@@ -196,8 +193,7 @@ impl NeonStoreD {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
     pub(crate) fn fcmul_fcma(self, other: NeonStoreD) -> Self {
@@ -355,11 +351,6 @@ impl NeonStoreF {
     }
 
     #[inline(always)]
-    pub(crate) fn lo(self) -> NeonStoreFh {
-        unsafe { NeonStoreFh::raw(vget_low_f32(self.v)) }
-    }
-
-    #[inline(always)]
     pub(crate) fn dup(p0: f32) -> NeonStoreF {
         unsafe { NeonStoreF::raw(vdupq_n_f32(p0)) }
     }
@@ -473,6 +464,24 @@ impl NeonStoreFh {
         unsafe { NeonStoreFh { v: vld1_f32(ptr) } }
     }
 
+    // #[inline]
+    // pub(crate) fn from_complex_ref(complex: &[Complex<f32>]) -> Self {
+    //     unsafe {
+    //         NeonStoreFh {
+    //             v: vld1_f32(complex.as_ptr().cast()),
+    //         }
+    //     }
+    // }
+
+    #[inline]
+    pub(crate) fn from_complex(complex: &Complex<f32>) -> Self {
+        unsafe {
+            NeonStoreFh {
+                v: vld1_f32(complex as *const Complex<f32> as *const f32),
+            }
+        }
+    }
+
     #[inline]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f32>]) {
         unsafe { vst1_f32(to_ref.as_mut_ptr().cast(), self.v) }
@@ -485,8 +494,7 @@ impl NeonStoreFh {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
     pub(crate) fn fcmul_fcma(self, other: NeonStoreFh) -> Self {

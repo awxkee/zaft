@@ -110,8 +110,7 @@ impl ColumnFcmaButterfly8d {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 8]) -> [NeonStoreD; 8] {
         let (u0, u2, u4, u6) = self
@@ -293,8 +292,7 @@ impl ColumnFcmaButterfly8f {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn rotate1(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vmulq_n_f32(
@@ -303,8 +301,7 @@ impl ColumnFcmaButterfly8f {
         ))
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn rotate3(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vmulq_n_f32(
@@ -322,8 +319,7 @@ impl ColumnFcmaButterfly8f {
         NeonStoreF::raw(vcmlaq_rot90_f32(vdupq_n_f32(0.), self.bf4.rot_sign, v.v))
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 8]) -> [NeonStoreF; 8] {
         let (u0, u2, u4, u6) = self
@@ -357,8 +353,7 @@ impl ColumnFcmaButterfly8f {
         ]
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 8]) -> [NeonStoreFh; 8] {
         let (u0, u2, u4, u6) = self

@@ -167,8 +167,7 @@ impl ColumnFcmaButterfly6f {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 6]) -> [NeonStoreF; 6] {
         let (t0, t2, t4) = NeonButterfly::butterfly3_f32_fcma(
@@ -190,8 +189,7 @@ impl ColumnFcmaButterfly6f {
         ]
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 6]) -> [NeonStoreFh; 6] {
         let (t0, t2, t4) = NeonButterfly::butterfly3h_f32_fcma(
@@ -242,8 +240,7 @@ impl ColumnFcmaButterfly6d {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 6]) -> [NeonStoreD; 6] {
         let (t0, t2, t4) = NeonButterfly::butterfly3_f64_fcma(

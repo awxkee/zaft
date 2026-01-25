@@ -160,8 +160,7 @@ impl ColumnFcmaButterfly16d {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, v: [NeonStoreD; 16]) -> [NeonStoreD; 16] {
         let evens = self.bf8.exec_fcma(
@@ -428,8 +427,7 @@ impl ColumnFcmaButterfly16f {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, v: [NeonStoreF; 16]) -> [NeonStoreF; 16] {
         let evens = self.bf8.exec_fcma(
@@ -489,8 +487,7 @@ impl ColumnFcmaButterfly16f {
         ]
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, v: [NeonStoreFh; 16]) -> [NeonStoreFh; 16] {
         let evens = self.bf8.exech_fcma(

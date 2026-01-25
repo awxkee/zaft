@@ -93,8 +93,7 @@ impl ColumnFcmaButterfly9d {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 9]) -> [NeonStoreD; 9] {
         let [u0, u3, u6] = self.bf3.exec([store[0], store[3], store[6]]);
@@ -190,8 +189,7 @@ impl ColumnFcmaButterfly9f {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 9]) -> [NeonStoreF; 9] {
         let [u0, u3, u6] = self.bf3.exec([store[0], store[3], store[6]]);

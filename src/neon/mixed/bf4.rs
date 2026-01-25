@@ -87,8 +87,7 @@ impl ColumnFcmaButterfly4d {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 4]) -> [NeonStoreD; 4] {
         let t0 = vaddq_f64(store[0].v, store[2].v);
@@ -180,8 +179,7 @@ impl ColumnFcmaButterfly4f {
         }
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 4]) -> [NeonStoreF; 4] {
         let t0 = vaddq_f32(store[0].v, store[2].v);
@@ -196,8 +194,7 @@ impl ColumnFcmaButterfly4f {
         ]
     }
 
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 4]) -> [NeonStoreFh; 4] {
         let t0 = vadd_f32(store[0].v, store[2].v);

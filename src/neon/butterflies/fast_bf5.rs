@@ -109,8 +109,7 @@ impl NeonFastButterfly5<f64> {
 
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn exec_fcma(
         &self,
         u0: float64x2_t,
@@ -210,8 +209,7 @@ impl NeonFastButterfly5<f32> {
 
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
-    #[cfg_attr(feature = "inline_always", inline(always))]
-    #[cfg_attr(not(feature = "inline_always"), inline)]
+    #[inline]
     pub(crate) fn exec_fcma(
         &self,
         u0: float32x4_t,

@@ -99,8 +99,7 @@ macro_rules! gen_column14f {
                 }
             }
 
-            #[cfg_attr(feature = "inline_always", inline(always))]
-            #[cfg_attr(not(feature = "inline_always"), inline)]
+            #[inline]
             #[target_feature(enable = $features)]
             pub(crate) fn exec(&self, v: [NeonStoreF; 15]) -> [NeonStoreF; 15] {
                 let mid0 = self.bf5.exec([v[0], v[3], v[6], v[9], v[12]]);
@@ -120,8 +119,7 @@ macro_rules! gen_column14f {
                 ]
             }
 
-            #[cfg_attr(feature = "inline_always", inline(always))]
-            #[cfg_attr(not(feature = "inline_always"), inline)]
+            #[inline]
             #[target_feature(enable = $features)]
             pub(crate) fn exech(&self, v: [NeonStoreFh; 15]) -> [NeonStoreFh; 15] {
                 let mid0 = self.bf5.exech([v[0], v[3], v[6], v[9], v[12]]);
