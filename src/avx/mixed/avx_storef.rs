@@ -34,11 +34,13 @@ use std::mem::MaybeUninit;
 use std::ops::{Add, Mul, Neg, Sub};
 
 #[derive(Copy, Clone)]
+#[repr(transparent)]
 pub(crate) struct AvxStoreF {
     pub(crate) v: __m256,
 }
 
 #[derive(Copy, Clone)]
+#[repr(transparent)]
 pub(crate) struct SseStoreF {
     pub(crate) v: __m128,
 }
