@@ -91,6 +91,7 @@ impl RadersIndicer<f32> for f32 {
         }
     }
 
+    #[target_feature(enable = "avx2")]
     unsafe fn index_inputs_real(buffer: &[f32], output: &mut [Complex<f32>], indices: &[u32]) {
         unsafe {
             for (scratch_element, buffer_idx) in
