@@ -34,6 +34,7 @@ use std::mem::MaybeUninit;
 use std::ops::{Add, Mul, Neg, Sub};
 
 #[derive(Copy, Clone)]
+#[repr(transparent)]
 pub(crate) struct AvxStoreD {
     pub(crate) v: __m256d,
 }

@@ -230,8 +230,8 @@ fn check_power_groupd(c: &mut Criterion, n: usize, group: String) {
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     //     .measurement_time(Duration::from_millis(135));
-    // bench_rustfft_average(c);
-    // bench_zaft_average(c);
+    bench_rustfft_average(c);
+    bench_zaft_average(c);
     bench_rustfft_averages(c);
     bench_zaft_averages(c);
 
