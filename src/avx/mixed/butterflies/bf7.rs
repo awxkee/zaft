@@ -56,7 +56,8 @@ impl ColumnButterfly7d {
 
 impl ColumnButterfly7d {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 7]) -> [AvxStoreD; 7] {
         let (x1p6, x1m6) = AvxButterfly::butterfly2_f64(v[1].v, v[6].v);
         let x1m6 = self.rotate.rotate_m256d(x1m6);
@@ -124,7 +125,8 @@ impl ColumnButterfly7f {
 
 impl ColumnButterfly7f {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 7]) -> [AvxStoreF; 7] {
         let (x1p6, x1m6) = AvxButterfly::butterfly2_f32(v[1].v, v[6].v);
         let x1m6 = self.rotate.rotate_m256(x1m6);

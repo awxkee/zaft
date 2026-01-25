@@ -99,7 +99,7 @@ macro_rules! gen_bf14 {
                 }
             }
 
-             #[cfg_attr(feature = "inline_always", inline(always))]
+            #[cfg_attr(feature = "inline_always", inline(always))]
             #[cfg_attr(not(feature = "inline_always"), inline)]
             #[target_feature(enable = $feature)]
             pub(crate) fn exec(&self, u: [NeonStoreF; 14]) -> [NeonStoreF; 14] {

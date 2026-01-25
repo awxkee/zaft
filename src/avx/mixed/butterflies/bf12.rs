@@ -50,7 +50,8 @@ impl ColumnButterfly12d {
 
 impl ColumnButterfly12d {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 12]) -> [AvxStoreD; 12] {
         let (u0, u1, u2, u3) = self.bf4.exec(v[0].v, v[3].v, v[6].v, v[9].v);
         let (u4, u5, u6, u7) = self.bf4.exec(v[4].v, v[7].v, v[10].v, v[1].v);
@@ -97,7 +98,8 @@ impl ColumnButterfly12f {
 
 impl ColumnButterfly12f {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 12]) -> [AvxStoreF; 12] {
         let (u0, u1, u2, u3) = self.bf4.exec(v[0].v, v[3].v, v[6].v, v[9].v);
         let (u4, u5, u6, u7) = self.bf4.exec(v[4].v, v[7].v, v[10].v, v[1].v);

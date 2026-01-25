@@ -48,7 +48,8 @@ impl ColumnButterfly6d {
 
 impl ColumnButterfly6d {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 6]) -> [AvxStoreD; 6] {
         let (t0, t2, t4) = self.bf3.exec(v[0].v, v[2].v, v[4].v);
         let (t1, t3, t5) = self.bf3.exec(v[3].v, v[5].v, v[1].v);
@@ -84,7 +85,8 @@ impl ColumnButterfly6f {
 
 impl ColumnButterfly6f {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 6]) -> [AvxStoreF; 6] {
         let (t0, t2, t4) = self.bf3.exec(v[0].v, v[2].v, v[4].v);
         let (t1, t3, t5) = self.bf3.exec(v[3].v, v[5].v, v[1].v);

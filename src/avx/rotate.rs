@@ -82,7 +82,8 @@ where
 
 impl AvxRotate<f64> {
     #[target_feature(enable = "avx2")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn rotate_m128d(&self, v: __m128d) -> __m128d {
         _mm_xor_pd(
             _mm_shuffle_pd::<0b01>(v, v),
@@ -91,7 +92,8 @@ impl AvxRotate<f64> {
     }
 
     #[target_feature(enable = "avx2")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn rotate_m256d(&self, v: __m256d) -> __m256d {
         _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(v, v), self.rot_flag)
     }
@@ -99,7 +101,8 @@ impl AvxRotate<f64> {
 
 impl AvxRotate<f32> {
     #[target_feature(enable = "avx2")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn rotate_m128(&self, v: __m128) -> __m128 {
         const SH: i32 = shuffle(2, 3, 0, 1);
         _mm_xor_ps(
@@ -109,7 +112,8 @@ impl AvxRotate<f32> {
     }
 
     #[target_feature(enable = "avx2")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn rotate_m256(&self, v: __m256) -> __m256 {
         const SH: i32 = shuffle(2, 3, 0, 1);
         _mm256_xor_ps(

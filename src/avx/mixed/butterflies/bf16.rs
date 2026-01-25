@@ -65,7 +65,8 @@ impl ColumnButterfly16d {
 
 impl ColumnButterfly16d {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 16]) -> [AvxStoreD; 16] {
         let evens = self.bf8.exec(
             v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
@@ -170,7 +171,8 @@ impl ColumnButterfly16f {
 
 impl ColumnButterfly16f {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 16]) -> [AvxStoreF; 16] {
         let evens = self.bf8.exec(
             v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,

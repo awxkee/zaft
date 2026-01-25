@@ -58,7 +58,8 @@ impl ColumnButterfly5d {
 
 impl ColumnButterfly5d {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 5]) -> [AvxStoreD; 5] {
         let x14p = _mm256_add_pd(v[1].v, v[4].v);
         let x14n = _mm256_sub_pd(v[1].v, v[4].v);
@@ -125,7 +126,8 @@ impl ColumnButterfly5f {
 
 impl ColumnButterfly5f {
     #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 5]) -> [AvxStoreF; 5] {
         let x14p = _mm256_add_ps(v[1].v, v[4].v);
         let x14n = _mm256_sub_ps(v[1].v, v[4].v);

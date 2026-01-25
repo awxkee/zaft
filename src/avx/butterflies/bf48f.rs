@@ -50,9 +50,8 @@ impl AvxButterfly48f {
     pub(crate) fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            twiddles: unsafe {
-                gen_butterfly_twiddles_interleaved_columns_f32!(4, 12, 0, fft_direction)
-            },
+            twiddles:
+                gen_butterfly_twiddles_interleaved_columns_f32!(4, 12, 0, fft_direction),
             bf12: ColumnButterfly12f::new(fft_direction),
             bf4: ColumnButterfly4f::new(fft_direction),
         }

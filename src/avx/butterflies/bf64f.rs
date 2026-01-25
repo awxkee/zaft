@@ -85,7 +85,7 @@ impl AvxButterfly64f {
     fn new_init(direction: FftDirection) -> Self {
         AvxButterfly64f {
             direction,
-            twiddles: unsafe { gen_butterfly_twiddles_separated_columns_f32!(8, 8, 0, direction) },
+            twiddles: gen_butterfly_twiddles_separated_columns_f32!(8, 8, 0, direction),
             bf8_column: ColumnButterfly8f::new(direction),
         }
     }

@@ -34,19 +34,22 @@ use num_traits::{AsPrimitive, Float};
 use std::any::TypeId;
 use std::arch::x86_64::*;
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set_complexd(v: Complex<f64>) -> __m256d {
     _mm256_setr_pd(v.re, v.im, v.re, v.im)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm_set_complex(v: Complex<f32>) -> __m128 {
     _mm_setr_ps(v.re, v.im, v.re, v.im)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set4_complex(
     v0: Complex<f32>,
@@ -57,25 +60,29 @@ pub(crate) fn _mm256_set4_complex(
     _mm256_setr_ps(v0.re, v0.im, v1.re, v1.im, v2.re, v2.im, v3.re, v3.im)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set_complex(v0: Complex<f32>) -> __m256 {
     _mm256_setr_ps(v0.re, v0.im, v0.re, v0.im, v0.re, v0.im, v0.re, v0.im)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set2_complexd(v0: Complex<f64>, v1: Complex<f64>) -> __m256d {
     _mm256_setr_pd(v0.re, v0.im, v1.re, v1.im)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_set2_complex(v0: Complex<f32>, v1: Complex<f32>) -> __m256 {
     _mm256_setr_ps(v0.re, v0.im, v0.re, v0.im, v1.re, v1.im, v1.re, v1.im)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_shuffle_pd::<0b00>(b, b);
@@ -85,7 +92,8 @@ pub(crate) fn _mm_fcmul_pd(a: __m128d, b: __m128d) -> __m128d {
     _mm_fmaddsub_pd(temp1, a, temp2)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
@@ -99,7 +107,8 @@ pub(crate) fn _mm256_fcmul_pd(a: __m256d, b: __m256d) -> __m256d {
     _mm256_fmaddsub_pd(a, b_xx, _mm256_mul_pd(a_yx, b_yy))
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_ps(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(b, b);
@@ -109,25 +118,29 @@ pub(crate) fn _mm_fcmul_ps(a: __m128, b: __m128) -> __m128 {
     _mm_fmaddsub_ps(a, temp1, mul2)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "sse4.2")]
 pub(crate) unsafe fn _m128s_load_f32x2(a: *const Complex<f32>) -> __m128 {
     unsafe { _mm_castsi128_ps(_mm_loadu_si64(a.cast())) }
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "sse4.2")]
 pub(crate) fn _m128s_store_f32x2(a: *mut Complex<f32>, b: __m128) {
     unsafe { _mm_storeu_si64(a.cast(), _mm_castps_si128(b)) }
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "sse4.2")]
 pub(crate) fn _m128s_storeh_f32x2(a: *mut Complex<f32>, b: __m128) {
     unsafe { _mm_storeh_pd(a.cast(), _mm_castps_pd(b)) }
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_ps(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
@@ -148,43 +161,50 @@ pub(crate) const fn shuffle(z: u32, y: u32, x: u32, w: u32) -> i32 {
     ((z << 6) | (y << 4) | (x << 2) | w) as i32
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "sse2")]
 pub(crate) fn _mm_unpacklo_ps64(a: __m128, b: __m128) -> __m128 {
     _mm_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(a, b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "sse2")]
 pub(crate) fn _mm_unpacklohi_ps64(a: __m128, b: __m128) -> __m128 {
     _mm_shuffle_ps::<{ shuffle(3, 2, 1, 0) }>(a, b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "sse2")]
 pub(crate) fn _mm_unpackhilo_ps64(a: __m128, b: __m128) -> __m128 {
     _mm_shuffle_ps::<{ shuffle(1, 0, 3, 2) }>(a, b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "sse2")]
 pub(crate) fn _mm_unpackhi_ps64(a: __m128, b: __m128) -> __m128 {
     _mm_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(a, b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_unpacklo_pd2(a: __m256d, b: __m256d) -> __m256d {
     _mm256_permute2f128_pd::<0x20>(a, b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_unpackhi_pd2(a: __m256d, b: __m256d) -> __m256d {
     _mm256_permute2f128_pd::<0x31>(a, b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256s_interleave4_epi64(
     a: __m256,
@@ -209,7 +229,8 @@ pub(crate) fn _mm256s_interleave4_epi64(
     )
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256s_deinterleave4_epi64(
     a: __m256,
@@ -234,13 +255,15 @@ pub(crate) fn _mm256s_deinterleave4_epi64(
     )
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_permute4x64_ps<const IMM: i32>(a: __m256) -> __m256 {
     _mm256_castpd_ps(_mm256_permute4x64_pd::<IMM>(_mm256_castps_pd(a)))
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256s_deinterleave3_epi64(
     a: __m256,
@@ -264,7 +287,8 @@ pub(crate) fn _mm256s_deinterleave3_epi64(
     )
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256s_interleave3_epi64(
     a: __m256,
@@ -288,7 +312,8 @@ pub(crate) fn _mm256s_interleave3_epi64(
     }
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_load4_f32x2(
     a: &[Complex<f32>],
@@ -310,25 +335,29 @@ pub(crate) fn _mm256_load4_f32x2(
     }
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_create_ps(a: __m128, b: __m128) -> __m256 {
     _mm256_insertf128_ps::<1>(_mm256_castps128_ps256(a), b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_create_pd(a: __m128d, b: __m128d) -> __m256d {
     _mm256_insertf128_pd::<1>(_mm256_castpd128_pd256(a), b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_unpacklo_ps64(a: __m256, b: __m256) -> __m256 {
     _mm256_shuffle_ps::<{ shuffle(1, 0, 1, 0) }>(a, b)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_blend_ps64<const IMM8: i32>(a: __m256, b: __m256) -> __m256 {
     _mm256_castpd_ps(_mm256_blend_pd::<IMM8>(
@@ -337,14 +366,16 @@ pub(crate) fn _mm256_blend_ps64<const IMM8: i32>(a: __m256, b: __m256) -> __m256
     ))
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2")]
 pub(crate) fn _mm256_unpackhi_ps64(a: __m256, b: __m256) -> __m256 {
     _mm256_shuffle_ps::<{ shuffle(3, 2, 3, 2) }>(a, b)
 }
 
 // a.conj() * b
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
@@ -360,7 +391,8 @@ pub(crate) fn _mm256_fcmul_ps_conj_a(a: __m256, b: __m256) -> __m256 {
 }
 
 // a * b.conj()
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_ps_conj_b(a: __m256, b: __m256) -> __m256 {
     // Extract real and imag parts from a
@@ -376,7 +408,8 @@ pub(crate) fn _mm256_fcmul_ps_conj_b(a: __m256, b: __m256) -> __m256 {
 }
 
 // a.conj() * b
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(a, a);
@@ -387,7 +420,8 @@ pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
 }
 
 // a * b.conj()
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_ps_conj_b(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(b, b);
@@ -398,7 +432,8 @@ pub(crate) fn _mm_fcmul_ps_conj_b(a: __m128, b: __m128) -> __m128 {
 }
 
 // a.conj() * b
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
@@ -412,7 +447,8 @@ pub(crate) fn _mm256_fcmul_pd_conj_a(a: __m256d, b: __m256d) -> __m256d {
 }
 
 // a * b.conj()
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm256_fcmul_pd_conj_b(a: __m256d, b: __m256d) -> __m256d {
     // Swap real and imaginary parts of 'a' for FMA
@@ -426,7 +462,8 @@ pub(crate) fn _mm256_fcmul_pd_conj_b(a: __m256d, b: __m256d) -> __m256d {
 }
 
 // a.conj() * b
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_shuffle_pd::<0b00>(a, a); // [b.re, b.re]
@@ -437,7 +474,8 @@ pub(crate) fn _mm_fcmul_pd_conj_a(a: __m128d, b: __m128d) -> __m128d {
 }
 
 // a * b.conj()
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn _mm_fcmul_pd_conj_b(a: __m128d, b: __m128d) -> __m128d {
     let temp1 = _mm_shuffle_pd::<0b00>(b, b); // [b.re, b.re]

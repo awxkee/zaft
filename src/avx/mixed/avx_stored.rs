@@ -40,13 +40,15 @@ pub(crate) struct AvxStoreD {
 }
 
 impl AvxStoreD {
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn dup(p0: f64) -> AvxStoreD {
         AvxStoreD::raw(_mm256_set1_pd(p0))
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn dup_even_odds(&self) -> [Self; 2] {
         [
@@ -55,49 +57,55 @@ impl AvxStoreD {
         ]
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn reverse_complex(&self) -> Self {
         AvxStoreD::raw(_mm256_permute2f128_pd::<0x01>(self.v, self.v))
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn reverse_complex_elements(&self) -> Self {
         AvxStoreD::raw(_mm256_shuffle_pd::<0x05>(self.v, self.v))
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn xor(&self, other: Self) -> Self {
         AvxStoreD::raw(_mm256_xor_pd(self.v, other.v))
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn set_values(p0: f64, p1: f64, p2: f64, p3: f64) -> Self {
         AvxStoreD::raw(_mm256_setr_pd(p0, p1, p2, p3))
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn blend_real_img(&self, other: Self) -> Self {
         AvxStoreD::raw(_mm256_blend_pd::<0b1010>(self.v, other.v))
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn neg(&self) -> AvxStoreD {
         AvxStoreD::raw(_mm256_xor_pd(self.v, _mm256_set1_pd(-0.0)))
     }
 
-    #[inline]
-    #[target_feature(enable = "avx2")]
+    #[inline(always)]
     pub(crate) fn raw(r: __m256d) -> AvxStoreD {
         AvxStoreD { v: r }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex_ref(complex: &[Complex<f64>]) -> Self {
         unsafe {
@@ -107,7 +115,8 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn load(complex: &[f64]) -> Self {
         unsafe {
@@ -117,7 +126,8 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex_refu(complex: &[MaybeUninit<Complex<f64>>]) -> Self {
         unsafe {
@@ -127,7 +137,8 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn from_complex(complex: &Complex<f64>) -> Self {
         unsafe {
@@ -139,7 +150,8 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn load3(ptr: &[f64]) -> Self {
         unsafe {
@@ -149,7 +161,8 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn load2(ptr: &[f64]) -> Self {
         unsafe {
@@ -158,7 +171,8 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn load1(ptr: &[f64]) -> Self {
         unsafe {
@@ -167,7 +181,8 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn set_complex(complex: &Complex<f64>) -> Self {
         AvxStoreD {
@@ -175,7 +190,8 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn from_complexu(complex: &MaybeUninit<Complex<f64>>) -> Self {
         unsafe {
@@ -187,19 +203,22 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn set_complex2(p0: Complex<f64>, p1: Complex<f64>) -> AvxStoreD {
         AvxStoreD::raw(_mm256_setr_pd(p0.re, p0.im, p1.re, p1.im))
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f64>]) {
         unsafe { _mm256_storeu_pd(to_ref.as_mut_ptr().cast(), self.v) }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn write_single(&self, to_ref: &mut Complex<f64>) {
         unsafe {
@@ -210,19 +229,22 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn write_u(&self, to_ref: &mut [MaybeUninit<Complex<f64>>]) {
         unsafe { _mm256_storeu_pd(to_ref.as_mut_ptr().cast(), self.v) }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn write_lo(&self, to_ref: &mut [Complex<f64>]) {
         unsafe { _mm_storeu_pd(to_ref.as_mut_ptr().cast(), _mm256_castpd256_pd128(self.v)) }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn write_hi(&self, to_ref: &mut [Complex<f64>]) {
         unsafe {
@@ -233,13 +255,15 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn write_lou(&self, to_ref: &mut [MaybeUninit<Complex<f64>>]) {
         unsafe { _mm_storeu_pd(to_ref.as_mut_ptr().cast(), _mm256_castpd256_pd128(self.v)) }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn mul_by_complex(self, other: AvxStoreD) -> Self {
         AvxStoreD {
@@ -249,7 +273,8 @@ impl AvxStoreD {
 }
 
 impl AvxStoreD {
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn zero() -> Self {
         Self {
@@ -257,13 +282,15 @@ impl AvxStoreD {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn to_complex(self) -> [Self; 2] {
         self.zip(AvxStoreD::zero())
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "avx2")]
     pub(crate) fn zip(self, other: Self) -> [Self; 2] {
         let r0 = _mm256_shuffle_pd::<0b0000>(self.v, other.v);

@@ -44,7 +44,11 @@ pub(crate) struct AvxButterfly49d {
 
 impl AvxButterfly49d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        unsafe {
+        unsafe { Self::new_init(fft_direction) }
+    }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn new_init(fft_direction: FftDirection) -> Self {
             let mut twiddles = [AvxStoreD::zero(); 24];
             let mut q = 0usize;
             let len_per_row = 7;
@@ -67,7 +71,6 @@ impl AvxButterfly49d {
                 twiddles,
                 bf7: ColumnButterfly7d::new(fft_direction),
             }
-        }
     }
 }
 
