@@ -140,7 +140,7 @@ macro_rules! define_mixed_radixd {
             for chunk in in_place.chunks_exact_mut(self.execution_length) {
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN * COMPLEX_PER_VECTOR)
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
                     .take(chunk_count)
                     .enumerate()
                 {
@@ -327,7 +327,7 @@ macro_rules! define_mixed_radixf {
                 for chunk in in_place.chunks_exact_mut(self.execution_length) {
                     for (c, twiddle_chunk) in self
                         .twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN * COMPLEX_PER_VECTOR)
+                        .chunks_exact(TWIDDLES_PER_COLUMN)
                         .take(chunk_count)
                         .enumerate()
                     {
