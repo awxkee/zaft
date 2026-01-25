@@ -31,8 +31,7 @@ use crate::avx::transpose::f64x2_2x2::transpose_f64x2_2x2;
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
-#[inline]
-#[target_feature(enable = "avx2")]
+#[inline(always)]
 pub(crate) fn avx_transpose_f64x2_4x4_impl(
     v0: (__m256d, __m256d),
     v1: (__m256d, __m256d),

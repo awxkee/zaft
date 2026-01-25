@@ -64,15 +64,13 @@ pub(crate) fn transpose_4x3(rows: [AvxStoreF; 3]) -> [AvxStoreF; 4] {
 
 #[inline(always)]
 pub(crate) fn transpose_4x4(rows: [AvxStoreF; 4]) -> [AvxStoreF; 4] {
-    unsafe {
-        let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
-        [
-            AvxStoreF::raw(a0.0),
-            AvxStoreF::raw(a0.1),
-            AvxStoreF::raw(a0.2),
-            AvxStoreF::raw(a0.3),
-        ]
-    }
+    let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
+    [
+        AvxStoreF::raw(a0.0),
+        AvxStoreF::raw(a0.1),
+        AvxStoreF::raw(a0.2),
+        AvxStoreF::raw(a0.3),
+    ]
 }
 
 #[inline(always)]
@@ -141,20 +139,18 @@ pub(crate) fn transpose_4x7(rows: [AvxStoreF; 7]) -> [AvxStoreF; 8] {
 
 #[inline(always)]
 pub(crate) fn transpose_4x8(rows: [AvxStoreF; 8]) -> [AvxStoreF; 8] {
-    unsafe {
-        let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
-        let b0 = avx_transpose_f32x2_4x4_impl(rows[4].v, rows[5].v, rows[6].v, rows[7].v);
-        [
-            AvxStoreF::raw(a0.0),
-            AvxStoreF::raw(a0.1),
-            AvxStoreF::raw(a0.2),
-            AvxStoreF::raw(a0.3),
-            AvxStoreF::raw(b0.0),
-            AvxStoreF::raw(b0.1),
-            AvxStoreF::raw(b0.2),
-            AvxStoreF::raw(b0.3),
-        ]
-    }
+    let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
+    let b0 = avx_transpose_f32x2_4x4_impl(rows[4].v, rows[5].v, rows[6].v, rows[7].v);
+    [
+        AvxStoreF::raw(a0.0),
+        AvxStoreF::raw(a0.1),
+        AvxStoreF::raw(a0.2),
+        AvxStoreF::raw(a0.3),
+        AvxStoreF::raw(b0.0),
+        AvxStoreF::raw(b0.1),
+        AvxStoreF::raw(b0.2),
+        AvxStoreF::raw(b0.3),
+    ]
 }
 
 #[inline(always)]
@@ -239,25 +235,23 @@ pub(crate) fn transpose_4x11(rows: [AvxStoreF; 11]) -> [AvxStoreF; 12] {
 
 #[inline(always)]
 pub(crate) fn transpose_4x12(rows: [AvxStoreF; 12]) -> [AvxStoreF; 12] {
-    unsafe {
-        let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
-        let b0 = avx_transpose_f32x2_4x4_impl(rows[4].v, rows[5].v, rows[6].v, rows[7].v);
-        let c0 = avx_transpose_f32x2_4x4_impl(rows[8].v, rows[9].v, rows[10].v, rows[11].v);
-        [
-            AvxStoreF::raw(a0.0),
-            AvxStoreF::raw(a0.1),
-            AvxStoreF::raw(a0.2),
-            AvxStoreF::raw(a0.3),
-            AvxStoreF::raw(b0.0),
-            AvxStoreF::raw(b0.1),
-            AvxStoreF::raw(b0.2),
-            AvxStoreF::raw(b0.3),
-            AvxStoreF::raw(c0.0),
-            AvxStoreF::raw(c0.1),
-            AvxStoreF::raw(c0.2),
-            AvxStoreF::raw(c0.3),
-        ]
-    }
+    let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
+    let b0 = avx_transpose_f32x2_4x4_impl(rows[4].v, rows[5].v, rows[6].v, rows[7].v);
+    let c0 = avx_transpose_f32x2_4x4_impl(rows[8].v, rows[9].v, rows[10].v, rows[11].v);
+    [
+        AvxStoreF::raw(a0.0),
+        AvxStoreF::raw(a0.1),
+        AvxStoreF::raw(a0.2),
+        AvxStoreF::raw(a0.3),
+        AvxStoreF::raw(b0.0),
+        AvxStoreF::raw(b0.1),
+        AvxStoreF::raw(b0.2),
+        AvxStoreF::raw(b0.3),
+        AvxStoreF::raw(c0.0),
+        AvxStoreF::raw(c0.1),
+        AvxStoreF::raw(c0.2),
+        AvxStoreF::raw(c0.3),
+    ]
 }
 
 #[inline(always)]
@@ -357,28 +351,26 @@ pub(crate) fn transpose_4x15(rows: [AvxStoreF; 15]) -> [AvxStoreF; 16] {
 
 #[inline(always)]
 pub(crate) fn transpose_4x16(rows: [AvxStoreF; 16]) -> [AvxStoreF; 16] {
-    unsafe {
-        let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
-        let b0 = avx_transpose_f32x2_4x4_impl(rows[4].v, rows[5].v, rows[6].v, rows[7].v);
-        let c0 = avx_transpose_f32x2_4x4_impl(rows[8].v, rows[9].v, rows[10].v, rows[11].v);
-        let d0 = avx_transpose_f32x2_4x4_impl(rows[12].v, rows[13].v, rows[14].v, rows[15].v);
-        [
-            AvxStoreF::raw(a0.0),
-            AvxStoreF::raw(a0.1),
-            AvxStoreF::raw(a0.2),
-            AvxStoreF::raw(a0.3),
-            AvxStoreF::raw(b0.0),
-            AvxStoreF::raw(b0.1),
-            AvxStoreF::raw(b0.2),
-            AvxStoreF::raw(b0.3),
-            AvxStoreF::raw(c0.0),
-            AvxStoreF::raw(c0.1),
-            AvxStoreF::raw(c0.2),
-            AvxStoreF::raw(c0.3),
-            AvxStoreF::raw(d0.0),
-            AvxStoreF::raw(d0.1),
-            AvxStoreF::raw(d0.2),
-            AvxStoreF::raw(d0.3),
-        ]
-    }
+    let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, rows[3].v);
+    let b0 = avx_transpose_f32x2_4x4_impl(rows[4].v, rows[5].v, rows[6].v, rows[7].v);
+    let c0 = avx_transpose_f32x2_4x4_impl(rows[8].v, rows[9].v, rows[10].v, rows[11].v);
+    let d0 = avx_transpose_f32x2_4x4_impl(rows[12].v, rows[13].v, rows[14].v, rows[15].v);
+    [
+        AvxStoreF::raw(a0.0),
+        AvxStoreF::raw(a0.1),
+        AvxStoreF::raw(a0.2),
+        AvxStoreF::raw(a0.3),
+        AvxStoreF::raw(b0.0),
+        AvxStoreF::raw(b0.1),
+        AvxStoreF::raw(b0.2),
+        AvxStoreF::raw(b0.3),
+        AvxStoreF::raw(c0.0),
+        AvxStoreF::raw(c0.1),
+        AvxStoreF::raw(c0.2),
+        AvxStoreF::raw(c0.3),
+        AvxStoreF::raw(d0.0),
+        AvxStoreF::raw(d0.1),
+        AvxStoreF::raw(d0.2),
+        AvxStoreF::raw(d0.3),
+    ]
 }

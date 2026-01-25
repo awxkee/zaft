@@ -50,8 +50,7 @@ impl ColumnButterfly15d {
         }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 15]) -> [AvxStoreD; 15] {
         let mid0 = self.bf5.exec([v[0], v[3], v[6], v[9], v[12]]);
         let mid1 = self.bf5.exec([v[5], v[8], v[11], v[14], v[2]]);
@@ -89,8 +88,7 @@ impl ColumnButterfly15f {
         }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 15]) -> [AvxStoreF; 15] {
         let mid0 = self.bf5.exec([v[0], v[3], v[6], v[9], v[12]]);
         let mid1 = self.bf5.exec([v[5], v[8], v[11], v[14], v[2]]);

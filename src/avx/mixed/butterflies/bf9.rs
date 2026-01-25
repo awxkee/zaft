@@ -97,8 +97,7 @@ impl ColumnButterfly9f {
 }
 
 impl ColumnButterfly9f {
-    #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 9]) -> [AvxStoreF; 9] {
         let [u0, u3, u6] = self.bf3.exec([v[0], v[3], v[6]]);
         let [u1, mut u4, mut u7] = self.bf3.exec([v[1], v[4], v[7]]);

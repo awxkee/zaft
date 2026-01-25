@@ -47,23 +47,24 @@ impl ColumnButterfly6d {
 }
 
 impl ColumnButterfly6d {
-    #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 6]) -> [AvxStoreD; 6] {
-        let (t0, t2, t4) = self.bf3.exec(v[0].v, v[2].v, v[4].v);
-        let (t1, t3, t5) = self.bf3.exec(v[3].v, v[5].v, v[1].v);
-        let (y0, y3) = AvxButterfly::butterfly2_f64(t0, t1);
-        let (y4, y1) = AvxButterfly::butterfly2_f64(t2, t3);
-        let (y2, y5) = AvxButterfly::butterfly2_f64(t4, t5);
+        unsafe {
+            let (t0, t2, t4) = self.bf3.exec(v[0].v, v[2].v, v[4].v);
+            let (t1, t3, t5) = self.bf3.exec(v[3].v, v[5].v, v[1].v);
+            let (y0, y3) = AvxButterfly::butterfly2_f64(t0, t1);
+            let (y4, y1) = AvxButterfly::butterfly2_f64(t2, t3);
+            let (y2, y5) = AvxButterfly::butterfly2_f64(t4, t5);
 
-        [
-            AvxStoreD::raw(y0),
-            AvxStoreD::raw(y1),
-            AvxStoreD::raw(y2),
-            AvxStoreD::raw(y3),
-            AvxStoreD::raw(y4),
-            AvxStoreD::raw(y5),
-        ]
+            [
+                AvxStoreD::raw(y0),
+                AvxStoreD::raw(y1),
+                AvxStoreD::raw(y2),
+                AvxStoreD::raw(y3),
+                AvxStoreD::raw(y4),
+                AvxStoreD::raw(y5),
+            ]
+        }
     }
 }
 
@@ -83,22 +84,23 @@ impl ColumnButterfly6f {
 }
 
 impl ColumnButterfly6f {
-    #[target_feature(enable = "avx2", enable = "fma")]
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 6]) -> [AvxStoreF; 6] {
-        let (t0, t2, t4) = self.bf3.exec(v[0].v, v[2].v, v[4].v);
-        let (t1, t3, t5) = self.bf3.exec(v[3].v, v[5].v, v[1].v);
-        let (y0, y3) = AvxButterfly::butterfly2_f32(t0, t1);
-        let (y4, y1) = AvxButterfly::butterfly2_f32(t2, t3);
-        let (y2, y5) = AvxButterfly::butterfly2_f32(t4, t5);
+        unsafe {
+            let (t0, t2, t4) = self.bf3.exec(v[0].v, v[2].v, v[4].v);
+            let (t1, t3, t5) = self.bf3.exec(v[3].v, v[5].v, v[1].v);
+            let (y0, y3) = AvxButterfly::butterfly2_f32(t0, t1);
+            let (y4, y1) = AvxButterfly::butterfly2_f32(t2, t3);
+            let (y2, y5) = AvxButterfly::butterfly2_f32(t4, t5);
 
-        [
-            AvxStoreF::raw(y0),
-            AvxStoreF::raw(y1),
-            AvxStoreF::raw(y2),
-            AvxStoreF::raw(y3),
-            AvxStoreF::raw(y4),
-            AvxStoreF::raw(y5),
-        ]
+            [
+                AvxStoreF::raw(y0),
+                AvxStoreF::raw(y1),
+                AvxStoreF::raw(y2),
+                AvxStoreF::raw(y3),
+                AvxStoreF::raw(y4),
+                AvxStoreF::raw(y5),
+            ]
+        }
     }
 }

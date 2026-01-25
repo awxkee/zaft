@@ -30,13 +30,14 @@
 use num_complex::Complex;
 use std::arch::x86_64::*;
 
-#[inline]
-#[target_feature(enable = "avx2")]
+#[inline(always)]
 pub(crate) unsafe fn transpose_u64_2x2_impl(v0: __m128, v1: __m128) -> (__m128, __m128) {
-    let l = _mm_shuffle_pd::<0b00>(_mm_castps_pd(v0), _mm_castps_pd(v1));
-    let h = _mm_shuffle_pd::<0b11>(_mm_castps_pd(v0), _mm_castps_pd(v1));
+    unsafe {
+        let l = _mm_shuffle_pd::<0b00>(_mm_castps_pd(v0), _mm_castps_pd(v1));
+        let h = _mm_shuffle_pd::<0b11>(_mm_castps_pd(v0), _mm_castps_pd(v1));
 
-    (_mm_castpd_ps(l), _mm_castpd_ps(h))
+        (_mm_castpd_ps(l), _mm_castpd_ps(h))
+    }
 }
 
 #[inline]
@@ -61,20 +62,21 @@ pub(crate) fn avx_transpose_f32x2_2x2(
     }
 }
 
-#[inline]
-#[target_feature(enable = "avx2")]
+#[inline(always)]
 pub(crate) fn transpose_f32_2x2_impl(v0: (__m256, __m256)) -> (__m256, __m256) {
-    let l = _mm_shuffle_pd::<0b00>(
-        _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
-        _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
-    );
-    let h = _mm_shuffle_pd::<0b11>(
-        _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
-        _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
-    );
+    unsafe {
+        let l = _mm_shuffle_pd::<0b00>(
+            _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
+            _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
+        );
+        let h = _mm_shuffle_pd::<0b11>(
+            _mm_castps_pd(_mm256_castps256_ps128(v0.0)),
+            _mm_castps_pd(_mm256_castps256_ps128(v0.1)),
+        );
 
-    (
-        _mm256_castps128_ps256(_mm_castpd_ps(l)),
-        _mm256_castps128_ps256(_mm_castpd_ps(h)),
-    )
+        (
+            _mm256_castps128_ps256(_mm_castpd_ps(l)),
+            _mm256_castps128_ps256(_mm_castpd_ps(h)),
+        )
+    }
 }

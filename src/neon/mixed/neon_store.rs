@@ -479,15 +479,6 @@ impl NeonStoreFh {
     // }
 
     #[inline]
-    pub(crate) fn from_complex(complex: &Complex<f32>) -> Self {
-        unsafe {
-            NeonStoreFh {
-                v: vld1_f32(complex as *const Complex<f32> as *const f32),
-            }
-        }
-    }
-
-    #[inline]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f32>]) {
         unsafe { vst1_f32(to_ref.as_mut_ptr().cast(), self.v) }
     }

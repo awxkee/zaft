@@ -42,38 +42,39 @@ impl ColumnButterfly14d {
         }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn exec(&self, u: [AvxStoreD; 14]) -> [AvxStoreD; 14] {
-        let (u0, u1) = AvxButterfly::butterfly2_f64(u[0].v, u[7].v);
-        let (u2, u3) = AvxButterfly::butterfly2_f64(u[8].v, u[1].v);
-        let (u4, u5) = AvxButterfly::butterfly2_f64(u[2].v, u[9].v);
-        let (u6, u7) = AvxButterfly::butterfly2_f64(u[10].v, u[3].v);
-        let (u8, u9) = AvxButterfly::butterfly2_f64(u[4].v, u[11].v);
-        let (u10, u11) = AvxButterfly::butterfly2_f64(u[12].v, u[5].v);
-        let (u12, u13) = AvxButterfly::butterfly2_f64(u[6].v, u[13].v);
+        unsafe {
+            let (u0, u1) = AvxButterfly::butterfly2_f64(u[0].v, u[7].v);
+            let (u2, u3) = AvxButterfly::butterfly2_f64(u[8].v, u[1].v);
+            let (u4, u5) = AvxButterfly::butterfly2_f64(u[2].v, u[9].v);
+            let (u6, u7) = AvxButterfly::butterfly2_f64(u[10].v, u[3].v);
+            let (u8, u9) = AvxButterfly::butterfly2_f64(u[4].v, u[11].v);
+            let (u10, u11) = AvxButterfly::butterfly2_f64(u[12].v, u[5].v);
+            let (u12, u13) = AvxButterfly::butterfly2_f64(u[6].v, u[13].v);
 
-        // Outer 7-point butterflies
-        let [y0, y2, y4, y6, y8, y10, y12] = self.bf7.exec([
-            AvxStoreD::raw(u0),
-            AvxStoreD::raw(u2),
-            AvxStoreD::raw(u4),
-            AvxStoreD::raw(u6),
-            AvxStoreD::raw(u8),
-            AvxStoreD::raw(u10),
-            AvxStoreD::raw(u12),
-        ]); // (v0, v1, v2, v3, v4, v5, v6)
-        let [y7, y9, y11, y13, y1, y3, y5] = self.bf7.exec([
-            AvxStoreD::raw(u1),
-            AvxStoreD::raw(u3),
-            AvxStoreD::raw(u5),
-            AvxStoreD::raw(u7),
-            AvxStoreD::raw(u9),
-            AvxStoreD::raw(u11),
-            AvxStoreD::raw(u13),
-        ]); // (v7, v8, v9, v10, v11, v12, v13)
+            // Outer 7-point butterflies
+            let [y0, y2, y4, y6, y8, y10, y12] = self.bf7.exec([
+                AvxStoreD::raw(u0),
+                AvxStoreD::raw(u2),
+                AvxStoreD::raw(u4),
+                AvxStoreD::raw(u6),
+                AvxStoreD::raw(u8),
+                AvxStoreD::raw(u10),
+                AvxStoreD::raw(u12),
+            ]); // (v0, v1, v2, v3, v4, v5, v6)
+            let [y7, y9, y11, y13, y1, y3, y5] = self.bf7.exec([
+                AvxStoreD::raw(u1),
+                AvxStoreD::raw(u3),
+                AvxStoreD::raw(u5),
+                AvxStoreD::raw(u7),
+                AvxStoreD::raw(u9),
+                AvxStoreD::raw(u11),
+                AvxStoreD::raw(u13),
+            ]); // (v7, v8, v9, v10, v11, v12, v13)
 
-        [y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13]
+            [y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13]
+        }
     }
 }
 
@@ -89,8 +90,7 @@ impl ColumnButterfly14f {
         }
     }
 
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
+    #[inline(always)]
     pub(crate) fn exec(&self, u: [AvxStoreF; 14]) -> [AvxStoreF; 14] {
         let (u0, u1) = AvxButterfly::butterfly2_f32(u[0].v, u[7].v);
         let (u2, u3) = AvxButterfly::butterfly2_f32(u[8].v, u[1].v);
