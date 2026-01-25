@@ -679,8 +679,14 @@ impl Zaft {
             if product.is_multiple_of(14) {
                 get_mixed_butterflies!(14, product / 14)
             }
+            if product.is_multiple_of(15) {
+                get_mixed_butterflies!(15, product / 15)
+            }
             if product.is_multiple_of(12) {
                 get_mixed_butterflies!(12, product / 12)
+            }
+            if product.is_multiple_of(16) {
+                get_mixed_butterflies!(16, product / 16)
             }
             if product.is_multiple_of(8) {
                 get_mixed_butterflies!(8, product / 8)
@@ -691,8 +697,20 @@ impl Zaft {
             if product.is_multiple_of(7) {
                 get_mixed_butterflies!(7, product / 7)
             }
+            if product.is_multiple_of(11) {
+                get_mixed_butterflies!(11, product / 11)
+            }
+            if product.is_multiple_of(13) {
+                get_mixed_butterflies!(13, product / 13)
+            }
             if product.is_multiple_of(5) {
                 get_mixed_butterflies!(5, product / 5)
+            }
+            if product.is_multiple_of(4) {
+                get_mixed_butterflies!(4, product / 4)
+            }
+            if product.is_multiple_of(2) {
+                get_mixed_butterflies!(2, product / 2)
             }
             match Zaft::try_split_mixed_radix_butterflies(n_length, q_length, direction) {
                 Ok(value) => match value {
