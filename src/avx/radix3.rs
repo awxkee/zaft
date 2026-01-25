@@ -113,70 +113,7 @@ pub(crate) fn avx_bitreversed_transpose_f32_radix3(
         return;
     }
 
-    let mut x = 0usize;
-
-    while x + 3 < strided_width {
-        let x_rev0 = [
-            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
-            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
-            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
-        ];
-        let x1 = x + 1;
-        let x2 = x + 2;
-        let x_rev1 = [
-            reverse_bits::<WIDTH>(WIDTH * x1, rev_digits) * height,
-            reverse_bits::<WIDTH>(WIDTH * x1 + 1, rev_digits) * height,
-            reverse_bits::<WIDTH>(WIDTH * x1 + 2, rev_digits) * height,
-        ];
-        let x_rev2 = [
-            reverse_bits::<WIDTH>(WIDTH * x2, rev_digits) * height,
-            reverse_bits::<WIDTH>(WIDTH * x2 + 1, rev_digits) * height,
-            reverse_bits::<WIDTH>(WIDTH * x2 + 2, rev_digits) * height,
-        ];
-
-        for y in 0..strided_height {
-            let base_input_idx0 = (WIDTH * x) + y * HEIGHT * width;
-            let base_input_idx1 = (WIDTH * x1) + y * HEIGHT * width;
-            let base_input_idx2 = (WIDTH * x2) + y * HEIGHT * width;
-            let rows0 = [
-                complex3_load_f32(input, base_input_idx0),
-                complex3_load_f32(input, base_input_idx0 + width),
-                complex3_load_f32(input, base_input_idx0 + width * 2),
-            ];
-            let rows1 = [
-                complex3_load_f32(input, base_input_idx1),
-                complex3_load_f32(input, base_input_idx1 + width),
-                complex3_load_f32(input, base_input_idx1 + width * 2),
-            ];
-            let rows2 = [
-                complex3_load_f32(input, base_input_idx2),
-                complex3_load_f32(input, base_input_idx2 + width),
-                complex3_load_f32(input, base_input_idx2 + width * 2),
-            ];
-
-            let transposed0 =
-                avx_transpose_f32x2_4x4_impl(rows0[0], rows0[1], rows0[2], _mm256_setzero_ps());
-            let transposed1 =
-                avx_transpose_f32x2_4x4_impl(rows1[0], rows1[1], rows1[2], _mm256_setzero_ps());
-            let transposed2 =
-                avx_transpose_f32x2_4x4_impl(rows2[0], rows2[1], rows2[2], _mm256_setzero_ps());
-
-            complex3_store_f32(output, HEIGHT * y + x_rev0[0], transposed0.0);
-            complex3_store_f32(output, HEIGHT * y + x_rev0[1], transposed0.1);
-            complex3_store_f32(output, HEIGHT * y + x_rev0[2], transposed0.2);
-
-            complex3_store_f32(output, HEIGHT * y + x_rev1[0], transposed1.0);
-            complex3_store_f32(output, HEIGHT * y + x_rev1[1], transposed1.1);
-            complex3_store_f32(output, HEIGHT * y + x_rev1[2], transposed1.2);
-
-            complex3_store_f32(output, HEIGHT * y + x_rev2[0], transposed2.0);
-            complex3_store_f32(output, HEIGHT * y + x_rev2[1], transposed2.1);
-            complex3_store_f32(output, HEIGHT * y + x_rev2[2], transposed2.2);
-        }
-        x += 3;
-    }
-
-    for x in x..strided_width {
+    for x in 0..strided_width {
         let x_rev = [
             reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
             reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
