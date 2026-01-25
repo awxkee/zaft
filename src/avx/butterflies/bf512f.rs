@@ -85,8 +85,7 @@ impl FftExecutor<f32> for AvxButterfly512f {
 }
 
 impl AvxButterfly512f {
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
+    #[inline(always)]
     fn exec_bf32(&self, src: &mut [MaybeUninit<Complex<f32>>], dst: &mut [Complex<f32>]) {
         unsafe {
             for k in 0..4 {

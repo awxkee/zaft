@@ -229,11 +229,11 @@ fn check_power_groupd(c: &mut Criterion, n: usize, group: String) {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    //     .measurement_time(Duration::from_millis(135));
-    bench_rustfft_average(c);
-    bench_zaft_average(c);
-    bench_rustfft_averages(c);
-    bench_zaft_averages(c);
+    // //     .measurement_time(Duration::from_millis(135));
+    // bench_rustfft_average(c);
+    // bench_zaft_average(c);
+    // bench_rustfft_averages(c);
+    // bench_zaft_averages(c);
 
     let mut input_1295 = vec![Complex::<f32>::default(); 1295];
     for z in input_1295.iter_mut() {
@@ -331,6 +331,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
+    check_power_group(c, 2usize.pow(19), "2usize.pow(19)".to_string());
     check_power_group(c, 192_000, "192_000".to_string());
     check_power_group(c, 1920, "1920".to_string());
 
