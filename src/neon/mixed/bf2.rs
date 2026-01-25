@@ -46,7 +46,7 @@ impl ColumnButterfly2f {
 }
 
 impl ColumnButterfly2d {
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreD; 2]) -> [NeonStoreD; 2] {
         unsafe {
             let t = vaddq_f64(store[0].v, store[1].v);
@@ -58,7 +58,7 @@ impl ColumnButterfly2d {
 }
 
 impl ColumnButterfly2f {
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreF; 2]) -> [NeonStoreF; 2] {
         unsafe {
             let t = vaddq_f32(store[0].v, store[1].v);
@@ -68,7 +68,7 @@ impl ColumnButterfly2f {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 2]) -> [NeonStoreFh; 2] {
         unsafe {
             let t = vadd_f32(store[0].v, store[1].v);

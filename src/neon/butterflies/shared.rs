@@ -160,7 +160,8 @@ impl NeonButterfly {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
     pub(crate) fn butterfly3h_f32_fcma(
@@ -182,7 +183,8 @@ impl NeonButterfly {
         (y0, y1, y2)
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
     pub(crate) fn butterfly3_f32_fcma(
@@ -204,7 +206,7 @@ impl NeonButterfly {
         (y0, y1, y2)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly2h_f32(u0: float32x2_t, u1: float32x2_t) -> (float32x2_t, float32x2_t) {
         unsafe {
             let t = vadd_f32(u0, u1);
@@ -215,7 +217,7 @@ impl NeonButterfly {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly2_f32(u0: float32x4_t, u1: float32x4_t) -> (float32x4_t, float32x4_t) {
         unsafe {
             let t = vaddq_f32(u0, u1);
@@ -249,7 +251,8 @@ impl NeonButterfly {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
     pub(crate) fn butterfly3_f64_fcma(
@@ -271,7 +274,7 @@ impl NeonButterfly {
         (y0, y1, y2)
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly4_f64(
         a: float64x2_t,
         b: float64x2_t,
@@ -297,7 +300,7 @@ impl NeonButterfly {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly4h_f32(
         a: float32x2_t,
         b: float32x2_t,
@@ -323,7 +326,7 @@ impl NeonButterfly {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn butterfly4_f32(
         a: float32x4_t,
         b: float32x4_t,
@@ -380,7 +383,8 @@ impl FastFcmaBf4f {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(
         &self,
@@ -442,7 +446,8 @@ impl FastFcmaBf4d {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(
         &self,
@@ -507,13 +512,15 @@ impl NeonFcmaRotate90F {
         Self {}
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "fcma")]
     pub(crate) fn roth(&self, values: float32x2_t) -> float32x2_t {
         vcadd_rot90_f32(vdup_n_f32(0.), values)
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "fcma")]
     pub(crate) fn rot(&self, values: float32x4_t) -> float32x4_t {
         vcaddq_rot90_f32(vdupq_n_f32(0.), values)
@@ -552,7 +559,8 @@ impl NeonFcmaRotate90D {
         Self {}
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "fcma")]
     pub(crate) fn rot(&self, values: float64x2_t) -> float64x2_t {
         vcaddq_rot90_f64(vdupq_n_f64(0.), values)

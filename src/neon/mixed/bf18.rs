@@ -44,8 +44,9 @@ macro_rules! gen_bf18d {
                     bf2: ColumnButterfly2d::new(fft_direction),
                 }
             }
-
-            #[inline]
+            
+            #[cfg_attr(feature = "inline_always", inline(always))]
+            #[cfg_attr(not(feature = "inline_always"), inline)]
             #[target_feature(enable = $feature)]
             pub(crate) fn exec(&self, v: [NeonStoreD; 18]) -> [NeonStoreD; 18] {
                 let u0 = v[0]; // 0

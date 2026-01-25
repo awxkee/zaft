@@ -38,6 +38,7 @@
     all(feature = "fcma", target_arch = "aarch64"),
     feature(stdarch_neon_fcma)
 )]
+#![cfg_attr(all(feature = "inline_always"), feature(target_feature_inline_always))]
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 mod avx;
 mod bluestein;

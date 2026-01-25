@@ -44,7 +44,8 @@ macro_rules! gen_bf14d {
                 }
             }
 
-            #[inline]
+            #[cfg_attr(feature = "inline_always", inline(always))]
+            #[cfg_attr(not(feature = "inline_always"), inline)]
             #[target_feature(enable = $feature)]
             pub(crate) fn exec(&self, u: [NeonStoreD; 14]) -> [NeonStoreD; 14] {
                 let (u0, u1) = NeonButterfly::butterfly2_f64(u[0].v, u[7].v);
@@ -98,7 +99,8 @@ macro_rules! gen_bf14 {
                 }
             }
 
-            #[inline]
+             #[cfg_attr(feature = "inline_always", inline(always))]
+            #[cfg_attr(not(feature = "inline_always"), inline)]
             #[target_feature(enable = $feature)]
             pub(crate) fn exec(&self, u: [NeonStoreF; 14]) -> [NeonStoreF; 14] {
                 let (u0, u1) = NeonButterfly::butterfly2_f32(u[0].v, u[7].v);
@@ -132,7 +134,8 @@ macro_rules! gen_bf14 {
                 [y0, y1, y2, y3, y4, y5, y6, y7, y8, y9, y10, y11, y12, y13]
             }
 
-            #[inline]
+            #[cfg_attr(feature = "inline_always", inline(always))]
+            #[cfg_attr(not(feature = "inline_always"), inline)]
             #[target_feature(enable = $feature)]
             pub(crate) fn exech(&self, u: [NeonStoreFh; 14]) -> [NeonStoreFh; 14] {
                 let (u0, u1) = NeonButterfly::butterfly2h_f32(u[0].v, u[7].v);

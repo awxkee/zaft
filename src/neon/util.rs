@@ -58,7 +58,8 @@ pub(crate) fn vfcmulq_conj_b_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x
     }
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[cfg(feature = "fcma")]
 #[target_feature(enable = "fcma")]
 pub(crate) fn vfcmulq_conj_b_fcma_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_t {
@@ -66,7 +67,8 @@ pub(crate) fn vfcmulq_conj_b_fcma_f64(lhs: float64x2_t, rhs: float64x2_t) -> flo
     vcmlaq_rot270_f64(vcmlaq_f64(vdupq_n_f64(0.), rhs, lhs), rhs, lhs)
 }
 
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[cfg(feature = "fcma")]
 #[target_feature(enable = "fcma")]
 pub(crate) fn vfcmulq_b_conj_fcma_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
@@ -94,21 +96,24 @@ pub(crate) fn vfcmul_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
 }
 
 #[cfg(feature = "fcma")]
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "fcma")]
 pub(crate) fn vfcmul_fcma_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
     vcmla_rot90_f32(vcmla_f32(vdup_n_f32(0.), lhs, rhs), lhs, rhs)
 }
 
 #[cfg(feature = "fcma")]
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "fcma")]
 pub(crate) fn vfcmulq_fcma_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
     vcmlaq_rot90_f32(vcmlaq_f32(vdupq_n_f32(0.), lhs, rhs), lhs, rhs)
 }
 
 #[cfg(feature = "fcma")]
-#[inline]
+#[cfg_attr(feature = "inline_always", inline(always))]
+#[cfg_attr(not(feature = "inline_always"), inline)]
 #[target_feature(enable = "fcma")]
 pub(crate) fn vfcmulq_fcma_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_t {
     vcmlaq_rot90_f64(vcmlaq_f64(vdupq_n_f64(0.), lhs, rhs), lhs, rhs)
@@ -174,7 +179,7 @@ pub(crate) unsafe fn v_transpose_complex_f32(
     }
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn conjq_f32(v: float32x4_t, a: float32x4_t) -> float32x4_t {
     unsafe {
         vreinterpretq_f32_u32(veorq_u32(
@@ -184,7 +189,7 @@ pub(crate) fn conjq_f32(v: float32x4_t, a: float32x4_t) -> float32x4_t {
     }
 }
 
-#[inline]
+#[inline(always)]
 pub(crate) fn conj_f64(v: float64x2_t, a: float64x2_t) -> float64x2_t {
     unsafe {
         vreinterpretq_f64_u64(veorq_u64(
@@ -195,7 +200,7 @@ pub(crate) fn conj_f64(v: float64x2_t, a: float64x2_t) -> float64x2_t {
 }
 
 #[cfg(feature = "fcma")]
-#[inline]
+#[inline(always)]
 pub(crate) fn conj_f32(v: float32x2_t, a: float32x2_t) -> float32x2_t {
     unsafe { vreinterpret_f32_u32(veor_u32(vreinterpret_u32_f32(v), vreinterpret_u32_f32(a))) }
 }

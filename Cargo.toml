@@ -34,6 +34,8 @@ neon = []
 fcma = ["neon"]
 # x86_64 AVX intrinsics
 avx = []
+# Nightly feature https://github.com/rust-lang/rust/issues/145574
+inline_always = []
 
 [package.metadata.docs.rs]
 # To build locally:

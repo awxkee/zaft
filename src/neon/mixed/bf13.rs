@@ -209,7 +209,8 @@ impl ColumnFcmaButterfly13d {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "fcma")]
     pub(crate) unsafe fn exec(&self, store: [NeonStoreD; 13]) -> [NeonStoreD; 13] {
         let y00 = store[0].v;
@@ -634,7 +635,8 @@ impl ColumnFcmaButterfly13f {
         }
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "fcma")]
     pub(crate) unsafe fn exec(&self, store: [NeonStoreF; 13]) -> [NeonStoreF; 13] {
         let y00 = store[0].v;
@@ -758,7 +760,8 @@ impl ColumnFcmaButterfly13f {
         ]
     }
 
-    #[inline]
+    #[cfg_attr(feature = "inline_always", inline(always))]
+    #[cfg_attr(not(feature = "inline_always"), inline)]
     #[target_feature(enable = "fcma")]
     pub(crate) unsafe fn exech(&self, store: [NeonStoreFh; 13]) -> [NeonStoreFh; 13] {
         let y00 = store[0].v;
