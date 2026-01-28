@@ -99,7 +99,56 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix4(
     let strided_width = width / WIDTH;
     let strided_height = height / HEIGHT;
 
-    for x in 0..strided_width {
+    let mut x = 0usize;
+    while x + 2 < strided_width {
+        let x_rev0 = [
+            reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x + 3, rev_digits) * height,
+        ];
+        let x1 = x + 1;
+        let x_rev1 = [
+            reverse_bits::<WIDTH>(WIDTH * x1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x1 + 1, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x1 + 2, rev_digits) * height,
+            reverse_bits::<WIDTH>(WIDTH * x1 + 3, rev_digits) * height,
+        ];
+
+        for y in 0..strided_height {
+            let base_input_idx0 = (WIDTH * x) + y * HEIGHT * width;
+            let base_input_idx1 = (WIDTH * x1) + y * HEIGHT * width;
+            let rows0 = [
+                complex4_load_f32(input, base_input_idx0),
+                complex4_load_f32(input, base_input_idx0 + width),
+                complex4_load_f32(input, base_input_idx0 + width * 2),
+                complex4_load_f32(input, base_input_idx0 + width * 3),
+            ];
+            let rows1 = [
+                complex4_load_f32(input, base_input_idx1),
+                complex4_load_f32(input, base_input_idx1 + width),
+                complex4_load_f32(input, base_input_idx1 + width * 2),
+                complex4_load_f32(input, base_input_idx1 + width * 3),
+            ];
+
+            let transposed0 = transpose_f32x2_4x4(rows0[0], rows0[1], rows0[2], rows0[3]);
+            let transposed1 = transpose_f32x2_4x4(rows1[0], rows1[1], rows1[2], rows1[3]);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev0[0], transposed0.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev0[1], transposed0.1);
+            complex4_store_f32(output, HEIGHT * y + x_rev0[2], transposed0.2);
+            complex4_store_f32(output, HEIGHT * y + x_rev0[3], transposed0.3);
+
+            complex4_store_f32(output, HEIGHT * y + x_rev1[0], transposed1.0);
+            complex4_store_f32(output, HEIGHT * y + x_rev1[1], transposed1.1);
+            complex4_store_f32(output, HEIGHT * y + x_rev1[2], transposed1.2);
+            complex4_store_f32(output, HEIGHT * y + x_rev1[3], transposed1.3);
+        }
+
+        x += 2;
+    }
+
+    for x in x..strided_width {
         let x_rev = [
             reverse_bits::<WIDTH>(WIDTH * x, rev_digits) * height,
             reverse_bits::<WIDTH>(WIDTH * x + 1, rev_digits) * height,

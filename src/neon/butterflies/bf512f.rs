@@ -83,8 +83,7 @@ impl FftExecutor<f32> for $name {
 }
 
 impl $name {
-    #[inline]
-    #[target_feature(enable = $feature)]
+    #[inline(always)]
     fn exec_bf32(&self, src: &mut [MaybeUninit<Complex<f32>>], dst: &mut [Complex<f32>]) {
         unsafe {
             for k in 0..8 {
