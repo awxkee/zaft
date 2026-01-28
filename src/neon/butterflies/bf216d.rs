@@ -28,16 +28,15 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::FftExecutorOutOfPlace;
-use crate::neon::butterflies::shared::gen_butterfly_twiddles_f64;
+use crate::neon::butterflies::shared::{boring_neon_butterfly, gen_butterfly_twiddles_f64};
 use crate::neon::mixed::NeonStoreD;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, ZaftError};
+use crate::store::BidirectionalStore;
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
-use std::sync::Arc;
 
 macro_rules! gen_bf216d {
-    ($name: ident, $feature: literal, $internal_bf18: ident, $internal_bf12: ident, $mul: ident) => {
+    ($name: ident, $features: literal, $internal_bf18: ident, $internal_bf12: ident, $mul: ident) => {
         use crate::neon::mixed::{$internal_bf12, $internal_bf18};
         pub(crate) struct $name {
             direction: FftDirection,
@@ -57,149 +56,48 @@ macro_rules! gen_bf216d {
             }
         }
 
-        impl FftExecutor<f64> for $name {
-            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                unsafe { self.execute_impl(in_place) }
-            }
+        boring_neon_butterfly!($name, $features, f64, 216);
 
-            fn direction(&self) -> FftDirection {
-                self.direction
-            }
-
+        impl $name {
             #[inline]
-            fn length(&self) -> usize {
-                216
-            }
-        }
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+                let mut rows12: [NeonStoreD; 12] = [NeonStoreD::default(); 12];
+                let mut rows18: [NeonStoreD; 18] = [NeonStoreD::default(); 18];
 
-        impl $name {
-            #[target_feature(enable = $feature)]
-            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(216) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        in_place.len(),
-                        self.length(),
-                    ));
-                }
-
+                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 216];
                 unsafe {
-                    let mut rows12: [NeonStoreD; 12] = [NeonStoreD::default(); 12];
-                    let mut rows18: [NeonStoreD; 18] = [NeonStoreD::default(); 18];
-
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 216];
-
-                    for chunk in in_place.chunks_exact_mut(216) {
-                        // columns
-                        for k in 0..18 {
-                            for i in 0..12 {
-                                rows12[i] =
-                                    NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 18 + k..));
-                            }
-
-                            rows12 = self.bf12.exec(rows12);
-
-                            for i in 1..12 {
-                                rows12[i] =
-                                    NeonStoreD::$mul(rows12[i], self.twiddles[i - 1 + 11 * k]);
-                            }
-
-                            for i in 0..12 {
-                                rows12[i].write_uninit(scratch.get_unchecked_mut(k * 12 + i..));
-                            }
+                    // columns
+                    for k in 0..18 {
+                        for i in 0..12 {
+                            rows12[i] =
+                                NeonStoreD::from_complex_ref(chunk.slice_from(i * 18 + k..));
                         }
 
-                        // rows
+                        rows12 = self.bf12.exec(rows12);
 
-                        for k in 0..12 {
-                            for i in 0..18 {
-                                rows18[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 12 + k..),
-                                );
-                            }
-                            rows18 = self.bf18.exec(rows18);
-                            for i in 0..18 {
-                                rows18[i].write(chunk.get_unchecked_mut(i * 12 + k..));
-                            }
+                        for i in 1..12 {
+                            rows12[i] = NeonStoreD::$mul(rows12[i], self.twiddles[i - 1 + 11 * k]);
+                        }
+
+                        for i in 0..12 {
+                            rows12[i].write_uninit(scratch.get_unchecked_mut(k * 12 + i..));
+                        }
+                    }
+
+                    // rows
+
+                    for k in 0..12 {
+                        for i in 0..18 {
+                            rows18[i] =
+                                NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 12 + k..));
+                        }
+                        rows18 = self.bf18.exec(rows18);
+                        for i in 0..18 {
+                            rows18[i].write(chunk.slice_from_mut(i * 12 + k..));
                         }
                     }
                 }
-                Ok(())
-            }
-        }
-
-        impl FftExecutorOutOfPlace<f64> for $name {
-            fn execute_out_of_place(
-                &self,
-                src: &[Complex<f64>],
-                dst: &mut [Complex<f64>],
-            ) -> Result<(), ZaftError> {
-                unsafe { self.execute_out_of_place_impl(src, dst) }
-            }
-        }
-
-        impl $name {
-            #[target_feature(enable = $feature)]
-            fn execute_out_of_place_impl(
-                &self,
-                src: &[Complex<f64>],
-                dst: &mut [Complex<f64>],
-            ) -> Result<(), ZaftError> {
-                if !src.len().is_multiple_of(216) {
-                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-                }
-                if !dst.len().is_multiple_of(216) {
-                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-                }
-
-                unsafe {
-                    let mut rows12: [NeonStoreD; 12] = [NeonStoreD::default(); 12];
-                    let mut rows18: [NeonStoreD; 18] = [NeonStoreD::default(); 18];
-
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 216];
-
-                    for (dst, src) in dst.chunks_exact_mut(216).zip(src.chunks_exact(216)) {
-                        // columns
-                        for k in 0..18 {
-                            for i in 0..12 {
-                                rows12[i] =
-                                    NeonStoreD::from_complex_ref(src.get_unchecked(i * 18 + k..));
-                            }
-
-                            rows12 = self.bf12.exec(rows12);
-
-                            for i in 1..12 {
-                                rows12[i] =
-                                    NeonStoreD::$mul(rows12[i], self.twiddles[i - 1 + 11 * k]);
-                            }
-
-                            for i in 0..12 {
-                                rows12[i].write_uninit(scratch.get_unchecked_mut(k * 12 + i..));
-                            }
-                        }
-
-                        // rows
-
-                        for k in 0..12 {
-                            for i in 0..18 {
-                                rows18[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 12 + k..),
-                                );
-                            }
-                            rows18 = self.bf18.exec(rows18);
-                            for i in 0..18 {
-                                rows18[i].write(dst.get_unchecked_mut(i * 12 + k..));
-                            }
-                        }
-                    }
-                }
-
-                Ok(())
-            }
-        }
-
-        impl CompositeFftExecutor<f64> for $name {
-            fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-                self
             }
         }
     };

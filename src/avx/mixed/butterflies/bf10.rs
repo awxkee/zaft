@@ -27,21 +27,23 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::avx::butterflies::{AvxButterfly, AvxFastButterfly5d, AvxFastButterfly5f};
 use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::mixed::avx_storef::AvxStoreF;
+use crate::avx::mixed::{
+    ColumnButterfly2d, ColumnButterfly2f, ColumnButterfly5d, ColumnButterfly5f,
+};
 
 pub(crate) struct ColumnButterfly10d {
-    bf5: AvxFastButterfly5d,
+    bf5: ColumnButterfly5d,
+    bf2: ColumnButterfly2d,
 }
 
 impl ColumnButterfly10d {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly10d {
-        unsafe {
-            Self {
-                bf5: AvxFastButterfly5d::new(direction),
-            }
+        Self {
+            bf5: ColumnButterfly5d::new(direction),
+            bf2: ColumnButterfly2d::new(direction),
         }
     }
 }
@@ -49,43 +51,30 @@ impl ColumnButterfly10d {
 impl ColumnButterfly10d {
     #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 10]) -> [AvxStoreD; 10] {
-        unsafe {
-            let mid0 = self.bf5.exec(v[0].v, v[2].v, v[4].v, v[6].v, v[8].v);
-            let mid1 = self.bf5.exec(v[5].v, v[7].v, v[9].v, v[1].v, v[3].v);
+        let mid0 = self.bf5.exec([v[0], v[2], v[4], v[6], v[8]]);
+        let mid1 = self.bf5.exec([v[5], v[7], v[9], v[1], v[3]]);
 
-            // Since this is good-thomas algorithm, we don't need twiddle factors
-            let (y0, y1) = AvxButterfly::butterfly2_f64(mid0.0, mid1.0);
-            let (y2, y3) = AvxButterfly::butterfly2_f64(mid0.1, mid1.1);
-            let (y4, y5) = AvxButterfly::butterfly2_f64(mid0.2, mid1.2);
-            let (y6, y7) = AvxButterfly::butterfly2_f64(mid0.3, mid1.3);
-            let (y8, y9) = AvxButterfly::butterfly2_f64(mid0.4, mid1.4);
-            [
-                AvxStoreD::raw(y0),
-                AvxStoreD::raw(y3),
-                AvxStoreD::raw(y4),
-                AvxStoreD::raw(y7),
-                AvxStoreD::raw(y8),
-                AvxStoreD::raw(y1),
-                AvxStoreD::raw(y2),
-                AvxStoreD::raw(y5),
-                AvxStoreD::raw(y6),
-                AvxStoreD::raw(y9),
-            ]
-        }
+        // Since this is good-thomas algorithm, we don't need twiddle factors
+        let [y0, y1] = self.bf2.exec([mid0[0], mid1[0]]);
+        let [y2, y3] = self.bf2.exec([mid0[1], mid1[1]]);
+        let [y4, y5] = self.bf2.exec([mid0[2], mid1[2]]);
+        let [y6, y7] = self.bf2.exec([mid0[3], mid1[3]]);
+        let [y8, y9] = self.bf2.exec([mid0[4], mid1[4]]);
+        [y0, y3, y4, y7, y8, y1, y2, y5, y6, y9]
     }
 }
 
 pub(crate) struct ColumnButterfly10f {
-    bf5: AvxFastButterfly5f,
+    bf5: ColumnButterfly5f,
+    bf2: ColumnButterfly2f,
 }
 
 impl ColumnButterfly10f {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly10f {
-        unsafe {
-            Self {
-                bf5: AvxFastButterfly5f::new(direction),
-            }
+        Self {
+            bf5: ColumnButterfly5f::new(direction),
+            bf2: ColumnButterfly2f::new(direction),
         }
     }
 }
@@ -93,26 +82,15 @@ impl ColumnButterfly10f {
 impl ColumnButterfly10f {
     #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 10]) -> [AvxStoreF; 10] {
-        let mid0 = self.bf5._m256_exec(v[0].v, v[2].v, v[4].v, v[6].v, v[8].v);
-        let mid1 = self.bf5._m256_exec(v[5].v, v[7].v, v[9].v, v[1].v, v[3].v);
+        let mid0 = self.bf5.exec([v[0], v[2], v[4], v[6], v[8]]);
+        let mid1 = self.bf5.exec([v[5], v[7], v[9], v[1], v[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
-        let (y0, y1) = AvxButterfly::butterfly2_f32(mid0.0, mid1.0);
-        let (y2, y3) = AvxButterfly::butterfly2_f32(mid0.1, mid1.1);
-        let (y4, y5) = AvxButterfly::butterfly2_f32(mid0.2, mid1.2);
-        let (y6, y7) = AvxButterfly::butterfly2_f32(mid0.3, mid1.3);
-        let (y8, y9) = AvxButterfly::butterfly2_f32(mid0.4, mid1.4);
-        [
-            AvxStoreF::raw(y0),
-            AvxStoreF::raw(y3),
-            AvxStoreF::raw(y4),
-            AvxStoreF::raw(y7),
-            AvxStoreF::raw(y8),
-            AvxStoreF::raw(y1),
-            AvxStoreF::raw(y2),
-            AvxStoreF::raw(y5),
-            AvxStoreF::raw(y6),
-            AvxStoreF::raw(y9),
-        ]
+        let [y0, y1] = self.bf2.exec([mid0[0], mid1[0]]);
+        let [y2, y3] = self.bf2.exec([mid0[1], mid1[1]]);
+        let [y4, y5] = self.bf2.exec([mid0[2], mid1[2]]);
+        let [y6, y7] = self.bf2.exec([mid0[3], mid1[3]]);
+        let [y8, y9] = self.bf2.exec([mid0[4], mid1[4]]);
+        [y0, y3, y4, y7, y8, y1, y2, y5, y6, y9]
     }
 }

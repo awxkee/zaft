@@ -26,14 +26,11 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::{
-    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
-    R2CFftExecutor, ZaftError,
-};
+use crate::util::validate_oof_sizes;
+use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) struct Butterfly2<T> {
@@ -76,46 +73,29 @@ where
         Ok(())
     }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        FftExecutor::execute(self, in_place)
     }
 
-    #[inline]
-    fn length(&self) -> usize {
-        2
-    }
-}
-
-impl<T: FftSample> Butterfly2<T>
-where
-    f64: AsPrimitive<T>,
-{
-    pub(crate) fn exec(data: &[Complex<T>; 2]) -> [Complex<T>; 2] {
-        let u0 = data[0];
-        let u1 = data[1];
-
-        let y0 = u0 + u1;
-        let y1 = u0 - u1;
-
-        [y0, y1]
-    }
-}
-
-impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly2<T>
-where
-    f64: AsPrimitive<T>,
-{
     fn execute_out_of_place(
         &self,
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(2) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(2) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
+        FftExecutor::execute_out_of_place_with_scratch(self, src, dst, &mut [])
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, 2);
 
         for (dst, src) in dst.chunks_exact_mut(2).zip(src.chunks_exact(2)) {
             let u0 = src[0];
@@ -129,14 +109,63 @@ where
         }
         Ok(())
     }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, 2);
+
+        for (dst, src) in dst.chunks_exact_mut(2).zip(src.chunks_exact(2)) {
+            let u0 = src[0];
+            let u1 = src[1];
+
+            let y0 = u0 + u1;
+            let y1 = u0 - u1;
+
+            dst[0] = y0;
+            dst[1] = y1;
+        }
+        Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    #[inline]
+    fn length(&self) -> usize {
+        2
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
+    }
 }
 
-impl<T: FftSample> CompositeFftExecutor<T> for Butterfly2<T>
+impl<T: FftSample> Butterfly2<T>
 where
     f64: AsPrimitive<T>,
 {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync> {
-        self
+    #[inline(always)]
+    pub(crate) fn exec(data: &[Complex<T>; 2]) -> [Complex<T>; 2] {
+        let u0 = data[0];
+        let u1 = data[1];
+
+        let y0 = u0 + u1;
+        let y1 = u0 - u1;
+
+        [y0, y1]
     }
 }
 
@@ -165,12 +194,25 @@ where
         Ok(())
     }
 
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        R2CFftExecutor::execute(self, input, output)
+    }
+
     fn real_length(&self) -> usize {
         2
     }
 
     fn complex_length(&self) -> usize {
         2
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        0
     }
 }
 

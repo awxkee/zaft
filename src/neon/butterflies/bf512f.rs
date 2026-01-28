@@ -26,23 +26,22 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
+use crate::neon::butterflies::shared::{boring_neon_butterfly, gen_butterfly_twiddles_f32};
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::transpose_2x2;
+use crate::store::BidirectionalStore;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
-use std::sync::Arc;
 
 macro_rules! gen_bf512f {
-    ($name: ident, $feature: literal, $internal_bf16: ident, $internal_bf8: ident, $internal_bf4: ident, $mul: ident) => {
-        use crate::neon::mixed::{$internal_bf8, $internal_bf16, $internal_bf4};
+    ($name: ident, $features: literal, $internal_bf16: ident, $internal_bf8: ident, $mul: ident) => {
+        use crate::neon::mixed::{$internal_bf8, $internal_bf16};
         pub(crate) struct $name {
     direction: FftDirection,
     bf16: $internal_bf16,
     bf8: $internal_bf8,
-    bf4: $internal_bf4,
     twiddles: [NeonStoreF; 240],
     twiddles32: [NeonStoreF; 6],
 }
@@ -62,23 +61,7 @@ impl $name {
             ],
             bf16: $internal_bf16::new(fft_direction),
             bf8: $internal_bf8::new(fft_direction),
-            bf4: $internal_bf4::new(fft_direction),
         }
-    }
-}
-
-impl FftExecutor<f32> for $name {
-    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_impl(in_place) }
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        512
     }
 }
 
@@ -101,7 +84,7 @@ impl $name {
                     load!(src, k, 17),
                     load!(src, k, 25),
                 ];
-                let mut mid1 = self.bf4.exec(input1);
+                let mut mid1 = self.bf8.bf4.exec(input1);
 
                 mid1[1] = NeonStoreF::$mul(mid1[1], self.twiddles32[0]);
                 mid1[2] = NeonStoreF::$mul(mid1[2], self.twiddles32[1]);
@@ -113,7 +96,7 @@ impl $name {
                     load!(src, k, 18),
                     load!(src, k, 26),
                 ];
-                let mut mid2 = self.bf4.exec(input2);
+                let mut mid2 = self.bf8.bf4.exec(input2);
 
                 mid2[1] = NeonStoreF::$mul(mid2[1], self.twiddles32[1]);
                 mid2[2] = self.bf8.rotate1(mid2[2]);
@@ -125,7 +108,7 @@ impl $name {
                     load!(src, k, 19),
                     load!(src, k, 27),
                 ];
-                let mut mid3 = self.bf4.exec(input3);
+                let mut mid3 = self.bf8.bf4.exec(input3);
 
                 mid3[1] = NeonStoreF::$mul(mid3[1], self.twiddles32[2]);
                 mid3[2] = NeonStoreF::$mul(mid3[2], self.twiddles32[4]);
@@ -137,7 +120,7 @@ impl $name {
                     load!(src, k, 20),
                     load!(src, k, 28),
                 ];
-                let mut mid4 = self.bf4.exec(input4);
+                let mut mid4 = self.bf8.bf4.exec(input4);
 
                 mid4[1] = self.bf8.rotate1(mid4[1]);
                 mid4[2] = self.bf8.rotate(mid4[2]);
@@ -149,7 +132,7 @@ impl $name {
                     load!(src, k, 21),
                     load!(src, k, 29),
                 ];
-                let mut mid5 = self.bf4.exec(input5);
+                let mut mid5 = self.bf8.bf4.exec(input5);
 
                 mid5[1] = NeonStoreF::$mul(mid5[1], self.twiddles32[3]);
                 mid5[2] = NeonStoreF::$mul(mid5[2], self.bf8.rotate(self.twiddles32[1]));
@@ -161,7 +144,7 @@ impl $name {
                     load!(src, k, 22),
                     load!(src, k, 30),
                 ];
-                let mut mid6 = self.bf4.exec(input6);
+                let mut mid6 = self.bf8.bf4.exec(input6);
 
                 mid6[1] = NeonStoreF::$mul(mid6[1], self.twiddles32[4]);
                 mid6[2] = self.bf8.rotate3(mid6[2]);
@@ -173,7 +156,7 @@ impl $name {
                     load!(src, k, 23),
                     load!(src, k, 31),
                 ];
-                let mut mid7 = self.bf4.exec(input7);
+                let mut mid7 = self.bf8.bf4.exec(input7);
 
                 mid7[1] = NeonStoreF::$mul(mid7[1], self.twiddles32[5]);
                 mid7[2] = NeonStoreF::$mul(mid7[2], self.bf8.rotate(self.twiddles32[4]));
@@ -185,7 +168,7 @@ impl $name {
                     load!(src, k, 16),
                     load!(src, k, 24),
                 ];
-                let mid0 = self.bf4.exec(input0);
+                let mid0 = self.bf8.bf4.exec(input0);
 
                 for i in 0..4 {
                     let output = self.bf8.exec([
@@ -204,133 +187,53 @@ impl $name {
         }
     }
 
-    #[target_feature(enable = $feature)]
-    fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(512) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
+    #[inline]
+    #[target_feature(enable = $features)]
+    pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
+        let mut rows: [NeonStoreF; 16] = [NeonStoreF::default(); 16];
+        let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 512];
 
         unsafe {
-            let mut rows: [NeonStoreF; 16] = [NeonStoreF::default(); 16];
-            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 512];
+         // columns
+        for k in 0..16 {
+            for i in 0..16 {
+                rows[i] =
+                    NeonStoreF::from_complex_ref(chunk.slice_from(i * 32 + k * 2..));
+            }
 
-            for chunk in in_place.chunks_exact_mut(512) {
-                // columns
-                for k in 0..16 {
-                    for i in 0..16 {
-                        rows[i] =
-                            NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 32 + k * 2..));
-                    }
+            rows = self.bf16.exec(rows);
 
-                    rows = self.bf16.exec(rows);
+            let q1 = NeonStoreF::$mul(rows[1], self.twiddles[15 * k]);
+            let t = transpose_2x2([rows[0], q1]);
+            t[0].write_uninit(scratch.get_unchecked_mut(k * 2 * 16..));
+            t[1].write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16..));
 
-                    let q1 = NeonStoreF::$mul(rows[1], self.twiddles[15 * k]);
-                    let t = transpose_2x2([rows[0], q1]);
-                    t[0].write_uninit(scratch.get_unchecked_mut(k * 2 * 16..));
-                    t[1].write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16..));
-
-                    for i in 1..8 {
-                        let q0 = NeonStoreF::$mul(
-                            rows[i * 2],
-                            self.twiddles[(i - 1) * 2 + 1 + 15 * k],
-                        );
-                        let q1 = NeonStoreF::$mul(
-                            rows[i * 2 + 1],
-                            self.twiddles[(i - 1) * 2 + 2 + 15 * k],
-                        );
-                        let t = transpose_2x2([q0, q1]);
-                        t[0]
-                            .write_uninit(scratch.get_unchecked_mut(k * 2 * 16 + i * 2..));
-                        t[1]
-                            .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..));
-                    }
-                }
-
-                // rows
-
-                self.exec_bf32(&mut scratch, chunk);
+            for i in 1..8 {
+                let q0 = NeonStoreF::$mul(
+                    rows[i * 2],
+                    self.twiddles[(i - 1) * 2 + 1 + 15 * k],
+                );
+                let q1 = NeonStoreF::$mul(
+                    rows[i * 2 + 1],
+                    self.twiddles[(i - 1) * 2 + 2 + 15 * k],
+                );
+                let t = transpose_2x2([q0, q1]);
+                t[0]
+                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 16 + i * 2..));
+                t[1]
+                    .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..));
             }
         }
-        Ok(())
-    }
-}
 
-impl FftExecutorOutOfPlace<f32> for $name {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-    ) -> Result<(), ZaftError> {
-        unsafe { self.execute_out_of_place_impl(src, dst) }
-    }
-}
+        // rows
 
-impl $name {
-    #[target_feature(enable = $feature)]
-    fn execute_out_of_place_impl(
-        &self,
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-    ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(512) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
+        self.exec_bf32(&mut scratch, chunk.slice_from_mut(0..));
         }
-        if !dst.len().is_multiple_of(512) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
-
-        unsafe {
-            let mut rows: [NeonStoreF; 16] = [NeonStoreF::default(); 16];
-            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 512];
-
-            for (dst, src) in dst.chunks_exact_mut(512).zip(src.chunks_exact(512)) {
-                // columns
-                for k in 0..16 {
-                    for i in 0..16 {
-                        rows[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 32 + k * 2..));
-                    }
-
-                    rows = self.bf16.exec(rows);
-
-                    let q1 = NeonStoreF::$mul(rows[1], self.twiddles[15 * k]);
-                    let t = transpose_2x2([rows[0], q1]);
-                    t[0].write_uninit(scratch.get_unchecked_mut(k * 2 * 16..));
-                    t[1].write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16..));
-
-                    for i in 1..8 {
-                        let q0 = NeonStoreF::$mul(
-                            rows[i * 2],
-                            self.twiddles[(i - 1) * 2 + 1 + 15 * k],
-                        );
-                        let q1 = NeonStoreF::$mul(
-                            rows[i * 2 + 1],
-                            self.twiddles[(i - 1) * 2 + 2 + 15 * k],
-                        );
-                        let t = transpose_2x2([q0, q1]);
-                        t[0]
-                            .write_uninit(scratch.get_unchecked_mut(k * 2 * 16 + i * 2..));
-                        t[1]
-                            .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..));
-                    }
-                }
-
-                // rows
-
-                self.exec_bf32(&mut scratch, dst);
-            }
-        }
-        Ok(())
     }
 }
 
-impl CompositeFftExecutor<f32> for $name {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-        self
-    }
-}
+        boring_neon_butterfly!($name, $features, f32, 512);
+
     };
 }
 
@@ -339,7 +242,6 @@ gen_bf512f!(
     "neon",
     ColumnButterfly16f,
     ColumnButterfly8f,
-    ColumnButterfly4f,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
@@ -348,7 +250,6 @@ gen_bf512f!(
     "fcma",
     ColumnFcmaButterfly16f,
     ColumnFcmaButterfly8f,
-    ColumnFcmaButterfly4f,
     fcmul_fcma
 );
 

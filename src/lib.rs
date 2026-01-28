@@ -66,6 +66,7 @@ mod radix5;
 mod radix6;
 mod radix7;
 mod spectrum_arithmetic;
+mod store;
 mod td;
 mod traits;
 mod transpose;
@@ -112,10 +113,7 @@ use num_traits::{AsPrimitive, Float, MulAdd};
 pub use r2c::{C2RFftExecutor, R2CFftExecutor};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, OnceLock, RwLock};
-pub use td::{
-    ExecutorWithScratch, TwoDimensionalExecutorC2R, TwoDimensionalExecutorR2C,
-    TwoDimensionalFftExecutor,
-};
+pub use td::{TwoDimensionalExecutorC2R, TwoDimensionalExecutorR2C, TwoDimensionalFftExecutor};
 
 pub(crate) trait FftSample:
     AlgorithmFactory<Self>
@@ -199,6 +197,47 @@ pub trait FftExecutor<T> {
     /// # Errors
     /// Returns a `ZaftError` if the execution fails (e.g., due to an incorrect slice length).
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError>;
+    /// Executes the FFT operation **in-place**, using caller-provided scratch memory.
+    ///
+    /// This variant avoids internal allocations and may improve performance
+    /// in repeated executions.
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError>;
+    /// Executes the FFT operation **out-of-place**.
+    ///
+    /// The input slice `src` is left unmodified. The result is written
+    /// into `dst`.
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError>;
+    /// Executes the FFT operation **out-of-place**, using caller-provided scratch memory.
+    ///
+    /// This allows reuse of scratch memory across multiple FFT calls
+    /// to avoid repeated allocations.
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError>;
+    /// Executes the FFT operation using a **destructive input strategy**.
+    ///
+    /// The `src` buffer may be overwritten during computation and should
+    /// not be assumed to retain its original contents after the call.
+    /// The final transform result is written to `dst`.
+    ///
+    /// This variant may enable more memory-efficient algorithms.
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError>;
     /// Returns the **direction** of the transform this executor is configured to perform.
     ///
     /// The direction is typically either `FftDirection::Forward` (Time to Frequency) or
@@ -208,19 +247,24 @@ pub trait FftExecutor<T> {
     ///
     /// This is the number of complex elements that the executor is designed to process.
     fn length(&self) -> usize;
-}
-
-pub(crate) trait FftExecutorOutOfPlace<T> {
-    #[allow(unused)]
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<T>],
-        dst: &mut [Complex<T>],
-    ) -> Result<(), ZaftError>;
-}
-
-pub(crate) trait CompositeFftExecutor<T>: FftExecutor<T> + FftExecutorOutOfPlace<T> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync>;
+    /// Returns the required scratch buffer length for
+    /// [`execute_with_scratch`].
+    /// The returned size is **not a stable constant** and may change
+    /// between crate versions or algorithm implementations.
+    /// Always query this value dynamically.
+    fn scratch_length(&self) -> usize;
+    /// Returns the required scratch buffer length for
+    /// [`execute_out_of_place_with_scratch`].
+    /// The returned size is **not a stable constant** and may change
+    /// between crate versions or algorithm implementations.
+    /// Always query this value dynamically.
+    fn out_of_place_scratch_length(&self) -> usize;
+    /// Returns the required scratch buffer length for
+    /// [`execute_destructive_with_scratch`].
+    /// The returned size is **not a stable constant** and may change
+    /// between crate versions or algorithm implementations.
+    /// Always query this value dynamically.
+    fn destructive_scratch_length(&self) -> usize;
 }
 
 static PRIME_CACHE_F: OnceLock<RwLock<HashMap<usize, Arc<dyn FftExecutor<f32> + Send + Sync>>>> =
@@ -312,15 +356,20 @@ impl FftPrimeCache<f64> for f64 {
 pub struct Zaft {}
 
 impl Zaft {
-    #[cfg(all(target_arch = "x86_64", feature = "avx"))]
     fn could_do_split_mixed_radix() -> bool {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if !std::arch::is_x86_feature_detected!("avx2")
-            || !std::arch::is_x86_feature_detected!("fma")
+        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
         {
-            return false;
+            return true;
         }
-        true
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            true
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            false
+        }
     }
 
     fn try_split_mixed_radix_butterflies<T: FftSample>(
@@ -799,22 +848,22 @@ impl Zaft {
         fft_direction: FftDirection,
     ) -> Option<Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>> {
         match n {
-            1 => return Some(T::butterfly1(fft_direction).map(|x| x.into_fft_executor())),
-            2 => return Some(T::butterfly2(fft_direction).map(|x| x.into_fft_executor())),
-            3 => return Some(T::butterfly3(fft_direction).map(|x| x.into_fft_executor())),
-            4 => return Some(T::butterfly4(fft_direction).map(|x| x.into_fft_executor())),
-            5 => return Some(T::butterfly5(fft_direction).map(|x| x.into_fft_executor())),
-            6 => return Some(T::butterfly6(fft_direction).map(|x| x.into_fft_executor())),
-            7 => return Some(T::butterfly7(fft_direction).map(|x| x.into_fft_executor())),
-            8 => return Some(T::butterfly8(fft_direction).map(|x| x.into_fft_executor())),
-            9 => return Some(T::butterfly9(fft_direction).map(|x| x.into_fft_executor())),
-            10 => return Some(T::butterfly10(fft_direction).map(|x| x.into_fft_executor())),
-            11 => return Some(T::butterfly11(fft_direction).map(|x| x.into_fft_executor())),
+            1 => return Some(T::butterfly1(fft_direction)),
+            2 => return Some(T::butterfly2(fft_direction)),
+            3 => return Some(T::butterfly3(fft_direction)),
+            4 => return Some(T::butterfly4(fft_direction)),
+            5 => return Some(T::butterfly5(fft_direction)),
+            6 => return Some(T::butterfly6(fft_direction)),
+            7 => return Some(T::butterfly7(fft_direction)),
+            8 => return Some(T::butterfly8(fft_direction)),
+            9 => return Some(T::butterfly9(fft_direction)),
+            10 => return Some(T::butterfly10(fft_direction)),
+            11 => return Some(T::butterfly11(fft_direction)),
             12 => return Some(T::butterfly12(fft_direction)),
-            13 => return Some(T::butterfly13(fft_direction).map(|x| x.into_fft_executor())),
+            13 => return Some(T::butterfly13(fft_direction)),
             14 => return Some(T::butterfly14(fft_direction)),
             15 => return Some(T::butterfly15(fft_direction)),
-            16 => return Some(T::butterfly16(fft_direction).map(|x| x.into_fft_executor())),
+            16 => return Some(T::butterfly16(fft_direction)),
             17 => return Some(T::butterfly17(fft_direction)),
             18 => return Some(T::butterfly18(fft_direction)),
             19 => return Some(T::butterfly19(fft_direction)),
@@ -826,23 +875,26 @@ impl Zaft {
             24 => {
                 return T::butterfly24(fft_direction).map(Ok);
             }
-            25 => return Some(T::butterfly25(fft_direction).map(|x| x.into_fft_executor())),
-            27 => return Some(T::butterfly27(fft_direction).map(|x| x.into_fft_executor())),
+            25 => return Some(T::butterfly25(fft_direction)),
+            27 => return Some(T::butterfly27(fft_direction)),
+            28 => return T::butterfly28(fft_direction).map(Ok),
             29 => return Some(T::butterfly29(fft_direction)),
             30 => {
                 return T::butterfly30(fft_direction).map(Ok);
             }
             31 => return Some(T::butterfly31(fft_direction)),
-            32 => return Some(T::butterfly32(fft_direction).map(|x| x.into_fft_executor())),
+            32 => return Some(T::butterfly32(fft_direction)),
             35 => {
                 return T::butterfly35(fft_direction).map(Ok);
             }
             36 => {
-                return T::butterfly36(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly36(fft_direction).map(Ok);
             }
+            37 => return Some(T::butterfly37(fft_direction)),
             40 => {
                 return T::butterfly40(fft_direction).map(Ok);
             }
+            41 => return Some(T::butterfly41(fft_direction)),
             42 => {
                 return T::butterfly42(fft_direction).map(Ok);
             }
@@ -850,7 +902,7 @@ impl Zaft {
                 return T::butterfly48(fft_direction).map(Ok);
             }
             49 => {
-                return T::butterfly49(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly49(fft_direction).map(Ok);
             }
             54 => {
                 return T::butterfly54(fft_direction).map(Ok);
@@ -859,7 +911,7 @@ impl Zaft {
                 return T::butterfly63(fft_direction).map(Ok);
             }
             64 => {
-                return T::butterfly64(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly64(fft_direction).map(Ok);
             }
             66 => {
                 return T::butterfly66(fft_direction).map(Ok);
@@ -874,7 +926,7 @@ impl Zaft {
                 return T::butterfly78(fft_direction).map(Ok);
             }
             81 => {
-                return T::butterfly81(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly81(fft_direction).map(Ok);
             }
             88 => {
                 return T::butterfly88(fft_direction).map(Ok);
@@ -883,40 +935,43 @@ impl Zaft {
                 return T::butterfly96(fft_direction).map(Ok);
             }
             100 => {
-                return T::butterfly100(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly100(fft_direction).map(Ok);
             }
             108 => {
                 return T::butterfly108(fft_direction).map(Ok);
             }
             121 => {
-                return T::butterfly121(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly121(fft_direction).map(Ok);
             }
             125 => {
-                return T::butterfly125(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly125(fft_direction).map(Ok);
             }
             128 => {
-                return T::butterfly128(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly128(fft_direction).map(Ok);
             }
             144 => {
                 return T::butterfly144(fft_direction).map(Ok);
             }
             169 => {
-                return T::butterfly169(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly169(fft_direction).map(Ok);
             }
             192 => {
                 return T::butterfly192(fft_direction).map(Ok);
             }
             216 => {
-                return T::butterfly216(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly216(fft_direction).map(Ok);
             }
             243 => {
-                return T::butterfly243(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly243(fft_direction).map(Ok);
             }
             256 => {
-                return T::butterfly256(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly256(fft_direction).map(Ok);
             }
             512 => {
-                return T::butterfly512(fft_direction).map(|x| Ok(x.into_fft_executor()));
+                return T::butterfly512(fft_direction).map(Ok);
+            }
+            1024 => {
+                return T::butterfly1024(fft_direction).map(Ok);
             }
             _ => {}
         }
@@ -933,7 +988,7 @@ impl Zaft {
         if n == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
-        if n <= 512 {
+        if n <= 512 || n == 1024 {
             if let Some(bf) = Zaft::plan_butterfly(n, fft_direction) {
                 return bf;
             }
@@ -947,6 +1002,41 @@ impl Zaft {
             T::radix5(n, fft_direction)
         } else if prime_factors.is_power_of_two {
             // Use Radix-4 if a power of 2
+            if Zaft::could_do_split_mixed_radix() {
+                if n == 2048 {
+                    if let Some(bf) =
+                        T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
+                    {
+                        return Ok(bf);
+                    }
+                }
+                let rem3 = prime_factors.factor_of_2() % 3;
+                if rem3 == 2 {
+                    if let Some(bf) =
+                        T::mixed_radix_butterfly4(Zaft::strategy(n / 4, fft_direction)?)?
+                    {
+                        return Ok(bf);
+                    }
+                } else if rem3 == 1 {
+                    let has1024 = T::butterfly1024(fft_direction).is_some();
+                    if has1024 {
+                        if let Some(bf) =
+                            T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
+                        {
+                            return Ok(bf);
+                        }
+                    }
+                    if let Some(bf) =
+                        T::mixed_radix_butterfly2(Zaft::strategy(n / 2, fft_direction)?)?
+                    {
+                        return Ok(bf);
+                    }
+                }
+                if let Some(bf) = T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
+                {
+                    return Ok(bf);
+                }
+            }
             T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_six {
             T::radix6(n, fft_direction)
@@ -1164,6 +1254,8 @@ impl Zaft {
         }
         let width_fft = Zaft::make_r2c_fft_f32(width)?;
         let height_fft = Zaft::make_forward_fft_f32(height)?;
+        let width_scratch_length = width_fft.complex_scratch_length();
+        let height_scratch_length = height_fft.scratch_length();
         Ok(Arc::new(TwoDimensionalR2C {
             width_r2c_executor: width_fft,
             height_c2c_executor: height_fft,
@@ -1171,6 +1263,8 @@ impl Zaft {
             width,
             height,
             transpose_width_to_height: f32::transpose_strategy((width / 2) + 1, height),
+            width_scratch_length,
+            height_scratch_length,
         }))
     }
 
@@ -1211,6 +1305,8 @@ impl Zaft {
         }
         let width_fft = Zaft::make_r2c_fft_f64(width)?;
         let height_fft = Zaft::make_forward_fft_f64(height)?;
+        let width_scratch_length = width_fft.complex_scratch_length();
+        let height_scratch_length = height_fft.scratch_length();
         Ok(Arc::new(TwoDimensionalR2C {
             width_r2c_executor: width_fft,
             height_c2c_executor: height_fft,
@@ -1218,6 +1314,8 @@ impl Zaft {
             width,
             height,
             transpose_width_to_height: f64::transpose_strategy((width / 2) + 1, height),
+            width_scratch_length,
+            height_scratch_length,
         }))
     }
 
@@ -1269,6 +1367,8 @@ impl Zaft {
             FftDirection::Forward => Zaft::make_forward_fft_f32(fft_height)?,
             FftDirection::Inverse => Zaft::make_inverse_fft_f32(fft_height)?,
         };
+        let oof_scratch_width = width_fft.out_of_place_scratch_length();
+        let inplace_scratch_height = height_fft.scratch_length();
         Ok(Arc::new(TwoDimensionalC2C {
             width_c2c_executor: width_fft,
             height_c2c_executor: height_fft,
@@ -1276,6 +1376,8 @@ impl Zaft {
             width: fft_width,
             height: fft_height,
             transpose_width_to_height: f32::transpose_strategy(fft_width, fft_height),
+            oof_width_scratch_size: oof_scratch_width,
+            height_scratch_size: inplace_scratch_height,
         }))
     }
 
@@ -1327,6 +1429,8 @@ impl Zaft {
             FftDirection::Forward => Zaft::make_forward_fft_f64(fft_height)?,
             FftDirection::Inverse => Zaft::make_inverse_fft_f64(fft_height)?,
         };
+        let oof_scratch_width = width_fft.out_of_place_scratch_length();
+        let inplace_scratch_height = height_fft.scratch_length();
         Ok(Arc::new(TwoDimensionalC2C {
             width_c2c_executor: width_fft,
             height_c2c_executor: height_fft,
@@ -1334,6 +1438,8 @@ impl Zaft {
             width: fft_width,
             height: fft_height,
             transpose_width_to_height: f64::transpose_strategy(fft_width, fft_height),
+            oof_width_scratch_size: oof_scratch_width,
+            height_scratch_size: inplace_scratch_height,
         }))
     }
 
@@ -1365,6 +1471,8 @@ impl Zaft {
         }
         let width_fft = Zaft::make_c2r_fft_f32(width)?;
         let height_fft = Zaft::make_inverse_fft_f32(height)?;
+        let width_scratch_length = width_fft.complex_scratch_length();
+        let height_scratch_length = height_fft.scratch_length();
         Ok(Arc::new(TwoDimensionalC2R {
             width_c2r_executor: width_fft,
             height_c2c_executor: height_fft,
@@ -1372,6 +1480,8 @@ impl Zaft {
             width,
             height,
             transpose_height_to_width: f32::transpose_strategy(height, (width / 2) + 1),
+            width_scratch_length,
+            height_scratch_length,
         }))
     }
 
@@ -1402,6 +1512,8 @@ impl Zaft {
         }
         let width_fft = Zaft::make_c2r_fft_f64(width)?;
         let height_fft = Zaft::make_inverse_fft_f64(height)?;
+        let width_scratch_length = width_fft.complex_scratch_length();
+        let height_scratch_length = height_fft.scratch_length();
         Ok(Arc::new(TwoDimensionalC2R {
             width_c2r_executor: width_fft,
             height_c2c_executor: height_fft,
@@ -1409,6 +1521,8 @@ impl Zaft {
             width,
             height,
             transpose_height_to_width: f64::transpose_strategy(height, (width / 2) + 1),
+            width_scratch_length,
+            height_scratch_length,
         }))
     }
 }
@@ -1449,6 +1563,7 @@ impl Display for FftDirection {
 mod tests {
     use crate::Zaft;
     use num_complex::Complex;
+    use num_traits::Zero;
 
     #[test]
     fn power_of_four() {
@@ -1474,8 +1589,56 @@ mod tests {
             let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
             let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
             let reference_clone = data.clone();
-            zaft_exec.execute(&mut data).unwrap();
-            zaft_inverse.execute(&mut data).unwrap();
+            zaft_exec
+                .execute(&mut data)
+                .expect(&format!("Failed to execute forward FFT for size {i}!"));
+            zaft_inverse
+                .execute(&mut data)
+                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+            let data_len = 1. / data.len() as f32;
+            for i in data.iter_mut() {
+                *i *= data_len;
+            }
+            data.iter()
+                .zip(reference_clone)
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-2,
+                        "a_re {}, b_re {} at {idx}, for size {i}",
+                        a.re,
+                        b.re
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-2,
+                        "a_re {}, b_re {} at {idx}, for size {i}",
+                        a.im,
+                        b.im
+                    );
+                });
+        }
+    }
+
+    #[test]
+    fn test_everything_oof_f32() {
+        for i in 1..2010 {
+            let mut data = vec![Complex::new(0.0019528865, 0.); i];
+            let mut scratch = data.to_vec();
+            for (i, chunk) in data.iter_mut().enumerate() {
+                *chunk = Complex::new(
+                    -0.19528865 + i as f32 * 0.001,
+                    0.0019528865 - i as f32 * 0.001,
+                );
+            }
+            let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
+            let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
+            let reference_clone = data.clone();
+            zaft_exec
+                .execute_out_of_place(&data, &mut scratch)
+                .expect(&format!("Failed to execute forward FFT for size {i}!"));
+            zaft_inverse
+                .execute_out_of_place(&scratch, &mut data)
+                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
             let data_len = 1. / data.len() as f32;
             for i in data.iter_mut() {
                 *i *= data_len;
@@ -1513,8 +1676,12 @@ mod tests {
             let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
             let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
             let rust_fft_clone = data.clone();
-            zaft_exec.execute(&mut data).unwrap();
-            zaft_inverse.execute(&mut data).unwrap();
+            zaft_exec
+                .execute(&mut data)
+                .expect(&format!("Failed to execute forward FFT for size {i}!"));
+            zaft_inverse
+                .execute(&mut data)
+                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
             let data_len = 1. / data.len() as f64;
             for i in data.iter_mut() {
                 *i *= data_len;
@@ -1532,6 +1699,140 @@ mod tests {
                     assert!(
                         (a.im - b.im).abs() < 1e-6,
                         "a_im {}, b_im {} at {idx}, for size {i}",
+                        a.im,
+                        b.im
+                    );
+                });
+        }
+    }
+
+    #[test]
+    fn test_everything_oof_f64() {
+        for i in 1..1900 {
+            let mut data = vec![Complex::new(0.0019528865, 0.); i];
+            let mut scratch = data.clone();
+            for (i, chunk) in data.iter_mut().enumerate() {
+                *chunk = Complex::new(
+                    -0.19528865 + i as f64 * 0.001,
+                    0.0019528865 - i as f64 * 0.001,
+                );
+            }
+            let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
+            let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
+            let rust_fft_clone = data.clone();
+            zaft_exec
+                .execute_out_of_place(&data, &mut scratch)
+                .expect(&format!("Failed to execute forward FFT for size {i}!"));
+            zaft_inverse
+                .execute_out_of_place(&scratch, &mut data)
+                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+            let data_len = 1. / data.len() as f64;
+            for i in data.iter_mut() {
+                *i *= data_len;
+            }
+            data.iter()
+                .zip(rust_fft_clone)
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-6,
+                        "a_re {}, b_re {} at {idx}, for size {i}",
+                        a.re,
+                        b.re
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-6,
+                        "a_im {}, b_im {} at {idx}, for size {i}",
+                        a.im,
+                        b.im
+                    );
+                });
+        }
+    }
+
+    #[test]
+    fn test_destructive_everything_f64() {
+        for i in 1..1900 {
+            let mut data = vec![Complex::new(0.0019528865, 0.); i];
+            for (i, chunk) in data.iter_mut().enumerate() {
+                *chunk = Complex::new(
+                    -0.19528865 + i as f64 * 0.001,
+                    0.0019528865 - i as f64 * 0.001,
+                );
+            }
+            let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
+            let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
+            let rust_fft_clone = data.clone();
+            let mut fwd = vec![Complex::zero(); data.len()];
+            let mut scratch = vec![Complex::zero(); zaft_exec.destructive_scratch_length()];
+            zaft_exec
+                .execute_destructive_with_scratch(&mut data, &mut fwd, &mut scratch)
+                .expect(&format!("Failed to execute forward FFT for size {i}!"));
+            zaft_inverse
+                .execute_destructive_with_scratch(&mut fwd, &mut data, &mut scratch)
+                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+            let data_len = 1. / data.len() as f64;
+            for i in data.iter_mut() {
+                *i *= data_len;
+            }
+            data.iter()
+                .zip(rust_fft_clone)
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-6,
+                        "a_re {}, b_re {} at {idx}, for size {i}",
+                        a.re,
+                        b.re
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-6,
+                        "a_im {}, b_im {} at {idx}, for size {i}",
+                        a.im,
+                        b.im
+                    );
+                });
+        }
+    }
+
+    #[test]
+    fn test_destructive_everything_oof_f32() {
+        for i in 1..2010 {
+            let mut data = vec![Complex::new(0.0019528865, 0.); i];
+            for (i, chunk) in data.iter_mut().enumerate() {
+                *chunk = Complex::new(
+                    -0.19528865 + i as f32 * 0.001,
+                    0.0019528865 - i as f32 * 0.001,
+                );
+            }
+            let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
+            let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
+            let reference_clone = data.clone();
+            let mut scratch = vec![Complex::zero(); zaft_exec.destructive_scratch_length()];
+            let mut target = vec![Complex::zero(); data.len()];
+            zaft_exec
+                .execute_destructive_with_scratch(&mut data, &mut target, &mut scratch)
+                .expect(&format!("Failed to execute forward FFT for size {i}!"));
+            zaft_inverse
+                .execute_destructive_with_scratch(&mut target, &mut data, &mut scratch)
+                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+            let data_len = 1. / data.len() as f32;
+            for i in data.iter_mut() {
+                *i *= data_len;
+            }
+            data.iter()
+                .zip(reference_clone)
+                .enumerate()
+                .for_each(|(idx, (a, b))| {
+                    assert!(
+                        (a.re - b.re).abs() < 1e-2,
+                        "a_re {}, b_re {} at {idx}, for size {i}",
+                        a.re,
+                        b.re
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < 1e-2,
+                        "a_re {}, b_re {} at {idx}, for size {i}",
                         a.im,
                         b.im
                     );

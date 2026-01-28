@@ -34,23 +34,14 @@ use crate::avx::rotate::AvxRotate;
 use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly4d {
-    rotate: __m256d,
+    pub(crate) rotate: AvxRotate<f64>,
 }
 
 impl ColumnButterfly4d {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly4d {
-        unsafe {
-            Self {
-                rotate: _mm256_loadu_pd(match direction {
-                    FftDirection::Inverse => {
-                        [-0.0f64, 0.0, -0.0, 0.0, -0.0f64, 0.0, -0.0, 0.0].as_ptr()
-                    }
-                    FftDirection::Forward => {
-                        [0.0f64, -0.0, 0.0, -0.0, 0.0f64, -0.0, 0.0, -0.0].as_ptr()
-                    }
-                }),
-            }
+        Self {
+            rotate: AvxRotate::new(direction),
         }
     }
 }
@@ -63,7 +54,8 @@ impl ColumnButterfly4d {
             let t1 = _mm256_sub_pd(v[0].v, v[2].v);
             let t2 = _mm256_add_pd(v[1].v, v[3].v);
             let mut t3 = _mm256_sub_pd(v[1].v, v[3].v);
-            t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), self.rotate);
+            t3 = _mm256_xor_pd(t3, self.rotate.rot_flag);
+            t3 = _mm256_shuffle_pd::<0b0101>(t3, t3);
 
             let y0 = _mm256_add_pd(t0, t2);
             let y1 = _mm256_add_pd(t1, t3);
@@ -80,7 +72,7 @@ impl ColumnButterfly4d {
 }
 
 pub(crate) struct ColumnButterfly4f {
-    rotate: AvxRotate<f32>,
+    pub(crate) rotate: AvxRotate<f32>,
 }
 
 impl ColumnButterfly4f {

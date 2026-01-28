@@ -29,6 +29,7 @@
 use crate::err::try_vec;
 use crate::fast_divider::DividerU16;
 use crate::transpose::TransposeExecutor;
+use crate::util::{validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
@@ -46,6 +47,9 @@ pub(crate) struct GoodThomasSmallFft<T> {
     execution_length: u16,
     direction: FftDirection,
     transpose_ops: Box<dyn TransposeExecutor<T> + Send + Sync>,
+    width_scratch_length: usize,
+    height_scratch_length: usize,
+    height_destructive_scratch: usize,
 }
 
 impl<T: FftSample> GoodThomasSmallFft<T>
@@ -83,6 +87,10 @@ where
 
         let len = width * height;
 
+        let width_scratch_length = width_fft.destructive_scratch_length();
+        let height_scratch_length = height_fft.scratch_length();
+        let height_destructive_scratch = height_fft.destructive_scratch_length();
+
         Ok(Self {
             width,
             width_size_fft: width_fft,
@@ -96,6 +104,9 @@ where
             execution_length: len as u16,
             direction,
             transpose_ops: T::transpose_strategy(width, height),
+            width_scratch_length,
+            height_scratch_length,
+            height_destructive_scratch,
         })
     }
 }
@@ -198,29 +209,144 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let length = self.execution_length as usize;
-        if !in_place.len().is_multiple_of(length) {
-            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), length));
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        self.execute_with_scratch(in_place, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        if !in_place
+            .len()
+            .is_multiple_of(self.execution_length as usize)
+        {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                in_place.len(),
+                self.execution_length as usize,
+            ));
         }
 
-        let mut scratch_full = try_vec![Complex::zero(); length * 2];
-        let (scratch_left, scratch_right) = scratch_full.split_at_mut(length);
+        let scratch = validate_scratch!(scratch, self.scratch_length());
+        let (scratch_left, sr) = scratch.split_at_mut(self.execution_length as usize);
 
-        for chunk in in_place.chunks_exact_mut(length) {
+        for chunk in in_place.chunks_exact_mut(self.execution_length as usize) {
             // Re-index the input, copying from the buffer to the scratch in the process
             self.reindex_input(chunk, scratch_left);
 
+            let (width_scratch, _) = sr.split_at_mut(self.width_scratch_length);
             // run FFTs of size `width`
-            self.width_size_fft.execute(scratch_left)?;
+            self.width_size_fft.execute_destructive_with_scratch(
+                scratch_left,
+                chunk,
+                width_scratch,
+            )?;
 
             // transpose
             self.transpose_ops
-                .transpose(scratch_left, scratch_right, self.width, self.height);
+                .transpose(chunk, scratch_left, self.width, self.height);
 
             // run FFTs of size 'height'
-            self.height_size_fft.execute(scratch_right)?;
+            let (height_scratch, _) = sr.split_at_mut(self.height_scratch_length);
+            self.height_size_fft
+                .execute_with_scratch(scratch_left, height_scratch)?;
+
             // Re-index the output, copying from the scratch to the buffer in the process
-            self.reindex_output(scratch_right, chunk);
+            self.reindex_output(scratch_left, chunk);
+        }
+        Ok(())
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
+        self.execute_out_of_place_with_scratch(src, dst, &mut scratch)
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length as usize);
+
+        let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
+        let (scratch_left, sr) = scratch.split_at_mut(self.execution_length as usize);
+
+        for (chunk, output_chunk) in src
+            .chunks_exact(self.execution_length as usize)
+            .zip(dst.chunks_exact_mut(self.execution_length as usize))
+        {
+            // Re-index the input, copying from the buffer to the scratch in the process
+            self.reindex_input(chunk, scratch_left);
+
+            let (width_scratch, _) = sr.split_at_mut(self.width_scratch_length);
+            // run FFTs of size `width`
+            self.width_size_fft.execute_destructive_with_scratch(
+                scratch_left,
+                output_chunk,
+                width_scratch,
+            )?;
+
+            // transpose
+            self.transpose_ops
+                .transpose(output_chunk, scratch_left, self.width, self.height);
+
+            // run FFTs of size 'height'
+            let (height_scratch, _) = sr.split_at_mut(self.height_scratch_length);
+            self.height_size_fft
+                .execute_with_scratch(scratch_left, height_scratch)?;
+
+            // Re-index the output, copying from the scratch to the buffer in the process
+            self.reindex_output(scratch_left, output_chunk);
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length as usize);
+
+        let scratch = validate_scratch!(scratch, self.destructive_scratch_length());
+
+        for (src_chunk, output_chunk) in src
+            .chunks_exact_mut(self.execution_length as usize)
+            .zip(dst.chunks_exact_mut(self.execution_length as usize))
+        {
+            // Re-index the input, copying from the buffer to the scratch in the process
+            self.reindex_input(src_chunk, output_chunk);
+
+            let (width_scratch, _) = scratch.split_at_mut(self.width_scratch_length);
+            // run FFTs of size `width`
+            self.width_size_fft.execute_destructive_with_scratch(
+                output_chunk,
+                src_chunk,
+                width_scratch,
+            )?;
+
+            // transpose
+            self.transpose_ops
+                .transpose(src_chunk, output_chunk, self.width, self.height);
+
+            // run FFTs of size 'height'
+            let (height_scratch, _) = scratch.split_at_mut(self.height_destructive_scratch);
+            self.height_size_fft.execute_destructive_with_scratch(
+                output_chunk,
+                src_chunk,
+                height_scratch,
+            )?;
+
+            // Re-index the output, copying from the scratch to the buffer in the process
+            self.reindex_output(src_chunk, output_chunk);
         }
         Ok(())
     }
@@ -232,5 +358,21 @@ where
     #[inline]
     fn length(&self) -> usize {
         self.execution_length as usize
+    }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.execution_length as usize + self.width_scratch_length.max(self.height_scratch_length)
+    }
+
+    #[inline]
+    fn out_of_place_scratch_length(&self) -> usize {
+        self.scratch_length()
+    }
+
+    #[inline]
+    fn destructive_scratch_length(&self) -> usize {
+        self.width_scratch_length
+            .max(self.height_destructive_scratch)
     }
 }

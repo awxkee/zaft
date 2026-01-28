@@ -26,13 +26,10 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::{
-    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample, ZaftError,
-};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 pub(crate) struct Butterfly1<T> {
     pub(crate) phantom_data: PhantomData<T>,
@@ -47,19 +44,14 @@ where
         Ok(())
     }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
+    fn execute_with_scratch(
+        &self,
+        _: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        Ok(())
     }
 
-    fn length(&self) -> usize {
-        1
-    }
-}
-
-impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly1<T>
-where
-    f64: AsPrimitive<T>,
-{
     fn execute_out_of_place(
         &self,
         src: &[Complex<T>],
@@ -70,13 +62,48 @@ where
         }
         Ok(())
     }
-}
 
-impl<T: FftSample> CompositeFftExecutor<T> for Butterfly1<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync> {
-        self
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        for (dst, src) in dst.iter_mut().zip(src.iter()) {
+            *dst = *src;
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        for (dst, src) in dst.iter_mut().zip(src.iter()) {
+            *dst = *src;
+        }
+        Ok(())
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        1
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }

@@ -28,14 +28,15 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::butterflies::shared::gen_butterfly_twiddles_f64;
+use crate::neon::butterflies::shared::{boring_neon_butterfly, gen_butterfly_twiddles_f64};
 use crate::neon::mixed::NeonStoreD;
+use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
 macro_rules! gen_bf35d {
-    ($name: ident, $feature: literal, $internal_bf5: ident, $internal_bf7: ident, $mul: ident) => {
+    ($name: ident, $features: literal, $internal_bf5: ident, $internal_bf7: ident, $mul: ident) => {
         use crate::neon::mixed::{$internal_bf5, $internal_bf7};
         pub(crate) struct $name {
             direction: FftDirection,
@@ -55,78 +56,52 @@ macro_rules! gen_bf35d {
             }
         }
 
-        impl FftExecutor<f64> for $name {
-            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                unsafe { self.execute_impl(in_place) }
-            }
-
-            fn direction(&self) -> FftDirection {
-                self.direction
-            }
-
-            #[inline]
-            fn length(&self) -> usize {
-                35
-            }
-        }
+        boring_neon_butterfly!($name, $features, f64, 35);
 
         impl $name {
-            #[target_feature(enable = $feature)]
-            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(35) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        in_place.len(),
-                        self.length(),
-                    ));
-                }
+            #[inline]
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+                let mut rows0: [NeonStoreD; 5] = [NeonStoreD::default(); 5];
+                let mut rows7: [NeonStoreD; 7] = [NeonStoreD::default(); 7];
+
+                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 42];
 
                 unsafe {
-                    let mut rows0: [NeonStoreD; 5] = [NeonStoreD::default(); 5];
-                    let mut rows7: [NeonStoreD; 7] = [NeonStoreD::default(); 7];
+                    // columns
+                    for k in 0..7 {
+                        rows0[0] = NeonStoreD::from_complex_ref(chunk.slice_from(k..));
+                        rows0[1] = NeonStoreD::from_complex_ref(chunk.slice_from(7 + k..));
+                        rows0[2] = NeonStoreD::from_complex_ref(chunk.slice_from(2 * 7 + k..));
+                        rows0[3] = NeonStoreD::from_complex_ref(chunk.slice_from(3 * 7 + k..));
+                        rows0[4] = NeonStoreD::from_complex_ref(chunk.slice_from(4 * 7 + k..));
 
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 42];
+                        rows0 = self.bf5.exec(rows0);
 
-                    for chunk in in_place.chunks_exact_mut(35) {
-                        // columns
-                        for k in 0..7 {
-                            rows0[0] = NeonStoreD::from_complex_ref(chunk.get_unchecked(k..));
-                            rows0[1] = NeonStoreD::from_complex_ref(chunk.get_unchecked(7 + k..));
-                            rows0[2] =
-                                NeonStoreD::from_complex_ref(chunk.get_unchecked(2 * 7 + k..));
-                            rows0[3] =
-                                NeonStoreD::from_complex_ref(chunk.get_unchecked(3 * 7 + k..));
-                            rows0[4] =
-                                NeonStoreD::from_complex_ref(chunk.get_unchecked(4 * 7 + k..));
-
-                            rows0 = self.bf5.exec(rows0);
-
-                            for i in 1..5 {
-                                rows0[i] = NeonStoreD::$mul(rows0[i], self.twiddles[i - 1 + 4 * k]);
-                            }
-
-                            rows0[0].write_uninit(scratch.get_unchecked_mut(k * 5..));
-                            rows0[1].write_uninit(scratch.get_unchecked_mut(k * 5 + 1..));
-                            rows0[2].write_uninit(scratch.get_unchecked_mut(k * 5 + 2..));
-                            rows0[3].write_uninit(scratch.get_unchecked_mut(k * 5 + 3..));
-                            rows0[4].write_uninit(scratch.get_unchecked_mut(k * 5 + 4..));
+                        for i in 1..5 {
+                            rows0[i] = NeonStoreD::$mul(rows0[i], self.twiddles[i - 1 + 4 * k]);
                         }
 
-                        // rows
+                        rows0[0].write_uninit(scratch.get_unchecked_mut(k * 5..));
+                        rows0[1].write_uninit(scratch.get_unchecked_mut(k * 5 + 1..));
+                        rows0[2].write_uninit(scratch.get_unchecked_mut(k * 5 + 2..));
+                        rows0[3].write_uninit(scratch.get_unchecked_mut(k * 5 + 3..));
+                        rows0[4].write_uninit(scratch.get_unchecked_mut(k * 5 + 4..));
+                    }
 
-                        for k in 0..5 {
-                            for i in 0..7 {
-                                rows7[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 5 + k..),
-                                );
-                            }
-                            rows7 = self.bf7.exec(rows7);
-                            for i in 0..7 {
-                                rows7[i].write(chunk.get_unchecked_mut(i * 5 + k..));
-                            }
+                    // rows
+
+                    for k in 0..5 {
+                        for i in 0..7 {
+                            rows7[i] =
+                                NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 5 + k..));
+                        }
+                        rows7 = self.bf7.exec(rows7);
+                        for i in 0..7 {
+                            rows7[i].write(chunk.slice_from_mut(i * 5 + k..));
                         }
                     }
                 }
-                Ok(())
             }
         }
     };

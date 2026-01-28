@@ -28,14 +28,15 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
+use crate::neon::butterflies::shared::{boring_neon_butterfly, gen_butterfly_twiddles_f32};
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::neon_transpose_f32x2_8x5_aos;
+use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 
 macro_rules! gen_bf40f {
-    ($name: ident, $feature: literal, $internal_bf5: ident, $internal_bf8: ident, $mul: ident) => {
+    ($name: ident, $features: literal, $internal_bf5: ident, $internal_bf8: ident, $mul: ident) => {
         use crate::neon::mixed::{$internal_bf5, $internal_bf8};
         pub(crate) struct $name {
             direction: FftDirection,
@@ -55,80 +56,52 @@ macro_rules! gen_bf40f {
             }
         }
 
-        impl FftExecutor<f32> for $name {
-            fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                unsafe { self.execute_impl(in_place) }
-            }
-
-            fn direction(&self) -> FftDirection {
-                self.direction
-            }
-
-            #[inline]
-            fn length(&self) -> usize {
-                40
-            }
-        }
+        boring_neon_butterfly!($name, $features, f32, 40);
 
         impl $name {
-            #[target_feature(enable = $feature)]
-            fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(40) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        in_place.len(),
-                        self.length(),
-                    ));
+            #[inline]
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
+                let mut rows0: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
+                let mut rows1: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
+                let mut rows2: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
+                let mut rows3: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
+                // columns
+                for i in 0..5 {
+                    rows0[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 8..));
+                    rows1[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 8 + 2..));
+                    rows2[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 8 + 4..));
+                    rows3[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 8 + 6..));
                 }
 
-                unsafe {
-                    let mut rows0: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
-                    let mut rows1: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
-                    let mut rows2: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
-                    let mut rows3: [NeonStoreF; 5] = [NeonStoreF::default(); 5];
+                rows0 = self.bf5.exec(rows0);
+                rows1 = self.bf5.exec(rows1);
+                rows2 = self.bf5.exec(rows2);
+                rows3 = self.bf5.exec(rows3);
 
-                    for chunk in in_place.chunks_exact_mut(40) {
-                        // columns
-                        for i in 0..5 {
-                            rows0[i] = NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 8..));
-                            rows1[i] =
-                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 8 + 2..));
-                            rows2[i] =
-                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 8 + 4..));
-                            rows3[i] =
-                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 8 + 6..));
-                        }
-
-                        rows0 = self.bf5.exec(rows0);
-                        rows1 = self.bf5.exec(rows1);
-                        rows2 = self.bf5.exec(rows2);
-                        rows3 = self.bf5.exec(rows3);
-
-                        for i in 1..5 {
-                            rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
-                            rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i - 1 + 4]);
-                            rows2[i] = NeonStoreF::$mul(rows2[i], self.twiddles[i - 1 + 8]);
-                            rows3[i] = NeonStoreF::$mul(rows3[i], self.twiddles[i - 1 + 12]);
-                        }
-
-                        let (mut v0, mut v1, mut v2) =
-                            neon_transpose_f32x2_8x5_aos(rows0, rows1, rows2, rows3);
-
-                        // rows
-                        v0 = self.bf8.exec(v0);
-                        for i in 0..8 {
-                            v0[i].write(chunk.get_unchecked_mut(i * 5..));
-                        }
-                        v1 = self.bf8.exec(v1);
-                        for i in 0..8 {
-                            v1[i].write(chunk.get_unchecked_mut(i * 5 + 2..));
-                        }
-                        v2 = self.bf8.exec(v2);
-                        for i in 0..8 {
-                            v2[i].write_lo(chunk.get_unchecked_mut(i * 5 + 4..));
-                        }
-                    }
+                for i in 1..5 {
+                    rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
+                    rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i - 1 + 4]);
+                    rows2[i] = NeonStoreF::$mul(rows2[i], self.twiddles[i - 1 + 8]);
+                    rows3[i] = NeonStoreF::$mul(rows3[i], self.twiddles[i - 1 + 12]);
                 }
-                Ok(())
+
+                let (mut v0, mut v1, mut v2) =
+                    neon_transpose_f32x2_8x5_aos(rows0, rows1, rows2, rows3);
+
+                // rows
+                v0 = self.bf8.exec(v0);
+                for i in 0..8 {
+                    v0[i].write(chunk.slice_from_mut(i * 5..));
+                }
+                v1 = self.bf8.exec(v1);
+                for i in 0..8 {
+                    v1[i].write(chunk.slice_from_mut(i * 5 + 2..));
+                }
+                v2 = self.bf8.exec(v2);
+                for i in 0..8 {
+                    v2[i].write_lo(chunk.slice_from_mut(i * 5 + 4..));
+                }
             }
         }
     };

@@ -28,9 +28,10 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::avx::butterflies::shared::gen_butterfly_twiddles_f64;
+use crate::avx::butterflies::shared::{boring_avx_butterfly, gen_butterfly_twiddles_f64};
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly5d, ColumnButterfly7d};
 use crate::avx::transpose::transpose_f64x2_2x2;
+use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::x86_64::_mm256_setzero_pd;
@@ -59,20 +60,7 @@ impl AvxButterfly35d {
     }
 }
 
-impl FftExecutor<f64> for AvxButterfly35d {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_impl(in_place) }
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        35
-    }
-}
+boring_avx_butterfly!(AvxButterfly35d, f64, 35);
 
 #[inline]
 #[target_feature(enable = "avx2")]
@@ -116,97 +104,85 @@ pub(crate) fn transpose_6x5(
 }
 
 impl AvxButterfly35d {
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(35) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
-
+    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+        let mut rows0: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
+        let mut rows1: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
+        let mut rows2: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
+        let mut rows7: [AvxStoreD; 7] = [AvxStoreD::zero(); 7];
+        let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 35];
         unsafe {
-            let mut rows0: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
-            let mut rows1: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
-            let mut rows2: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
-            let mut rows7: [AvxStoreD; 7] = [AvxStoreD::zero(); 7];
-
-            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 35];
-
-            for chunk in in_place.chunks_exact_mut(35) {
-                // columns
-                {
-                    for i in 0..5 {
-                        rows0[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7..));
-                        rows1[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + 2..));
-                        rows2[i] = AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 7 + 4..));
-                    }
-
-                    rows0 = self.bf5.exec(rows0);
-                    rows1 = self.bf5.exec(rows1);
-                    rows2 = self.bf5.exec(rows2);
-
-                    for i in 1..5 {
-                        rows0[i] = AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1]);
-                        rows1[i] = AvxStoreD::mul_by_complex(rows1[i], self.twiddles[i - 1 + 4]);
-                        rows2[i] = AvxStoreD::mul_by_complex(rows2[i], self.twiddles[i - 1 + 8]);
-                    }
-
-                    let transposed = transpose_6x5(rows0, rows1, rows2);
-
-                    for i in 0..6 {
-                        transposed[i].write_u(scratch.get_unchecked_mut(i * 5..));
-                        transposed[i + 6].write_u(scratch.get_unchecked_mut(i * 5 + 2..));
-                        transposed[i + 12].write_lou(scratch.get_unchecked_mut(i * 5 + 4..));
-                    }
+            // columns
+            {
+                for i in 0..5 {
+                    rows0[i] = AvxStoreD::from_complex_ref(chunk.slice_from(i * 7..));
+                    rows1[i] = AvxStoreD::from_complex_ref(chunk.slice_from(i * 7 + 2..));
+                    rows2[i] = AvxStoreD::from_complex_ref(chunk.slice_from(i * 7 + 4..));
                 }
 
-                {
-                    let k = 6;
-                    for i in 0..5 {
-                        rows0[i] = AvxStoreD::from_complex(chunk.get_unchecked(i * 7 + k));
-                    }
+                rows0 = self.bf5.exec(rows0);
+                rows1 = self.bf5.exec(rows1);
+                rows2 = self.bf5.exec(rows2);
 
-                    rows0 = self.bf5.exec(rows0);
-
-                    for i in 1..5 {
-                        rows0[i] = AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 12]);
-                    }
-
-                    let a0 = transpose_f64x2_2x2(rows0[0].v, rows0[1].v);
-                    let d0 = transpose_f64x2_2x2(rows0[2].v, rows0[3].v);
-                    let g0 = transpose_f64x2_2x2(rows0[4].v, _mm256_setzero_pd());
-
-                    AvxStoreD::raw(a0.0).write_u(scratch.get_unchecked_mut(6 * 5..));
-                    AvxStoreD::raw(d0.0).write_u(scratch.get_unchecked_mut(6 * 5 + 2..));
-                    AvxStoreD::raw(g0.0).write_lou(scratch.get_unchecked_mut(6 * 5 + 4..));
+                for i in 1..5 {
+                    rows0[i] = AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1]);
+                    rows1[i] = AvxStoreD::mul_by_complex(rows1[i], self.twiddles[i - 1 + 4]);
+                    rows2[i] = AvxStoreD::mul_by_complex(rows2[i], self.twiddles[i - 1 + 8]);
                 }
 
-                // rows
+                let transposed = transpose_6x5(rows0, rows1, rows2);
 
-                for k in 0..2 {
-                    for i in 0..7 {
-                        rows7[i] =
-                            AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 5 + k * 2..));
-                    }
-                    rows7 = self.bf7.exec(rows7);
-                    for i in 0..7 {
-                        rows7[i].write(chunk.get_unchecked_mut(i * 5 + k * 2..));
-                    }
+                for i in 0..6 {
+                    transposed[i].write_u(scratch.get_unchecked_mut(i * 5..));
+                    transposed[i + 6].write_u(scratch.get_unchecked_mut(i * 5 + 2..));
+                    transposed[i + 12].write_lou(scratch.get_unchecked_mut(i * 5 + 4..));
                 }
-                {
-                    let k = 2;
-                    for i in 0..7 {
-                        rows7[i] = AvxStoreD::from_complexu(scratch.get_unchecked(i * 5 + k * 2));
-                    }
-                    rows7 = self.bf7.exec(rows7);
-                    for i in 0..7 {
-                        rows7[i].write_lo(chunk.get_unchecked_mut(i * 5 + k * 2..));
-                    }
+            }
+
+            {
+                let k = 6;
+                for i in 0..5 {
+                    rows0[i] = AvxStoreD::from_complex(chunk.index(i * 7 + k));
+                }
+
+                rows0 = self.bf5.exec(rows0);
+
+                for i in 1..5 {
+                    rows0[i] = AvxStoreD::mul_by_complex(rows0[i], self.twiddles[i - 1 + 12]);
+                }
+
+                let a0 = transpose_f64x2_2x2(rows0[0].v, rows0[1].v);
+                let d0 = transpose_f64x2_2x2(rows0[2].v, rows0[3].v);
+                let g0 = transpose_f64x2_2x2(rows0[4].v, _mm256_setzero_pd());
+
+                AvxStoreD::raw(a0.0).write_u(scratch.get_unchecked_mut(6 * 5..));
+                AvxStoreD::raw(d0.0).write_u(scratch.get_unchecked_mut(6 * 5 + 2..));
+                AvxStoreD::raw(g0.0).write_lou(scratch.get_unchecked_mut(6 * 5 + 4..));
+            }
+
+            // rows
+
+            for k in 0..2 {
+                for i in 0..7 {
+                    rows7[i] = AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 5 + k * 2..));
+                }
+                rows7 = self.bf7.exec(rows7);
+                for i in 0..7 {
+                    rows7[i].write(chunk.slice_from_mut(i * 5 + k * 2..));
+                }
+            }
+            {
+                let k = 2;
+                for i in 0..7 {
+                    rows7[i] = AvxStoreD::from_complexu(scratch.get_unchecked(i * 5 + k * 2));
+                }
+                rows7 = self.bf7.exec(rows7);
+                for i in 0..7 {
+                    rows7[i].write_lo(chunk.slice_from_mut(i * 5 + k * 2..));
                 }
             }
         }
-        Ok(())
     }
 }
 

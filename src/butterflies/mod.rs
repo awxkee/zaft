@@ -50,7 +50,9 @@ mod bf29;
 mod bf3;
 mod bf31;
 mod bf32;
+mod bf37;
 mod bf4;
+mod bf41;
 mod bf5;
 mod bf6;
 mod bf7;
@@ -61,6 +63,7 @@ mod fast_bf7;
 mod fast_bf8;
 mod fast_bf9;
 pub mod short_butterflies;
+mod util;
 
 pub(crate) use bf1::Butterfly1;
 #[allow(unused)]
@@ -108,12 +111,14 @@ pub(crate) use bf25::Butterfly25;
 #[allow(unused)]
 pub(crate) use bf27::Butterfly27;
 #[allow(unused)]
-pub(crate) use bf29::Butterfly29;
-#[allow(unused)]
+pub(crate) use bf29::{Butterfly29, RfftButterfly29};
 pub(crate) use bf31::Butterfly31;
 #[allow(unused)]
 pub(crate) use bf32::Butterfly32;
+pub(crate) use bf37::Butterfly37;
+pub(crate) use bf41::Butterfly41;
 
+#[inline(always)]
 pub(crate) fn rotate_90<T: Copy + Neg<Output = T>>(
     value: Complex<T>,
     direction: FftDirection,

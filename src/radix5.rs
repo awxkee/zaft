@@ -31,11 +31,11 @@ use crate::err::try_vec;
 use crate::mla::fmla;
 use crate::util::{
     bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_five,
-    radixn_floating_twiddles_from_base,
+    radixn_floating_twiddles_from_base, validate_oof_sizes, validate_scratch,
 };
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -45,7 +45,7 @@ pub(crate) struct Radix5<T> {
     twiddle1: Complex<T>,
     twiddle2: Complex<T>,
     direction: FftDirection,
-    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn FftExecutor<T> + Send + Sync>,
     butterfly_length: usize,
 }
 
@@ -120,11 +120,120 @@ where
     }
 }
 
+impl<T: FftSample> Radix5<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn base_run(&self, chunk: &mut [Complex<T>]) {
+        let mut len = self.butterfly_length;
+
+        unsafe {
+            let mut m_twiddles = self.twiddles.as_slice();
+
+            while len < self.execution_length {
+                let columns = len;
+                len *= 5;
+                let fifth = len / 5;
+
+                for data in chunk.chunks_exact_mut(len) {
+                    for j in 0..fifth {
+                        let u0 = *data.get_unchecked(j);
+                        let u1 = c_mul_fast(
+                            *data.get_unchecked(j + fifth),
+                            *m_twiddles.get_unchecked(4 * j),
+                        );
+                        let u2 = c_mul_fast(
+                            *data.get_unchecked(j + 2 * fifth),
+                            *m_twiddles.get_unchecked(4 * j + 1),
+                        );
+                        let u3 = c_mul_fast(
+                            *data.get_unchecked(j + 3 * fifth),
+                            *m_twiddles.get_unchecked(4 * j + 2),
+                        );
+                        let u4 = c_mul_fast(
+                            *data.get_unchecked(j + 4 * fifth),
+                            *m_twiddles.get_unchecked(4 * j + 3),
+                        );
+
+                        // Radix-5 butterfly
+
+                        let x14p = u1 + u4;
+                        let x14n = u1 - u4;
+                        let x23p = u2 + u3;
+                        let x23n = u2 - u3;
+                        let y0 = u0 + x14p + x23p;
+
+                        let b14re_a = fmla(
+                            self.twiddle2.re,
+                            x23p.re,
+                            fmla(self.twiddle1.re, x14p.re, u0.re),
+                        );
+                        let b14re_b = fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
+                        let b23re_a = fmla(
+                            self.twiddle1.re,
+                            x23p.re,
+                            fmla(self.twiddle2.re, x14p.re, u0.re),
+                        );
+                        let b23re_b = fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
+
+                        let b14im_a = fmla(
+                            self.twiddle2.re,
+                            x23p.im,
+                            fmla(self.twiddle1.re, x14p.im, u0.im),
+                        );
+                        let b14im_b = fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
+                        let b23im_a = fmla(
+                            self.twiddle1.re,
+                            x23p.im,
+                            fmla(self.twiddle2.re, x14p.im, u0.im),
+                        );
+                        let b23im_b = fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
+
+                        let y1 = Complex {
+                            re: b14re_a - b14re_b,
+                            im: b14im_a + b14im_b,
+                        };
+                        let y2 = Complex {
+                            re: b23re_a - b23re_b,
+                            im: b23im_a + b23im_b,
+                        };
+                        let y3 = Complex {
+                            re: b23re_a + b23re_b,
+                            im: b23im_a - b23im_b,
+                        };
+                        let y4 = Complex {
+                            re: b14re_a + b14re_b,
+                            im: b14im_a - b14im_b,
+                        };
+
+                        *data.get_unchecked_mut(j) = y0;
+                        *data.get_unchecked_mut(j + fifth) = y1;
+                        *data.get_unchecked_mut(j + 2 * fifth) = y2;
+                        *data.get_unchecked_mut(j + 3 * fifth) = y3;
+                        *data.get_unchecked_mut(j + 4 * fifth) = y4;
+                    }
+                }
+
+                m_twiddles = &m_twiddles[columns * 4..];
+            }
+        }
+    }
+}
+
 impl<T: FftSample> FftExecutor<T> for Radix5<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        self.execute_with_scratch(in_place, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -132,112 +241,52 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::<T>::default(); self.execution_length];
+        let scratch = validate_scratch!(scratch, self.scratch_length());
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
-            bitreversed_transpose::<Complex<T>, 5>(self.butterfly_length, chunk, &mut scratch);
-
-            self.butterfly.execute_out_of_place(&scratch, chunk)?;
-
-            let mut len = self.butterfly_length;
-
-            unsafe {
-                let mut m_twiddles = self.twiddles.as_slice();
-
-                while len < self.execution_length {
-                    let columns = len;
-                    len *= 5;
-                    let fifth = len / 5;
-
-                    for data in chunk.chunks_exact_mut(len) {
-                        for j in 0..fifth {
-                            let u0 = *data.get_unchecked(j);
-                            let u1 = c_mul_fast(
-                                *data.get_unchecked(j + fifth),
-                                *m_twiddles.get_unchecked(4 * j),
-                            );
-                            let u2 = c_mul_fast(
-                                *data.get_unchecked(j + 2 * fifth),
-                                *m_twiddles.get_unchecked(4 * j + 1),
-                            );
-                            let u3 = c_mul_fast(
-                                *data.get_unchecked(j + 3 * fifth),
-                                *m_twiddles.get_unchecked(4 * j + 2),
-                            );
-                            let u4 = c_mul_fast(
-                                *data.get_unchecked(j + 4 * fifth),
-                                *m_twiddles.get_unchecked(4 * j + 3),
-                            );
-
-                            // Radix-5 butterfly
-
-                            let x14p = u1 + u4;
-                            let x14n = u1 - u4;
-                            let x23p = u2 + u3;
-                            let x23n = u2 - u3;
-                            let y0 = u0 + x14p + x23p;
-
-                            let b14re_a = fmla(
-                                self.twiddle2.re,
-                                x23p.re,
-                                fmla(self.twiddle1.re, x14p.re, u0.re),
-                            );
-                            let b14re_b =
-                                fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
-                            let b23re_a = fmla(
-                                self.twiddle1.re,
-                                x23p.re,
-                                fmla(self.twiddle2.re, x14p.re, u0.re),
-                            );
-                            let b23re_b =
-                                fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
-
-                            let b14im_a = fmla(
-                                self.twiddle2.re,
-                                x23p.im,
-                                fmla(self.twiddle1.re, x14p.im, u0.im),
-                            );
-                            let b14im_b =
-                                fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
-                            let b23im_a = fmla(
-                                self.twiddle1.re,
-                                x23p.im,
-                                fmla(self.twiddle2.re, x14p.im, u0.im),
-                            );
-                            let b23im_b =
-                                fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
-
-                            let y1 = Complex {
-                                re: b14re_a - b14re_b,
-                                im: b14im_a + b14im_b,
-                            };
-                            let y2 = Complex {
-                                re: b23re_a - b23re_b,
-                                im: b23im_a + b23im_b,
-                            };
-                            let y3 = Complex {
-                                re: b23re_a + b23re_b,
-                                im: b23im_a - b23im_b,
-                            };
-                            let y4 = Complex {
-                                re: b14re_a + b14re_b,
-                                im: b14im_a - b14im_b,
-                            };
-
-                            *data.get_unchecked_mut(j) = y0;
-                            *data.get_unchecked_mut(j + fifth) = y1;
-                            *data.get_unchecked_mut(j + 2 * fifth) = y2;
-                            *data.get_unchecked_mut(j + 3 * fifth) = y3;
-                            *data.get_unchecked_mut(j + 4 * fifth) = y4;
-                        }
-                    }
-
-                    m_twiddles = &m_twiddles[columns * 4..];
-                }
-            }
+            bitreversed_transpose::<Complex<T>, 5>(self.butterfly_length, chunk, scratch);
+            self.butterfly.execute_out_of_place(scratch, chunk)?;
+            self.base_run(chunk);
         }
         Ok(())
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, &mut [])
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        for (dst, src) in dst
+            .chunks_exact_mut(self.execution_length)
+            .zip(src.chunks_exact(self.execution_length))
+        {
+            // Digit-reversal permutation
+            bitreversed_transpose::<Complex<T>, 5>(self.butterfly_length, src, dst);
+            self.butterfly.execute(dst)?;
+            self.base_run(dst);
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -246,6 +295,20 @@ where
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.execution_length
+    }
+
+    #[inline]
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 

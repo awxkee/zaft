@@ -68,11 +68,11 @@ where
         unsafe {
             match fft_direction {
                 FftDirection::Inverse => Self {
-                    rot_flag: _mm256_loadu_pd(rot90.as_ptr().cast()),
+                    rot_flag: _mm256_loadu_pd(rot270.as_ptr().cast()),
                     phantom_data: PhantomData,
                 },
                 FftDirection::Forward => Self {
-                    rot_flag: _mm256_loadu_pd(rot270.as_ptr().cast()),
+                    rot_flag: _mm256_loadu_pd(rot90.as_ptr().cast()),
                     phantom_data: PhantomData,
                 },
             }
@@ -84,16 +84,17 @@ impl AvxRotate<f64> {
     #[inline(always)]
     pub(crate) fn rotate_m128d(&self, v: __m128d) -> __m128d {
         unsafe {
-            _mm_xor_pd(
-                _mm_shuffle_pd::<0b01>(v, v),
-                _mm256_castpd256_pd128(self.rot_flag),
-            )
+            let z = _mm_xor_pd(v, _mm256_castpd256_pd128(self.rot_flag));
+            _mm_shuffle_pd::<0b01>(z, z)
         }
     }
 
     #[inline(always)]
     pub(crate) fn rotate_m256d(&self, v: __m256d) -> __m256d {
-        unsafe { _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(v, v), self.rot_flag) }
+        unsafe {
+            let z = _mm256_xor_pd(v, self.rot_flag);
+            _mm256_shuffle_pd::<0b0101>(z, z)
+        }
     }
 }
 
@@ -102,10 +103,8 @@ impl AvxRotate<f32> {
     pub(crate) fn rotate_m128(&self, v: __m128) -> __m128 {
         const SH: i32 = shuffle(2, 3, 0, 1);
         unsafe {
-            _mm_xor_ps(
-                _mm_shuffle_ps::<SH>(v, v),
-                _mm_castpd_ps(_mm256_castpd256_pd128(self.rot_flag)),
-            )
+            let z = _mm_xor_ps(v, _mm_castpd_ps(_mm256_castpd256_pd128(self.rot_flag)));
+            _mm_shuffle_ps::<SH>(z, z)
         }
     }
 
@@ -113,10 +112,8 @@ impl AvxRotate<f32> {
     pub(crate) fn rotate_m256(&self, v: __m256) -> __m256 {
         const SH: i32 = shuffle(2, 3, 0, 1);
         unsafe {
-            _mm256_xor_ps(
-                _mm256_shuffle_ps::<SH>(v, v),
-                _mm256_castpd_ps(self.rot_flag),
-            )
+            let z = _mm256_xor_ps(v, _mm256_castpd_ps(self.rot_flag));
+            _mm256_shuffle_ps::<SH>(z, z)
         }
     }
 }

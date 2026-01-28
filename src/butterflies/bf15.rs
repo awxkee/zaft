@@ -28,6 +28,8 @@
  */
 
 use crate::butterflies::short_butterflies::{FastButterfly3, FastButterfly5};
+use crate::butterflies::util::boring_scalar_butterfly;
+use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
@@ -53,87 +55,71 @@ where
     }
 }
 
-impl<T: FftSample> FftExecutor<T> for Butterfly15<T>
+impl<T: FftSample> Butterfly15<T>
 where
     f64: AsPrimitive<T>,
 {
-    fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(self.length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
+    #[inline(always)]
+    pub(crate) fn run<S: BidirectionalStore<Complex<T>>>(&self, chunk: &mut S) {
+        let u0 = chunk[0];
+        let u1 = chunk[1];
+        let u2 = chunk[2];
+        let u3 = chunk[3];
 
-        for chunk in in_place.chunks_exact_mut(15) {
-            let u0 = chunk[0];
-            let u1 = chunk[1];
-            let u2 = chunk[2];
-            let u3 = chunk[3];
+        let u4 = chunk[4];
+        let u5 = chunk[5];
+        let u6 = chunk[6];
+        let u7 = chunk[7];
 
-            let u4 = chunk[4];
-            let u5 = chunk[5];
-            let u6 = chunk[6];
-            let u7 = chunk[7];
+        let u8 = chunk[8];
+        let u9 = chunk[9];
+        let u10 = chunk[10];
+        let u11 = chunk[11];
+        let u12 = chunk[12];
 
-            let u8 = chunk[8];
-            let u9 = chunk[9];
-            let u10 = chunk[10];
-            let u11 = chunk[11];
-            let u12 = chunk[12];
+        let u13 = chunk[13];
+        let u14 = chunk[14];
 
-            let u13 = chunk[13];
-            let u14 = chunk[14];
+        // Size-5 FFTs down the columns of our reordered array
+        let mid0 = self.bf5.bf5(u0, u3, u6, u9, u12);
+        let mid1 = self.bf5.bf5(u5, u8, u11, u14, u2);
+        let mid2 = self.bf5.bf5(u10, u13, u1, u4, u7);
 
-            // Size-5 FFTs down the columns of our reordered array
-            let mid0 = self.bf5.bf5(u0, u3, u6, u9, u12);
-            let mid1 = self.bf5.bf5(u5, u8, u11, u14, u2);
-            let mid2 = self.bf5.bf5(u10, u13, u1, u4, u7);
+        // Since this is good-thomas algorithm, we don't need twiddle factors
 
-            // Since this is good-thomas algorithm, we don't need twiddle factors
+        // Transpose the data and do size-3 FFTs down the columns
+        let (y0, y1, y2) = self.bf3.butterfly3(mid0.0, mid1.0, mid2.0);
+        let (y3, y4, y5) = self.bf3.butterfly3(mid0.1, mid1.1, mid2.1);
+        let (y6, y7, y8) = self.bf3.butterfly3(mid0.2, mid1.2, mid2.2);
+        let (y9, y10, y11) = self.bf3.butterfly3(mid0.3, mid1.3, mid2.3);
+        let (y12, y13, y14) = self.bf3.butterfly3(mid0.4, mid1.4, mid2.4);
 
-            // Transpose the data and do size-3 FFTs down the columns
-            let (y0, y1, y2) = self.bf3.butterfly3(mid0.0, mid1.0, mid2.0);
-            let (y3, y4, y5) = self.bf3.butterfly3(mid0.1, mid1.1, mid2.1);
-            let (y6, y7, y8) = self.bf3.butterfly3(mid0.2, mid1.2, mid2.2);
-            let (y9, y10, y11) = self.bf3.butterfly3(mid0.3, mid1.3, mid2.3);
-            let (y12, y13, y14) = self.bf3.butterfly3(mid0.4, mid1.4, mid2.4);
+        chunk[0] = y0;
+        chunk[1] = y4;
 
-            chunk[0] = y0;
-            chunk[1] = y4;
+        chunk[2] = y8;
+        chunk[3] = y9;
 
-            chunk[2] = y8;
-            chunk[3] = y9;
+        chunk[4] = y13;
+        chunk[5] = y2;
 
-            chunk[4] = y13;
-            chunk[5] = y2;
+        chunk[6] = y3;
+        chunk[7] = y7;
 
-            chunk[6] = y3;
-            chunk[7] = y7;
+        chunk[8] = y11;
+        chunk[9] = y12;
 
-            chunk[8] = y11;
-            chunk[9] = y12;
+        chunk[10] = y1;
+        chunk[11] = y5;
 
-            chunk[10] = y1;
-            chunk[11] = y5;
+        chunk[12] = y6;
+        chunk[13] = y10;
 
-            chunk[12] = y6;
-            chunk[13] = y10;
-
-            chunk[14] = y14;
-        }
-        Ok(())
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        15
+        chunk[14] = y14;
     }
 }
+
+boring_scalar_butterfly!(Butterfly15, 15);
 
 impl<T: FftSample> R2CFftExecutor<T> for Butterfly15<T>
 where
@@ -202,6 +188,15 @@ where
         Ok(())
     }
 
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        R2CFftExecutor::execute(self, input, output)
+    }
+
     #[inline]
     fn real_length(&self) -> usize {
         15
@@ -210,6 +205,10 @@ where
     #[inline]
     fn complex_length(&self) -> usize {
         8
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        0
     }
 }
 

@@ -191,7 +191,7 @@ impl R2cAlgorithmFactory<f64> for f64 {
     }
 
     fn r2c_butterfly29() -> Arc<dyn R2CFftExecutor<f64> + Send + Sync> {
-        make_default_butterfly!(Butterfly29)
+        make_default_butterfly!(RfftButterfly29)
     }
 
     fn r2c_butterfly31() -> Arc<dyn R2CFftExecutor<f64> + Send + Sync> {

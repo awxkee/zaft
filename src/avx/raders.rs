@@ -31,7 +31,7 @@ use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
 use crate::prime_factors::{PrimeFactors, primitive_root};
 use crate::spectrum_arithmetic::ComplexArith;
-use crate::util::compute_twiddle;
+use crate::util::{compute_twiddle, validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_integer::Integer;
@@ -47,6 +47,7 @@ pub(crate) struct AvxRadersFft<T> {
     input_indices: Vec<u32>,
     output_indices: Vec<u32>,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
+    convolve_fft_scratch_length: usize,
 }
 
 pub(crate) trait RadersIndicer<T> {
@@ -354,6 +355,8 @@ where
             z_output[output_idx as usize] = input_idx as u32;
         }
 
+        let convolve_fft_scratch = convolve_fft.scratch_length();
+
         Ok(AvxRadersFft {
             execution_length: size,
             convolve_fft,
@@ -362,6 +365,7 @@ where
             convolve_fft_twiddles: inner_fft_input,
             direction: fft_direction,
             spectrum_ops: T::make_complex_arith(),
+            convolve_fft_scratch_length: convolve_fft_scratch,
         })
     }
 }
@@ -371,7 +375,11 @@ where
     f64: AsPrimitive<T>,
 {
     #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_impl(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
+    fn execute_impl(
+        &self,
+        in_place: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -379,7 +387,8 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.execution_length];
+        let scratch = validate_scratch!(scratch, self.scratch_length());
+        let (scratch, convolve_scratch) = scratch.split_at_mut(self.execution_length);
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // The first output element is just the sum of all the input elements, and we need to store off the first input value
@@ -395,7 +404,8 @@ where
 
             // perform the first of two inner FFTs
 
-            self.convolve_fft.execute(scratch)?;
+            self.convolve_fft
+                .execute_with_scratch(scratch, convolve_scratch)?;
 
             // scratch[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
             *buffer_first = *buffer_first + scratch[0];
@@ -411,7 +421,8 @@ where
             scratch[0] = scratch[0] + buffer_first_val.conj();
 
             // execute the second FFT
-            self.convolve_fft.execute(scratch)?;
+            self.convolve_fft
+                .execute_with_scratch(scratch, convolve_scratch)?;
 
             // copy the final values into the output, reordering as we go
             unsafe {
@@ -422,7 +433,73 @@ where
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_r2c(&self, src: &[T], dst: &mut [Complex<T>]) -> Result<(), ZaftError> {
+    fn execute_oof_impl(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
+        let (scratch, convolve_scratch) = scratch.split_at_mut(self.execution_length);
+
+        for (chunk, output_chunk) in src
+            .chunks_exact(self.execution_length)
+            .zip(dst.chunks_exact_mut(self.execution_length))
+        {
+            // The first output element is just the sum of all the input elements, and we need to store off the first input value
+            let (buffer_first, buffer) = chunk.split_first().unwrap();
+            let buffer_first_val = *buffer_first;
+
+            let (scratch, _) = scratch.split_at_mut(self.length() - 1);
+
+            // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
+            unsafe {
+                T::index_inputs(buffer, scratch, &self.input_indices);
+            }
+
+            // perform the first of two inner FFTs
+
+            self.convolve_fft
+                .execute_with_scratch(scratch, convolve_scratch)?;
+
+            // scratch[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
+            unsafe {
+                *output_chunk.get_unchecked_mut(0) = *buffer_first + scratch[0];
+            }
+
+            // multiply the inner result with our cached setup data
+            // also conjugate every entry. this sets us up to do an inverse FFT
+            // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
+            self.spectrum_ops
+                .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
+
+            // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
+            // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
+            scratch[0] = scratch[0] + buffer_first_val.conj();
+
+            // execute the second FFT
+            self.convolve_fft
+                .execute_with_scratch(scratch, convolve_scratch)?;
+
+            let (_, buffer) = output_chunk.split_first_mut().unwrap();
+
+            // copy the final values into the output, reordering as we go
+            unsafe {
+                T::output_indices(buffer, scratch, &self.output_indices);
+            }
+        }
+        Ok(())
+    }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_r2c(
+        &self,
+        src: &[T],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !src.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 src.len(),
@@ -442,7 +519,8 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.execution_length];
+        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
+        let (scratch, convolve_scratch) = scratch.split_at_mut(self.execution_length);
 
         for (input, complex) in src
             .chunks_exact(self.execution_length)
@@ -457,7 +535,8 @@ where
                 T::index_inputs_real(buffer, scratch, &self.input_indices);
             }
 
-            self.convolve_fft.execute(scratch)?;
+            self.convolve_fft
+                .execute_with_scratch(scratch, convolve_scratch)?;
 
             complex[0] = buffer_first_val + scratch[0];
 
@@ -467,7 +546,8 @@ where
             scratch[0] = scratch[0] + buffer_first_val.conj();
 
             // execute the second FFT
-            self.convolve_fft.execute(scratch)?;
+            self.convolve_fft
+                .execute_with_scratch(scratch, convolve_scratch)?;
 
             // copy the final values into the output, with reordering
             let output = &mut complex[1..];
@@ -485,7 +565,43 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_impl(in_place) }
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        unsafe { self.execute_impl(in_place, &mut scratch) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_impl(in_place, scratch) }
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
+        self.execute_out_of_place_with_scratch(src, dst, &mut scratch)
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_impl(src, dst, scratch) }
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -495,6 +611,20 @@ where
     fn length(&self) -> usize {
         self.execution_length
     }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.execution_length + self.convolve_fft_scratch_length
+    }
+
+    #[inline]
+    fn out_of_place_scratch_length(&self) -> usize {
+        self.scratch_length()
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        self.scratch_length()
+    }
 }
 
 impl<T: FftSample + RadersIndicer<T>> R2CFftExecutor<T> for AvxRadersFft<T>
@@ -502,7 +632,17 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_r2c(input, output) }
+        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
+        unsafe { self.execute_r2c(input, output, &mut scratch) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_r2c(input, output, scratch) }
     }
 
     #[inline]
@@ -513,5 +653,10 @@ where
     #[inline]
     fn complex_length(&self) -> usize {
         self.execution_length / 2 + 1
+    }
+
+    #[inline]
+    fn complex_scratch_length(&self) -> usize {
+        self.execution_length + self.convolve_fft_scratch_length
     }
 }

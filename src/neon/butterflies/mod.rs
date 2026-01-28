@@ -30,6 +30,7 @@
 mod bf10;
 mod bf100d;
 mod bf100f;
+mod bf1024;
 mod bf108d;
 mod bf108f;
 mod bf11;
@@ -66,12 +67,10 @@ mod bf25;
 mod bf256d;
 mod bf256f;
 mod bf27;
-mod bf29;
+mod bf28;
 mod bf3;
 mod bf30d;
 mod bf30f;
-mod bf31d;
-mod bf31f;
 mod bf32;
 mod bf35d;
 mod bf35f;
@@ -117,7 +116,6 @@ mod bf9;
 mod bf96d;
 mod bf96f;
 mod fast_bf5;
-mod fast_bf8;
 mod shared;
 
 pub(crate) use bf2::NeonButterfly2;
@@ -188,21 +186,15 @@ pub(crate) use bf25::{NeonFcmaButterfly25d, NeonFcmaButterfly25f};
 pub(crate) use bf27::{NeonButterfly27d, NeonButterfly27f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf27::{NeonFcmaButterfly27d, NeonFcmaButterfly27f};
-pub(crate) use bf29::{NeonButterfly29d, NeonButterfly29f};
+pub(crate) use bf28::{NeonButterfly28d, NeonButterfly28f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf29::{NeonFcmaButterfly29d, NeonFcmaButterfly29f};
+pub(crate) use bf28::{NeonFcmaButterfly28d, NeonFcmaButterfly28f};
 pub(crate) use bf30d::NeonButterfly30d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf30d::NeonFcmaButterfly30d;
 pub(crate) use bf30f::NeonButterfly30f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf30f::NeonFcmaButterfly30f;
-pub(crate) use bf31d::NeonButterfly31d;
-#[cfg(feature = "fcma")]
-pub(crate) use bf31d::NeonFcmaButterfly31d;
-pub(crate) use bf31f::NeonButterfly31f;
-#[cfg(feature = "fcma")]
-pub(crate) use bf31f::NeonFcmaButterfly31f;
 pub(crate) use bf32::{NeonButterfly32d, NeonButterfly32f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf32::{NeonFcmaButterfly32d, NeonFcmaButterfly32f};
@@ -371,12 +363,14 @@ pub(crate) use bf256f::NeonFcmaButterfly256f;
 pub(crate) use bf512f::NeonButterfly512f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf512f::NeonFcmaButterfly512f;
-pub(crate) use fast_bf5::NeonFastButterfly5;
-pub(crate) use fast_bf8::NeonFastButterfly8;
-use num_complex::Complex;
-pub(crate) use shared::NeonButterfly;
+pub(crate) use bf1024::NeonButterfly1024f;
 #[cfg(feature = "fcma")]
-pub(crate) use shared::{FastFcmaBf4d, FastFcmaBf4f};
+pub(crate) use bf1024::{NeonFcmaForwardButterfly1024f, NeonFcmaInverseButterfly1024f};
+pub(crate) use fast_bf5::NeonFastButterfly5;
+use num_complex::Complex;
+#[cfg(feature = "fcma")]
+pub(crate) use shared::FastFcmaBf4f;
+pub(crate) use shared::NeonButterfly;
 
 #[inline]
 pub(crate) fn make_mixedradix_twiddle_chunk_f32(

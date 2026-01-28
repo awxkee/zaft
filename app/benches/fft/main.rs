@@ -4,14 +4,15 @@
  * // Use of this source code is governed by a BSD-style
  * // license that can be found in the LICENSE file.
  */
-use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use criterion::measurement::WallTime;
+use criterion::{BatchSize, BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
 use rand::Rng;
 use rustfft::FftPlanner;
 use std::time::Duration;
 use zaft::Zaft;
 
-pub fn bench_rustfft_averages(c: &mut Criterion) {
+pub fn bench_rustfft_averages(c: &mut BenchmarkGroup<WallTime>) {
     c.bench_function("rustfft 1..=1500 float", |b| {
         b.iter_batched(
             || {
@@ -37,7 +38,7 @@ pub fn bench_rustfft_averages(c: &mut Criterion) {
     });
 }
 
-pub fn bench_zaft_averages(c: &mut Criterion) {
+pub fn bench_zaft_averages(c: &mut BenchmarkGroup<WallTime>) {
     c.bench_function("zaft 1..=1500 float", |b| {
         b.iter_batched(
             || {
@@ -63,7 +64,7 @@ pub fn bench_zaft_averages(c: &mut Criterion) {
     });
 }
 
-pub fn bench_rustfft_average(c: &mut Criterion) {
+pub fn bench_rustfft_average(c: &mut BenchmarkGroup<WallTime>) {
     c.bench_function("rustfft 1..=1500 double", |b| {
         b.iter_batched(
             || {
@@ -89,7 +90,7 @@ pub fn bench_rustfft_average(c: &mut Criterion) {
     });
 }
 
-pub fn bench_zaft_average(c: &mut Criterion) {
+pub fn bench_zaft_average(c: &mut BenchmarkGroup<WallTime>) {
     c.bench_function("zaft 1..=1500 double", |b| {
         b.iter_batched(
             || {
@@ -118,7 +119,7 @@ pub fn bench_zaft_average(c: &mut Criterion) {
     });
 }
 
-fn check_power_group(c: &mut Criterion, n: usize, group: String) {
+fn check_power_group(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) {
     let mut input_power = vec![Complex::<f64>::default(); n];
     for z in input_power.iter_mut() {
         *z = Complex {
@@ -229,11 +230,15 @@ fn check_power_groupd(c: &mut Criterion, n: usize, group: String) {
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
-    // //     .measurement_time(Duration::from_millis(135));
-    // bench_rustfft_average(c);
-    // bench_zaft_average(c);
-    // bench_rustfft_averages(c);
-    // bench_zaft_averages(c);
+    let mut group = c.benchmark_group("fft");
+    let c = group
+        .warm_up_time(Duration::from_millis(750))
+        .measurement_time(Duration::from_millis(1050));
+    //     .measurement_time(Duration::from_millis(135));
+    bench_rustfft_average(c);
+    bench_zaft_average(c);
+    bench_rustfft_averages(c);
+    bench_zaft_averages(c);
 
     let mut input_1295 = vec![Complex::<f32>::default(); 1295];
     for z in input_1295.iter_mut() {
@@ -275,7 +280,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    let mut input_power4s = vec![Complex::<f32>::default(); 1024];
+    let mut input_power4s = vec![Complex::<f32>::default(); 4096];
     for z in input_power4s.iter_mut() {
         *z = Complex {
             re: rand::rng().random(),
@@ -283,7 +288,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    let mut input_power2 = vec![Complex::<f64>::default(); 2048];
+    let mut input_power2 = vec![Complex::<f64>::default(); 4096];
     for z in input_power2.iter_mut() {
         *z = Complex {
             re: rand::rng().random(),
@@ -331,19 +336,40 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    check_power_group(c, 2usize.pow(19), "2usize.pow(19)".to_string());
+    check_power_group(c, 512, "512".to_string());
+    check_power_group(c, 1024, "1024".to_string());
+    check_power_group(c, 2048, "2048".to_string());
+    check_power_group(c, 4096, "4096".to_string());
+    check_power_group(c, 8192, "8192".to_string());
+    check_power_group(c, 16384, "16384".to_string());
+    check_power_group(c, 32768, "32768".to_string());
+    check_power_group(c, 65536, "65536".to_string());
+    check_power_group(c, 131072, "131072".to_string());
+    check_power_group(c, 262144, "262144".to_string());
+    check_power_group(c, 524288, "524288".to_string());
+    check_power_group(c, 1048576, "1048576".to_string());
+    check_power_group(c, 2097152, "2097152".to_string());
+    check_power_group(c, 4194304, "4194304".to_string());
+    // check_power_group(c, 8388608, "8388608".to_string());
+    // check_power_group(c, 16777216, "16777216".to_string());
+    // check_power_group(c, 33554432, "33554432".to_string());
+    // check_power_group(c, 29, "29".to_string());
+    // check_power_group(c, 30, "30".to_string());
+    // check_power_group(c, 31, "31".to_string());
+    // check_power_group(c, 32, "32".to_string());
+    // check_power_group(c, 2usize.pow(19), "2usize.pow(19)".to_string());
     check_power_group(c, 192_000, "192_000".to_string());
     check_power_group(c, 1920, "1920".to_string());
-
-    check_power_group(c, 216, "216".to_string());
-    check_power_group(c, 1296, "1296".to_string());
-    check_power_group(c, 7776, "7776".to_string());
-    check_power_group(c, 46656, "46656".to_string());
-
-    check_power_group(c, 100, "100".to_string());
-    check_power_group(c, 1000, "1000".to_string());
-    check_power_group(c, 10000, "10000".to_string());
-    check_power_group(c, 100000, "100000".to_string());
+    //
+    // check_power_group(c, 216, "216".to_string());
+    // check_power_group(c, 1296, "1296".to_string());
+    // check_power_group(c, 7776, "7776".to_string());
+    // check_power_group(c, 46656, "46656".to_string());
+    //
+    // check_power_group(c, 100, "100".to_string());
+    // check_power_group(c, 1000, "1000".to_string());
+    // check_power_group(c, 10000, "10000".to_string());
+    // check_power_group(c, 100000, "100000".to_string());
     // check_power_group(c, 1920, "Full HD".to_string());
     // check_power_group(c, 1000, "power 10".to_string());
     // check_power_group(c, 11 * 11 * 11, "power 11".to_string());

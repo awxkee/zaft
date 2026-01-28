@@ -240,22 +240,6 @@ impl PrimeFactors {
         false
     }
 
-    pub(crate) fn factor_of_11(&self) -> u32 {
-        self.factorization
-            .iter()
-            .find(|p| p.0 == 11)
-            .map(|x| x.1)
-            .unwrap_or(0)
-    }
-
-    pub(crate) fn factor_of_13(&self) -> u32 {
-        self.factorization
-            .iter()
-            .find(|p| p.0 == 13)
-            .map(|x| x.1)
-            .unwrap_or(0)
-    }
-
     pub(crate) fn factor_of_7(&self) -> u32 {
         self.factorization
             .iter()

@@ -26,20 +26,19 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::butterflies::shared::{gen_butterfly_twiddles_f32, gen_butterfly_twiddles_f64};
+use crate::neon::butterflies::shared::{
+    boring_neon_butterfly, gen_butterfly_twiddles_f32, gen_butterfly_twiddles_f64,
+};
 use crate::neon::mixed::{NeonStoreD, NeonStoreF};
 use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
-use crate::{
-    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, R2CFftExecutor,
-    ZaftError,
-};
+use crate::store::BidirectionalStore;
+use crate::{FftDirection, FftExecutor, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 use std::mem::MaybeUninit;
-use std::sync::Arc;
 
 macro_rules! gen_bf32d {
-    ($name: ident, $feature: literal, $internal_bf8: ident, $internal_bf4: ident, $mul: ident) => {
+    ($name: ident, $features: literal, $internal_bf8: ident, $internal_bf4: ident, $mul: ident) => {
         use crate::neon::mixed::{$internal_bf4, $internal_bf8};
         pub(crate) struct $name {
             direction: FftDirection,
@@ -59,133 +58,54 @@ macro_rules! gen_bf32d {
             }
         }
 
-        impl FftExecutor<f64> for $name {
-            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                unsafe { self.execute_impl(in_place) }
-            }
+        boring_neon_butterfly!($name, $features, f64, 32);
 
-            fn direction(&self) -> FftDirection {
-                self.direction
-            }
-
+        impl $name {
             #[inline]
-            fn length(&self) -> usize {
-                32
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+                let mut rows0: [NeonStoreD; 4] = [NeonStoreD::default(); 4];
+                let mut rows8: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
+
+                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 32];
+
+                unsafe {
+                    for k in 0..8 {
+                        rows0[0] = NeonStoreD::from_complex_ref(chunk.slice_from(k..));
+                        rows0[1] = NeonStoreD::from_complex_ref(chunk.slice_from(8 + k..));
+                        rows0[2] = NeonStoreD::from_complex_ref(chunk.slice_from(2 * 8 + k..));
+                        rows0[3] = NeonStoreD::from_complex_ref(chunk.slice_from(3 * 8 + k..));
+
+                        rows0 = self.bf4.exec(rows0);
+
+                        for i in 1..4 {
+                            rows0[i] = NeonStoreD::$mul(rows0[i], self.twiddles[i - 1 + 3 * k]);
+                        }
+
+                        rows0[0].write_uninit(scratch.get_unchecked_mut(k * 4..));
+                        rows0[1].write_uninit(scratch.get_unchecked_mut(k * 4 + 1..));
+                        rows0[2].write_uninit(scratch.get_unchecked_mut(k * 4 + 2..));
+                        rows0[3].write_uninit(scratch.get_unchecked_mut(k * 4 + 3..));
+                    }
+
+                    // rows
+
+                    for k in 0..4 {
+                        for i in 0..8 {
+                            rows8[i] =
+                                NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 4 + k..));
+                        }
+                        rows8 = self.bf8.exec(rows8);
+                        for i in 0..8 {
+                            rows8[i].write(chunk.slice_from_mut(i * 4 + k..));
+                        }
+                    }
+                }
             }
         }
 
         impl $name {
-            #[target_feature(enable = $feature)]
-            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(32) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        in_place.len(),
-                        self.length(),
-                    ));
-                }
-
-                unsafe {
-                    let mut rows0: [NeonStoreD; 4] = [NeonStoreD::default(); 4];
-                    let mut rows8: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
-
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 32];
-
-                    for chunk in in_place.chunks_exact_mut(32) {
-                        for k in 0..8 {
-                            rows0[0] = NeonStoreD::from_complex_ref(chunk.get_unchecked(k..));
-                            rows0[1] = NeonStoreD::from_complex_ref(chunk.get_unchecked(8 + k..));
-                            rows0[2] =
-                                NeonStoreD::from_complex_ref(chunk.get_unchecked(2 * 8 + k..));
-                            rows0[3] =
-                                NeonStoreD::from_complex_ref(chunk.get_unchecked(3 * 8 + k..));
-
-                            rows0 = self.bf4.exec(rows0);
-
-                            for i in 1..4 {
-                                rows0[i] = NeonStoreD::$mul(rows0[i], self.twiddles[i - 1 + 3 * k]);
-                            }
-
-                            rows0[0].write_uninit(scratch.get_unchecked_mut(k * 4..));
-                            rows0[1].write_uninit(scratch.get_unchecked_mut(k * 4 + 1..));
-                            rows0[2].write_uninit(scratch.get_unchecked_mut(k * 4 + 2..));
-                            rows0[3].write_uninit(scratch.get_unchecked_mut(k * 4 + 3..));
-                        }
-
-                        // rows
-
-                        for k in 0..4 {
-                            for i in 0..8 {
-                                rows8[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 4 + k..),
-                                );
-                            }
-                            rows8 = self.bf8.exec(rows8);
-                            for i in 0..8 {
-                                rows8[i].write(chunk.get_unchecked_mut(i * 4 + k..));
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            }
-
-            #[target_feature(enable = $feature)]
-            fn execute_out_of_place_impl(
-                &self,
-                src: &[Complex<f64>],
-                dst: &mut [Complex<f64>],
-            ) -> Result<(), ZaftError> {
-                if !src.len().is_multiple_of(32) {
-                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-                }
-                if !dst.len().is_multiple_of(32) {
-                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-                }
-
-                unsafe {
-                    let mut rows0: [NeonStoreD; 4] = [NeonStoreD::default(); 4];
-                    let mut rows8: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
-
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 32];
-
-                    for (dst, src) in dst.chunks_exact_mut(32).zip(src.chunks_exact(32)) {
-                        for k in 0..8 {
-                            rows0[0] = NeonStoreD::from_complex_ref(src.get_unchecked(k..));
-                            rows0[1] = NeonStoreD::from_complex_ref(src.get_unchecked(8 + k..));
-                            rows0[2] = NeonStoreD::from_complex_ref(src.get_unchecked(2 * 8 + k..));
-                            rows0[3] = NeonStoreD::from_complex_ref(src.get_unchecked(3 * 8 + k..));
-
-                            rows0 = self.bf4.exec(rows0);
-
-                            for i in 1..4 {
-                                rows0[i] = NeonStoreD::$mul(rows0[i], self.twiddles[i - 1 + 3 * k]);
-                            }
-
-                            rows0[0].write_uninit(scratch.get_unchecked_mut(k * 4..));
-                            rows0[1].write_uninit(scratch.get_unchecked_mut(k * 4 + 1..));
-                            rows0[2].write_uninit(scratch.get_unchecked_mut(k * 4 + 2..));
-                            rows0[3].write_uninit(scratch.get_unchecked_mut(k * 4 + 3..));
-                        }
-
-                        // rows
-
-                        for k in 0..4 {
-                            for i in 0..8 {
-                                rows8[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 4 + k..),
-                                );
-                            }
-                            rows8 = self.bf8.exec(rows8);
-                            for i in 0..8 {
-                                rows8[i].write(dst.get_unchecked_mut(i * 4 + k..));
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            }
-
-            #[target_feature(enable = $feature)]
+            #[target_feature(enable = $features)]
             fn execute_r2c(&self, src: &[f64], dst: &mut [Complex<f64>]) -> Result<(), ZaftError> {
                 if !src.len().is_multiple_of(32) {
                     return Err(ZaftError::InvalidSizeMultiplier(
@@ -280,6 +200,15 @@ macro_rules! gen_bf32d {
                 unsafe { self.execute_r2c(input, output) }
             }
 
+            fn execute_with_scratch(
+                &self,
+                input: &[f64],
+                output: &mut [Complex<f64>],
+                _: &mut [Complex<f64>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_r2c(input, output) }
+            }
+
             fn real_length(&self) -> usize {
                 32
             }
@@ -287,21 +216,9 @@ macro_rules! gen_bf32d {
             fn complex_length(&self) -> usize {
                 17
             }
-        }
 
-        impl FftExecutorOutOfPlace<f64> for $name {
-            fn execute_out_of_place(
-                &self,
-                src: &[Complex<f64>],
-                dst: &mut [Complex<f64>],
-            ) -> Result<(), ZaftError> {
-                unsafe { self.execute_out_of_place_impl(src, dst) }
-            }
-        }
-
-        impl CompositeFftExecutor<f64> for $name {
-            fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-                self
+            fn complex_scratch_length(&self) -> usize {
+                0
             }
         }
     };
@@ -364,7 +281,7 @@ pub(crate) fn transpose_8x4_to_4x8_f32(
 }
 
 macro_rules! gen_bf32f {
-    ($name: ident, $feature: literal, $internal_bf8: ident, $internal_bf4: ident, $mul: ident) => {
+    ($name: ident, $features: literal, $internal_bf8: ident, $internal_bf4: ident, $mul: ident) => {
         use crate::neon::mixed::{$internal_bf4, $internal_bf8};
         pub(crate) struct $name {
             direction: FftDirection,
@@ -384,142 +301,49 @@ macro_rules! gen_bf32f {
             }
         }
 
-        impl FftExecutor<f32> for $name {
-            fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                unsafe { self.execute_impl(in_place) }
-            }
+        boring_neon_butterfly!($name, $features, f32, 32);
 
-            fn direction(&self) -> FftDirection {
-                self.direction
-            }
-
+        impl $name {
             #[inline]
-            fn length(&self) -> usize {
-                32
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
+                let mut rows0: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
+                let mut rows1: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
+                let mut rows2: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
+                let mut rows3: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
+                for i in 0..4 {
+                    rows0[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 8..));
+                    rows1[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 8 + 2..));
+                    rows2[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 8 + 4..));
+                    rows3[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 8 + 6..));
+                }
+
+                rows0 = self.bf4.exec(rows0);
+                rows1 = self.bf4.exec(rows1);
+                rows2 = self.bf4.exec(rows2);
+                rows3 = self.bf4.exec(rows3);
+
+                for i in 1..4 {
+                    rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
+                    rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i - 1 + 3]);
+                    rows2[i] = NeonStoreF::$mul(rows2[i], self.twiddles[i - 1 + 6]);
+                    rows3[i] = NeonStoreF::$mul(rows3[i], self.twiddles[i - 1 + 9]);
+                }
+
+                let (mut q0, mut q1) = transpose_8x4_to_4x8_f32(rows0, rows1, rows2, rows3);
+
+                q0 = self.bf8.exec(q0);
+                q1 = self.bf8.exec(q1);
+
+                for i in 0..8 {
+                    q0[i].write(chunk.slice_from_mut(i * 4..));
+                    q1[i].write(chunk.slice_from_mut(i * 4 + 2..));
+                }
             }
         }
 
         impl $name {
-            #[target_feature(enable = $feature)]
-            fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(32) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        in_place.len(),
-                        self.length(),
-                    ));
-                }
-
-                unsafe {
-                    let mut rows0: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
-                    let mut rows1: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
-                    let mut rows2: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
-                    let mut rows3: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
-
-                    for chunk in in_place.chunks_exact_mut(32) {
-                        for i in 0..4 {
-                            rows0[i] = NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 8..));
-                            rows1[i] =
-                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 8 + 2..));
-                            rows2[i] =
-                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 8 + 4..));
-                            rows3[i] =
-                                NeonStoreF::from_complex_ref(chunk.get_unchecked(i * 8 + 6..));
-                        }
-
-                        rows0 = self.bf4.exec(rows0);
-                        rows1 = self.bf4.exec(rows1);
-                        rows2 = self.bf4.exec(rows2);
-                        rows3 = self.bf4.exec(rows3);
-
-                        for i in 1..4 {
-                            rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
-                            rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i - 1 + 3]);
-                            rows2[i] = NeonStoreF::$mul(rows2[i], self.twiddles[i - 1 + 6]);
-                            rows3[i] = NeonStoreF::$mul(rows3[i], self.twiddles[i - 1 + 9]);
-                        }
-
-                        let (mut q0, mut q1) = transpose_8x4_to_4x8_f32(rows0, rows1, rows2, rows3);
-
-                        q0 = self.bf8.exec(q0);
-                        q1 = self.bf8.exec(q1);
-
-                        for i in 0..8 {
-                            q0[i].write(chunk.get_unchecked_mut(i * 4..));
-                            q1[i].write(chunk.get_unchecked_mut(i * 4 + 2..));
-                        }
-                    }
-                }
-                Ok(())
-            }
-        }
-
-        impl FftExecutorOutOfPlace<f32> for $name {
-            fn execute_out_of_place(
-                &self,
-                src: &[Complex<f32>],
-                dst: &mut [Complex<f32>],
-            ) -> Result<(), ZaftError> {
-                unsafe { self.execute_out_of_place_impl(src, dst) }
-            }
-        }
-
-        impl $name {
-            #[target_feature(enable = $feature)]
-            fn execute_out_of_place_impl(
-                &self,
-                src: &[Complex<f32>],
-                dst: &mut [Complex<f32>],
-            ) -> Result<(), ZaftError> {
-                if !src.len().is_multiple_of(32) {
-                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-                }
-                if !dst.len().is_multiple_of(32) {
-                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-                }
-
-                unsafe {
-                    let mut rows0: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
-                    let mut rows1: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
-                    let mut rows2: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
-                    let mut rows3: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
-
-                    for (dst, src) in dst.chunks_exact_mut(32).zip(src.chunks_exact(32)) {
-                        for i in 0..4 {
-                            rows0[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 8..));
-                            rows1[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 8 + 2..));
-                            rows2[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 8 + 4..));
-                            rows3[i] = NeonStoreF::from_complex_ref(src.get_unchecked(i * 8 + 6..));
-                        }
-
-                        rows0 = self.bf4.exec(rows0);
-                        rows1 = self.bf4.exec(rows1);
-                        rows2 = self.bf4.exec(rows2);
-                        rows3 = self.bf4.exec(rows3);
-
-                        for i in 1..4 {
-                            rows0[i] = NeonStoreF::$mul(rows0[i], self.twiddles[i - 1]);
-                            rows1[i] = NeonStoreF::$mul(rows1[i], self.twiddles[i - 1 + 3]);
-                            rows2[i] = NeonStoreF::$mul(rows2[i], self.twiddles[i - 1 + 6]);
-                            rows3[i] = NeonStoreF::$mul(rows3[i], self.twiddles[i - 1 + 9]);
-                        }
-
-                        let (mut q0, mut q1) = transpose_8x4_to_4x8_f32(rows0, rows1, rows2, rows3);
-
-                        q0 = self.bf8.exec(q0);
-                        q1 = self.bf8.exec(q1);
-
-                        for i in 0..8 {
-                            q0[i].write(dst.get_unchecked_mut(i * 4..));
-                            q1[i].write(dst.get_unchecked_mut(i * 4 + 2..));
-                        }
-                    }
-                }
-                Ok(())
-            }
-        }
-
-        impl $name {
-            #[target_feature(enable = $feature)]
+            #[target_feature(enable = $features)]
             fn execute_r2c(&self, src: &[f32], dst: &mut [Complex<f32>]) -> Result<(), ZaftError> {
                 if !src.len().is_multiple_of(32) {
                     return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
@@ -579,6 +403,15 @@ macro_rules! gen_bf32f {
                 unsafe { self.execute_r2c(input, output) }
             }
 
+            fn execute_with_scratch(
+                &self,
+                input: &[f32],
+                output: &mut [Complex<f32>],
+                _: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_r2c(input, output) }
+            }
+
             fn real_length(&self) -> usize {
                 32
             }
@@ -586,11 +419,9 @@ macro_rules! gen_bf32f {
             fn complex_length(&self) -> usize {
                 17
             }
-        }
 
-        impl CompositeFftExecutor<f32> for $name {
-            fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-                self
+            fn complex_scratch_length(&self) -> usize {
+                0
             }
         }
     };

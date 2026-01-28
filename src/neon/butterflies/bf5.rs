@@ -28,12 +28,11 @@
  */
 use crate::neon::util::{v_rotate90_f32, v_rotate90_f64};
 use crate::traits::FftTrigonometry;
-use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::util::{compute_twiddle, validate_oof_sizes};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
-use std::sync::Arc;
 
 pub(crate) struct NeonButterfly5<T> {
     twiddle1: Complex<T>,
@@ -192,25 +191,20 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
         Ok(())
     }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute(in_place)
     }
 
-    #[inline]
-    fn length(&self) -> usize {
-        5
-    }
-}
-
-impl FftExecutorOutOfPlace<f32> for NeonButterfly5<f32> {
     fn execute_out_of_place(
         &self,
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(5) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
+        validate_oof_sizes!(src, dst, 5);
         unsafe {
             let tw1_re = vdupq_n_f32(self.twiddle1.re);
             let tw1_im = vdupq_n_f32(self.twiddle1.im);
@@ -341,11 +335,44 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly5<f32> {
         }
         Ok(())
     }
-}
 
-impl CompositeFftExecutor<f32> for NeonButterfly5<f32> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-        self
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    #[inline]
+    fn length(&self) -> usize {
+        5
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 
@@ -407,28 +434,29 @@ impl FftExecutor<f64> for NeonButterfly5<f64> {
         Ok(())
     }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute(in_place)
     }
 
-    #[inline]
-    fn length(&self) -> usize {
-        5
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
     }
-}
 
-impl FftExecutorOutOfPlace<f64> for NeonButterfly5<f64> {
     fn execute_out_of_place(
         &self,
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(5) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(5) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
+        validate_oof_sizes!(src, dst, 5);
 
         let tw1_re = unsafe { vdupq_n_f64(self.twiddle1.re) };
         let tw1_im = unsafe { vdupq_n_f64(self.twiddle1.im) };
@@ -478,11 +506,35 @@ impl FftExecutorOutOfPlace<f64> for NeonButterfly5<f64> {
         }
         Ok(())
     }
-}
 
-impl CompositeFftExecutor<f64> for NeonButterfly5<f64> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-        self
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    #[inline]
+    fn length(&self) -> usize {
+        5
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 

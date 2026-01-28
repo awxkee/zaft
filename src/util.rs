@@ -543,3 +543,34 @@ macro_rules! test_radix {
 
 #[cfg(test)]
 pub(crate) use test_radix;
+
+macro_rules! validate_scratch {
+    ($scratch: expr, $size: expr) => {{
+        if $scratch.len() < $size {
+            return Err(crate::ZaftError::ScratchBufferIsTooSmall(
+                $size,
+                $scratch.len(),
+            ));
+        }
+        let (left, _) = $scratch.split_at_mut($size);
+        left
+    }};
+}
+
+pub(crate) use validate_scratch;
+
+macro_rules! validate_oof_sizes {
+    ($src: expr, $dst: expr, $length: expr) => {{
+        if !$src.len().is_multiple_of($length) {
+            return Err(ZaftError::InvalidSizeMultiplier($src.len(), $length));
+        }
+        if !$dst.len().is_multiple_of($length) {
+            return Err(ZaftError::InvalidSizeMultiplier($dst.len(), $length));
+        }
+        if $dst.len() != $src.len() {
+            return Err(ZaftError::OutOfPlaceSizeDoesntMatch($src.len(), $dst.len()));
+        }
+    }};
+}
+
+pub(crate) use validate_oof_sizes;

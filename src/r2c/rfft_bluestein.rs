@@ -29,6 +29,7 @@
 use crate::bluestein::make_bluesteins_twiddles;
 use crate::err::try_vec;
 use crate::spectrum_arithmetic::ComplexArith;
+use crate::util::validate_scratch;
 use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
@@ -40,6 +41,7 @@ pub(crate) struct BluesteinRfft<T> {
     twiddles: Vec<Complex<T>>,
     execution_length: usize,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
+    convolve_scratch_length: usize,
 }
 
 impl<T: FftSample> BluesteinRfft<T>
@@ -84,12 +86,15 @@ where
         let mut twiddles = try_vec![Complex::zero(); size];
         make_bluesteins_twiddles(&mut twiddles, direction);
 
+        let convolve_scratch_length = convolve_fft.scratch_length();
+
         Ok(BluesteinRfft {
             convolve_fft,
             convolve_fft_twiddles,
             twiddles,
             execution_length: size,
             spectrum_ops: T::make_complex_arith(),
+            convolve_scratch_length,
         })
     }
 }
@@ -99,6 +104,16 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
+        self.execute_with_scratch(input, output, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !input.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 input.len(),
@@ -112,7 +127,9 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.convolve_fft_twiddles.len()];
+        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
+        let (inner_input, convolve_scratch) =
+            scratch.split_at_mut(self.convolve_fft_twiddles.len());
 
         let in_length = self.real_length();
         let complex_length = self.complex_length();
@@ -121,8 +138,6 @@ where
             .chunks_exact(self.execution_length)
             .zip(output.chunks_exact_mut(complex_length))
         {
-            let (inner_input, _) = scratch.split_at_mut(self.convolve_fft_twiddles.len());
-
             // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
             self.spectrum_ops.mul_expand_to_complex(
                 src,
@@ -135,14 +150,16 @@ where
             }
 
             // run our inner forward FFT
-            self.convolve_fft.execute(inner_input)?;
+            self.convolve_fft
+                .execute_with_scratch(inner_input, convolve_scratch)?;
 
             // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
             self.spectrum_ops
                 .mul_conjugate_in_place(inner_input, &self.convolve_fft_twiddles);
 
             // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
-            self.convolve_fft.execute(inner_input)?;
+            self.convolve_fft
+                .execute_with_scratch(inner_input, convolve_scratch)?;
 
             // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
             self.spectrum_ops.conjugate_mul_by_b(
@@ -162,6 +179,11 @@ where
     #[inline]
     fn complex_length(&self) -> usize {
         self.execution_length / 2 + 1
+    }
+
+    #[inline]
+    fn complex_scratch_length(&self) -> usize {
+        self.convolve_scratch_length + self.convolve_fft_twiddles.len()
     }
 }
 

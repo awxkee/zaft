@@ -35,7 +35,7 @@ use crate::avx::util::{
     _mm256_create_ps,
 };
 use crate::traits::FftTrigonometry;
-use crate::util::compute_twiddle;
+use crate::util::{compute_twiddle, validate_oof_sizes};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
@@ -295,7 +295,7 @@ impl AvxButterfly19<f64> {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+    fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe {
             if !in_place.len().is_multiple_of(19) {
                 return Err(ZaftError::InvalidSizeMultiplier(
@@ -624,11 +624,376 @@ impl AvxButterfly19<f64> {
         }
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_oof_f64(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe {
+            validate_oof_sizes!(src, dst, 19);
+
+            for (dst, src) in dst.chunks_exact_mut(38).zip(src.chunks_exact(38)) {
+                let (u0, u1) = shift_load2dd!(src, 19, 0);
+                let (u2, u3) = shift_load2dd!(src, 19, 2);
+                let (u4, u5) = shift_load2dd!(src, 19, 4);
+                let (u6, u7) = shift_load2dd!(src, 19, 6);
+                let (u8, u9) = shift_load2dd!(src, 19, 8);
+                let (u10, u11) = shift_load2dd!(src, 19, 10);
+                let (u12, u13) = shift_load2dd!(src, 19, 12);
+                let (u14, u15) = shift_load2dd!(src, 19, 14);
+                let (u16, u17) = shift_load2dd!(src, 19, 16);
+                let u18 = shift_load2d!(src, 19, 18);
+
+                let q = self.kernel_f64([
+                    u0, u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, u12, u13, u14, u15, u16, u17,
+                    u18,
+                ]);
+
+                shift_store2dd!(dst, 19, 0, q[0], q[1]);
+                shift_store2dd!(dst, 19, 2, q[2], q[3]);
+                shift_store2dd!(dst, 19, 4, q[4], q[5]);
+                shift_store2dd!(dst, 19, 6, q[6], q[7]);
+                shift_store2dd!(dst, 19, 8, q[8], q[9]);
+                shift_store2dd!(dst, 19, 10, q[10], q[11]);
+                shift_store2dd!(dst, 19, 12, q[12], q[13]);
+                shift_store2dd!(dst, 19, 14, q[14], q[15]);
+                shift_store2dd!(dst, 19, 16, q[16], q[17]);
+                shift_store2d!(dst, 19, 18, q[18]);
+            }
+
+            let rem_dst = dst.chunks_exact_mut(38).into_remainder();
+            let rem_src = src.chunks_exact(38).remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(19).zip(rem_src.chunks_exact(19)) {
+                let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
+                let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = _mm256_loadu_pd(src.get_unchecked(6..).as_ptr().cast());
+                let u8u9 = _mm256_loadu_pd(src.get_unchecked(8..).as_ptr().cast());
+                let u10u11 = _mm256_loadu_pd(src.get_unchecked(10..).as_ptr().cast());
+                let u12u13 = _mm256_loadu_pd(src.get_unchecked(12..).as_ptr().cast());
+                let u14u15 = _mm256_loadu_pd(src.get_unchecked(14..).as_ptr().cast());
+                let u16u17 = _mm256_loadu_pd(src.get_unchecked(16..).as_ptr().cast());
+                let u18 = _mm_loadu_pd(src.get_unchecked(18..).as_ptr().cast());
+
+                let u0 = _mm256_castpd256_pd128(u0u1);
+                let y00 = _mm256_castpd256_pd128(u0u1);
+                let (x1p18, x1m18) =
+                    AvxButterfly::butterfly2_f64_m128(_mm256_extractf128_pd::<1>(u0u1), u18);
+                let x1m18 = self.rotate.rotate_m128d(x1m18);
+                let y00 = _mm_add_pd(y00, x1p18);
+                let (x2p17, x2m17) = AvxButterfly::butterfly2_f64_m128(
+                    _mm256_castpd256_pd128(u2u3),
+                    _mm256_extractf128_pd::<1>(u16u17),
+                );
+                let x2m17 = self.rotate.rotate_m128d(x2m17);
+                let y00 = _mm_add_pd(y00, x2p17);
+                let (x3p16, x3m16) = AvxButterfly::butterfly2_f64_m128(
+                    _mm256_extractf128_pd::<1>(u2u3),
+                    _mm256_castpd256_pd128(u16u17),
+                );
+                let x3m16 = self.rotate.rotate_m128d(x3m16);
+                let y00 = _mm_add_pd(y00, x3p16);
+                let (x4p15, x4m15) = AvxButterfly::butterfly2_f64_m128(
+                    _mm256_castpd256_pd128(u4u5),
+                    _mm256_extractf128_pd::<1>(u14u15),
+                );
+                let x4m15 = self.rotate.rotate_m128d(x4m15);
+                let y00 = _mm_add_pd(y00, x4p15);
+                let (x5p14, x5m14) = AvxButterfly::butterfly2_f64_m128(
+                    _mm256_extractf128_pd::<1>(u4u5),
+                    _mm256_castpd256_pd128(u14u15),
+                );
+                let x5m14 = self.rotate.rotate_m128d(x5m14);
+                let y00 = _mm_add_pd(y00, x5p14);
+                let (x6p13, x6m13) = AvxButterfly::butterfly2_f64_m128(
+                    _mm256_castpd256_pd128(u6u7),
+                    _mm256_extractf128_pd::<1>(u12u13),
+                );
+                let x6m13 = self.rotate.rotate_m128d(x6m13);
+                let y00 = _mm_add_pd(y00, x6p13);
+                let (x7p12, x7m12) = AvxButterfly::butterfly2_f64_m128(
+                    _mm256_extractf128_pd::<1>(u6u7),
+                    _mm256_castpd256_pd128(u12u13),
+                );
+                let x7m12 = self.rotate.rotate_m128d(x7m12);
+                let y00 = _mm_add_pd(y00, x7p12);
+                let (x8p11, x8m11) = AvxButterfly::butterfly2_f64_m128(
+                    _mm256_castpd256_pd128(u8u9),
+                    _mm256_extractf128_pd::<1>(u10u11),
+                );
+                let x8m11 = self.rotate.rotate_m128d(x8m11);
+                let y00 = _mm_add_pd(y00, x8p11);
+                let (x9p10, x9m10) = AvxButterfly::butterfly2_f64_m128(
+                    _mm256_extractf128_pd::<1>(u8u9),
+                    _mm256_castpd256_pd128(u10u11),
+                );
+                let x9m10 = self.rotate.rotate_m128d(x9m10);
+                let y00 = _mm_add_pd(y00, x9p10);
+
+                let m0118a = _mm_fmadd_pd(x1p18, _mm_set1_pd(self.twiddle1.re), u0);
+                let m0118a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle2.re), m0118a);
+                let m0118a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle3.re), m0118a);
+                let m0118a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle4.re), m0118a);
+                let m0118a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle5.re), m0118a);
+                let m0118a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle6.re), m0118a);
+                let m0118a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle7.re), m0118a);
+                let m0118a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle8.re), m0118a);
+                let m0118a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle9.re), m0118a);
+                let m0118b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle1.im));
+                let m0118b = _mm_fmadd_pd(x2m17, _mm_set1_pd(self.twiddle2.im), m0118b);
+                let m0118b = _mm_fmadd_pd(x3m16, _mm_set1_pd(self.twiddle3.im), m0118b);
+                let m0118b = _mm_fmadd_pd(x4m15, _mm_set1_pd(self.twiddle4.im), m0118b);
+                let m0118b = _mm_fmadd_pd(x5m14, _mm_set1_pd(self.twiddle5.im), m0118b);
+                let m0118b = _mm_fmadd_pd(x6m13, _mm_set1_pd(self.twiddle6.im), m0118b);
+                let m0118b = _mm_fmadd_pd(x7m12, _mm_set1_pd(self.twiddle7.im), m0118b);
+                let m0118b = _mm_fmadd_pd(x8m11, _mm_set1_pd(self.twiddle8.im), m0118b);
+                let m0118b = _mm_fmadd_pd(x9m10, _mm_set1_pd(self.twiddle9.im), m0118b);
+                let (y01, y18) = AvxButterfly::butterfly2_f64_m128(m0118a, m0118b);
+
+                _mm256_storeu_pd(dst.as_mut_ptr().cast(), _mm256_create_pd(y00, y01));
+                _mm_storeu_pd(dst.get_unchecked_mut(18..).as_mut_ptr().cast(), y18);
+
+                let m0217a = _mm_fmadd_pd(_mm_set1_pd(self.twiddle2.re), x1p18, u0);
+                let m0217a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle4.re), m0217a);
+                let m0217a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle6.re), m0217a);
+                let m0217a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle8.re), m0217a);
+                let m0217a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle9.re), m0217a);
+                let m0217a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle7.re), m0217a);
+                let m0217a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle5.re), m0217a);
+                let m0217a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle3.re), m0217a);
+                let m0217a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle1.re), m0217a);
+                let m0217b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle2.im));
+                let m0217b = _mm_fmadd_pd(x2m17, _mm_set1_pd(self.twiddle4.im), m0217b);
+                let m0217b = _mm_fmadd_pd(x3m16, _mm_set1_pd(self.twiddle6.im), m0217b);
+                let m0217b = _mm_fmadd_pd(x4m15, _mm_set1_pd(self.twiddle8.im), m0217b);
+                let m0217b = _mm_fnmadd_pd(x5m14, _mm_set1_pd(self.twiddle9.im), m0217b);
+                let m0217b = _mm_fnmadd_pd(x6m13, _mm_set1_pd(self.twiddle7.im), m0217b);
+                let m0217b = _mm_fnmadd_pd(x7m12, _mm_set1_pd(self.twiddle5.im), m0217b);
+                let m0217b = _mm_fnmadd_pd(x8m11, _mm_set1_pd(self.twiddle3.im), m0217b);
+                let m0217b = _mm_fnmadd_pd(x9m10, _mm_set1_pd(self.twiddle1.im), m0217b);
+                let (y02, y17) = AvxButterfly::butterfly2_f64_m128(m0217a, m0217b);
+
+                let m0316a = _mm_fmadd_pd(x1p18, _mm_set1_pd(self.twiddle3.re), u0);
+                let m0316a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle6.re), m0316a);
+                let m0316a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle9.re), m0316a);
+                let m0316a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle7.re), m0316a);
+                let m0316a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle4.re), m0316a);
+                let m0316a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle1.re), m0316a);
+                let m0316a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle2.re), m0316a);
+                let m0316a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle5.re), m0316a);
+                let m0316a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle8.re), m0316a);
+                let m0316b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle3.im));
+                let m0316b = _mm_fmadd_pd(x2m17, _mm_set1_pd(self.twiddle6.im), m0316b);
+                let m0316b = _mm_fmadd_pd(x3m16, _mm_set1_pd(self.twiddle9.im), m0316b);
+                let m0316b = _mm_fnmadd_pd(x4m15, _mm_set1_pd(self.twiddle7.im), m0316b);
+                let m0316b = _mm_fnmadd_pd(x5m14, _mm_set1_pd(self.twiddle4.im), m0316b);
+                let m0316b = _mm_fnmadd_pd(x6m13, _mm_set1_pd(self.twiddle1.im), m0316b);
+                let m0316b = _mm_fmadd_pd(x7m12, _mm_set1_pd(self.twiddle2.im), m0316b);
+                let m0316b = _mm_fmadd_pd(x8m11, _mm_set1_pd(self.twiddle5.im), m0316b);
+                let m0316b = _mm_fmadd_pd(x9m10, _mm_set1_pd(self.twiddle8.im), m0316b);
+                let (y03, y16) = AvxButterfly::butterfly2_f64_m128(m0316a, m0316b);
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    _mm256_create_pd(y02, y03),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(16..).as_mut_ptr().cast(),
+                    _mm256_create_pd(y16, y17),
+                );
+
+                let m0415a = _mm_fmadd_pd(x1p18, _mm_set1_pd(self.twiddle4.re), u0);
+                let m0415a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle8.re), m0415a);
+                let m0415a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle7.re), m0415a);
+                let m0415a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle3.re), m0415a);
+                let m0415a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle1.re), m0415a);
+                let m0415a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle5.re), m0415a);
+                let m0415a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle9.re), m0415a);
+                let m0415a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle6.re), m0415a);
+                let m0415a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle2.re), m0415a);
+                let m0415b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle4.im));
+                let m0415b = _mm_fmadd_pd(x2m17, _mm_set1_pd(self.twiddle8.im), m0415b);
+                let m0415b = _mm_fnmadd_pd(x3m16, _mm_set1_pd(self.twiddle7.im), m0415b);
+                let m0415b = _mm_fnmadd_pd(x4m15, _mm_set1_pd(self.twiddle3.im), m0415b);
+                let m0415b = _mm_fmadd_pd(x5m14, _mm_set1_pd(self.twiddle1.im), m0415b);
+                let m0415b = _mm_fmadd_pd(x6m13, _mm_set1_pd(self.twiddle5.im), m0415b);
+                let m0415b = _mm_fmadd_pd(x7m12, _mm_set1_pd(self.twiddle9.im), m0415b);
+                let m0415b = _mm_fnmadd_pd(x8m11, _mm_set1_pd(self.twiddle6.im), m0415b);
+                let m0415b = _mm_fnmadd_pd(x9m10, _mm_set1_pd(self.twiddle2.im), m0415b);
+                let (y04, y15) = AvxButterfly::butterfly2_f64_m128(m0415a, m0415b);
+
+                let m0514a = _mm_fmadd_pd(x1p18, _mm_set1_pd(self.twiddle5.re), u0);
+                let m0514a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle9.re), m0514a);
+                let m0514a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle4.re), m0514a);
+                let m0514a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle1.re), m0514a);
+                let m0514a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle6.re), m0514a);
+                let m0514a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle8.re), m0514a);
+                let m0514a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle3.re), m0514a);
+                let m0514a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle2.re), m0514a);
+                let m0514a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle7.re), m0514a);
+                let m0514b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle5.im));
+                let m0514b = _mm_fnmadd_pd(x2m17, _mm_set1_pd(self.twiddle9.im), m0514b);
+                let m0514b = _mm_fnmadd_pd(x3m16, _mm_set1_pd(self.twiddle4.im), m0514b);
+                let m0514b = _mm_fmadd_pd(x4m15, _mm_set1_pd(self.twiddle1.im), m0514b);
+                let m0514b = _mm_fmadd_pd(x5m14, _mm_set1_pd(self.twiddle6.im), m0514b);
+                let m0514b = _mm_fnmadd_pd(x6m13, _mm_set1_pd(self.twiddle8.im), m0514b);
+                let m0514b = _mm_fnmadd_pd(x7m12, _mm_set1_pd(self.twiddle3.im), m0514b);
+                let m0514b = _mm_fmadd_pd(x8m11, _mm_set1_pd(self.twiddle2.im), m0514b);
+                let m0514b = _mm_fmadd_pd(x9m10, _mm_set1_pd(self.twiddle7.im), m0514b);
+                let (y05, y14) = AvxButterfly::butterfly2_f64_m128(m0514a, m0514b);
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    _mm256_create_pd(y04, y05),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(14..).as_mut_ptr().cast(),
+                    _mm256_create_pd(y14, y15),
+                );
+
+                let m0613a = _mm_fmadd_pd(x1p18, _mm_set1_pd(self.twiddle6.re), u0);
+                let m0613a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle7.re), m0613a);
+                let m0613a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle1.re), m0613a);
+                let m0613a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle5.re), m0613a);
+                let m0613a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle8.re), m0613a);
+                let m0613a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle2.re), m0613a);
+                let m0613a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle4.re), m0613a);
+                let m0613a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle9.re), m0613a);
+                let m0613a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle3.re), m0613a);
+                let m0613b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle6.im));
+                let m0613b = _mm_fnmadd_pd(x2m17, _mm_set1_pd(self.twiddle7.im), m0613b);
+                let m0613b = _mm_fnmadd_pd(x3m16, _mm_set1_pd(self.twiddle1.im), m0613b);
+                let m0613b = _mm_fmadd_pd(x4m15, _mm_set1_pd(self.twiddle5.im), m0613b);
+                let m0613b = _mm_fnmadd_pd(x5m14, _mm_set1_pd(self.twiddle8.im), m0613b);
+                let m0613b = _mm_fnmadd_pd(x6m13, _mm_set1_pd(self.twiddle2.im), m0613b);
+                let m0613b = _mm_fmadd_pd(x7m12, _mm_set1_pd(self.twiddle4.im), m0613b);
+                let m0613b = _mm_fnmadd_pd(x8m11, _mm_set1_pd(self.twiddle9.im), m0613b);
+                let m0613b = _mm_fnmadd_pd(x9m10, _mm_set1_pd(self.twiddle3.im), m0613b);
+                let (y06, y13) = AvxButterfly::butterfly2_f64_m128(m0613a, m0613b);
+
+                let m0712a = _mm_fmadd_pd(x1p18, _mm_set1_pd(self.twiddle7.re), u0);
+                let m0712a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle5.re), m0712a);
+                let m0712a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle2.re), m0712a);
+                let m0712a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle9.re), m0712a);
+                let m0712a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle3.re), m0712a);
+                let m0712a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle4.re), m0712a);
+                let m0712a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle8.re), m0712a);
+                let m0712a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle1.re), m0712a);
+                let m0712a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle6.re), m0712a);
+                let m0712b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle7.im));
+                let m0712b = _mm_fnmadd_pd(x2m17, _mm_set1_pd(self.twiddle5.im), m0712b);
+                let m0712b = _mm_fmadd_pd(x3m16, _mm_set1_pd(self.twiddle2.im), m0712b);
+                let m0712b = _mm_fmadd_pd(x4m15, _mm_set1_pd(self.twiddle9.im), m0712b);
+                let m0712b = _mm_fnmadd_pd(x5m14, _mm_set1_pd(self.twiddle3.im), m0712b);
+                let m0712b = _mm_fmadd_pd(x6m13, _mm_set1_pd(self.twiddle4.im), m0712b);
+                let m0712b = _mm_fnmadd_pd(x7m12, _mm_set1_pd(self.twiddle8.im), m0712b);
+                let m0712b = _mm_fnmadd_pd(x8m11, _mm_set1_pd(self.twiddle1.im), m0712b);
+                let m0712b = _mm_fmadd_pd(x9m10, _mm_set1_pd(self.twiddle6.im), m0712b);
+                let (y07, y12) = AvxButterfly::butterfly2_f64_m128(m0712a, m0712b);
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    _mm256_create_pd(y06, y07),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(12..).as_mut_ptr().cast(),
+                    _mm256_create_pd(y12, y13),
+                );
+
+                let m0811a = _mm_fmadd_pd(x1p18, _mm_set1_pd(self.twiddle8.re), u0);
+                let m0811a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle3.re), m0811a);
+                let m0811a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle5.re), m0811a);
+                let m0811a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle6.re), m0811a);
+                let m0811a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle2.re), m0811a);
+                let m0811a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle9.re), m0811a);
+                let m0811a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle1.re), m0811a);
+                let m0811a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle7.re), m0811a);
+                let m0811a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle4.re), m0811a);
+                let m0811b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle8.im));
+                let m0811b = _mm_fnmadd_pd(x2m17, _mm_set1_pd(self.twiddle3.im), m0811b);
+                let m0811b = _mm_fmadd_pd(x3m16, _mm_set1_pd(self.twiddle5.im), m0811b);
+                let m0811b = _mm_fnmadd_pd(x4m15, _mm_set1_pd(self.twiddle6.im), m0811b);
+                let m0811b = _mm_fmadd_pd(x5m14, _mm_set1_pd(self.twiddle2.im), m0811b);
+                let m0811b = _mm_fnmadd_pd(x6m13, _mm_set1_pd(self.twiddle9.im), m0811b);
+                let m0811b = _mm_fnmadd_pd(x7m12, _mm_set1_pd(self.twiddle1.im), m0811b);
+                let m0811b = _mm_fmadd_pd(x8m11, _mm_set1_pd(self.twiddle7.im), m0811b);
+                let m0811b = _mm_fnmadd_pd(x9m10, _mm_set1_pd(self.twiddle4.im), m0811b);
+                let (y08, y11) = AvxButterfly::butterfly2_f64_m128(m0811a, m0811b);
+
+                let m0910a = _mm_fmadd_pd(x1p18, _mm_set1_pd(self.twiddle9.re), u0);
+                let m0910a = _mm_fmadd_pd(x2p17, _mm_set1_pd(self.twiddle1.re), m0910a);
+                let m0910a = _mm_fmadd_pd(x3p16, _mm_set1_pd(self.twiddle8.re), m0910a);
+                let m0910a = _mm_fmadd_pd(x4p15, _mm_set1_pd(self.twiddle2.re), m0910a);
+                let m0910a = _mm_fmadd_pd(x5p14, _mm_set1_pd(self.twiddle7.re), m0910a);
+                let m0910a = _mm_fmadd_pd(x6p13, _mm_set1_pd(self.twiddle3.re), m0910a);
+                let m0910a = _mm_fmadd_pd(x7p12, _mm_set1_pd(self.twiddle6.re), m0910a);
+                let m0910a = _mm_fmadd_pd(x8p11, _mm_set1_pd(self.twiddle4.re), m0910a);
+                let m0910a = _mm_fmadd_pd(x9p10, _mm_set1_pd(self.twiddle5.re), m0910a);
+                let m0910b = _mm_mul_pd(x1m18, _mm_set1_pd(self.twiddle9.im));
+                let m0910b = _mm_fnmadd_pd(x2m17, _mm_set1_pd(self.twiddle1.im), m0910b);
+                let m0910b = _mm_fmadd_pd(x3m16, _mm_set1_pd(self.twiddle8.im), m0910b);
+                let m0910b = _mm_fnmadd_pd(x4m15, _mm_set1_pd(self.twiddle2.im), m0910b);
+                let m0910b = _mm_fmadd_pd(x5m14, _mm_set1_pd(self.twiddle7.im), m0910b);
+                let m0910b = _mm_fnmadd_pd(x6m13, _mm_set1_pd(self.twiddle3.im), m0910b);
+                let m0910b = _mm_fmadd_pd(x7m12, _mm_set1_pd(self.twiddle6.im), m0910b);
+                let m0910b = _mm_fnmadd_pd(x8m11, _mm_set1_pd(self.twiddle4.im), m0910b);
+                let m0910b = _mm_fmadd_pd(x9m10, _mm_set1_pd(self.twiddle5.im), m0910b);
+                let (y09, y10) = AvxButterfly::butterfly2_f64_m128(m0910a, m0910b);
+
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(8..).as_mut_ptr().cast(),
+                    _mm256_create_pd(y08, y09),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(10..).as_mut_ptr().cast(),
+                    _mm256_create_pd(y10, y11),
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 impl FftExecutor<f64> for AvxButterfly19<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f64(in_place) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_f64(in_place) }
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f64(src, dst) }
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f64(src, dst) }
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f64>],
+        dst: &mut [Complex<f64>],
+        scratch: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -638,6 +1003,18 @@ impl FftExecutor<f64> for AvxButterfly19<f64> {
     #[inline]
     fn length(&self) -> usize {
         19
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 
@@ -862,7 +1239,7 @@ impl AvxButterfly19<f32> {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+    fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe {
             if !in_place.len().is_multiple_of(19) {
                 return Err(ZaftError::InvalidSizeMultiplier(
@@ -965,11 +1342,150 @@ impl AvxButterfly19<f32> {
         }
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_oof_f32(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe {
+            validate_oof_sizes!(src, dst, 19);
+
+            for (dst, src) in dst.chunks_exact_mut(38).zip(src.chunks_exact(38)) {
+                let (u0, u1, u2, u3) = shift_load4!(src, 19, 0);
+                let (u4, u5, u6, u7) = shift_load4!(src, 19, 4);
+                let (u8, u9, u10, u11) = shift_load4!(src, 19, 8);
+                let (u12, u13, u14, u15) = shift_load4!(src, 19, 12);
+                let (_, u16, u17, u18) = shift_load4!(src, 19, 15);
+
+                let q = self.kernel_f32([
+                    u0, u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, u12, u13, u14, u15, u16, u17,
+                    u18,
+                ]);
+
+                shift_store4!(dst, 19, 0, q[0], q[1], q[2], q[3]);
+                shift_store4!(dst, 19, 4, q[4], q[5], q[6], q[7]);
+                shift_store4!(dst, 19, 8, q[8], q[9], q[10], q[11]);
+                shift_store4!(dst, 19, 12, q[12], q[13], q[14], q[15]);
+                shift_store4!(dst, 19, 15, q[15], q[16], q[17], q[18]);
+            }
+
+            let rem_dst = dst.chunks_exact_mut(38).into_remainder();
+            let rem_src = src.chunks_exact(38).remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(19).zip(rem_src.chunks_exact(19)) {
+                let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
+                let u4u5u6u7 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
+                let u8u9u10u11 = _mm256_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
+                let u12u13u14u15 = _mm256_loadu_ps(src.get_unchecked(12..).as_ptr().cast());
+                let u16u17 = _mm_loadu_ps(src.get_unchecked(16..).as_ptr().cast());
+                let u18 = _m128s_load_f32x2(src.get_unchecked(18..).as_ptr().cast());
+
+                let u0u1 = _mm256_castps256_ps128(u0u1u2u3);
+                let u2u3 = _mm256_extractf128_ps::<1>(u0u1u2u3);
+                let u4u5 = _mm256_castps256_ps128(u4u5u6u7);
+                let u14u15 = _mm256_extractf128_ps::<1>(u12u13u14u15);
+                let u6u7 = _mm256_extractf128_ps::<1>(u4u5u6u7);
+                let u12u13 = _mm256_castps256_ps128(u12u13u14u15);
+                let u8u9 = _mm256_castps256_ps128(u8u9u10u11);
+                let u10u11 = _mm256_extractf128_ps::<1>(u8u9u10u11);
+
+                let q = self.kernel_f32([
+                    _mm256_castps256_ps128(u0u1u2u3),
+                    _mm_unpackhi_ps64(u0u1, u0u1),
+                    u2u3,
+                    _mm_unpackhi_ps64(u2u3, u2u3),
+                    u4u5,
+                    _mm_unpackhi_ps64(u4u5, u4u5),
+                    u6u7,
+                    _mm_unpackhi_ps64(u6u7, u6u7),
+                    u8u9,
+                    _mm_unpackhi_ps64(u8u9, u8u9),
+                    u10u11,
+                    _mm_unpackhi_ps64(u10u11, u10u11),
+                    u12u13,
+                    _mm_unpackhi_ps64(u12u13, u12u13),
+                    u14u15,
+                    _mm_unpackhi_ps64(u14u15, u14u15),
+                    u16u17,
+                    _mm_unpackhi_ps64(u16u17, u16u17),
+                    u18,
+                ]);
+
+                _m128s_store_f32x2(dst.get_unchecked_mut(18..).as_mut_ptr().cast(), q[18]);
+
+                _mm256_storeu_ps(
+                    dst.as_mut_ptr().cast(),
+                    _mm256_create_ps(_mm_unpacklo_ps64(q[0], q[1]), _mm_unpacklo_ps64(q[2], q[3])),
+                );
+                _mm_storeu_ps(
+                    dst.get_unchecked_mut(16..).as_mut_ptr().cast(),
+                    _mm_unpacklo_ps64(q[16], q[17]),
+                );
+
+                _mm256_storeu_ps(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    _mm256_create_ps(_mm_unpacklo_ps64(q[4], q[5]), _mm_unpacklo_ps64(q[6], q[7])),
+                );
+                _mm256_storeu_ps(
+                    dst.get_unchecked_mut(12..).as_mut_ptr().cast(),
+                    _mm256_create_ps(
+                        _mm_unpacklo_ps64(q[12], q[13]),
+                        _mm_unpacklo_ps64(q[14], q[15]),
+                    ),
+                );
+
+                _mm256_storeu_ps(
+                    dst.get_unchecked_mut(8..).as_mut_ptr().cast(),
+                    _mm256_create_ps(
+                        _mm_unpacklo_ps64(q[8], q[9]),
+                        _mm_unpacklo_ps64(q[10], q[11]),
+                    ),
+                );
+            }
+        }
+        Ok(())
+    }
 }
 
 impl FftExecutor<f32> for AvxButterfly19<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_f32(in_place) }
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f32(src, dst) }
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f32(src, dst) }
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f32>],
+        dst: &mut [Complex<f32>],
+        scratch: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -979,6 +1495,18 @@ impl FftExecutor<f32> for AvxButterfly19<f32> {
     #[inline]
     fn length(&self) -> usize {
         19
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 

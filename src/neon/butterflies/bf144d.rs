@@ -28,14 +28,15 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::butterflies::shared::gen_butterfly_twiddles_f64;
+use crate::neon::butterflies::shared::{boring_neon_butterfly, gen_butterfly_twiddles_f64};
 use crate::neon::mixed::NeonStoreD;
+use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
-macro_rules! gen_bf129d {
-    ($name: ident, $feature: literal, $internal_bf16: ident, $internal_bf9: ident, $mul: ident) => {
+macro_rules! gen_bf128d {
+    ($name: ident, $features: literal, $internal_bf16: ident, $internal_bf9: ident, $mul: ident) => {
         use crate::neon::mixed::{$internal_bf9, $internal_bf16};
         pub(crate) struct $name {
             direction: FftDirection,
@@ -55,78 +56,53 @@ macro_rules! gen_bf129d {
             }
         }
 
-        impl FftExecutor<f64> for $name {
-            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                unsafe { self.execute_impl(in_place) }
-            }
-
-            fn direction(&self) -> FftDirection {
-                self.direction
-            }
-
-            #[inline]
-            fn length(&self) -> usize {
-                144
-            }
-        }
+        boring_neon_butterfly!($name, $features, f64, 144);
 
         impl $name {
-            #[target_feature(enable = $feature)]
-            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(144) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        in_place.len(),
-                        self.length(),
-                    ));
-                }
+            #[inline]
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+                let mut rows: [NeonStoreD; 9] = [NeonStoreD::default(); 9];
+                let mut rows16: [NeonStoreD; 16] = [NeonStoreD::default(); 16];
 
+                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 144];
                 unsafe {
-                    let mut rows: [NeonStoreD; 9] = [NeonStoreD::default(); 9];
-                    let mut rows16: [NeonStoreD; 16] = [NeonStoreD::default(); 16];
-
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 144];
-
-                    for chunk in in_place.chunks_exact_mut(144) {
-                        // columns
-                        for k in 0..16 {
-                            for i in 0..9 {
-                                rows[i] =
-                                    NeonStoreD::from_complex_ref(chunk.get_unchecked(i * 16 + k..));
-                            }
-
-                            rows = self.bf9.exec(rows);
-
-                            for i in 1..9 {
-                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 8 * k]);
-                            }
-
-                            for i in 0..9 {
-                                rows[i].write_uninit(scratch.get_unchecked_mut(k * 9 + i..));
-                            }
+                    // columns
+                    for k in 0..16 {
+                        for i in 0..9 {
+                            rows[i] = NeonStoreD::from_complex_ref(chunk.slice_from(i * 16 + k..));
                         }
 
-                        // rows
+                        rows = self.bf9.exec(rows);
 
-                        for k in 0..9 {
-                            for i in 0..16 {
-                                rows16[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 9 + k..),
-                                );
-                            }
-                            rows16 = self.bf16.exec(rows16);
-                            for i in 0..16 {
-                                rows16[i].write(chunk.get_unchecked_mut(i * 9 + k..));
-                            }
+                        for i in 1..9 {
+                            rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 8 * k]);
+                        }
+
+                        for i in 0..9 {
+                            rows[i].write_uninit(scratch.get_unchecked_mut(k * 9 + i..));
+                        }
+                    }
+
+                    // rows
+
+                    for k in 0..9 {
+                        for i in 0..16 {
+                            rows16[i] =
+                                NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 9 + k..));
+                        }
+                        rows16 = self.bf16.exec(rows16);
+                        for i in 0..16 {
+                            rows16[i].write(chunk.slice_from_mut(i * 9 + k..));
                         }
                     }
                 }
-                Ok(())
             }
         }
     };
 }
 
-gen_bf129d!(
+gen_bf128d!(
     NeonButterfly144d,
     "neon",
     ColumnButterfly16d,
@@ -134,7 +110,7 @@ gen_bf129d!(
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-gen_bf129d!(
+gen_bf128d!(
     NeonFcmaButterfly144d,
     "fcma",
     ColumnFcmaButterfly16d,

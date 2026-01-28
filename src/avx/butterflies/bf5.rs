@@ -32,12 +32,11 @@ use crate::avx::util::{
 };
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::x86_64::*;
 use std::ops::Neg;
-use std::sync::Arc;
 
 pub(crate) struct AvxButterfly5<T> {
     direction: FftDirection,
@@ -79,7 +78,7 @@ where
 
 impl AvxButterfly5<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+    fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(5) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -344,7 +343,7 @@ impl AvxButterfly5<f32> {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_out_of_place_f32(
+    fn execute_out_of_place_f32(
         &self,
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
@@ -615,7 +614,19 @@ impl AvxButterfly5<f32> {
     }
 }
 
-impl FftExecutorOutOfPlace<f32> for AvxButterfly5<f32> {
+impl FftExecutor<f32> for AvxButterfly5<f32> {
+    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_f32(in_place) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_f32(in_place) }
+    }
+
     fn execute_out_of_place(
         &self,
         src: &[Complex<f32>],
@@ -623,17 +634,23 @@ impl FftExecutorOutOfPlace<f32> for AvxButterfly5<f32> {
     ) -> Result<(), ZaftError> {
         unsafe { self.execute_out_of_place_f32(src, dst) }
     }
-}
 
-impl CompositeFftExecutor<f32> for AvxButterfly5<f32> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-        self
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_out_of_place_f32(src, dst) }
     }
-}
 
-impl FftExecutor<f32> for AvxButterfly5<f32> {
-    fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_f32(in_place) }
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f32>],
+        dst: &mut [Complex<f32>],
+        scratch: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -644,11 +661,23 @@ impl FftExecutor<f32> for AvxButterfly5<f32> {
     fn length(&self) -> usize {
         5
     }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
+    }
 }
 
 impl AvxButterfly5<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+    fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(5) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -792,7 +821,7 @@ impl AvxButterfly5<f64> {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_out_of_place_f64(
+    fn execute_out_of_place_f64(
         &self,
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
@@ -941,7 +970,19 @@ impl AvxButterfly5<f64> {
     }
 }
 
-impl FftExecutorOutOfPlace<f64> for AvxButterfly5<f64> {
+impl FftExecutor<f64> for AvxButterfly5<f64> {
+    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        unsafe { self.execute_f64(in_place) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_f64(in_place) }
+    }
+
     fn execute_out_of_place(
         &self,
         src: &[Complex<f64>],
@@ -949,17 +990,23 @@ impl FftExecutorOutOfPlace<f64> for AvxButterfly5<f64> {
     ) -> Result<(), ZaftError> {
         unsafe { self.execute_out_of_place_f64(src, dst) }
     }
-}
 
-impl CompositeFftExecutor<f64> for AvxButterfly5<f64> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-        self
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_out_of_place_f64(src, dst) }
     }
-}
 
-impl FftExecutor<f64> for AvxButterfly5<f64> {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_f64(in_place) }
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f64>],
+        dst: &mut [Complex<f64>],
+        scratch: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -969,6 +1016,18 @@ impl FftExecutor<f64> for AvxButterfly5<f64> {
     #[inline]
     fn length(&self) -> usize {
         5
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 

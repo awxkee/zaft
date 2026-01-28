@@ -30,7 +30,7 @@ use crate::avx::butterflies::{AvxButterfly, shift_load4, shift_store4};
 use crate::avx::rotate::AvxRotate;
 use crate::avx::util::{_mm_unpackhi_ps64, _mm_unpacklo_ps64, _mm256_create_ps};
 use crate::traits::FftTrigonometry;
-use crate::util::compute_twiddle;
+use crate::util::{compute_twiddle, validate_oof_sizes};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
@@ -385,7 +385,7 @@ impl AvxButterfly23<f64> {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+    fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(23) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -489,11 +489,150 @@ impl AvxButterfly23<f64> {
             Ok(())
         }
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_oof_f64(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, 23);
+
+        unsafe {
+            for (dst, src) in dst.chunks_exact_mut(23).zip(src.chunks_exact(23)) {
+                let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
+                let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
+                let u4u5 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
+                let u6u7 = _mm256_loadu_pd(src.get_unchecked(6..).as_ptr().cast());
+                let u8u9 = _mm256_loadu_pd(src.get_unchecked(8..).as_ptr().cast());
+                let u10u11 = _mm256_loadu_pd(src.get_unchecked(10..).as_ptr().cast());
+                let u12u13 = _mm256_loadu_pd(src.get_unchecked(12..).as_ptr().cast());
+                let u14u15 = _mm256_loadu_pd(src.get_unchecked(14..).as_ptr().cast());
+                let u16u17 = _mm256_loadu_pd(src.get_unchecked(16..).as_ptr().cast());
+                let u18u19 = _mm256_loadu_pd(src.get_unchecked(18..).as_ptr().cast());
+                let u20u21 = _mm256_loadu_pd(src.get_unchecked(20..).as_ptr().cast());
+                let u22u = _mm_loadu_pd(src.get_unchecked(22..).as_ptr().cast());
+
+                const HI_LO: i32 = 0b0010_0001;
+                const LO_LO: i32 = 0b0010_0000;
+
+                let q = self.kernel_f64([
+                    u0u1,
+                    _mm256_permute2f128_pd::<HI_LO>(u0u1, u0u1),
+                    u2u3,
+                    _mm256_permute2f128_pd::<HI_LO>(u2u3, u2u3),
+                    u4u5,
+                    _mm256_permute2f128_pd::<HI_LO>(u4u5, u4u5),
+                    u6u7,
+                    _mm256_permute2f128_pd::<HI_LO>(u6u7, u6u7),
+                    u8u9,
+                    _mm256_permute2f128_pd::<HI_LO>(u8u9, u8u9),
+                    u10u11,
+                    _mm256_permute2f128_pd::<HI_LO>(u10u11, u10u11),
+                    u12u13,
+                    _mm256_permute2f128_pd::<HI_LO>(u12u13, u12u13),
+                    u14u15,
+                    _mm256_permute2f128_pd::<HI_LO>(u14u15, u14u15),
+                    u16u17,
+                    _mm256_permute2f128_pd::<HI_LO>(u16u17, u16u17),
+                    u18u19,
+                    _mm256_permute2f128_pd::<HI_LO>(u18u19, u18u19),
+                    u20u21,
+                    _mm256_permute2f128_pd::<HI_LO>(u20u21, u20u21),
+                    _mm256_castpd128_pd256(u22u),
+                ]);
+
+                _mm256_storeu_pd(
+                    dst.as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[0], q[1]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[2], q[3]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[4], q[5]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(6..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[6], q[7]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(8..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[8], q[9]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(10..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[10], q[11]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(12..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[12], q[13]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(14..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[14], q[15]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(16..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[16], q[17]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(18..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[18], q[19]),
+                );
+                _mm256_storeu_pd(
+                    dst.get_unchecked_mut(20..).as_mut_ptr().cast(),
+                    _mm256_permute2f128_pd::<LO_LO>(q[20], q[21]),
+                );
+                _mm_storeu_pd(
+                    dst.get_unchecked_mut(22..).as_mut_ptr().cast(),
+                    _mm256_castpd256_pd128(q[22]),
+                );
+            }
+            Ok(())
+        }
+    }
 }
 
 impl FftExecutor<f64> for AvxButterfly23<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f64(in_place) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_f64(in_place) }
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f64(src, dst) }
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f64(src, dst) }
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f64>],
+        dst: &mut [Complex<f64>],
+        scratch: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -503,6 +642,18 @@ impl FftExecutor<f64> for AvxButterfly23<f64> {
     #[inline]
     fn length(&self) -> usize {
         23
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 
@@ -816,7 +967,7 @@ impl AvxButterfly23<f32> {
     }
 
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+    fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(23) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -941,11 +1092,172 @@ impl AvxButterfly23<f32> {
 
         Ok(())
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_oof_f32(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, 23);
+
+        unsafe {
+            for (dst, src) in dst.chunks_exact_mut(46).zip(src.chunks_exact(46)) {
+                let (u0, u1, u2, u3) = shift_load4!(src, 23, 0);
+                let (u4, u5, u6, u7) = shift_load4!(src, 23, 4);
+                let (u8, u9, u10, u11) = shift_load4!(src, 23, 8);
+                let (u12, u13, u14, u15) = shift_load4!(src, 23, 12);
+                let (u16, u17, u18, u19) = shift_load4!(src, 23, 16);
+                let (_, u20, u21, u22) = shift_load4!(src, 23, 19);
+
+                let q = self.kernel_f32([
+                    u0, u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, u12, u13, u14, u15, u16, u17,
+                    u18, u19, u20, u21, u22,
+                ]);
+
+                shift_store4!(dst, 23, 0, q[0], q[1], q[2], q[3]);
+                shift_store4!(dst, 23, 4, q[4], q[5], q[6], q[7]);
+                shift_store4!(dst, 23, 8, q[8], q[9], q[10], q[11]);
+                shift_store4!(dst, 23, 12, q[12], q[13], q[14], q[15]);
+                shift_store4!(dst, 23, 16, q[16], q[17], q[18], q[19]);
+                shift_store4!(dst, 23, 19, q[19], q[20], q[21], q[22]);
+            }
+
+            let rem_dst = dst.chunks_exact_mut(46).into_remainder();
+            let rem_src = src.chunks_exact(46).remainder();
+
+            for (dst, src) in rem_dst.chunks_exact_mut(23).zip(rem_src.chunks_exact(23)) {
+                let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
+                let u4u5u6u7 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
+                let u8u9u10u11 = _mm256_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
+                let u12u13u14u15 = _mm256_loadu_ps(src.get_unchecked(12..).as_ptr().cast());
+                let u16u17u18u19 = _mm256_loadu_ps(src.get_unchecked(16..).as_ptr().cast());
+                let u19u20u21u22 = _mm256_loadu_ps(src.get_unchecked(19..).as_ptr().cast());
+
+                let u0u1 = _mm256_castps256_ps128(u0u1u2u3);
+                let u2u3 = _mm256_extractf128_ps::<1>(u0u1u2u3);
+                let u4u5 = _mm256_castps256_ps128(u4u5u6u7);
+                let u6u7 = _mm256_extractf128_ps::<1>(u4u5u6u7);
+                let u8u9 = _mm256_castps256_ps128(u8u9u10u11);
+                let u10u11 = _mm256_extractf128_ps::<1>(u8u9u10u11);
+                let u12u13 = _mm256_castps256_ps128(u12u13u14u15);
+                let u14u15 = _mm256_extractf128_ps::<1>(u12u13u14u15);
+                let u16u17 = _mm256_castps256_ps128(u16u17u18u19);
+                let u18u19 = _mm256_extractf128_ps::<1>(u16u17u18u19);
+                let u19u20 = _mm256_castps256_ps128(u19u20u21u22);
+                let u21u22 = _mm256_extractf128_ps::<1>(u19u20u21u22);
+
+                let q = self.kernel_f32([
+                    _mm256_castps256_ps128(u0u1u2u3),
+                    _mm_unpackhi_ps64(u0u1, u0u1),
+                    u2u3,
+                    _mm_unpackhi_ps64(u2u3, u2u3),
+                    u4u5,
+                    _mm_unpackhi_ps64(u4u5, u4u5),
+                    u6u7,
+                    _mm_unpackhi_ps64(u6u7, u6u7),
+                    u8u9,
+                    _mm_unpackhi_ps64(u8u9, u8u9),
+                    u10u11,
+                    _mm_unpackhi_ps64(u10u11, u10u11),
+                    u12u13,
+                    _mm_unpackhi_ps64(u12u13, u12u13),
+                    u14u15,
+                    _mm_unpackhi_ps64(u14u15, u14u15),
+                    u16u17,
+                    _mm_unpackhi_ps64(u16u17, u16u17),
+                    u18u19,
+                    _mm_unpackhi_ps64(u18u19, u18u19),
+                    _mm_unpackhi_ps64(u19u20, u19u20),
+                    u21u22,
+                    _mm_unpackhi_ps64(u21u22, u21u22),
+                ]);
+
+                _mm256_storeu_ps(
+                    dst.as_mut_ptr().cast(),
+                    _mm256_create_ps(_mm_unpacklo_ps64(q[0], q[1]), _mm_unpacklo_ps64(q[2], q[3])),
+                );
+
+                _mm256_storeu_ps(
+                    dst.get_unchecked_mut(4..).as_mut_ptr().cast(),
+                    _mm256_create_ps(_mm_unpacklo_ps64(q[4], q[5]), _mm_unpacklo_ps64(q[6], q[7])),
+                );
+
+                _mm256_storeu_ps(
+                    dst.get_unchecked_mut(8..).as_mut_ptr().cast(),
+                    _mm256_create_ps(
+                        _mm_unpacklo_ps64(q[8], q[9]),
+                        _mm_unpacklo_ps64(q[10], q[11]),
+                    ),
+                );
+
+                _mm256_storeu_ps(
+                    dst.get_unchecked_mut(12..).as_mut_ptr().cast(),
+                    _mm256_create_ps(
+                        _mm_unpacklo_ps64(q[12], q[13]),
+                        _mm_unpacklo_ps64(q[14], q[15]),
+                    ),
+                );
+
+                _mm256_storeu_ps(
+                    dst.get_unchecked_mut(16..).as_mut_ptr().cast(),
+                    _mm256_create_ps(
+                        _mm_unpacklo_ps64(q[16], q[17]),
+                        _mm_unpacklo_ps64(q[18], q[19]),
+                    ),
+                );
+
+                _mm256_storeu_ps(
+                    dst.get_unchecked_mut(19..).as_mut_ptr().cast(),
+                    _mm256_create_ps(
+                        _mm_unpacklo_ps64(q[19], q[20]),
+                        _mm_unpacklo_ps64(q[21], q[22]),
+                    ),
+                );
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl FftExecutor<f32> for AvxButterfly23<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         unsafe { self.execute_f32(in_place) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_f32(in_place) }
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f32(src, dst) }
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f32(src, dst) }
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f32>],
+        dst: &mut [Complex<f32>],
+        scratch: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -956,13 +1268,28 @@ impl FftExecutor<f32> for AvxButterfly23<f32> {
     fn length(&self) -> usize {
         23
     }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::avx::butterflies::test_avx_butterfly;
+    use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
 
     test_avx_butterfly!(test_avx_butterfly23, f32, AvxButterfly23, 23, 1e-5);
     test_avx_butterfly!(test_avx_butterfly23_f64, f64, AvxButterfly23, 23, 1e-7);
+
+    test_oof_avx_butterfly!(test_avx_oof_butterfly23, f32, AvxButterfly23, 23, 1e-5);
+    test_oof_avx_butterfly!(test_avx_oof_butterfly23_f64, f64, AvxButterfly23, 23, 1e-7);
 }

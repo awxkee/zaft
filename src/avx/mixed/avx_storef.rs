@@ -216,7 +216,7 @@ impl AvxStoreF {
     pub(crate) fn reverse_complex(&self) -> Self {
         unsafe {
             let permuted = _mm256_shuffle_ps::<0x4E>(self.v, self.v);
-            AvxStoreF::raw(_mm256_permute2f128_ps(permuted, permuted, 0x01))
+            AvxStoreF::raw(_mm256_permute2f128_ps::<0x01>(permuted, permuted))
         }
     }
 
