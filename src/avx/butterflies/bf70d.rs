@@ -28,9 +28,10 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::avx::butterflies::shared::gen_butterfly_twiddles_f64;
+use crate::avx::butterflies::shared::{boring_avx_butterfly, gen_butterfly_twiddles_f64};
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly7d, ColumnButterfly10d};
 use crate::avx::transpose::transpose_f64x2_2x7;
+use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
@@ -58,99 +59,76 @@ impl AvxButterfly70d {
     }
 }
 
-impl FftExecutor<f64> for AvxButterfly70d {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_impl(in_place) }
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        70
-    }
-}
+boring_avx_butterfly!(AvxButterfly70d, f64, 70);
 
 impl AvxButterfly70d {
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(70) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
-
+    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+        let mut rows: [AvxStoreD; 7] = [AvxStoreD::zero(); 7];
+        let mut rows10: [AvxStoreD; 10] = [AvxStoreD::zero(); 10];
+        let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 70];
         unsafe {
-            let mut rows: [AvxStoreD; 7] = [AvxStoreD::zero(); 7];
-            let mut rows10: [AvxStoreD; 10] = [AvxStoreD::zero(); 10];
-            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 70];
-
-            for chunk in in_place.chunks_exact_mut(70) {
-                // columns
-                for k in 0..5 {
-                    for i in 0..7 {
-                        rows[i] =
-                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 10 + k * 2..));
-                    }
-
-                    rows = self.bf7.exec(rows);
-
-                    for i in 1..7 {
-                        rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 6 * k]);
-                    }
-
-                    let transposed = transpose_f64x2_2x7(rows);
-
-                    for i in 0..3 {
-                        transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 7 + i * 2..));
-                        transposed[i * 2 + 1]
-                            .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 7 + i * 2..));
-                    }
-
-                    {
-                        let i = 3;
-                        transposed[i * 2].write_lou(scratch.get_unchecked_mut(k * 2 * 7 + i * 2..));
-                        transposed[i * 2 + 1]
-                            .write_lou(scratch.get_unchecked_mut((k * 2 + 1) * 7 + i * 2..));
-                    }
+            // columns
+            for k in 0..5 {
+                for i in 0..7 {
+                    rows[i] = AvxStoreD::from_complex_ref(chunk.slice_from(i * 10 + k * 2..));
                 }
 
-                // rows
+                rows = self.bf7.exec(rows);
 
-                for k in 0..3 {
-                    for i in 0..10 {
-                        rows10[i] =
-                            AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 7 + k * 2..));
-                    }
-                    rows10 = self.bf10.exec(rows10);
-                    for i in 0..10 {
-                        rows10[i].write(chunk.get_unchecked_mut(i * 7 + k * 2..));
-                    }
+                for i in 1..7 {
+                    rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 6 * k]);
+                }
+
+                let transposed = transpose_f64x2_2x7(rows);
+
+                for i in 0..3 {
+                    transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 7 + i * 2..));
+                    transposed[i * 2 + 1]
+                        .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 7 + i * 2..));
                 }
 
                 {
-                    let k = 3;
-                    for i in 0..10 {
-                        rows10[i] = AvxStoreD::from_complexu(scratch.get_unchecked(i * 7 + k * 2));
-                    }
-                    rows10 = self.bf10.exec(rows10);
-                    for i in 0..10 {
-                        rows10[i].write_lo(chunk.get_unchecked_mut(i * 7 + k * 2..));
-                    }
+                    let i = 3;
+                    transposed[i * 2].write_lou(scratch.get_unchecked_mut(k * 2 * 7 + i * 2..));
+                    transposed[i * 2 + 1]
+                        .write_lou(scratch.get_unchecked_mut((k * 2 + 1) * 7 + i * 2..));
+                }
+            }
+
+            // rows
+
+            for k in 0..3 {
+                for i in 0..10 {
+                    rows10[i] =
+                        AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 7 + k * 2..));
+                }
+                rows10 = self.bf10.exec(rows10);
+                for i in 0..10 {
+                    rows10[i].write(chunk.slice_from_mut(i * 7 + k * 2..));
+                }
+            }
+
+            {
+                let k = 3;
+                for i in 0..10 {
+                    rows10[i] = AvxStoreD::from_complexu(scratch.get_unchecked(i * 7 + k * 2));
+                }
+                rows10 = self.bf10.exec(rows10);
+                for i in 0..10 {
+                    rows10[i].write_lo(chunk.slice_from_mut(i * 7 + k * 2..));
                 }
             }
         }
-        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::avx::butterflies::test_avx_butterfly;
+    use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
 
     test_avx_butterfly!(test_avx_butterfly70_f64, f64, AvxButterfly70d, 70, 1e-3);
+    test_oof_avx_butterfly!(test_avx_oof_butterfly70_f64, f64, AvxButterfly70d, 70, 1e-3);
 }

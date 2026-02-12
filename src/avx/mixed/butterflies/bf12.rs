@@ -27,23 +27,23 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::avx::butterflies::{AvxFastButterfly3, AvxFastButterfly4};
 use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::mixed::avx_storef::AvxStoreF;
+use crate::avx::mixed::{
+    ColumnButterfly3d, ColumnButterfly3f, ColumnButterfly4d, ColumnButterfly4f,
+};
 
 pub(crate) struct ColumnButterfly12d {
-    bf4: AvxFastButterfly4<f64>,
-    bf3: AvxFastButterfly3<f64>,
+    pub(crate) bf4: ColumnButterfly4d,
+    bf3: ColumnButterfly3d,
 }
 
 impl ColumnButterfly12d {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly12d {
-        unsafe {
-            Self {
-                bf3: AvxFastButterfly3::<f64>::new(direction),
-                bf4: AvxFastButterfly4::<f64>::new(direction),
-            }
+        Self {
+            bf3: ColumnButterfly3d::new(direction),
+            bf4: ColumnButterfly4d::new(direction),
         }
     }
 }
@@ -51,47 +51,30 @@ impl ColumnButterfly12d {
 impl ColumnButterfly12d {
     #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 12]) -> [AvxStoreD; 12] {
-        unsafe {
-            let (u0, u1, u2, u3) = self.bf4.exec(v[0].v, v[3].v, v[6].v, v[9].v);
-            let (u4, u5, u6, u7) = self.bf4.exec(v[4].v, v[7].v, v[10].v, v[1].v);
-            let (u8, u9, u10, u11) = self.bf4.exec(v[8].v, v[11].v, v[2].v, v[5].v);
+        let [u0, u1, u2, u3] = self.bf4.exec([v[0], v[3], v[6], v[9]]);
+        let [u4, u5, u6, u7] = self.bf4.exec([v[4], v[7], v[10], v[1]]);
+        let [u8, u9, u10, u11] = self.bf4.exec([v[8], v[11], v[2], v[5]]);
 
-            let (v0, v4, v8) = self.bf3.exec(u0, u4, u8); // (v0, v4, v8)
-            let (v9, v1, v5) = self.bf3.exec(u1, u5, u9); // (v9, v1, v5)
-            let (v6, v10, v2) = self.bf3.exec(u2, u6, u10); // (v6, v10, v2)
-            let (v3, v7, v11) = self.bf3.exec(u3, u7, u11); // (v3, v7, v11)
+        let [v0, v4, v8] = self.bf3.exec([u0, u4, u8]); // (v0, v4, v8)
+        let [v9, v1, v5] = self.bf3.exec([u1, u5, u9]); // (v9, v1, v5)
+        let [v6, v10, v2] = self.bf3.exec([u2, u6, u10]); // (v6, v10, v2)
+        let [v3, v7, v11] = self.bf3.exec([u3, u7, u11]); // (v3, v7, v11)
 
-            [
-                AvxStoreD::raw(v0),
-                AvxStoreD::raw(v1),
-                AvxStoreD::raw(v2),
-                AvxStoreD::raw(v3),
-                AvxStoreD::raw(v4),
-                AvxStoreD::raw(v5),
-                AvxStoreD::raw(v6),
-                AvxStoreD::raw(v7),
-                AvxStoreD::raw(v8),
-                AvxStoreD::raw(v9),
-                AvxStoreD::raw(v10),
-                AvxStoreD::raw(v11),
-            ]
-        }
+        [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
     }
 }
 
 pub(crate) struct ColumnButterfly12f {
-    pub(crate) bf4: AvxFastButterfly4<f32>,
-    bf3: AvxFastButterfly3<f32>,
+    pub(crate) bf4: ColumnButterfly4f,
+    bf3: ColumnButterfly3f,
 }
 
 impl ColumnButterfly12f {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly12f {
-        unsafe {
-            Self {
-                bf3: AvxFastButterfly3::<f32>::new(direction),
-                bf4: AvxFastButterfly4::<f32>::new(direction),
-            }
+        Self {
+            bf3: ColumnButterfly3f::new(direction),
+            bf4: ColumnButterfly4f::new(direction),
         }
     }
 }
@@ -99,30 +82,15 @@ impl ColumnButterfly12f {
 impl ColumnButterfly12f {
     #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 12]) -> [AvxStoreF; 12] {
-        unsafe {
-            let (u0, u1, u2, u3) = self.bf4.exec(v[0].v, v[3].v, v[6].v, v[9].v);
-            let (u4, u5, u6, u7) = self.bf4.exec(v[4].v, v[7].v, v[10].v, v[1].v);
-            let (u8, u9, u10, u11) = self.bf4.exec(v[8].v, v[11].v, v[2].v, v[5].v);
+        let [u0, u1, u2, u3] = self.bf4.exec([v[0], v[3], v[6], v[9]]);
+        let [u4, u5, u6, u7] = self.bf4.exec([v[4], v[7], v[10], v[1]]);
+        let [u8, u9, u10, u11] = self.bf4.exec([v[8], v[11], v[2], v[5]]);
 
-            let (v0, v4, v8) = self.bf3.exec(u0, u4, u8); // (v0, v4, v8)
-            let (v9, v1, v5) = self.bf3.exec(u1, u5, u9); // (v9, v1, v5)
-            let (v6, v10, v2) = self.bf3.exec(u2, u6, u10); // (v6, v10, v2)
-            let (v3, v7, v11) = self.bf3.exec(u3, u7, u11); // (v3, v7, v11)
+        let [v0, v4, v8] = self.bf3.exec([u0, u4, u8]); // (v0, v4, v8)
+        let [v9, v1, v5] = self.bf3.exec([u1, u5, u9]); // (v9, v1, v5)
+        let [v6, v10, v2] = self.bf3.exec([u2, u6, u10]); // (v6, v10, v2)
+        let [v3, v7, v11] = self.bf3.exec([u3, u7, u11]); // (v3, v7, v11)
 
-            [
-                AvxStoreF::raw(v0),
-                AvxStoreF::raw(v1),
-                AvxStoreF::raw(v2),
-                AvxStoreF::raw(v3),
-                AvxStoreF::raw(v4),
-                AvxStoreF::raw(v5),
-                AvxStoreF::raw(v6),
-                AvxStoreF::raw(v7),
-                AvxStoreF::raw(v8),
-                AvxStoreF::raw(v9),
-                AvxStoreF::raw(v10),
-                AvxStoreF::raw(v11),
-            ]
-        }
+        [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
     }
 }

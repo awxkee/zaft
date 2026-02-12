@@ -26,14 +26,15 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::neon::butterflies::shared::boring_simple_neon_butterfly;
+use crate::store::{BidirectionalStore, InPlaceStore};
 use crate::traits::FftTrigonometry;
-use crate::util::compute_twiddle;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::util::{compute_twiddle, validate_oof_sizes};
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 pub(crate) struct NeonButterfly3<T> {
     phantom_data: PhantomData<T>,
@@ -57,98 +58,35 @@ where
     }
 }
 
-impl FftExecutor<f64> for NeonButterfly3<f64> {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(3) {
-            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), 3));
-        }
-
+impl NeonButterfly3<f64> {
+    #[inline(always)]
+    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
         unsafe {
-            let twiddle_re = vdupq_n_f64(self.twiddle.re);
             let tw1 = vld1q_f64(self.tw1.as_ptr());
+            let u0 = vld1q_f64(chunk.slice_from(0..).as_ptr().cast());
+            let u1 = vld1q_f64(chunk.slice_from(1..).as_ptr().cast());
+            let u2 = vld1q_f64(chunk.slice_from(2..).as_ptr().cast());
 
-            for chunk in in_place.chunks_exact_mut(3) {
-                let u0 = vld1q_f64(chunk.get_unchecked(0..).as_ptr().cast());
-                let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
-                let u2 = vld1q_f64(chunk.get_unchecked(2..).as_ptr().cast());
+            let xp = vaddq_f64(u1, u2);
+            let xn = vsubq_f64(u1, u2);
+            let sum = vaddq_f64(u0, xp);
 
-                let xp = vaddq_f64(u1, u2);
-                let xn = vsubq_f64(u1, u2);
-                let sum = vaddq_f64(u0, xp);
+            let w_1 = vfmaq_n_f64(u0, xp, self.twiddle.re);
 
-                let w_1 = vfmaq_f64(u0, twiddle_re, xp);
+            let xn_rot = vextq_f64::<1>(xn, xn);
 
-                let xn_rot = vextq_f64::<1>(xn, xn);
+            let y0 = sum;
+            let y1 = vfmaq_f64(w_1, tw1, xn_rot);
+            let y2 = vfmsq_f64(w_1, tw1, xn_rot);
 
-                let y0 = sum;
-                let y1 = vfmaq_f64(w_1, tw1, xn_rot);
-                let y2 = vfmsq_f64(w_1, tw1, xn_rot);
-
-                vst1q_f64(chunk.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
-                vst1q_f64(chunk.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
-                vst1q_f64(chunk.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
-            }
+            vst1q_f64(chunk.slice_from_mut(0..).as_mut_ptr().cast(), y0);
+            vst1q_f64(chunk.slice_from_mut(1..).as_mut_ptr().cast(), y1);
+            vst1q_f64(chunk.slice_from_mut(2..).as_mut_ptr().cast(), y2);
         }
-        Ok(())
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    fn length(&self) -> usize {
-        3
     }
 }
 
-impl FftExecutorOutOfPlace<f64> for NeonButterfly3<f64> {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-    ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(3) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), 3));
-        }
-        if !dst.len().is_multiple_of(3) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), 3));
-        }
-
-        unsafe {
-            let twiddle_re = vdupq_n_f64(self.twiddle.re);
-            let tw1 = vld1q_f64(self.tw1.as_ptr());
-
-            for (dst, src) in dst.chunks_exact_mut(3).zip(src.chunks_exact(3)) {
-                let u0 = vld1q_f64(src.get_unchecked(0..).as_ptr().cast());
-                let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
-                let u2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
-
-                let xp = vaddq_f64(u1, u2);
-                let xn = vsubq_f64(u1, u2);
-                let sum = vaddq_f64(u0, xp);
-
-                let w_1 = vfmaq_f64(u0, twiddle_re, xp);
-
-                let xn_rot = vextq_f64::<1>(xn, xn);
-
-                let y0 = sum;
-                let y1 = vfmaq_f64(w_1, tw1, xn_rot);
-                let y2 = vfmsq_f64(w_1, tw1, xn_rot);
-
-                vst1q_f64(dst.get_unchecked_mut(0..).as_mut_ptr().cast(), y0);
-                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), y1);
-                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), y2);
-            }
-        }
-        Ok(())
-    }
-}
-
-impl CompositeFftExecutor<f64> for NeonButterfly3<f64> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-        self
-    }
-}
+boring_simple_neon_butterfly!(NeonButterfly3, f64, 3);
 
 impl FftExecutor<f32> for NeonButterfly3<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
@@ -277,27 +215,20 @@ impl FftExecutor<f32> for NeonButterfly3<f32> {
         Ok(())
     }
 
-    fn direction(&self) -> FftDirection {
-        self.direction
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute(in_place)
     }
 
-    fn length(&self) -> usize {
-        3
-    }
-}
-
-impl FftExecutorOutOfPlace<f32> for NeonButterfly3<f32> {
     fn execute_out_of_place(
         &self,
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(3) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(3) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
+        validate_oof_sizes!(src, dst, 3);
 
         unsafe {
             let twiddle_re = vdupq_n_f32(self.twiddle.re);
@@ -418,11 +349,43 @@ impl FftExecutorOutOfPlace<f32> for NeonButterfly3<f32> {
         }
         Ok(())
     }
-}
 
-impl CompositeFftExecutor<f32> for NeonButterfly3<f32> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-        self
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
+    fn direction(&self) -> FftDirection {
+        self.direction
+    }
+
+    fn length(&self) -> usize {
+        3
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 

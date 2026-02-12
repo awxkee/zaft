@@ -211,7 +211,7 @@ impl ColumnFcmaButterfly13d {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) unsafe fn exec(&self, store: [NeonStoreD; 13]) -> [NeonStoreD; 13] {
+    pub(crate) fn exec(&self, store: [NeonStoreD; 13]) -> [NeonStoreD; 13] {
         let y00 = store[0].v;
         let (x1p12, x1m12) = NeonButterfly::butterfly2_f64(store[1].v, store[12].v);
         let x1m12 = vcaddq_rot90_f64(vdupq_n_f64(0.), x1m12);
@@ -636,7 +636,7 @@ impl ColumnFcmaButterfly13f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) unsafe fn exec(&self, store: [NeonStoreF; 13]) -> [NeonStoreF; 13] {
+    pub(crate) fn exec(&self, store: [NeonStoreF; 13]) -> [NeonStoreF; 13] {
         let y00 = store[0].v;
         let (x1p12, x1m12) = NeonButterfly::butterfly2_f32(store[1].v, store[12].v);
         let x1m12 = vcaddq_rot90_f32(vdupq_n_f32(0.), x1m12);

@@ -72,12 +72,25 @@ where
         Ok(())
     }
 
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        R2CFftExecutor::execute(self, input, output)
+    }
+
     fn real_length(&self) -> usize {
         1
     }
 
     fn complex_length(&self) -> usize {
         1
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        0
     }
 }
 
@@ -95,12 +108,25 @@ impl<T: Copy + 'static> C2RFftExecutor<T> for OneSizedRealFft<T> {
         Ok(())
     }
 
+    fn execute_with_scratch(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [T],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute(input, output)
+    }
+
     fn complex_length(&self) -> usize {
         1
     }
 
     fn real_length(&self) -> usize {
         1
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        0
     }
 }
 
@@ -189,8 +215,12 @@ mod tests {
             let inverse_r2c = Zaft::make_c2r_fft_f32(data.len()).unwrap();
 
             let mut complex_data = vec![Complex::<f32>::default(); data.len() / 2 + 1];
-            forward_r2c.execute(&real_data, &mut complex_data).unwrap();
-            inverse_r2c.execute(&complex_data, &mut real_data).unwrap();
+            forward_r2c
+                .execute(&real_data, &mut complex_data)
+                .expect(&format!("R2C Failed for size {i}"));
+            inverse_r2c
+                .execute(&complex_data, &mut real_data)
+                .expect(&format!("R2C Failed for size {i}"));
 
             real_data = real_data
                 .iter()
@@ -232,8 +262,12 @@ mod tests {
             let inverse_r2c = Zaft::make_c2r_fft_f64(data.len()).unwrap();
 
             let mut complex_data = vec![Complex::<f64>::default(); data.len() / 2 + 1];
-            forward_r2c.execute(&real_data, &mut complex_data).unwrap();
-            inverse_r2c.execute(&complex_data, &mut real_data).unwrap();
+            forward_r2c
+                .execute(&real_data, &mut complex_data)
+                .expect(&format!("R2C Failed for size {i}"));
+            inverse_r2c
+                .execute(&complex_data, &mut real_data)
+                .expect(&format!("R2C Failed for size {i}"));
 
             real_data = real_data
                 .iter()

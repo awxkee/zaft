@@ -27,13 +27,11 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::butterflies::rotate_90;
-use crate::{
-    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
-    R2CFftExecutor, ZaftError,
-};
+use crate::butterflies::util::boring_scalar_butterfly;
+use crate::store::BidirectionalStore;
+use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
-use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) struct Butterfly4<T> {
@@ -57,93 +55,31 @@ where
     }
 }
 
-impl<T: FftSample> FftExecutor<T> for Butterfly4<T>
+impl<T: FftSample> Butterfly4<T>
 where
     f64: AsPrimitive<T>,
 {
-    fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
+    #[inline(always)]
+    pub(crate) fn run<S: BidirectionalStore<Complex<T>>>(&self, chunk: &mut S) {
+        let a = chunk[0];
+        let b = chunk[1];
+        let c = chunk[2];
+        let d = chunk[3];
 
-        for chunk in in_place.chunks_exact_mut(4) {
-            let a = chunk[0];
-            let b = chunk[1];
-            let c = chunk[2];
-            let d = chunk[3];
+        let t0 = a + c;
+        let t1 = a - c;
+        let t2 = b + d;
+        let z3 = b - d;
+        let t3 = rotate_90(z3, self.direction);
 
-            let t0 = a + c;
-            let t1 = a - c;
-            let t2 = b + d;
-            let z3 = b - d;
-            let t3 = rotate_90(z3, self.direction);
-
-            chunk[0] = t0 + t2;
-            chunk[1] = t1 + t3;
-            chunk[2] = t0 - t2;
-            chunk[3] = t1 - t3;
-        }
-        Ok(())
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        4
+        chunk[0] = t0 + t2;
+        chunk[1] = t1 + t3;
+        chunk[2] = t0 - t2;
+        chunk[3] = t1 - t3;
     }
 }
 
-impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly4<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<T>],
-        dst: &mut [Complex<T>],
-    ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
-
-        for (dst, src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
-            let a = src[0];
-            let b = src[1];
-            let c = src[2];
-            let d = src[3];
-
-            let t0 = a + c;
-            let t1 = a - c;
-            let t2 = b + d;
-            let z3 = b - d;
-            let t3 = rotate_90(z3, self.direction);
-
-            dst[0] = t0 + t2;
-            dst[1] = t1 + t3;
-            dst[2] = t0 - t2;
-            dst[3] = t1 - t3;
-        }
-        Ok(())
-    }
-}
-
-impl<T: FftSample> CompositeFftExecutor<T> for Butterfly4<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync> {
-        self
-    }
-}
+boring_scalar_butterfly!(Butterfly4, 4);
 
 impl<T: FftSample> R2CFftExecutor<T> for Butterfly4<T>
 where
@@ -185,12 +121,25 @@ where
         Ok(())
     }
 
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        R2CFftExecutor::execute(self, input, output)
+    }
+
     fn real_length(&self) -> usize {
         4
     }
 
     fn complex_length(&self) -> usize {
         3
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        0
     }
 }
 

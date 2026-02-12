@@ -35,7 +35,7 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 
 pub(crate) struct Dft<T> {
-    size: usize,
+    execution_length: usize,
     twiddles: Vec<Complex<T>>,
     direction: FftDirection,
 }
@@ -46,7 +46,7 @@ where
 {
     pub fn new(size: usize, fft_direction: FftDirection) -> Result<Dft<T>, ZaftError> {
         Ok(Dft {
-            size,
+            execution_length: size,
             twiddles: generate_twiddles_dft(size, fft_direction)?,
             direction: fft_direction,
         })
@@ -72,13 +72,16 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(self.size) {
-            return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), self.size));
+        if !in_place.len().is_multiple_of(self.execution_length) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                in_place.len(),
+                self.execution_length,
+            ));
         }
 
-        let mut output = try_vec![Complex::<T>::default(); self.size];
+        let mut output = try_vec![Complex::<T>::default(); self.execution_length];
 
-        for chunk in in_place.chunks_exact_mut(self.size) {
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
             for (k, dst) in output.iter_mut().enumerate() {
                 let mut sum = Complex::<T>::new(0f64.as_(), 0f64.as_());
                 let mut twiddle_idx = 0usize;
@@ -98,11 +101,92 @@ where
         Ok(())
     }
 
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute(in_place)
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, &mut [])
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        if !src.len().is_multiple_of(self.execution_length) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                src.len(),
+                self.execution_length,
+            ));
+        }
+        if !dst.len().is_multiple_of(self.execution_length) {
+            return Err(ZaftError::InvalidSizeMultiplier(
+                dst.len(),
+                self.execution_length,
+            ));
+        }
+
+        let mut output = try_vec![Complex::<T>::default(); self.execution_length];
+
+        for (chunk, output_chunk) in src
+            .chunks_exact(self.execution_length)
+            .zip(dst.chunks_exact_mut(self.execution_length))
+        {
+            for (k, dst) in output.iter_mut().enumerate() {
+                let mut sum = Complex::<T>::new(0f64.as_(), 0f64.as_());
+                let mut twiddle_idx = 0usize;
+                for src in chunk.iter() {
+                    let w = unsafe { *self.twiddles.get_unchecked(twiddle_idx) };
+                    sum = c_mul_add_fast(*src, w, sum);
+                    twiddle_idx += k;
+                    if twiddle_idx >= self.twiddles.len() {
+                        twiddle_idx -= self.twiddles.len();
+                    }
+                }
+                *dst = sum;
+            }
+
+            output_chunk.copy_from_slice(&output);
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
+    }
+
     fn direction(&self) -> FftDirection {
         self.direction
     }
 
     fn length(&self) -> usize {
-        self.size
+        self.execution_length
+    }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }

@@ -27,13 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly5};
+use crate::butterflies::util::boring_scalar_butterfly;
+use crate::store::BidirectionalStore;
 use crate::traits::FftTrigonometry;
-use crate::{
-    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample, ZaftError,
-};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
-use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) struct Butterfly10<T> {
@@ -54,137 +53,52 @@ where
     }
 }
 
-impl<T: FftSample> FftExecutor<T> for Butterfly10<T>
+impl<T: FftSample> Butterfly10<T>
 where
     f64: AsPrimitive<T>,
 {
-    fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(self.length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
-
+    #[inline(always)]
+    pub(crate) fn run<S: BidirectionalStore<Complex<T>>>(&self, chunk: &mut S) {
         let bf2 = FastButterfly2::new(self.direction);
+        let u0 = chunk[0];
+        let u1 = chunk[1];
+        let u2 = chunk[2];
+        let u3 = chunk[3];
+        let u4 = chunk[4];
+        let u5 = chunk[5];
+        let u6 = chunk[6];
+        let u7 = chunk[7];
+        let u8 = chunk[8];
+        let u9 = chunk[9];
 
-        for chunk in in_place.chunks_exact_mut(10) {
-            let u0 = chunk[0];
-            let u1 = chunk[1];
-            let u2 = chunk[2];
-            let u3 = chunk[3];
-            let u4 = chunk[4];
-            let u5 = chunk[5];
-            let u6 = chunk[6];
-            let u7 = chunk[7];
-            let u8 = chunk[8];
-            let u9 = chunk[9];
+        // Good-thomas butterfly-10
+        let mid0 = self.bf5.bf5(u0, u2, u4, u6, u8);
+        let mid1 = self.bf5.bf5(u5, u7, u9, u1, u3);
 
-            // Good-thomas butterfly-10
-            let mid0 = self.bf5.bf5(u0, u2, u4, u6, u8);
-            let mid1 = self.bf5.bf5(u5, u7, u9, u1, u3);
+        // Since this is good-thomas algorithm, we don't need twiddle factors
+        let (y0, y1) = bf2.butterfly2(mid0.0, mid1.0);
+        let (y2, y3) = bf2.butterfly2(mid0.1, mid1.1);
+        let (y4, y5) = bf2.butterfly2(mid0.2, mid1.2);
+        let (y6, y7) = bf2.butterfly2(mid0.3, mid1.3);
+        let (y8, y9) = bf2.butterfly2(mid0.4, mid1.4);
 
-            // Since this is good-thomas algorithm, we don't need twiddle factors
-            let (y0, y1) = bf2.butterfly2(mid0.0, mid1.0);
-            let (y2, y3) = bf2.butterfly2(mid0.1, mid1.1);
-            let (y4, y5) = bf2.butterfly2(mid0.2, mid1.2);
-            let (y6, y7) = bf2.butterfly2(mid0.3, mid1.3);
-            let (y8, y9) = bf2.butterfly2(mid0.4, mid1.4);
+        chunk[0] = y0;
+        chunk[1] = y3;
+        chunk[2] = y4;
 
-            chunk[0] = y0;
-            chunk[1] = y3;
-            chunk[2] = y4;
+        chunk[3] = y7;
+        chunk[4] = y8;
+        chunk[5] = y1;
 
-            chunk[3] = y7;
-            chunk[4] = y8;
-            chunk[5] = y1;
+        chunk[6] = y2;
+        chunk[7] = y5;
+        chunk[8] = y6;
 
-            chunk[6] = y2;
-            chunk[7] = y5;
-            chunk[8] = y6;
-
-            chunk[9] = y9;
-        }
-        Ok(())
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        10
+        chunk[9] = y9;
     }
 }
 
-impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly10<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<T>],
-        dst: &mut [Complex<T>],
-    ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(self.length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(self.length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
-
-        let bf2 = FastButterfly2::<T>::new(self.direction);
-
-        for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
-            let u0 = src[0];
-            let u1 = src[1];
-            let u2 = src[2];
-            let u3 = src[3];
-            let u4 = src[4];
-            let u5 = src[5];
-            let u6 = src[6];
-            let u7 = src[7];
-            let u8 = src[8];
-            let u9 = src[9];
-
-            // Good-thomas butterfly-10
-            let mid0 = self.bf5.bf5(u0, u2, u4, u6, u8);
-            let mid1 = self.bf5.bf5(u5, u7, u9, u1, u3);
-
-            // Since this is good-thomas algorithm, we don't need twiddle factors
-            let (y0, y1) = bf2.butterfly2(mid0.0, mid1.0);
-            let (y2, y3) = bf2.butterfly2(mid0.1, mid1.1);
-            let (y4, y5) = bf2.butterfly2(mid0.2, mid1.2);
-            let (y6, y7) = bf2.butterfly2(mid0.3, mid1.3);
-            let (y8, y9) = bf2.butterfly2(mid0.4, mid1.4);
-
-            dst[0] = y0;
-            dst[1] = y3;
-            dst[2] = y4;
-
-            dst[3] = y7;
-            dst[4] = y8;
-            dst[5] = y1;
-
-            dst[6] = y2;
-            dst[7] = y5;
-            dst[8] = y6;
-
-            dst[9] = y9;
-        }
-        Ok(())
-    }
-}
-
-impl<T: FftSample> CompositeFftExecutor<T> for Butterfly10<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync> {
-        self
-    }
-}
+boring_scalar_butterfly!(Butterfly10, 10);
 
 #[cfg(test)]
 mod tests {

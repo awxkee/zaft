@@ -29,6 +29,8 @@
 use crate::butterflies::Butterfly2;
 use crate::butterflies::fast_bf7::FastButterfly7;
 use crate::butterflies::short_butterflies::FastButterfly2;
+use crate::butterflies::util::boring_scalar_butterfly;
+use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
@@ -55,85 +57,68 @@ where
     }
 }
 
-impl<T: FftSample> FftExecutor<T> for Butterfly14<T>
+impl<T: FftSample> Butterfly14<T>
 where
     f64: AsPrimitive<T>,
 {
-    fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(self.length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
-
+    #[inline(always)]
+    pub(crate) fn run<S: BidirectionalStore<Complex<T>>>(&self, chunk: &mut S) {
         let bf2 = FastButterfly2::new(self.direction);
+        let u0 = chunk[0];
+        let u1 = chunk[7];
 
-        for chunk in in_place.chunks_exact_mut(14) {
-            let u0 = chunk[0];
-            let u1 = chunk[7];
+        let u2 = chunk[8];
+        let u3 = chunk[1];
 
-            let u2 = chunk[8];
-            let u3 = chunk[1];
+        let u4 = chunk[2];
+        let u5 = chunk[9];
 
-            let u4 = chunk[2];
-            let u5 = chunk[9];
+        let u6 = chunk[10];
+        let u7 = chunk[3];
 
-            let u6 = chunk[10];
-            let u7 = chunk[3];
+        let u8 = chunk[4];
+        let u9 = chunk[11];
 
-            let u8 = chunk[4];
-            let u9 = chunk[11];
+        let u10 = chunk[12];
+        let u11 = chunk[5];
 
-            let u10 = chunk[12];
-            let u11 = chunk[5];
+        let u12 = chunk[6];
+        let u13 = chunk[13];
 
-            let u12 = chunk[6];
-            let u13 = chunk[13];
+        // Good-Thomas algorithm
 
-            // Good-Thomas algorithm
+        // Inner 2-point butterflies
+        let (u0, u1) = bf2.butterfly2(u0, u1);
+        let (u2, u3) = bf2.butterfly2(u2, u3);
+        let (u4, u5) = bf2.butterfly2(u4, u5);
+        let (u6, u7) = bf2.butterfly2(u6, u7);
+        let (u8, u9) = bf2.butterfly2(u8, u9);
+        let (u10, u11) = bf2.butterfly2(u10, u11);
+        let (u12, u13) = bf2.butterfly2(u12, u13);
 
-            // Inner 2-point butterflies
-            let (u0, u1) = bf2.butterfly2(u0, u1);
-            let (u2, u3) = bf2.butterfly2(u2, u3);
-            let (u4, u5) = bf2.butterfly2(u4, u5);
-            let (u6, u7) = bf2.butterfly2(u6, u7);
-            let (u8, u9) = bf2.butterfly2(u8, u9);
-            let (u10, u11) = bf2.butterfly2(u10, u11);
-            let (u12, u13) = bf2.butterfly2(u12, u13);
+        // Outer 7-point butterflies
+        let (v0, v2, v4, v6, v8, v10, v12) = self.bf7.exec(u0, u2, u4, u6, u8, u10, u12); // (v0, v1, v2, v3, v4, v5, v6)
+        let (v7, v9, v11, v13, v1, v3, v5) = self.bf7.exec(u1, u3, u5, u7, u9, u11, u13); // (v7, v8, v9, v10, v11, v12, v13)
 
-            // Outer 7-point butterflies
-            let (v0, v2, v4, v6, v8, v10, v12) = self.bf7.exec(u0, u2, u4, u6, u8, u10, u12); // (v0, v1, v2, v3, v4, v5, v6)
-            let (v7, v9, v11, v13, v1, v3, v5) = self.bf7.exec(u1, u3, u5, u7, u9, u11, u13); // (v7, v8, v9, v10, v11, v12, v13)
-
-            // // Map back to natural order
-            chunk[0] = v0;
-            chunk[1] = v1;
-            chunk[2] = v2;
-            chunk[3] = v3;
-            chunk[4] = v4;
-            chunk[5] = v5;
-            chunk[6] = v6;
-            chunk[7] = v7;
-            chunk[8] = v8;
-            chunk[9] = v9;
-            chunk[10] = v10;
-            chunk[11] = v11;
-            chunk[12] = v12;
-            chunk[13] = v13;
-        }
-        Ok(())
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        14
+        // // Map back to natural order
+        chunk[0] = v0;
+        chunk[1] = v1;
+        chunk[2] = v2;
+        chunk[3] = v3;
+        chunk[4] = v4;
+        chunk[5] = v5;
+        chunk[6] = v6;
+        chunk[7] = v7;
+        chunk[8] = v8;
+        chunk[9] = v9;
+        chunk[10] = v10;
+        chunk[11] = v11;
+        chunk[12] = v12;
+        chunk[13] = v13;
     }
 }
+
+boring_scalar_butterfly!(Butterfly14, 14);
 
 impl<T: FftSample> R2CFftExecutor<T> for Butterfly14<T>
 where
@@ -204,6 +189,15 @@ where
         Ok(())
     }
 
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        R2CFftExecutor::execute(self, input, output)
+    }
+
     fn real_length(&self) -> usize {
         14
     }
@@ -211,6 +205,10 @@ where
     #[inline]
     fn complex_length(&self) -> usize {
         8
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        0
     }
 }
 

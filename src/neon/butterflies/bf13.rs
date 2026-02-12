@@ -26,11 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::neon::butterflies::shared::{boring_neon_butterfly, boring_neon_butterfly2};
 use crate::neon::mixed::{NeonStoreD, NeonStoreF};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::store::BidirectionalStore;
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::*;
-use std::sync::Arc;
 
 macro_rules! gen_bf13d {
     ($name: ident, $features: literal, $internal_bf: ident) => {
@@ -49,91 +50,20 @@ macro_rules! gen_bf13d {
             }
         }
 
-        impl FftExecutor<f64> for $name {
-            fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                unsafe { self.execute_impl(in_place) }
-            }
+        boring_neon_butterfly!($name, $features, f64, 13);
 
-            fn direction(&self) -> FftDirection {
-                self.direction
-            }
-
+        impl $name {
             #[inline]
-            fn length(&self) -> usize {
-                13
-            }
-        }
-
-        impl $name {
             #[target_feature(enable = $features)]
-            fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(13) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        in_place.len(),
-                        self.length(),
-                    ));
+            pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+                let mut rows = [NeonStoreD::default(); 13];
+                for i in 0..13 {
+                    rows[i] = NeonStoreD::from_complex_ref(chunk.slice_from(i..));
                 }
-
-                unsafe {
-                    let mut rows = [NeonStoreD::default(); 13];
-                    for chunk in in_place.chunks_exact_mut(13) {
-                        for i in 0..13 {
-                            rows[i] = NeonStoreD::from_complex_ref(chunk.get_unchecked(i..));
-                        }
-                        rows = self.bf13.exec(rows);
-                        for i in 0..13 {
-                            rows[i].write(chunk.get_unchecked_mut(i..));
-                        }
-                    }
+                rows = self.bf13.exec(rows);
+                for i in 0..13 {
+                    rows[i].write(chunk.slice_from_mut(i..));
                 }
-                Ok(())
-            }
-        }
-
-        impl FftExecutorOutOfPlace<f64> for $name {
-            fn execute_out_of_place(
-                &self,
-                src: &[Complex<f64>],
-                dst: &mut [Complex<f64>],
-            ) -> Result<(), ZaftError> {
-                unsafe { self.execute_out_of_place_impl(src, dst) }
-            }
-        }
-
-        impl $name {
-            #[target_feature(enable = $features)]
-            fn execute_out_of_place_impl(
-                &self,
-                src: &[Complex<f64>],
-                dst: &mut [Complex<f64>],
-            ) -> Result<(), ZaftError> {
-                if !src.len().is_multiple_of(13) {
-                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-                }
-                if !dst.len().is_multiple_of(13) {
-                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-                }
-
-                unsafe {
-                    let mut rows = [NeonStoreD::default(); 13];
-
-                    for (dst, src) in dst.chunks_exact_mut(13).zip(src.chunks_exact(13)) {
-                        for i in 0..13 {
-                            rows[i] = NeonStoreD::from_complex_ref(src.get_unchecked(i..));
-                        }
-                        rows = self.bf13.exec(rows);
-                        for i in 0..13 {
-                            rows[i].write(dst.get_unchecked_mut(i..));
-                        }
-                    }
-                }
-                Ok(())
-            }
-        }
-
-        impl CompositeFftExecutor<f64> for $name {
-            fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-                self
             }
         }
     };
@@ -160,166 +90,58 @@ macro_rules! gen_bf13f {
             }
         }
 
-        impl FftExecutor<f32> for $name {
-            fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                unsafe { self.execute_impl(in_place) }
-            }
-
-            fn direction(&self) -> FftDirection {
-                self.direction
+        impl $name {
+            #[inline]
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
+                let mut rows = [NeonStoreF::default(); 13];
+                for i in 0..13 {
+                    rows[i] = NeonStoreF::from_complex(chunk.index(i));
+                }
+                rows = self.bf13.exec(rows);
+                for i in 0..13 {
+                    rows[i].write_lo(chunk.slice_from_mut(i..));
+                }
             }
 
             #[inline]
-            fn length(&self) -> usize {
-                13
-            }
-        }
-
-        impl $name {
             #[target_feature(enable = $features)]
-            fn execute_impl(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                if !in_place.len().is_multiple_of(13) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        in_place.len(),
-                        self.length(),
-                    ));
-                }
-
+            pub(crate) fn run2<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
                 unsafe {
                     let mut rows = [NeonStoreF::default(); 13];
-                    for chunk in in_place.chunks_exact_mut(26) {
-                        for i in 0..6 {
-                            let q0 = vld1q_f32(chunk.get_unchecked(i * 2..).as_ptr().cast());
-                            let q1 = vld1q_f32(chunk.get_unchecked(i * 2 + 13..).as_ptr().cast());
-                            rows[i * 2] =
-                                NeonStoreF::raw(vcombine_f32(vget_low_f32(q0), vget_low_f32(q1)));
-                            rows[i * 2 + 1] =
-                                NeonStoreF::raw(vcombine_f32(vget_high_f32(q0), vget_high_f32(q1)));
-                        }
-
-                        let q0 = vld1_f32(chunk.get_unchecked(12..).as_ptr().cast());
-                        let q1 = vld1_f32(chunk.get_unchecked(12 + 13..).as_ptr().cast());
-                        rows[12] = NeonStoreF::raw(vcombine_f32(q0, q1));
-
-                        rows = self.bf13.exec(rows);
-                        for i in 0..6 {
-                            let r0 = rows[i * 2];
-                            let r1 = rows[i * 2 + 1];
-                            let new_row0 = NeonStoreF::raw(vcombine_f32(
-                                vget_low_f32(r0.v),
-                                vget_low_f32(r1.v),
-                            ));
-                            let new_row1 = NeonStoreF::raw(vcombine_f32(
-                                vget_high_f32(r0.v),
-                                vget_high_f32(r1.v),
-                            ));
-                            new_row0.write(chunk.get_unchecked_mut(i * 2..));
-                            new_row1.write(chunk.get_unchecked_mut(i * 2 + 13..));
-                        }
-
-                        let r0 = rows[12];
-                        r0.write_lo(chunk.get_unchecked_mut(12..));
-                        r0.write_hi(chunk.get_unchecked_mut(12 + 13..));
+                    for i in 0..6 {
+                        let q0 = vld1q_f32(chunk.slice_from(i * 2..).as_ptr().cast());
+                        let q1 = vld1q_f32(chunk.slice_from(i * 2 + 13..).as_ptr().cast());
+                        rows[i * 2] =
+                            NeonStoreF::raw(vcombine_f32(vget_low_f32(q0), vget_low_f32(q1)));
+                        rows[i * 2 + 1] =
+                            NeonStoreF::raw(vcombine_f32(vget_high_f32(q0), vget_high_f32(q1)));
                     }
-                    let rem = in_place.chunks_exact_mut(26).into_remainder();
-                    for chunk in rem.chunks_exact_mut(13) {
-                        for i in 0..13 {
-                            rows[i] = NeonStoreF::from_complex(chunk.get_unchecked(i));
-                        }
-                        rows = self.bf13.exec(rows);
-                        for i in 0..13 {
-                            rows[i].write_lo(chunk.get_unchecked_mut(i..));
-                        }
+
+                    let q0 = vld1_f32(chunk.slice_from(12..).as_ptr().cast());
+                    let q1 = vld1_f32(chunk.slice_from(12 + 13..).as_ptr().cast());
+                    rows[12] = NeonStoreF::raw(vcombine_f32(q0, q1));
+
+                    rows = self.bf13.exec(rows);
+                    for i in 0..6 {
+                        let r0 = rows[i * 2];
+                        let r1 = rows[i * 2 + 1];
+                        let new_row0 =
+                            NeonStoreF::raw(vcombine_f32(vget_low_f32(r0.v), vget_low_f32(r1.v)));
+                        let new_row1 =
+                            NeonStoreF::raw(vcombine_f32(vget_high_f32(r0.v), vget_high_f32(r1.v)));
+                        new_row0.write(chunk.slice_from_mut(i * 2..));
+                        new_row1.write(chunk.slice_from_mut(i * 2 + 13..));
                     }
+
+                    let r0 = rows[12];
+                    r0.write_lo(chunk.slice_from_mut(12..));
+                    r0.write_hi(chunk.slice_from_mut(12 + 13..));
                 }
-                Ok(())
             }
         }
 
-        impl FftExecutorOutOfPlace<f32> for $name {
-            fn execute_out_of_place(
-                &self,
-                src: &[Complex<f32>],
-                dst: &mut [Complex<f32>],
-            ) -> Result<(), ZaftError> {
-                unsafe { self.execute_out_of_place_impl(src, dst) }
-            }
-        }
-
-        impl $name {
-            #[target_feature(enable = $features)]
-            fn execute_out_of_place_impl(
-                &self,
-                src: &[Complex<f32>],
-                dst: &mut [Complex<f32>],
-            ) -> Result<(), ZaftError> {
-                if !src.len().is_multiple_of(13) {
-                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-                }
-                if !dst.len().is_multiple_of(13) {
-                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-                }
-
-                unsafe {
-                    let mut rows = [NeonStoreF::default(); 13];
-
-                    for (dst, src) in dst.chunks_exact_mut(26).zip(src.chunks_exact(26)) {
-                        for i in 0..6 {
-                            let q0 = vld1q_f32(src.get_unchecked(i * 2..).as_ptr().cast());
-                            let q1 = vld1q_f32(src.get_unchecked(i * 2 + 13..).as_ptr().cast());
-                            rows[i * 2] =
-                                NeonStoreF::raw(vcombine_f32(vget_low_f32(q0), vget_low_f32(q1)));
-                            rows[i * 2 + 1] =
-                                NeonStoreF::raw(vcombine_f32(vget_high_f32(q0), vget_high_f32(q1)));
-                        }
-
-                        let q0 = vld1_f32(src.get_unchecked(12..).as_ptr().cast());
-                        let q1 = vld1_f32(src.get_unchecked(12 + 13..).as_ptr().cast());
-                        rows[12] = NeonStoreF::raw(vcombine_f32(q0, q1));
-
-                        rows = self.bf13.exec(rows);
-                        for i in 0..6 {
-                            let r0 = rows[i * 2];
-                            let r1 = rows[i * 2 + 1];
-                            let new_row0 = NeonStoreF::raw(vcombine_f32(
-                                vget_low_f32(r0.v),
-                                vget_low_f32(r1.v),
-                            ));
-                            let new_row1 = NeonStoreF::raw(vcombine_f32(
-                                vget_high_f32(r0.v),
-                                vget_high_f32(r1.v),
-                            ));
-                            new_row0.write(dst.get_unchecked_mut(i * 2..));
-                            new_row1.write(dst.get_unchecked_mut(i * 2 + 13..));
-                        }
-
-                        let r0 = rows[12];
-                        r0.write_lo(dst.get_unchecked_mut(12..));
-                        r0.write_hi(dst.get_unchecked_mut(12 + 13..));
-                    }
-
-                    let rem_dst = dst.chunks_exact_mut(26).into_remainder();
-                    let rem_src = src.chunks_exact(26).remainder();
-
-                    for (dst, src) in rem_dst.chunks_exact_mut(13).zip(rem_src.chunks_exact(13)) {
-                        for i in 0..13 {
-                            rows[i] = NeonStoreF::from_complex(src.get_unchecked(i));
-                        }
-                        rows = self.bf13.exec(rows);
-                        for i in 0..13 {
-                            rows[i].write_lo(dst.get_unchecked_mut(i..));
-                        }
-                    }
-                }
-                Ok(())
-            }
-        }
-
-        impl CompositeFftExecutor<f32> for $name {
-            fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-                self
-            }
-        }
+        boring_neon_butterfly2!($name, $features, f32, 13);
     };
 }
 

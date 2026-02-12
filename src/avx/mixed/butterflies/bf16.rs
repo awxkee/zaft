@@ -27,10 +27,10 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::avx::butterflies::{AvxButterfly, AvxFastButterfly8};
+use crate::avx::butterflies::AvxButterfly;
 use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::mixed::avx_storef::AvxStoreF;
-use crate::avx::rotate::AvxRotate;
+use crate::avx::mixed::{ColumnButterfly8d, ColumnButterfly8f};
 use crate::avx::util::{
     _mm256_fcmul_pd, _mm256_fcmul_pd_conj_b, _mm256_fcmul_ps, _mm256_fcmul_ps_conj_b,
 };
@@ -38,8 +38,7 @@ use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly16d {
-    pub(crate) rotate: AvxRotate<f64>,
-    pub(crate) bf8: AvxFastButterfly8<f64>,
+    pub(crate) bf8: ColumnButterfly8d,
     twiddle1: __m256d,
     twiddle2: __m256d,
     twiddle3: __m256d,
@@ -53,8 +52,7 @@ impl ColumnButterfly16d {
         let tw3 = compute_twiddle(3, 16, direction);
         unsafe {
             Self {
-                rotate: AvxRotate::new(direction),
-                bf8: AvxFastButterfly8::new(direction),
+                bf8: ColumnButterfly8d::new(direction),
                 twiddle1: _mm256_loadu_pd([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr()),
                 twiddle2: _mm256_loadu_pd([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr()),
                 twiddle3: _mm256_loadu_pd([tw3.re, tw3.im, tw3.re, tw3.im].as_ptr()),
@@ -67,69 +65,66 @@ impl ColumnButterfly16d {
     #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
     pub(crate) fn exec(&self, v: [AvxStoreD; 16]) -> [AvxStoreD; 16] {
-        let evens = self.bf8.exec(
-            v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
-        );
+        let evens = self
+            .bf8
+            .exec([v[0], v[2], v[4], v[6], v[8], v[10], v[12], v[14]]);
 
-        let mut odds_1 =
-            AvxButterfly::butterfly4_f64(v[1].v, v[5].v, v[9].v, v[13].v, self.rotate.rot_flag);
-        let mut odds_2 =
-            AvxButterfly::butterfly4_f64(v[15].v, v[3].v, v[7].v, v[11].v, self.rotate.rot_flag);
+        let mut odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
+        let mut odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
 
-        odds_1.1 = _mm256_fcmul_pd(odds_1.1, self.twiddle1);
-        odds_2.1 = _mm256_fcmul_pd_conj_b(odds_2.1, self.twiddle1);
+        odds_1[1] = AvxStoreD::raw(_mm256_fcmul_pd(odds_1[1].v, self.twiddle1));
+        odds_2[1] = AvxStoreD::raw(_mm256_fcmul_pd_conj_b(odds_2[1].v, self.twiddle1));
 
-        odds_1.2 = _mm256_fcmul_pd(odds_1.2, self.twiddle2);
-        odds_2.2 = _mm256_fcmul_pd_conj_b(odds_2.2, self.twiddle2);
+        odds_1[2] = AvxStoreD::raw(_mm256_fcmul_pd(odds_1[2].v, self.twiddle2));
+        odds_2[2] = AvxStoreD::raw(_mm256_fcmul_pd_conj_b(odds_2[2].v, self.twiddle2));
 
-        odds_1.3 = _mm256_fcmul_pd(odds_1.3, self.twiddle3);
-        odds_2.3 = _mm256_fcmul_pd_conj_b(odds_2.3, self.twiddle3);
+        odds_1[3] = AvxStoreD::raw(_mm256_fcmul_pd(odds_1[3].v, self.twiddle3));
+        odds_2[3] = AvxStoreD::raw(_mm256_fcmul_pd_conj_b(odds_2[3].v, self.twiddle3));
 
         // step 4: cross FFTs
-        let (o01, o02) = AvxButterfly::butterfly2_f64(odds_1.0, odds_2.0);
-        odds_1.0 = o01;
-        odds_2.0 = o02;
+        let (o01, o02) = AvxButterfly::butterfly2_f64(odds_1[0].v, odds_2[0].v);
+        odds_1[0] = AvxStoreD::raw(o01);
+        odds_2[0] = AvxStoreD::raw(o02);
 
-        let (o03, o04) = AvxButterfly::butterfly2_f64(odds_1.1, odds_2.1);
-        odds_1.1 = o03;
-        odds_2.1 = o04;
-        let (o05, o06) = AvxButterfly::butterfly2_f64(odds_1.2, odds_2.2);
-        odds_1.2 = o05;
-        odds_2.2 = o06;
-        let (o07, o08) = AvxButterfly::butterfly2_f64(odds_1.3, odds_2.3);
-        odds_1.3 = o07;
-        odds_2.3 = o08;
+        let (o03, o04) = AvxButterfly::butterfly2_f64(odds_1[1].v, odds_2[1].v);
+        odds_1[1] = AvxStoreD::raw(o03);
+        odds_2[1] = AvxStoreD::raw(o04);
+        let (o05, o06) = AvxButterfly::butterfly2_f64(odds_1[2].v, odds_2[2].v);
+        odds_1[2] = AvxStoreD::raw(o05);
+        odds_2[2] = AvxStoreD::raw(o06);
+        let (o07, o08) = AvxButterfly::butterfly2_f64(odds_1[3].v, odds_2[3].v);
+        odds_1[3] = AvxStoreD::raw(o07);
+        odds_2[3] = AvxStoreD::raw(o08);
 
         // apply the butterfly 4 twiddle factor, which is just a rotation
-        odds_2.0 = self.rotate.rotate_m256d(odds_2.0);
-        odds_2.1 = self.rotate.rotate_m256d(odds_2.1);
-        odds_2.2 = self.rotate.rotate_m256d(odds_2.2);
-        odds_2.3 = self.rotate.rotate_m256d(odds_2.3);
+        odds_2[0] = AvxStoreD::raw(self.bf8.bf4.rotate.rotate_m256d(odds_2[0].v));
+        odds_2[1] = AvxStoreD::raw(self.bf8.bf4.rotate.rotate_m256d(odds_2[1].v));
+        odds_2[2] = AvxStoreD::raw(self.bf8.bf4.rotate.rotate_m256d(odds_2[2].v));
+        odds_2[3] = AvxStoreD::raw(self.bf8.bf4.rotate.rotate_m256d(odds_2[3].v));
 
         [
-            AvxStoreD::raw(_mm256_add_pd(evens.0, odds_1.0)),
-            AvxStoreD::raw(_mm256_add_pd(evens.1, odds_1.1)),
-            AvxStoreD::raw(_mm256_add_pd(evens.2, odds_1.2)),
-            AvxStoreD::raw(_mm256_add_pd(evens.3, odds_1.3)),
-            AvxStoreD::raw(_mm256_add_pd(evens.4, odds_2.0)),
-            AvxStoreD::raw(_mm256_add_pd(evens.5, odds_2.1)),
-            AvxStoreD::raw(_mm256_add_pd(evens.6, odds_2.2)),
-            AvxStoreD::raw(_mm256_add_pd(evens.7, odds_2.3)),
-            AvxStoreD::raw(_mm256_sub_pd(evens.0, odds_1.0)),
-            AvxStoreD::raw(_mm256_sub_pd(evens.1, odds_1.1)),
-            AvxStoreD::raw(_mm256_sub_pd(evens.2, odds_1.2)),
-            AvxStoreD::raw(_mm256_sub_pd(evens.3, odds_1.3)),
-            AvxStoreD::raw(_mm256_sub_pd(evens.4, odds_2.0)),
-            AvxStoreD::raw(_mm256_sub_pd(evens.5, odds_2.1)),
-            AvxStoreD::raw(_mm256_sub_pd(evens.6, odds_2.2)),
-            AvxStoreD::raw(_mm256_sub_pd(evens.7, odds_2.3)),
+            AvxStoreD::raw(_mm256_add_pd(evens[0].v, odds_1[0].v)),
+            AvxStoreD::raw(_mm256_add_pd(evens[1].v, odds_1[1].v)),
+            AvxStoreD::raw(_mm256_add_pd(evens[2].v, odds_1[2].v)),
+            AvxStoreD::raw(_mm256_add_pd(evens[3].v, odds_1[3].v)),
+            AvxStoreD::raw(_mm256_add_pd(evens[4].v, odds_2[0].v)),
+            AvxStoreD::raw(_mm256_add_pd(evens[5].v, odds_2[1].v)),
+            AvxStoreD::raw(_mm256_add_pd(evens[6].v, odds_2[2].v)),
+            AvxStoreD::raw(_mm256_add_pd(evens[7].v, odds_2[3].v)),
+            AvxStoreD::raw(_mm256_sub_pd(evens[0].v, odds_1[0].v)),
+            AvxStoreD::raw(_mm256_sub_pd(evens[1].v, odds_1[1].v)),
+            AvxStoreD::raw(_mm256_sub_pd(evens[2].v, odds_1[2].v)),
+            AvxStoreD::raw(_mm256_sub_pd(evens[3].v, odds_1[3].v)),
+            AvxStoreD::raw(_mm256_sub_pd(evens[4].v, odds_2[0].v)),
+            AvxStoreD::raw(_mm256_sub_pd(evens[5].v, odds_2[1].v)),
+            AvxStoreD::raw(_mm256_sub_pd(evens[6].v, odds_2[2].v)),
+            AvxStoreD::raw(_mm256_sub_pd(evens[7].v, odds_2[3].v)),
         ]
     }
 }
 
 pub(crate) struct ColumnButterfly16f {
-    pub(crate) rotate: AvxRotate<f32>,
-    pub(crate) bf8: AvxFastButterfly8<f32>,
+    pub(crate) bf8: ColumnButterfly8f,
     twiddle1: __m256,
     twiddle2: __m256,
     twiddle3: __m256,
@@ -143,8 +138,7 @@ impl ColumnButterfly16f {
         let tw3 = compute_twiddle(3, 16, direction);
         unsafe {
             Self {
-                rotate: AvxRotate::new(direction),
-                bf8: AvxFastButterfly8::new(direction),
+                bf8: ColumnButterfly8f::new(direction),
                 twiddle1: _mm256_loadu_ps(
                     [
                         tw1.re, tw1.im, tw1.re, tw1.im, tw1.re, tw1.im, tw1.re, tw1.im,
@@ -172,72 +166,60 @@ impl ColumnButterfly16f {
     #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 16]) -> [AvxStoreF; 16] {
         unsafe {
-            let evens = self.bf8.exec(
-                v[0].v, v[2].v, v[4].v, v[6].v, v[8].v, v[10].v, v[12].v, v[14].v,
-            );
+            let evens = self
+                .bf8
+                .exec([v[0], v[2], v[4], v[6], v[8], v[10], v[12], v[14]]);
 
-            let mut odds_1 = AvxButterfly::butterfly4_f32(
-                v[1].v,
-                v[5].v,
-                v[9].v,
-                v[13].v,
-                _mm256_castpd_ps(self.rotate.rot_flag),
-            );
-            let mut odds_2 = AvxButterfly::butterfly4_f32(
-                v[15].v,
-                v[3].v,
-                v[7].v,
-                v[11].v,
-                _mm256_castpd_ps(self.rotate.rot_flag),
-            );
+            let mut odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
+            let mut odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
 
-            odds_1.1 = _mm256_fcmul_ps(odds_1.1, self.twiddle1);
-            odds_2.1 = _mm256_fcmul_ps_conj_b(odds_2.1, self.twiddle1);
+            odds_1[1] = AvxStoreF::raw(_mm256_fcmul_ps(odds_1[1].v, self.twiddle1));
+            odds_2[1] = AvxStoreF::raw(_mm256_fcmul_ps_conj_b(odds_2[1].v, self.twiddle1));
 
-            odds_1.2 = _mm256_fcmul_ps(odds_1.2, self.twiddle2);
-            odds_2.2 = _mm256_fcmul_ps_conj_b(odds_2.2, self.twiddle2);
+            odds_1[2] = AvxStoreF::raw(_mm256_fcmul_ps(odds_1[2].v, self.twiddle2));
+            odds_2[2] = AvxStoreF::raw(_mm256_fcmul_ps_conj_b(odds_2[2].v, self.twiddle2));
 
-            odds_1.3 = _mm256_fcmul_ps(odds_1.3, self.twiddle3);
-            odds_2.3 = _mm256_fcmul_ps_conj_b(odds_2.3, self.twiddle3);
+            odds_1[3] = AvxStoreF::raw(_mm256_fcmul_ps(odds_1[3].v, self.twiddle3));
+            odds_2[3] = AvxStoreF::raw(_mm256_fcmul_ps_conj_b(odds_2[3].v, self.twiddle3));
 
             // step 4: cross FFTs
-            let (o01, o02) = AvxButterfly::butterfly2_f32(odds_1.0, odds_2.0);
-            odds_1.0 = o01;
-            odds_2.0 = o02;
+            let (o01, o02) = AvxButterfly::butterfly2_f32(odds_1[0].v, odds_2[0].v);
+            odds_1[0] = AvxStoreF::raw(o01);
+            odds_2[0] = AvxStoreF::raw(o02);
 
-            let (o03, o04) = AvxButterfly::butterfly2_f32(odds_1.1, odds_2.1);
-            odds_1.1 = o03;
-            odds_2.1 = o04;
-            let (o05, o06) = AvxButterfly::butterfly2_f32(odds_1.2, odds_2.2);
-            odds_1.2 = o05;
-            odds_2.2 = o06;
-            let (o07, o08) = AvxButterfly::butterfly2_f32(odds_1.3, odds_2.3);
-            odds_1.3 = o07;
-            odds_2.3 = o08;
+            let (o03, o04) = AvxButterfly::butterfly2_f32(odds_1[1].v, odds_2[1].v);
+            odds_1[1] = AvxStoreF::raw(o03);
+            odds_2[1] = AvxStoreF::raw(o04);
+            let (o05, o06) = AvxButterfly::butterfly2_f32(odds_1[2].v, odds_2[2].v);
+            odds_1[2] = AvxStoreF::raw(o05);
+            odds_2[2] = AvxStoreF::raw(o06);
+            let (o07, o08) = AvxButterfly::butterfly2_f32(odds_1[3].v, odds_2[3].v);
+            odds_1[3] = AvxStoreF::raw(o07);
+            odds_2[3] = AvxStoreF::raw(o08);
 
             // apply the butterfly 4 twiddle factor, which is just a rotation
-            odds_2.0 = self.rotate.rotate_m256(odds_2.0);
-            odds_2.1 = self.rotate.rotate_m256(odds_2.1);
-            odds_2.2 = self.rotate.rotate_m256(odds_2.2);
-            odds_2.3 = self.rotate.rotate_m256(odds_2.3);
+            odds_2[0] = AvxStoreF::raw(self.bf8.bf4.rotate.rotate_m256(odds_2[0].v));
+            odds_2[1] = AvxStoreF::raw(self.bf8.bf4.rotate.rotate_m256(odds_2[1].v));
+            odds_2[2] = AvxStoreF::raw(self.bf8.bf4.rotate.rotate_m256(odds_2[2].v));
+            odds_2[3] = AvxStoreF::raw(self.bf8.bf4.rotate.rotate_m256(odds_2[3].v));
 
             [
-                AvxStoreF::raw(_mm256_add_ps(evens.0, odds_1.0)),
-                AvxStoreF::raw(_mm256_add_ps(evens.1, odds_1.1)),
-                AvxStoreF::raw(_mm256_add_ps(evens.2, odds_1.2)),
-                AvxStoreF::raw(_mm256_add_ps(evens.3, odds_1.3)),
-                AvxStoreF::raw(_mm256_add_ps(evens.4, odds_2.0)),
-                AvxStoreF::raw(_mm256_add_ps(evens.5, odds_2.1)),
-                AvxStoreF::raw(_mm256_add_ps(evens.6, odds_2.2)),
-                AvxStoreF::raw(_mm256_add_ps(evens.7, odds_2.3)),
-                AvxStoreF::raw(_mm256_sub_ps(evens.0, odds_1.0)),
-                AvxStoreF::raw(_mm256_sub_ps(evens.1, odds_1.1)),
-                AvxStoreF::raw(_mm256_sub_ps(evens.2, odds_1.2)),
-                AvxStoreF::raw(_mm256_sub_ps(evens.3, odds_1.3)),
-                AvxStoreF::raw(_mm256_sub_ps(evens.4, odds_2.0)),
-                AvxStoreF::raw(_mm256_sub_ps(evens.5, odds_2.1)),
-                AvxStoreF::raw(_mm256_sub_ps(evens.6, odds_2.2)),
-                AvxStoreF::raw(_mm256_sub_ps(evens.7, odds_2.3)),
+                AvxStoreF::raw(_mm256_add_ps(evens[0].v, odds_1[0].v)),
+                AvxStoreF::raw(_mm256_add_ps(evens[1].v, odds_1[1].v)),
+                AvxStoreF::raw(_mm256_add_ps(evens[2].v, odds_1[2].v)),
+                AvxStoreF::raw(_mm256_add_ps(evens[3].v, odds_1[3].v)),
+                AvxStoreF::raw(_mm256_add_ps(evens[4].v, odds_2[0].v)),
+                AvxStoreF::raw(_mm256_add_ps(evens[5].v, odds_2[1].v)),
+                AvxStoreF::raw(_mm256_add_ps(evens[6].v, odds_2[2].v)),
+                AvxStoreF::raw(_mm256_add_ps(evens[7].v, odds_2[3].v)),
+                AvxStoreF::raw(_mm256_sub_ps(evens[0].v, odds_1[0].v)),
+                AvxStoreF::raw(_mm256_sub_ps(evens[1].v, odds_1[1].v)),
+                AvxStoreF::raw(_mm256_sub_ps(evens[2].v, odds_1[2].v)),
+                AvxStoreF::raw(_mm256_sub_ps(evens[3].v, odds_1[3].v)),
+                AvxStoreF::raw(_mm256_sub_ps(evens[4].v, odds_2[0].v)),
+                AvxStoreF::raw(_mm256_sub_ps(evens[5].v, odds_2[1].v)),
+                AvxStoreF::raw(_mm256_sub_ps(evens[6].v, odds_2[2].v)),
+                AvxStoreF::raw(_mm256_sub_ps(evens[7].v, odds_2[3].v)),
             ]
         }
     }

@@ -26,16 +26,14 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::butterflies::util::boring_scalar_butterfly;
 use crate::mla::fmla;
+use crate::store::BidirectionalStore;
 use crate::traits::FftTrigonometry;
 use crate::util::compute_twiddle;
-use crate::{
-    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, FftSample,
-    R2CFftExecutor, ZaftError,
-};
+use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
-use std::sync::Arc;
 
 #[allow(unused)]
 pub(crate) struct Butterfly5<T> {
@@ -58,185 +56,76 @@ where
     }
 }
 
-impl<T: FftSample> FftExecutor<T> for Butterfly5<T>
+boring_scalar_butterfly!(Butterfly5, 5);
+
+impl<T: FftSample> Butterfly5<T>
 where
     f64: AsPrimitive<T>,
 {
-    fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(self.length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
+    #[inline(always)]
+    pub(crate) fn run<S: BidirectionalStore<Complex<T>>>(&self, chunk: &mut S) {
+        let u0 = chunk[0];
+        let u1 = chunk[1];
+        let u2 = chunk[2];
+        let u3 = chunk[3];
+        let u4 = chunk[4];
 
-        for chunk in in_place.chunks_exact_mut(5) {
-            let u0 = chunk[0];
-            let u1 = chunk[1];
-            let u2 = chunk[2];
-            let u3 = chunk[3];
-            let u4 = chunk[4];
+        // Radix-5 butterfly
 
-            // Radix-5 butterfly
+        let x14p = u1 + u4;
+        let x14n = u1 - u4;
+        let x23p = u2 + u3;
+        let x23n = u2 - u3;
+        let y0 = u0 + x14p + x23p;
 
-            let x14p = u1 + u4;
-            let x14n = u1 - u4;
-            let x23p = u2 + u3;
-            let x23n = u2 - u3;
-            let y0 = u0 + x14p + x23p;
+        let b14re_a = fmla(
+            self.twiddle2.re,
+            x23p.re,
+            fmla(self.twiddle1.re, x14p.re, u0.re),
+        );
+        let b14re_b = fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
+        let b23re_a = fmla(
+            self.twiddle1.re,
+            x23p.re,
+            fmla(self.twiddle2.re, x14p.re, u0.re),
+        );
+        let b23re_b = fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
 
-            let b14re_a = fmla(
-                self.twiddle2.re,
-                x23p.re,
-                fmla(self.twiddle1.re, x14p.re, u0.re),
-            );
-            let b14re_b = fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
-            let b23re_a = fmla(
-                self.twiddle1.re,
-                x23p.re,
-                fmla(self.twiddle2.re, x14p.re, u0.re),
-            );
-            let b23re_b = fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
+        let b14im_a = fmla(
+            self.twiddle2.re,
+            x23p.im,
+            fmla(self.twiddle1.re, x14p.im, u0.im),
+        );
+        let b14im_b = fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
+        let b23im_a = fmla(
+            self.twiddle1.re,
+            x23p.im,
+            fmla(self.twiddle2.re, x14p.im, u0.im),
+        );
+        let b23im_b = fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
 
-            let b14im_a = fmla(
-                self.twiddle2.re,
-                x23p.im,
-                fmla(self.twiddle1.re, x14p.im, u0.im),
-            );
-            let b14im_b = fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
-            let b23im_a = fmla(
-                self.twiddle1.re,
-                x23p.im,
-                fmla(self.twiddle2.re, x14p.im, u0.im),
-            );
-            let b23im_b = fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
+        let y1 = Complex {
+            re: b14re_a - b14re_b,
+            im: b14im_a + b14im_b,
+        };
+        let y2 = Complex {
+            re: b23re_a - b23re_b,
+            im: b23im_a + b23im_b,
+        };
+        let y3 = Complex {
+            re: b23re_a + b23re_b,
+            im: b23im_a - b23im_b,
+        };
+        let y4 = Complex {
+            re: b14re_a + b14re_b,
+            im: b14im_a - b14im_b,
+        };
 
-            let y1 = Complex {
-                re: b14re_a - b14re_b,
-                im: b14im_a + b14im_b,
-            };
-            let y2 = Complex {
-                re: b23re_a - b23re_b,
-                im: b23im_a + b23im_b,
-            };
-            let y3 = Complex {
-                re: b23re_a + b23re_b,
-                im: b23im_a - b23im_b,
-            };
-            let y4 = Complex {
-                re: b14re_a + b14re_b,
-                im: b14im_a - b14im_b,
-            };
-
-            chunk[0] = y0;
-            chunk[1] = y1;
-            chunk[2] = y2;
-            chunk[3] = y3;
-            chunk[4] = y4;
-        }
-        Ok(())
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    #[inline]
-    fn length(&self) -> usize {
-        5
-    }
-}
-
-impl<T: FftSample> FftExecutorOutOfPlace<T> for Butterfly5<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<T>],
-        dst: &mut [Complex<T>],
-    ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(self.length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(self.length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
-
-        for (dst, src) in dst.chunks_exact_mut(5).zip(src.chunks_exact(5)) {
-            let u0 = src[0];
-            let u1 = src[1];
-            let u2 = src[2];
-            let u3 = src[3];
-            let u4 = src[4];
-
-            // Radix-5 butterfly
-
-            let x14p = u1 + u4;
-            let x14n = u1 - u4;
-            let x23p = u2 + u3;
-            let x23n = u2 - u3;
-            let y0 = u0 + x14p + x23p;
-
-            let b14re_a = fmla(
-                self.twiddle2.re,
-                x23p.re,
-                fmla(self.twiddle1.re, x14p.re, u0.re),
-            );
-            let b14re_b = fmla(self.twiddle1.im, x14n.im, self.twiddle2.im * x23n.im);
-            let b23re_a = fmla(
-                self.twiddle1.re,
-                x23p.re,
-                fmla(self.twiddle2.re, x14p.re, u0.re),
-            );
-            let b23re_b = fmla(self.twiddle2.im, x14n.im, -self.twiddle1.im * x23n.im);
-
-            let b14im_a = fmla(
-                self.twiddle2.re,
-                x23p.im,
-                fmla(self.twiddle1.re, x14p.im, u0.im),
-            );
-            let b14im_b = fmla(self.twiddle1.im, x14n.re, self.twiddle2.im * x23n.re);
-            let b23im_a = fmla(
-                self.twiddle1.re,
-                x23p.im,
-                fmla(self.twiddle2.re, x14p.im, u0.im),
-            );
-            let b23im_b = fmla(self.twiddle2.im, x14n.re, -self.twiddle1.im * x23n.re);
-
-            let y1 = Complex {
-                re: b14re_a - b14re_b,
-                im: b14im_a + b14im_b,
-            };
-            let y2 = Complex {
-                re: b23re_a - b23re_b,
-                im: b23im_a + b23im_b,
-            };
-            let y3 = Complex {
-                re: b23re_a + b23re_b,
-                im: b23im_a - b23im_b,
-            };
-            let y4 = Complex {
-                re: b14re_a + b14re_b,
-                im: b14im_a - b14im_b,
-            };
-
-            dst[0] = y0;
-            dst[1] = y1;
-            dst[2] = y2;
-            dst[3] = y3;
-            dst[4] = y4;
-        }
-        Ok(())
-    }
-}
-
-impl<T: FftSample> CompositeFftExecutor<T> for Butterfly5<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<T> + Send + Sync> {
-        self
+        chunk[0] = y0;
+        chunk[1] = y1;
+        chunk[2] = y2;
+        chunk[3] = y3;
+        chunk[4] = y4;
     }
 }
 
@@ -289,12 +178,25 @@ where
         Ok(())
     }
 
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        R2CFftExecutor::execute(self, input, output)
+    }
+
     fn complex_length(&self) -> usize {
         3
     }
 
     fn real_length(&self) -> usize {
         5
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        0
     }
 }
 

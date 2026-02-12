@@ -279,86 +279,222 @@ impl AvxButterfly {
             (y0, y1)
         }
     }
-
-    #[inline(always)]
-    pub(crate) fn butterfly4_f32(
-        a: __m256,
-        b: __m256,
-        c: __m256,
-        d: __m256,
-        rotate: __m256,
-    ) -> (__m256, __m256, __m256, __m256) {
-        unsafe {
-            let t0 = _mm256_add_ps(a, c);
-            let t1 = _mm256_sub_ps(a, c);
-            let t2 = _mm256_add_ps(b, d);
-            let mut t3 = _mm256_sub_ps(b, d);
-            const SH: i32 = shuffle(2, 3, 0, 1);
-            t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), rotate);
-            (
-                _mm256_add_ps(t0, t2),
-                _mm256_add_ps(t1, t3),
-                _mm256_sub_ps(t0, t2),
-                _mm256_sub_ps(t1, t3),
-            )
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn qbutterfly4_f32(a: [AvxStoreF; 4], rotate: __m256) -> [AvxStoreF; 4] {
-        unsafe {
-            let t0 = _mm256_add_ps(a[0].v, a[2].v);
-            let t1 = _mm256_sub_ps(a[0].v, a[2].v);
-            let t2 = _mm256_add_ps(a[1].v, a[3].v);
-            let mut t3 = _mm256_sub_ps(a[1].v, a[3].v);
-            const SH: i32 = shuffle(2, 3, 0, 1);
-            t3 = _mm256_xor_ps(_mm256_shuffle_ps::<SH>(t3, t3), rotate);
-            [
-                AvxStoreF::raw(_mm256_add_ps(t0, t2)),
-                AvxStoreF::raw(_mm256_add_ps(t1, t3)),
-                AvxStoreF::raw(_mm256_sub_ps(t0, t2)),
-                AvxStoreF::raw(_mm256_sub_ps(t1, t3)),
-            ]
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn butterfly4_f64(
-        a: __m256d,
-        b: __m256d,
-        c: __m256d,
-        d: __m256d,
-        rotate: __m256d,
-    ) -> (__m256d, __m256d, __m256d, __m256d) {
-        unsafe {
-            let t0 = _mm256_add_pd(a, c);
-            let t1 = _mm256_sub_pd(a, c);
-            let t2 = _mm256_add_pd(b, d);
-            let mut t3 = _mm256_sub_pd(b, d);
-            t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), rotate);
-            (
-                _mm256_add_pd(t0, t2),
-                _mm256_add_pd(t1, t3),
-                _mm256_sub_pd(t0, t2),
-                _mm256_sub_pd(t1, t3),
-            )
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn qbutterfly4_f64(a: [AvxStoreD; 4], rotate: __m256d) -> [AvxStoreD; 4] {
-        unsafe {
-            let t0 = _mm256_add_pd(a[0].v, a[2].v);
-            let t1 = _mm256_sub_pd(a[0].v, a[2].v);
-            let t2 = _mm256_add_pd(a[1].v, a[3].v);
-            let mut t3 = _mm256_sub_pd(a[1].v, a[3].v);
-            t3 = _mm256_xor_pd(_mm256_shuffle_pd::<0b0101>(t3, t3), rotate);
-            [
-                AvxStoreD::raw(_mm256_add_pd(t0, t2)),
-                AvxStoreD::raw(_mm256_add_pd(t1, t3)),
-                AvxStoreD::raw(_mm256_sub_pd(t0, t2)),
-                AvxStoreD::raw(_mm256_sub_pd(t1, t3)),
-            ]
-        }
-    }
 }
+
+macro_rules! boring_avx_butterfly {
+    ($bf_name: ident, $f_type: ident, $size: expr) => {
+        impl $bf_name {
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn execute_impl(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of($size) {
+                    return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
+                }
+
+                for chunk in in_place.chunks_exact_mut($size) {
+                    use crate::store::InPlaceStore;
+                    self.run(&mut InPlaceStore::new(chunk));
+                }
+
+                Ok(())
+            }
+
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn execute_oof_impl(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                use crate::util::validate_oof_sizes;
+                validate_oof_sizes!(src, dst, $size);
+
+                for (dst, src) in dst.chunks_exact_mut($size).zip(src.chunks_exact($size)) {
+                    use crate::store::BiStore;
+                    self.run(&mut BiStore::new(src, dst));
+                }
+                Ok(())
+            }
+        }
+
+        impl FftExecutor<$f_type> for $bf_name {
+            fn execute(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                FftExecutor::execute_with_scratch(self, in_place, &mut [])
+            }
+
+            fn execute_with_scratch(
+                &self,
+                in_place: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
+            }
+
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(src, dst) }
+            }
+
+            fn execute_out_of_place_with_scratch(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(src, dst) }
+            }
+
+            fn execute_destructive_with_scratch(
+                &self,
+                src: &mut [Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                self.execute_out_of_place_with_scratch(src, dst, &mut [])
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            #[inline]
+            fn length(&self) -> usize {
+                $size
+            }
+
+            fn scratch_length(&self) -> usize {
+                0
+            }
+
+            fn out_of_place_scratch_length(&self) -> usize {
+                0
+            }
+
+            fn destructive_scratch_length(&self) -> usize {
+                0
+            }
+        }
+    };
+}
+
+pub(crate) use boring_avx_butterfly;
+
+macro_rules! boring_avx_butterfly2 {
+    ($bf_name: ident, $f_type: ident, $size: expr) => {
+        impl $bf_name {
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn execute_impl(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of($size) {
+                    return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
+                }
+
+                for chunk in in_place.chunks_exact_mut($size * 2) {
+                    use crate::store::InPlaceStore;
+                    self.run2(&mut InPlaceStore::new(chunk));
+                }
+
+                let rem = in_place.chunks_exact_mut($size * 2).into_remainder();
+
+                for chunk in rem.chunks_exact_mut($size) {
+                    use crate::store::InPlaceStore;
+                    self.run(&mut InPlaceStore::new(chunk));
+                }
+
+                Ok(())
+            }
+
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn execute_oof_impl(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                use crate::util::validate_oof_sizes;
+                validate_oof_sizes!(src, dst, $size);
+
+                for (dst, src) in dst
+                    .chunks_exact_mut($size * 2)
+                    .zip(src.chunks_exact($size * 2))
+                {
+                    use crate::store::BiStore;
+                    self.run2(&mut BiStore::new(src, dst));
+                }
+
+                let rem_dst = dst.chunks_exact_mut($size * 2).into_remainder();
+                let rem_src = src.chunks_exact($size * 2).remainder();
+
+                for (dst, src) in rem_dst
+                    .chunks_exact_mut($size)
+                    .zip(rem_src.chunks_exact($size))
+                {
+                    use crate::store::BiStore;
+                    self.run(&mut BiStore::new(src, dst));
+                }
+                Ok(())
+            }
+        }
+
+        impl FftExecutor<$f_type> for $bf_name {
+            fn execute(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                FftExecutor::execute_with_scratch(self, in_place, &mut [])
+            }
+
+            fn execute_with_scratch(
+                &self,
+                in_place: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
+            }
+
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(src, dst) }
+            }
+
+            fn execute_out_of_place_with_scratch(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(src, dst) }
+            }
+
+            fn execute_destructive_with_scratch(
+                &self,
+                src: &mut [Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                self.execute_out_of_place_with_scratch(src, dst, &mut [])
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            fn length(&self) -> usize {
+                $size
+            }
+
+            fn scratch_length(&self) -> usize {
+                0
+            }
+
+            fn out_of_place_scratch_length(&self) -> usize {
+                0
+            }
+
+            fn destructive_scratch_length(&self) -> usize {
+                0
+            }
+        }
+    };
+}
+
+pub(crate) use boring_avx_butterfly2;

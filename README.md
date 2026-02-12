@@ -28,7 +28,7 @@ fn main() -> Result<(), zaft::ZaftError> {
     Ok(())
 }
 ```
-Note: After the round-trip, real_data will approximately equal its original values (within floating-point precision).
+Note: After the round-trip, real_data will approximately equal its original values (within floating-point precision and normalization).
 
 Complex-to-Complex FFT
 

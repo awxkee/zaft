@@ -33,10 +33,12 @@ use crate::avx::util::{
 };
 use crate::err::try_vec;
 use crate::radix3::Radix3Twiddles;
-use crate::util::{compute_twiddle, int_logarithm, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
+use crate::util::{
+    compute_twiddle, int_logarithm, reverse_bits, validate_oof_sizes, validate_scratch,
+};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, Zero};
 use std::any::TypeId;
 use std::arch::x86_64::*;
 use std::sync::Arc;
@@ -194,7 +196,7 @@ pub(crate) struct AvxFmaRadix3<T> {
     twiddle_re: T,
     twiddle_im: [T; 8],
     direction: FftDirection,
-    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 
@@ -238,7 +240,7 @@ where
             let mut i = 0usize;
 
             if TypeId::of::<T>() == TypeId::of::<f32>() {
-                while i + 4 < num_columns {
+                while i + 4 <= num_columns {
                     for k in 1..N {
                         let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
                         let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
@@ -254,7 +256,7 @@ where
             }
 
             if TypeId::of::<T>() == TypeId::of::<f64>() {
-                while i + 2 < num_columns {
+                while i + 2 <= num_columns {
                     for k in 1..N {
                         let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
                         let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
@@ -298,7 +300,187 @@ where
 
 impl AvxFmaRadix3<f64> {
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+    fn base_run(&self, chunk: &mut [Complex<f64>]) {
+        unsafe {
+            let twiddle_re = _mm256_set1_pd(self.twiddle_re);
+            let twiddle_w_2 = _mm256_loadu_pd(self.twiddle_im.as_ptr().cast());
+
+            let mut len = self.base_len;
+
+            let mut m_twiddles = self.twiddles.as_slice();
+
+            while len < self.execution_length {
+                let columns = len;
+                len *= 3;
+                let third = len / 3;
+
+                for data in chunk.chunks_exact_mut(len) {
+                    let mut j = 0usize;
+
+                    while j + 4 <= third {
+                        let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+                        let u0_1 = _mm256_loadu_pd(data.get_unchecked(j + 2..).as_ptr().cast());
+
+                        let tw0 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
+                        let tw1 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast());
+
+                        let tw2 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j + 4..).as_ptr().cast());
+                        let tw3 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j + 6..).as_ptr().cast());
+
+                        let rk1 = _mm256_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast());
+                        let rk2 =
+                            _mm256_loadu_pd(data.get_unchecked(j + 2 * third..).as_ptr().cast());
+
+                        let rk1_1 =
+                            _mm256_loadu_pd(data.get_unchecked(j + third + 2..).as_ptr().cast());
+                        let rk2_1 = _mm256_loadu_pd(
+                            data.get_unchecked(j + 2 * third + 2..).as_ptr().cast(),
+                        );
+
+                        let u1 = _mm256_fcmul_pd(rk1, tw0);
+                        let u2 = _mm256_fcmul_pd(rk2, tw1);
+
+                        let u1_1 = _mm256_fcmul_pd(rk1_1, tw2);
+                        let u2_1 = _mm256_fcmul_pd(rk2_1, tw3);
+
+                        // Radix-3 butterfly
+                        let xp_0 = _mm256_add_pd(u1, u2);
+                        let xn_0 = _mm256_sub_pd(u1, u2);
+                        let sum_0 = _mm256_add_pd(u0, xp_0);
+
+                        let xp_1 = _mm256_add_pd(u1_1, u2_1);
+                        let xn_1 = _mm256_sub_pd(u1_1, u2_1);
+                        let sum_1 = _mm256_add_pd(u0_1, xp_1);
+
+                        let w_0 = _mm256_fmadd_pd(twiddle_re, xp_0, u0);
+                        let xn_rot_0 = _mm256_shuffle_pd::<0b0101>(xn_0, xn_0);
+
+                        let w_1 = _mm256_fmadd_pd(twiddle_re, xp_1, u0_1);
+                        let xn_rot_1 = _mm256_shuffle_pd::<0b0101>(xn_1, xn_1);
+
+                        let vy0 = sum_0;
+                        let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot_0, w_0);
+                        let vy2 = _mm256_fnmadd_pd(twiddle_w_2, xn_rot_0, w_0);
+
+                        let vy0_1 = sum_1;
+                        let vy1_1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot_1, w_1);
+                        let vy2_1 = _mm256_fnmadd_pd(twiddle_w_2, xn_rot_1, w_1);
+
+                        _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
+                            vy1,
+                        );
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
+                            vy2,
+                        );
+
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + 2..).as_mut_ptr().cast(),
+                            vy0_1,
+                        );
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + third + 2..).as_mut_ptr().cast(),
+                            vy1_1,
+                        );
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + 2 * third + 2..)
+                                .as_mut_ptr()
+                                .cast(),
+                            vy2_1,
+                        );
+
+                        j += 4;
+                    }
+
+                    while j + 2 <= third {
+                        let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw0 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
+                        let tw1 =
+                            _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast());
+
+                        let rk1 = _mm256_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast());
+                        let rk2 =
+                            _mm256_loadu_pd(data.get_unchecked(j + 2 * third..).as_ptr().cast());
+
+                        let u1 = _mm256_fcmul_pd(rk1, tw0);
+                        let u2 = _mm256_fcmul_pd(rk2, tw1);
+
+                        // Radix-3 butterfly
+                        let xp = _mm256_add_pd(u1, u2);
+                        let xn = _mm256_sub_pd(u1, u2);
+                        let sum = _mm256_add_pd(u0, xp);
+
+                        let w_1 = _mm256_fmadd_pd(twiddle_re, xp, u0);
+                        let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
+
+                        let vy0 = sum;
+                        let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot, w_1);
+                        let vy2 = _mm256_fnmadd_pd(twiddle_w_2, xn_rot, w_1);
+
+                        _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
+                            vy1,
+                        );
+                        _mm256_storeu_pd(
+                            data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
+                            vy2,
+                        );
+
+                        j += 2;
+                    }
+
+                    for j in j..third {
+                        let u0 = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
+                        let u1 = _mm_fcmul_pd(
+                            _mm_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast()),
+                            _mm_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
+                        );
+                        let u2 = _mm_fcmul_pd(
+                            _mm_loadu_pd(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
+                            _mm_loadu_pd(m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast()),
+                        );
+
+                        // Radix-3 butterfly
+                        let xp = _mm_add_pd(u1, u2);
+                        let xn = _mm_sub_pd(u1, u2);
+                        let sum = _mm_add_pd(u0, xp);
+
+                        let w_1 = _mm_fmadd_pd(_mm256_castpd256_pd128(twiddle_re), xp, u0);
+                        let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
+
+                        let vy0 = sum;
+                        let vy1 = _mm_fmadd_pd(_mm256_castpd256_pd128(twiddle_w_2), xn_rot, w_1);
+                        let vy2 = _mm_fnmadd_pd(_mm256_castpd256_pd128(twiddle_w_2), xn_rot, w_1);
+
+                        _mm_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
+                        _mm_storeu_pd(data.get_unchecked_mut(j + third..).as_mut_ptr().cast(), vy1);
+                        _mm_storeu_pd(
+                            data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
+                            vy2,
+                        );
+                    }
+                }
+
+                m_twiddles = &m_twiddles[columns * 2..];
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_f64(
+        &self,
+        in_place: &mut [Complex<f64>],
+        scratch: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -306,199 +488,33 @@ impl AvxFmaRadix3<f64> {
             ));
         }
 
-        unsafe {
-            let twiddle_re = _mm256_set1_pd(self.twiddle_re);
-            let twiddle_w_2 = _mm256_loadu_pd(self.twiddle_im.as_ptr().cast());
+        let scratch = validate_scratch!(scratch, self.scratch_length());
 
-            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
-            for chunk in in_place.chunks_exact_mut(self.execution_length) {
-                // Digit-reversal permutation
-                avx_bitreversed_transpose_f64_radix3(self.base_len, chunk, &mut scratch);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            // Digit-reversal permutation
+            avx_bitreversed_transpose_f64_radix3(self.base_len, chunk, scratch);
+            self.base_fft.execute_out_of_place(scratch, chunk)?;
+            self.base_run(chunk);
+        }
+        Ok(())
+    }
 
-                self.base_fft.execute_out_of_place(&scratch, chunk)?;
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_oof_f64(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
 
-                let mut len = self.base_len;
-
-                let mut m_twiddles = self.twiddles.as_slice();
-
-                while len < self.execution_length {
-                    let columns = len;
-                    len *= 3;
-                    let third = len / 3;
-
-                    for data in chunk.chunks_exact_mut(len) {
-                        let mut j = 0usize;
-
-                        while j + 4 < third {
-                            let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
-                            let u0_1 = _mm256_loadu_pd(data.get_unchecked(j + 2..).as_ptr().cast());
-
-                            let tw0 =
-                                _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
-                            let tw1 = _mm256_loadu_pd(
-                                m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast(),
-                            );
-
-                            let tw2 = _mm256_loadu_pd(
-                                m_twiddles.get_unchecked(2 * j + 4..).as_ptr().cast(),
-                            );
-                            let tw3 = _mm256_loadu_pd(
-                                m_twiddles.get_unchecked(2 * j + 6..).as_ptr().cast(),
-                            );
-
-                            let rk1 =
-                                _mm256_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast());
-                            let rk2 = _mm256_loadu_pd(
-                                data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                            );
-
-                            let rk1_1 = _mm256_loadu_pd(
-                                data.get_unchecked(j + third + 2..).as_ptr().cast(),
-                            );
-                            let rk2_1 = _mm256_loadu_pd(
-                                data.get_unchecked(j + 2 * third + 2..).as_ptr().cast(),
-                            );
-
-                            let u1 = _mm256_fcmul_pd(rk1, tw0);
-                            let u2 = _mm256_fcmul_pd(rk2, tw1);
-
-                            let u1_1 = _mm256_fcmul_pd(rk1_1, tw2);
-                            let u2_1 = _mm256_fcmul_pd(rk2_1, tw3);
-
-                            // Radix-3 butterfly
-                            let xp_0 = _mm256_add_pd(u1, u2);
-                            let xn_0 = _mm256_sub_pd(u1, u2);
-                            let sum_0 = _mm256_add_pd(u0, xp_0);
-
-                            let xp_1 = _mm256_add_pd(u1_1, u2_1);
-                            let xn_1 = _mm256_sub_pd(u1_1, u2_1);
-                            let sum_1 = _mm256_add_pd(u0_1, xp_1);
-
-                            let w_0 = _mm256_fmadd_pd(twiddle_re, xp_0, u0);
-                            let xn_rot_0 = _mm256_shuffle_pd::<0b0101>(xn_0, xn_0);
-
-                            let w_1 = _mm256_fmadd_pd(twiddle_re, xp_1, u0_1);
-                            let xn_rot_1 = _mm256_shuffle_pd::<0b0101>(xn_1, xn_1);
-
-                            let vy0 = sum_0;
-                            let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot_0, w_0);
-                            let vy2 = _mm256_fnmadd_pd(twiddle_w_2, xn_rot_0, w_0);
-
-                            let vy0_1 = sum_1;
-                            let vy1_1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot_1, w_1);
-                            let vy2_1 = _mm256_fnmadd_pd(twiddle_w_2, xn_rot_1, w_1);
-
-                            _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
-                            _mm256_storeu_pd(
-                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
-                                vy1,
-                            );
-                            _mm256_storeu_pd(
-                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
-                                vy2,
-                            );
-
-                            _mm256_storeu_pd(
-                                data.get_unchecked_mut(j + 2..).as_mut_ptr().cast(),
-                                vy0_1,
-                            );
-                            _mm256_storeu_pd(
-                                data.get_unchecked_mut(j + third + 2..).as_mut_ptr().cast(),
-                                vy1_1,
-                            );
-                            _mm256_storeu_pd(
-                                data.get_unchecked_mut(j + 2 * third + 2..)
-                                    .as_mut_ptr()
-                                    .cast(),
-                                vy2_1,
-                            );
-
-                            j += 4;
-                        }
-
-                        while j + 2 < third {
-                            let u0 = _mm256_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
-
-                            let tw0 =
-                                _mm256_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
-                            let tw1 = _mm256_loadu_pd(
-                                m_twiddles.get_unchecked(2 * j + 2..).as_ptr().cast(),
-                            );
-
-                            let rk1 =
-                                _mm256_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast());
-                            let rk2 = _mm256_loadu_pd(
-                                data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                            );
-
-                            let u1 = _mm256_fcmul_pd(rk1, tw0);
-                            let u2 = _mm256_fcmul_pd(rk2, tw1);
-
-                            // Radix-3 butterfly
-                            let xp = _mm256_add_pd(u1, u2);
-                            let xn = _mm256_sub_pd(u1, u2);
-                            let sum = _mm256_add_pd(u0, xp);
-
-                            let w_1 = _mm256_fmadd_pd(twiddle_re, xp, u0);
-                            let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
-
-                            let vy0 = sum;
-                            let vy1 = _mm256_fmadd_pd(twiddle_w_2, xn_rot, w_1);
-                            let vy2 = _mm256_fnmadd_pd(twiddle_w_2, xn_rot, w_1);
-
-                            _mm256_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
-                            _mm256_storeu_pd(
-                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
-                                vy1,
-                            );
-                            _mm256_storeu_pd(
-                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
-                                vy2,
-                            );
-
-                            j += 2;
-                        }
-
-                        for j in j..third {
-                            let u0 = _mm_loadu_pd(data.get_unchecked(j..).as_ptr().cast());
-                            let u1 = _mm_fcmul_pd(
-                                _mm_loadu_pd(data.get_unchecked(j + third..).as_ptr().cast()),
-                                _mm_loadu_pd(m_twiddles.get_unchecked(2 * j..).as_ptr().cast()),
-                            );
-                            let u2 = _mm_fcmul_pd(
-                                _mm_loadu_pd(data.get_unchecked(j + 2 * third..).as_ptr().cast()),
-                                _mm_loadu_pd(m_twiddles.get_unchecked(2 * j + 1..).as_ptr().cast()),
-                            );
-
-                            // Radix-3 butterfly
-                            let xp = _mm_add_pd(u1, u2);
-                            let xn = _mm_sub_pd(u1, u2);
-                            let sum = _mm_add_pd(u0, xp);
-
-                            let w_1 = _mm_fmadd_pd(_mm256_castpd256_pd128(twiddle_re), xp, u0);
-                            let xn_rot = _mm_shuffle_pd::<0b01>(xn, xn);
-
-                            let vy0 = sum;
-                            let vy1 =
-                                _mm_fmadd_pd(_mm256_castpd256_pd128(twiddle_w_2), xn_rot, w_1);
-                            let vy2 =
-                                _mm_fnmadd_pd(_mm256_castpd256_pd128(twiddle_w_2), xn_rot, w_1);
-
-                            _mm_storeu_pd(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
-                            _mm_storeu_pd(
-                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
-                                vy1,
-                            );
-                            _mm_storeu_pd(
-                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
-                                vy2,
-                            );
-                        }
-                    }
-
-                    m_twiddles = &m_twiddles[columns * 2..];
-                }
-            }
+        for (dst, src) in dst
+            .chunks_exact_mut(self.execution_length)
+            .zip(src.chunks_exact(self.execution_length))
+        {
+            // Digit-reversal permutation
+            avx_bitreversed_transpose_f64_radix3(self.base_len, src, dst);
+            self.base_fft.execute(dst)?;
+            self.base_run(dst);
         }
         Ok(())
     }
@@ -506,7 +522,42 @@ impl AvxFmaRadix3<f64> {
 
 impl FftExecutor<f64> for AvxFmaRadix3<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_f64(in_place) }
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        unsafe { self.execute_f64(in_place, &mut scratch) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f64>],
+        scratch: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_f64(in_place, scratch) }
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f64(src, dst) }
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f64(src, dst) }
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f64>],
+        dst: &mut [Complex<f64>],
+        scratch: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -516,11 +567,188 @@ impl FftExecutor<f64> for AvxFmaRadix3<f64> {
     fn length(&self) -> usize {
         self.execution_length
     }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.execution_length
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
+    }
 }
 
 impl AvxFmaRadix3<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
-    unsafe fn execute_f32(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+    fn base_run(&self, chunk: &mut [Complex<f32>]) {
+        unsafe {
+            let twiddle_re = _mm256_set1_ps(self.twiddle_re);
+            let twiddle_w_2 = _mm256_loadu_ps(self.twiddle_im.as_ptr().cast());
+
+            let mut len = self.base_len;
+
+            let mut m_twiddles = self.twiddles.as_slice();
+
+            while len < self.execution_length {
+                let columns = len;
+                len *= 3;
+                let third = len / 3;
+
+                for data in chunk.chunks_exact_mut(len) {
+                    macro_rules! make_block {
+                        ($data: expr, $twiddles: expr, $third: expr, $j: expr, $start: expr, $tw_start: expr) => {{
+                            let u0 =
+                                _mm256_loadu_ps($data.get_unchecked($j + $start..).as_ptr().cast());
+
+                            let tw0 = _mm256_loadu_ps(
+                                $twiddles
+                                    .get_unchecked(2 * $j + $tw_start..)
+                                    .as_ptr()
+                                    .cast(),
+                            );
+                            let tw1 = _mm256_loadu_ps(
+                                $twiddles
+                                    .get_unchecked(2 * $j + $tw_start + 4..)
+                                    .as_ptr()
+                                    .cast(),
+                            );
+
+                            let rk1 = _mm256_loadu_ps(
+                                $data.get_unchecked($j + $third + $start..).as_ptr().cast(),
+                            );
+                            let rk2 = _mm256_loadu_ps(
+                                $data
+                                    .get_unchecked($j + 2 * $third + $start..)
+                                    .as_ptr()
+                                    .cast(),
+                            );
+
+                            let u1 = _mm256_fcmul_ps(rk1, tw0);
+                            let u2 = _mm256_fcmul_ps(rk2, tw1);
+
+                            // Radix-3 butterfly
+                            let xp_0 = _mm256_add_ps(u1, u2);
+                            let xn_0 = _mm256_sub_ps(u1, u2);
+                            let sum_0 = _mm256_add_ps(u0, xp_0);
+
+                            const SH: i32 = shuffle(2, 3, 0, 1);
+
+                            let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
+                            let xn_rot = _mm256_shuffle_ps::<SH>(xn_0, xn_0);
+
+                            let vy0 = sum_0;
+                            let vy1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
+                            let vy2 = _mm256_fnmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
+                            (vy0, vy1, vy2)
+                        }};
+                    }
+
+                    let mut j = 0usize;
+
+                    while j + 8 <= third {
+                        let (vy0, vy1, vy2) = make_block!(data, m_twiddles, third, j, 0, 0);
+                        let (vy0_1, vy1_1, vy2_1) = make_block!(data, m_twiddles, third, j, 4, 8);
+
+                        _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
+                            vy1,
+                        );
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
+                            vy2,
+                        );
+
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + 4..).as_mut_ptr().cast(),
+                            vy0_1,
+                        );
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + third + 4..).as_mut_ptr().cast(),
+                            vy1_1,
+                        );
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + 2 * third + 4..)
+                                .as_mut_ptr()
+                                .cast(),
+                            vy2_1,
+                        );
+
+                        j += 8;
+                    }
+
+                    while j + 4 <= third {
+                        let (vy0, vy1, vy2) = make_block!(data, m_twiddles, third, j, 0, 0);
+
+                        _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
+                            vy1,
+                        );
+                        _mm256_storeu_ps(
+                            data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
+                            vy2,
+                        );
+
+                        j += 4;
+                    }
+
+                    for j in j..third {
+                        let u0 = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw = _mm_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
+
+                        let rk1 =
+                            _m128s_load_f32x2(data.get_unchecked(j + third..).as_ptr().cast());
+                        let rk2 =
+                            _m128s_load_f32x2(data.get_unchecked(j + 2 * third..).as_ptr().cast());
+
+                        let u1u2 = _mm_fcmul_ps(_mm_unpacklo_ps64(rk1, rk2), tw);
+
+                        let u1 = u1u2;
+                        let u2 = _mm_unpackhi_ps64(u1u2, u1u2);
+
+                        // Radix-3 butterfly
+                        let xp = _mm_add_ps(u1, u2);
+                        let xn = _mm_sub_ps(u1, u2);
+                        let sum = _mm_add_ps(u0, xp);
+
+                        const SH: i32 = shuffle(2, 3, 0, 1);
+
+                        let w_1 = _mm_fmadd_ps(_mm256_castps256_ps128(twiddle_re), xp, u0);
+                        let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
+
+                        let vy0 = sum;
+                        let vy1 = _mm_fmadd_ps(_mm256_castps256_ps128(twiddle_w_2), xn_rot, w_1);
+                        let vy2 = _mm_fnmadd_ps(_mm256_castps256_ps128(twiddle_w_2), xn_rot, w_1);
+
+                        _m128s_store_f32x2(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
+                        _m128s_store_f32x2(
+                            data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
+                            vy1,
+                        );
+                        _m128s_store_f32x2(
+                            data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
+                            vy2,
+                        );
+                    }
+                }
+
+                m_twiddles = &m_twiddles[columns * 2..];
+            }
+        }
+    }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_f32(
+        &self,
+        in_place: &mut [Complex<f32>],
+        scratch: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -528,245 +756,33 @@ impl AvxFmaRadix3<f32> {
             ));
         }
 
-        unsafe {
-            let twiddle_re = _mm256_set1_ps(self.twiddle_re);
-            let twiddle_w_2 = _mm256_loadu_ps(self.twiddle_im.as_ptr().cast());
+        let scratch = validate_scratch!(scratch, self.scratch_length());
 
-            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
-            for chunk in in_place.chunks_exact_mut(self.execution_length) {
-                // Digit-reversal permutation
-                avx_bitreversed_transpose_f32_radix3(self.base_len, chunk, &mut scratch);
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            // Digit-reversal permutation
+            avx_bitreversed_transpose_f32_radix3(self.base_len, chunk, scratch);
+            self.base_fft.execute_out_of_place(scratch, chunk)?;
+            self.base_run(chunk);
+        }
+        Ok(())
+    }
 
-                self.base_fft.execute_out_of_place(&scratch, chunk)?;
+    #[target_feature(enable = "avx2", enable = "fma")]
+    fn execute_oof_f32(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
 
-                let mut len = self.base_len;
-
-                let mut m_twiddles = self.twiddles.as_slice();
-
-                while len < self.execution_length {
-                    let columns = len;
-                    len *= 3;
-                    let third = len / 3;
-
-                    for data in chunk.chunks_exact_mut(len) {
-                        macro_rules! make_block {
-                            ($data: expr, $twiddles: expr, $third: expr, $j: expr, $start: expr, $tw_start: expr) => {{
-                                let u0 = _mm256_loadu_ps(
-                                    $data.get_unchecked($j + $start..).as_ptr().cast(),
-                                );
-
-                                let tw0 = _mm256_loadu_ps(
-                                    $twiddles
-                                        .get_unchecked(2 * $j + $tw_start..)
-                                        .as_ptr()
-                                        .cast(),
-                                );
-                                let tw1 = _mm256_loadu_ps(
-                                    $twiddles
-                                        .get_unchecked(2 * $j + $tw_start + 4..)
-                                        .as_ptr()
-                                        .cast(),
-                                );
-
-                                let rk1 = _mm256_loadu_ps(
-                                    $data.get_unchecked($j + $third + $start..).as_ptr().cast(),
-                                );
-                                let rk2 = _mm256_loadu_ps(
-                                    $data
-                                        .get_unchecked($j + 2 * $third + $start..)
-                                        .as_ptr()
-                                        .cast(),
-                                );
-
-                                let u1 = _mm256_fcmul_ps(rk1, tw0);
-                                let u2 = _mm256_fcmul_ps(rk2, tw1);
-
-                                // Radix-3 butterfly
-                                let xp_0 = _mm256_add_ps(u1, u2);
-                                let xn_0 = _mm256_sub_ps(u1, u2);
-                                let sum_0 = _mm256_add_ps(u0, xp_0);
-
-                                const SH: i32 = shuffle(2, 3, 0, 1);
-
-                                let vw_1_1 = _mm256_fmadd_ps(twiddle_re, xp_0, u0);
-                                let xn_rot = _mm256_shuffle_ps::<SH>(xn_0, xn_0);
-
-                                let vy0 = sum_0;
-                                let vy1 = _mm256_fmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
-                                let vy2 = _mm256_fnmadd_ps(twiddle_w_2, xn_rot, vw_1_1);
-                                (vy0, vy1, vy2)
-                            }};
-                        }
-
-                        let mut j = 0usize;
-
-                        while j + 16 < third {
-                            let (vy0, vy1, vy2) = make_block!(data, m_twiddles, third, j, 0, 0);
-                            let (vy0_1, vy1_1, vy2_1) =
-                                make_block!(data, m_twiddles, third, j, 4, 8);
-                            let (vy0_2, vy1_2, vy2_2) =
-                                make_block!(data, m_twiddles, third, j, 8, 16);
-                            let (vy0_3, vy1_3, vy2_3) =
-                                make_block!(data, m_twiddles, third, j, 12, 24);
-
-                            _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
-                                vy1,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
-                                vy2,
-                            );
-
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 4..).as_mut_ptr().cast(),
-                                vy0_1,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + third + 4..).as_mut_ptr().cast(),
-                                vy1_1,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 2 * third + 4..)
-                                    .as_mut_ptr()
-                                    .cast(),
-                                vy2_1,
-                            );
-
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 8..).as_mut_ptr().cast(),
-                                vy0_2,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + third + 8..).as_mut_ptr().cast(),
-                                vy1_2,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 2 * third + 8..)
-                                    .as_mut_ptr()
-                                    .cast(),
-                                vy2_2,
-                            );
-
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 12..).as_mut_ptr().cast(),
-                                vy0_3,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + third + 12..).as_mut_ptr().cast(),
-                                vy1_3,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 2 * third + 12..)
-                                    .as_mut_ptr()
-                                    .cast(),
-                                vy2_3,
-                            );
-
-                            j += 16;
-                        }
-
-                        while j + 8 < third {
-                            let (vy0, vy1, vy2) = make_block!(data, m_twiddles, third, j, 0, 0);
-                            let (vy0_1, vy1_1, vy2_1) =
-                                make_block!(data, m_twiddles, third, j, 4, 8);
-
-                            _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
-                                vy1,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
-                                vy2,
-                            );
-
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 4..).as_mut_ptr().cast(),
-                                vy0_1,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + third + 4..).as_mut_ptr().cast(),
-                                vy1_1,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 2 * third + 4..)
-                                    .as_mut_ptr()
-                                    .cast(),
-                                vy2_1,
-                            );
-
-                            j += 8;
-                        }
-
-                        while j + 4 < third {
-                            let (vy0, vy1, vy2) = make_block!(data, m_twiddles, third, j, 0, 0);
-
-                            _mm256_storeu_ps(data.get_unchecked_mut(j..).as_mut_ptr().cast(), vy0);
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
-                                vy1,
-                            );
-                            _mm256_storeu_ps(
-                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
-                                vy2,
-                            );
-
-                            j += 4;
-                        }
-
-                        for j in j..third {
-                            let u0 = _m128s_load_f32x2(data.get_unchecked(j..).as_ptr().cast());
-
-                            let tw =
-                                _mm_loadu_ps(m_twiddles.get_unchecked(2 * j..).as_ptr().cast());
-
-                            let rk1 =
-                                _m128s_load_f32x2(data.get_unchecked(j + third..).as_ptr().cast());
-                            let rk2 = _m128s_load_f32x2(
-                                data.get_unchecked(j + 2 * third..).as_ptr().cast(),
-                            );
-
-                            let u1u2 = _mm_fcmul_ps(_mm_unpacklo_ps64(rk1, rk2), tw);
-
-                            let u1 = u1u2;
-                            let u2 = _mm_unpackhi_ps64(u1u2, u1u2);
-
-                            // Radix-3 butterfly
-                            let xp = _mm_add_ps(u1, u2);
-                            let xn = _mm_sub_ps(u1, u2);
-                            let sum = _mm_add_ps(u0, xp);
-
-                            const SH: i32 = shuffle(2, 3, 0, 1);
-
-                            let w_1 = _mm_fmadd_ps(_mm256_castps256_ps128(twiddle_re), xp, u0);
-                            let xn_rot = _mm_shuffle_ps::<SH>(xn, xn);
-
-                            let vy0 = sum;
-                            let vy1 =
-                                _mm_fmadd_ps(_mm256_castps256_ps128(twiddle_w_2), xn_rot, w_1);
-                            let vy2 =
-                                _mm_fnmadd_ps(_mm256_castps256_ps128(twiddle_w_2), xn_rot, w_1);
-
-                            _m128s_store_f32x2(
-                                data.get_unchecked_mut(j..).as_mut_ptr().cast(),
-                                vy0,
-                            );
-                            _m128s_store_f32x2(
-                                data.get_unchecked_mut(j + third..).as_mut_ptr().cast(),
-                                vy1,
-                            );
-                            _m128s_store_f32x2(
-                                data.get_unchecked_mut(j + 2 * third..).as_mut_ptr().cast(),
-                                vy2,
-                            );
-                        }
-                    }
-
-                    m_twiddles = &m_twiddles[columns * 2..];
-                }
-            }
+        for (dst, src) in dst
+            .chunks_exact_mut(self.execution_length)
+            .zip(src.chunks_exact(self.execution_length))
+        {
+            // Digit-reversal permutation
+            avx_bitreversed_transpose_f32_radix3(self.base_len, src, dst);
+            self.base_fft.execute(dst)?;
+            self.base_run(dst);
         }
         Ok(())
     }
@@ -774,7 +790,42 @@ impl AvxFmaRadix3<f32> {
 
 impl FftExecutor<f32> for AvxFmaRadix3<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_f32(in_place) }
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        unsafe { self.execute_f32(in_place, &mut scratch) }
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f32>],
+        scratch: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_f32(in_place, scratch) }
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f32(src, dst) }
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_oof_f32(src, dst) }
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f32>],
+        dst: &mut [Complex<f32>],
+        scratch: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -783,6 +834,18 @@ impl FftExecutor<f32> for AvxFmaRadix3<f32> {
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+
+    fn scratch_length(&self) -> usize {
+        self.execution_length
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 

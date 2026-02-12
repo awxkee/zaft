@@ -38,6 +38,7 @@ pub enum ZaftError {
     ZeroSizedFft,
     ScratchBufferIsTooSmall(usize, usize),
     InvalidSamplesCount(usize, usize),
+    OutOfPlaceSizeDoesntMatch(usize, usize),
 }
 
 impl Error for ZaftError {}
@@ -63,6 +64,9 @@ impl std::fmt::Display for ZaftError {
             )),
             ZaftError::InvalidSamplesCount(u0, u1) => f.write_fmt(format_args!(
                 "Amount of samples aren't matching ({u0}, {u1})"
+            )),
+            ZaftError::OutOfPlaceSizeDoesntMatch(left, right) => f.write_fmt(format_args!(
+                "In and out sizes on out of place transforms must match but they were ({left}, {right})"
             )),
         }
     }

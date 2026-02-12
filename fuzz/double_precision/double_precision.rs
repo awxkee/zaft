@@ -23,4 +23,12 @@ fuzz_target!(|data: Target| {
     };
     let mut chunk = vec![Complex::new(data.re, data.im); data.size as usize];
     executor.execute(&mut chunk).unwrap();
+    let mut test_target = vec![Complex::new(data.re, data.im); data.size as usize];
+    executor
+        .execute_out_of_place(&chunk, &mut test_target)
+        .unwrap();
+    let mut scratch = vec![Complex::default(); executor.destructive_scratch_length()];
+    executor
+        .execute_destructive_with_scratch(&mut chunk, &mut test_target, &mut scratch)
+        .unwrap();
 });

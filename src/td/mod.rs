@@ -36,7 +36,3 @@ pub(crate) use td_c2r::TwoDimensionalC2R;
 pub use td_c2r::TwoDimensionalExecutorC2R;
 pub use td_r2c::TwoDimensionalExecutorR2C;
 pub(crate) use td_r2c::TwoDimensionalR2C;
-
-pub trait ExecutorWithScratch {
-    fn required_scratch_size(&self) -> usize;
-}

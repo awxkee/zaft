@@ -32,10 +32,13 @@ use crate::neon::radix4::{complex4_load_f32, complex4_store_f32};
 use crate::neon::transpose::{neon_transpose_f32x2_2x2_impl, transpose_f32x2_4x4};
 use crate::neon::util::{create_neon_twiddles, vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use crate::radix10::Radix10Twiddles;
-use crate::util::{bitreversed_transpose, int_logarithm, is_power_of_ten, reverse_bits};
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
+use crate::util::{
+    bitreversed_transpose, int_logarithm, is_power_of_ten, reverse_bits, validate_oof_sizes,
+    validate_scratch,
+};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, Zero};
 use std::arch::aarch64::*;
 use std::sync::Arc;
 
@@ -44,7 +47,7 @@ pub(crate) struct NeonRadix10<T> {
     execution_length: usize,
     bf5: NeonFastButterfly5<T>,
     direction: FftDirection,
-    butterfly: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
+    butterfly: Arc<dyn FftExecutor<T> + Send + Sync>,
     butterfly_length: usize,
 }
 
@@ -82,144 +85,191 @@ where
     }
 }
 
+impl NeonRadix10<f64> {
+    fn base_run(&self, chunk: &mut [Complex<f64>]) {
+        unsafe {
+            static ROT_90: [f64; 2] = [-0.0, 0.0];
+            let rot_sign = vld1q_f64(ROT_90.as_ptr());
+
+            let mut len = self.butterfly_length;
+
+            let mut m_twiddles = self.twiddles.as_slice();
+
+            while len < self.execution_length {
+                let columns = len;
+                len *= 10;
+                let tenth = len / 10;
+
+                for data in chunk.chunks_exact_mut(len) {
+                    for j in 0..tenth {
+                        let td = 9 * j;
+                        let tw0 = vld1q_f64(m_twiddles.get_unchecked(td..).as_ptr().cast());
+                        let tw1 = vld1q_f64(m_twiddles.get_unchecked(td + 1..).as_ptr().cast());
+                        let tw2 = vld1q_f64(m_twiddles.get_unchecked(td + 2..).as_ptr().cast());
+                        let tw3 = vld1q_f64(m_twiddles.get_unchecked(td + 3..).as_ptr().cast());
+                        let tw4 = vld1q_f64(m_twiddles.get_unchecked(td + 4..).as_ptr().cast());
+                        let tw5 = vld1q_f64(m_twiddles.get_unchecked(td + 5..).as_ptr().cast());
+                        let tw6 = vld1q_f64(m_twiddles.get_unchecked(td + 6..).as_ptr().cast());
+                        let tw7 = vld1q_f64(m_twiddles.get_unchecked(td + 7..).as_ptr().cast());
+                        let tw8 = vld1q_f64(m_twiddles.get_unchecked(td + 8..).as_ptr().cast());
+
+                        let u0 = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
+                        let u1 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + tenth..).as_ptr().cast()),
+                            tw0,
+                        );
+                        let u2 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
+                            tw1,
+                        );
+                        let u3 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
+                            tw2,
+                        );
+                        let u4 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
+                            tw3,
+                        );
+                        let u5 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
+                            tw4,
+                        );
+                        let u6 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
+                            tw5,
+                        );
+                        let u7 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
+                            tw6,
+                        );
+                        let u8 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
+                            tw7,
+                        );
+                        let u9 = vfcmulq_f64(
+                            vld1q_f64(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
+                            tw8,
+                        );
+
+                        // Radix-10 butterfly
+
+                        let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
+                        let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
+
+                        // Since this is good-thomas algorithm, we don't need twiddle factors
+                        let (y0, y5) = NeonButterfly::butterfly2_f64(mid0.0, mid1.0);
+                        let (y6, y1) = NeonButterfly::butterfly2_f64(mid0.1, mid1.1);
+                        let (y2, y7) = NeonButterfly::butterfly2_f64(mid0.2, mid1.2);
+                        let (y8, y3) = NeonButterfly::butterfly2_f64(mid0.3, mid1.3);
+                        let (y4, y9) = NeonButterfly::butterfly2_f64(mid0.4, mid1.4);
+
+                        // Store results
+                        vst1q_f64(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                        vst1q_f64(data.get_unchecked_mut(j + tenth..).as_mut_ptr().cast(), y1);
+                        vst1q_f64(
+                            data.get_unchecked_mut(j + 2 * tenth..).as_mut_ptr().cast(),
+                            y2,
+                        );
+                        vst1q_f64(
+                            data.get_unchecked_mut(j + 3 * tenth..).as_mut_ptr().cast(),
+                            y3,
+                        );
+                        vst1q_f64(
+                            data.get_unchecked_mut(j + 4 * tenth..).as_mut_ptr().cast(),
+                            y4,
+                        );
+                        vst1q_f64(
+                            data.get_unchecked_mut(j + 5 * tenth..).as_mut_ptr().cast(),
+                            y5,
+                        );
+                        vst1q_f64(
+                            data.get_unchecked_mut(j + 6 * tenth..).as_mut_ptr().cast(),
+                            y6,
+                        );
+                        vst1q_f64(
+                            data.get_unchecked_mut(j + 7 * tenth..).as_mut_ptr().cast(),
+                            y7,
+                        );
+                        vst1q_f64(
+                            data.get_unchecked_mut(j + 8 * tenth..).as_mut_ptr().cast(),
+                            y8,
+                        );
+                        vst1q_f64(
+                            data.get_unchecked_mut(j + 9 * tenth..).as_mut_ptr().cast(),
+                            y9,
+                        );
+                    }
+                }
+
+                m_twiddles = &m_twiddles[columns * 9..];
+            }
+        }
+    }
+}
+
 impl FftExecutor<f64> for NeonRadix10<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        self.execute_with_scratch(in_place, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f64>],
+        scratch: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
                 self.execution_length,
             ));
         }
-        unsafe {
-            static ROT_90: [f64; 2] = [-0.0, 0.0];
-            let rot_sign = vld1q_f64(ROT_90.as_ptr());
+        let scratch = validate_scratch!(scratch, self.scratch_length());
 
-            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
-            for chunk in in_place.chunks_exact_mut(self.execution_length) {
-                // Digit-reversal permutation
-                bitreversed_transpose::<Complex<f64>, 10>(
-                    self.butterfly_length,
-                    chunk,
-                    &mut scratch,
-                );
-
-                self.butterfly.execute_out_of_place(&scratch, chunk)?;
-
-                let mut len = self.butterfly_length;
-
-                let mut m_twiddles = self.twiddles.as_slice();
-
-                while len < self.execution_length {
-                    let columns = len;
-                    len *= 10;
-                    let tenth = len / 10;
-
-                    for data in chunk.chunks_exact_mut(len) {
-                        for j in 0..tenth {
-                            let td = 9 * j;
-                            let tw0 = vld1q_f64(m_twiddles.get_unchecked(td..).as_ptr().cast());
-                            let tw1 = vld1q_f64(m_twiddles.get_unchecked(td + 1..).as_ptr().cast());
-                            let tw2 = vld1q_f64(m_twiddles.get_unchecked(td + 2..).as_ptr().cast());
-                            let tw3 = vld1q_f64(m_twiddles.get_unchecked(td + 3..).as_ptr().cast());
-                            let tw4 = vld1q_f64(m_twiddles.get_unchecked(td + 4..).as_ptr().cast());
-                            let tw5 = vld1q_f64(m_twiddles.get_unchecked(td + 5..).as_ptr().cast());
-                            let tw6 = vld1q_f64(m_twiddles.get_unchecked(td + 6..).as_ptr().cast());
-                            let tw7 = vld1q_f64(m_twiddles.get_unchecked(td + 7..).as_ptr().cast());
-                            let tw8 = vld1q_f64(m_twiddles.get_unchecked(td + 8..).as_ptr().cast());
-
-                            let u0 = vld1q_f64(data.get_unchecked(j..).as_ptr().cast());
-                            let u1 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + tenth..).as_ptr().cast()),
-                                tw0,
-                            );
-                            let u2 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
-                                tw1,
-                            );
-                            let u3 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
-                                tw2,
-                            );
-                            let u4 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
-                                tw3,
-                            );
-                            let u5 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
-                                tw4,
-                            );
-                            let u6 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
-                                tw5,
-                            );
-                            let u7 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
-                                tw6,
-                            );
-                            let u8 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
-                                tw7,
-                            );
-                            let u9 = vfcmulq_f64(
-                                vld1q_f64(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
-                                tw8,
-                            );
-
-                            // Radix-10 butterfly
-
-                            let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
-                            let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
-
-                            // Since this is good-thomas algorithm, we don't need twiddle factors
-                            let (y0, y5) = NeonButterfly::butterfly2_f64(mid0.0, mid1.0);
-                            let (y6, y1) = NeonButterfly::butterfly2_f64(mid0.1, mid1.1);
-                            let (y2, y7) = NeonButterfly::butterfly2_f64(mid0.2, mid1.2);
-                            let (y8, y3) = NeonButterfly::butterfly2_f64(mid0.3, mid1.3);
-                            let (y4, y9) = NeonButterfly::butterfly2_f64(mid0.4, mid1.4);
-
-                            // Store results
-                            vst1q_f64(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                            vst1q_f64(data.get_unchecked_mut(j + tenth..).as_mut_ptr().cast(), y1);
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 2 * tenth..).as_mut_ptr().cast(),
-                                y2,
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 3 * tenth..).as_mut_ptr().cast(),
-                                y3,
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 4 * tenth..).as_mut_ptr().cast(),
-                                y4,
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 5 * tenth..).as_mut_ptr().cast(),
-                                y5,
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 6 * tenth..).as_mut_ptr().cast(),
-                                y6,
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 7 * tenth..).as_mut_ptr().cast(),
-                                y7,
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 8 * tenth..).as_mut_ptr().cast(),
-                                y8,
-                            );
-                            vst1q_f64(
-                                data.get_unchecked_mut(j + 9 * tenth..).as_mut_ptr().cast(),
-                                y9,
-                            );
-                        }
-                    }
-
-                    m_twiddles = &m_twiddles[columns * 9..];
-                }
-            }
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            // Digit-reversal permutation
+            bitreversed_transpose::<Complex<f64>, 10>(self.butterfly_length, chunk, scratch);
+            self.butterfly.execute_out_of_place(scratch, chunk)?;
+            self.base_run(chunk);
         }
         Ok(())
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, &mut [])
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        for (dst, src) in dst
+            .chunks_exact_mut(self.execution_length)
+            .zip(src.chunks_exact(self.execution_length))
+        {
+            // Digit-reversal permutation
+            bitreversed_transpose::<Complex<f64>, 10>(self.butterfly_length, src, dst);
+            self.butterfly.execute(dst)?;
+            self.base_run(dst);
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f64>],
+        dst: &mut [Complex<f64>],
+        scratch: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -229,14 +279,27 @@ impl FftExecutor<f64> for NeonRadix10<f64> {
     fn length(&self) -> usize {
         self.execution_length
     }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.execution_length
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
+    }
 }
 
-#[inline]
+#[inline(always)]
 fn complex2_load_f32(array: &[Complex<f32>], idx: usize) -> float32x4_t {
     unsafe { vld1q_f32(array.get_unchecked(idx..).as_ptr().cast()) }
 }
 
-#[inline]
+#[inline(always)]
 fn complex2_store_f32(array: &mut [Complex<f32>], idx: usize, v: float32x4_t) {
     unsafe {
         vst1q_f32(array.get_unchecked_mut(idx..).as_mut_ptr().cast(), v);
@@ -438,8 +501,268 @@ pub(crate) fn neon_bitreversed_transpose_f32_radix10(
     }
 }
 
+impl NeonRadix10<f32> {
+    fn base_run(&self, chunk: &mut [Complex<f32>]) {
+        unsafe {
+            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
+            let rot_sign = vld1q_f32(ROT_90.as_ptr());
+
+            let mut len = self.butterfly_length;
+
+            let mut m_twiddles = self.twiddles.as_slice();
+
+            while len < self.execution_length {
+                let columns = len;
+                len *= 10;
+                let tenth = len / 10;
+
+                for data in chunk.chunks_exact_mut(len) {
+                    let mut j = 0usize;
+
+                    while j + 2 <= tenth {
+                        let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
+
+                        let tw = 9 * j;
+
+                        let tw0 = vld1q_f32(m_twiddles.get_unchecked(tw..).as_ptr().cast());
+                        let tw1 = vld1q_f32(m_twiddles.get_unchecked(tw + 2..).as_ptr().cast());
+                        let tw2 = vld1q_f32(m_twiddles.get_unchecked(tw + 4..).as_ptr().cast());
+                        let tw3 = vld1q_f32(m_twiddles.get_unchecked(tw + 6..).as_ptr().cast());
+                        let tw4 = vld1q_f32(m_twiddles.get_unchecked(tw + 8..).as_ptr().cast());
+                        let tw5 = vld1q_f32(m_twiddles.get_unchecked(tw + 10..).as_ptr().cast());
+                        let tw6 = vld1q_f32(m_twiddles.get_unchecked(tw + 12..).as_ptr().cast());
+                        let tw7 = vld1q_f32(m_twiddles.get_unchecked(tw + 14..).as_ptr().cast());
+                        let tw8 = vld1q_f32(m_twiddles.get_unchecked(tw + 16..).as_ptr().cast());
+
+                        let u1 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + tenth..).as_ptr().cast()),
+                            tw0,
+                        );
+                        let u2 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
+                            tw1,
+                        );
+                        let u3 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
+                            tw2,
+                        );
+                        let u4 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
+                            tw3,
+                        );
+                        let u5 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
+                            tw4,
+                        );
+                        let u6 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
+                            tw5,
+                        );
+                        let u7 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
+                            tw6,
+                        );
+                        let u8 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
+                            tw7,
+                        );
+                        let u9 = vfcmulq_f32(
+                            vld1q_f32(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
+                            tw8,
+                        );
+
+                        // Radix-10 butterfly
+
+                        let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
+                        let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
+
+                        // Since this is good-thomas algorithm, we don't need twiddle factors
+                        let (y0, y5) = NeonButterfly::butterfly2_f32(mid0.0, mid1.0);
+                        let (y6, y1) = NeonButterfly::butterfly2_f32(mid0.1, mid1.1);
+                        let (y2, y7) = NeonButterfly::butterfly2_f32(mid0.2, mid1.2);
+                        let (y8, y3) = NeonButterfly::butterfly2_f32(mid0.3, mid1.3);
+                        let (y4, y9) = NeonButterfly::butterfly2_f32(mid0.4, mid1.4);
+
+                        // Store results
+                        vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                        vst1q_f32(data.get_unchecked_mut(j + tenth..).as_mut_ptr().cast(), y1);
+                        vst1q_f32(
+                            data.get_unchecked_mut(j + 2 * tenth..).as_mut_ptr().cast(),
+                            y2,
+                        );
+                        vst1q_f32(
+                            data.get_unchecked_mut(j + 3 * tenth..).as_mut_ptr().cast(),
+                            y3,
+                        );
+                        vst1q_f32(
+                            data.get_unchecked_mut(j + 4 * tenth..).as_mut_ptr().cast(),
+                            y4,
+                        );
+                        vst1q_f32(
+                            data.get_unchecked_mut(j + 5 * tenth..).as_mut_ptr().cast(),
+                            y5,
+                        );
+                        vst1q_f32(
+                            data.get_unchecked_mut(j + 6 * tenth..).as_mut_ptr().cast(),
+                            y6,
+                        );
+                        vst1q_f32(
+                            data.get_unchecked_mut(j + 7 * tenth..).as_mut_ptr().cast(),
+                            y7,
+                        );
+                        vst1q_f32(
+                            data.get_unchecked_mut(j + 8 * tenth..).as_mut_ptr().cast(),
+                            y8,
+                        );
+                        vst1q_f32(
+                            data.get_unchecked_mut(j + 9 * tenth..).as_mut_ptr().cast(),
+                            y9,
+                        );
+
+                        j += 2;
+                    }
+
+                    for j in j..tenth {
+                        let u0 = vld1_f32(data.get_unchecked(j..).as_ptr().cast());
+
+                        let ti = 9 * j;
+
+                        let w0w1 = vld1q_f32(m_twiddles.get_unchecked(ti..).as_ptr().cast());
+                        let w2w3 = vld1q_f32(m_twiddles.get_unchecked(ti + 2..).as_ptr().cast());
+                        let w4w5 = vld1q_f32(m_twiddles.get_unchecked(ti + 4..).as_ptr().cast());
+                        let w6w7 = vld1q_f32(m_twiddles.get_unchecked(ti + 6..).as_ptr().cast());
+                        let w8 = vld1_f32(m_twiddles.get_unchecked(ti + 8..).as_ptr().cast());
+
+                        let u1u2 = vfcmulq_f32(
+                            vcombine_f32(
+                                vld1_f32(data.get_unchecked(j + tenth..).as_ptr().cast()),
+                                vld1_f32(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
+                            ),
+                            w0w1,
+                        );
+                        let u3u4 = vfcmulq_f32(
+                            vcombine_f32(
+                                vld1_f32(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
+                                vld1_f32(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
+                            ),
+                            w2w3,
+                        );
+                        let u5u6 = vfcmulq_f32(
+                            vcombine_f32(
+                                vld1_f32(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
+                                vld1_f32(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
+                            ),
+                            w4w5,
+                        );
+                        let u7u8 = vfcmulq_f32(
+                            vcombine_f32(
+                                vld1_f32(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
+                                vld1_f32(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
+                            ),
+                            w6w7,
+                        );
+                        let u9 = vfcmul_f32(
+                            vld1_f32(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
+                            w8,
+                        );
+
+                        let u1 = vget_low_f32(u1u2);
+                        let u2 = vget_high_f32(u1u2);
+                        let u3 = vget_low_f32(u3u4);
+                        let u4 = vget_high_f32(u3u4);
+                        let u5 = vget_low_f32(u5u6);
+                        let u6 = vget_high_f32(u5u6);
+                        let u7 = vget_low_f32(u7u8);
+                        let u8 = vget_high_f32(u7u8);
+
+                        // Radix-10 butterfly
+
+                        let mid0 = self.bf5.exec(
+                            vcombine_f32(u0, u5),
+                            vcombine_f32(u2, u7),
+                            vcombine_f32(u4, u9),
+                            vcombine_f32(u6, u1),
+                            vcombine_f32(u8, u3),
+                            rot_sign,
+                        );
+
+                        // Since this is good-thomas algorithm, we don't need twiddle factors
+                        let (y0, y5) = NeonButterfly::butterfly2h_f32(
+                            vget_low_f32(mid0.0),
+                            vget_high_f32(mid0.0),
+                        );
+                        let (y6, y1) = NeonButterfly::butterfly2h_f32(
+                            vget_low_f32(mid0.1),
+                            vget_high_f32(mid0.1),
+                        );
+                        let (y2, y7) = NeonButterfly::butterfly2h_f32(
+                            vget_low_f32(mid0.2),
+                            vget_high_f32(mid0.2),
+                        );
+                        let (y8, y3) = NeonButterfly::butterfly2h_f32(
+                            vget_low_f32(mid0.3),
+                            vget_high_f32(mid0.3),
+                        );
+                        let (y4, y9) = NeonButterfly::butterfly2h_f32(
+                            vget_low_f32(mid0.4),
+                            vget_high_f32(mid0.4),
+                        );
+
+                        // Store results
+                        vst1_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
+                        vst1_f32(data.get_unchecked_mut(j + tenth..).as_mut_ptr().cast(), y1);
+                        vst1_f32(
+                            data.get_unchecked_mut(j + 2 * tenth..).as_mut_ptr().cast(),
+                            y2,
+                        );
+                        vst1_f32(
+                            data.get_unchecked_mut(j + 3 * tenth..).as_mut_ptr().cast(),
+                            y3,
+                        );
+                        vst1_f32(
+                            data.get_unchecked_mut(j + 4 * tenth..).as_mut_ptr().cast(),
+                            y4,
+                        );
+                        vst1_f32(
+                            data.get_unchecked_mut(j + 5 * tenth..).as_mut_ptr().cast(),
+                            y5,
+                        );
+                        vst1_f32(
+                            data.get_unchecked_mut(j + 6 * tenth..).as_mut_ptr().cast(),
+                            y6,
+                        );
+                        vst1_f32(
+                            data.get_unchecked_mut(j + 7 * tenth..).as_mut_ptr().cast(),
+                            y7,
+                        );
+                        vst1_f32(
+                            data.get_unchecked_mut(j + 8 * tenth..).as_mut_ptr().cast(),
+                            y8,
+                        );
+                        vst1_f32(
+                            data.get_unchecked_mut(j + 9 * tenth..).as_mut_ptr().cast(),
+                            y9,
+                        );
+                    }
+                }
+
+                m_twiddles = &m_twiddles[columns * 9..];
+            }
+        }
+    }
+}
+
 impl FftExecutor<f32> for NeonRadix10<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        self.execute_with_scratch(in_place, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f32>],
+        scratch: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -447,268 +770,52 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
             ));
         }
 
-        unsafe {
-            static ROT_90: [f32; 4] = [-0.0, 0.0, -0.0, 0.0];
-            let rot_sign = vld1q_f32(ROT_90.as_ptr());
+        let scratch = validate_scratch!(scratch, self.scratch_length());
 
-            let mut scratch = try_vec![Complex::new(0., 0.); self.execution_length];
-            for chunk in in_place.chunks_exact_mut(self.execution_length) {
-                // Digit-reversal permutation
-                neon_bitreversed_transpose_f32_radix10(self.butterfly_length, chunk, &mut scratch);
-
-                self.butterfly.execute_out_of_place(&scratch, chunk)?;
-
-                let mut len = self.butterfly_length;
-
-                let mut m_twiddles = self.twiddles.as_slice();
-
-                while len < self.execution_length {
-                    let columns = len;
-                    len *= 10;
-                    let tenth = len / 10;
-
-                    for data in chunk.chunks_exact_mut(len) {
-                        let mut j = 0usize;
-
-                        while j + 2 < tenth {
-                            let u0 = vld1q_f32(data.get_unchecked(j..).as_ptr().cast());
-
-                            let tw = 9 * j;
-
-                            let tw0 = vld1q_f32(m_twiddles.get_unchecked(tw..).as_ptr().cast());
-                            let tw1 = vld1q_f32(m_twiddles.get_unchecked(tw + 2..).as_ptr().cast());
-                            let tw2 = vld1q_f32(m_twiddles.get_unchecked(tw + 4..).as_ptr().cast());
-                            let tw3 = vld1q_f32(m_twiddles.get_unchecked(tw + 6..).as_ptr().cast());
-                            let tw4 = vld1q_f32(m_twiddles.get_unchecked(tw + 8..).as_ptr().cast());
-                            let tw5 =
-                                vld1q_f32(m_twiddles.get_unchecked(tw + 10..).as_ptr().cast());
-                            let tw6 =
-                                vld1q_f32(m_twiddles.get_unchecked(tw + 12..).as_ptr().cast());
-                            let tw7 =
-                                vld1q_f32(m_twiddles.get_unchecked(tw + 14..).as_ptr().cast());
-                            let tw8 =
-                                vld1q_f32(m_twiddles.get_unchecked(tw + 16..).as_ptr().cast());
-
-                            let u1 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + tenth..).as_ptr().cast()),
-                                tw0,
-                            );
-                            let u2 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
-                                tw1,
-                            );
-                            let u3 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
-                                tw2,
-                            );
-                            let u4 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
-                                tw3,
-                            );
-                            let u5 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
-                                tw4,
-                            );
-                            let u6 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
-                                tw5,
-                            );
-                            let u7 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
-                                tw6,
-                            );
-                            let u8 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
-                                tw7,
-                            );
-                            let u9 = vfcmulq_f32(
-                                vld1q_f32(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
-                                tw8,
-                            );
-
-                            // Radix-10 butterfly
-
-                            let mid0 = self.bf5.exec(u0, u2, u4, u6, u8, rot_sign);
-                            let mid1 = self.bf5.exec(u5, u7, u9, u1, u3, rot_sign);
-
-                            // Since this is good-thomas algorithm, we don't need twiddle factors
-                            let (y0, y5) = NeonButterfly::butterfly2_f32(mid0.0, mid1.0);
-                            let (y6, y1) = NeonButterfly::butterfly2_f32(mid0.1, mid1.1);
-                            let (y2, y7) = NeonButterfly::butterfly2_f32(mid0.2, mid1.2);
-                            let (y8, y3) = NeonButterfly::butterfly2_f32(mid0.3, mid1.3);
-                            let (y4, y9) = NeonButterfly::butterfly2_f32(mid0.4, mid1.4);
-
-                            // Store results
-                            vst1q_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                            vst1q_f32(data.get_unchecked_mut(j + tenth..).as_mut_ptr().cast(), y1);
-                            vst1q_f32(
-                                data.get_unchecked_mut(j + 2 * tenth..).as_mut_ptr().cast(),
-                                y2,
-                            );
-                            vst1q_f32(
-                                data.get_unchecked_mut(j + 3 * tenth..).as_mut_ptr().cast(),
-                                y3,
-                            );
-                            vst1q_f32(
-                                data.get_unchecked_mut(j + 4 * tenth..).as_mut_ptr().cast(),
-                                y4,
-                            );
-                            vst1q_f32(
-                                data.get_unchecked_mut(j + 5 * tenth..).as_mut_ptr().cast(),
-                                y5,
-                            );
-                            vst1q_f32(
-                                data.get_unchecked_mut(j + 6 * tenth..).as_mut_ptr().cast(),
-                                y6,
-                            );
-                            vst1q_f32(
-                                data.get_unchecked_mut(j + 7 * tenth..).as_mut_ptr().cast(),
-                                y7,
-                            );
-                            vst1q_f32(
-                                data.get_unchecked_mut(j + 8 * tenth..).as_mut_ptr().cast(),
-                                y8,
-                            );
-                            vst1q_f32(
-                                data.get_unchecked_mut(j + 9 * tenth..).as_mut_ptr().cast(),
-                                y9,
-                            );
-
-                            j += 2;
-                        }
-
-                        for j in j..tenth {
-                            let u0 = vld1_f32(data.get_unchecked(j..).as_ptr().cast());
-
-                            let ti = 9 * j;
-
-                            let w0w1 = vld1q_f32(m_twiddles.get_unchecked(ti..).as_ptr().cast());
-                            let w2w3 =
-                                vld1q_f32(m_twiddles.get_unchecked(ti + 2..).as_ptr().cast());
-                            let w4w5 =
-                                vld1q_f32(m_twiddles.get_unchecked(ti + 4..).as_ptr().cast());
-                            let w6w7 =
-                                vld1q_f32(m_twiddles.get_unchecked(ti + 6..).as_ptr().cast());
-                            let w8 = vld1_f32(m_twiddles.get_unchecked(ti + 8..).as_ptr().cast());
-
-                            let u1u2 = vfcmulq_f32(
-                                vcombine_f32(
-                                    vld1_f32(data.get_unchecked(j + tenth..).as_ptr().cast()),
-                                    vld1_f32(data.get_unchecked(j + 2 * tenth..).as_ptr().cast()),
-                                ),
-                                w0w1,
-                            );
-                            let u3u4 = vfcmulq_f32(
-                                vcombine_f32(
-                                    vld1_f32(data.get_unchecked(j + 3 * tenth..).as_ptr().cast()),
-                                    vld1_f32(data.get_unchecked(j + 4 * tenth..).as_ptr().cast()),
-                                ),
-                                w2w3,
-                            );
-                            let u5u6 = vfcmulq_f32(
-                                vcombine_f32(
-                                    vld1_f32(data.get_unchecked(j + 5 * tenth..).as_ptr().cast()),
-                                    vld1_f32(data.get_unchecked(j + 6 * tenth..).as_ptr().cast()),
-                                ),
-                                w4w5,
-                            );
-                            let u7u8 = vfcmulq_f32(
-                                vcombine_f32(
-                                    vld1_f32(data.get_unchecked(j + 7 * tenth..).as_ptr().cast()),
-                                    vld1_f32(data.get_unchecked(j + 8 * tenth..).as_ptr().cast()),
-                                ),
-                                w6w7,
-                            );
-                            let u9 = vfcmul_f32(
-                                vld1_f32(data.get_unchecked(j + 9 * tenth..).as_ptr().cast()),
-                                w8,
-                            );
-
-                            let u1 = vget_low_f32(u1u2);
-                            let u2 = vget_high_f32(u1u2);
-                            let u3 = vget_low_f32(u3u4);
-                            let u4 = vget_high_f32(u3u4);
-                            let u5 = vget_low_f32(u5u6);
-                            let u6 = vget_high_f32(u5u6);
-                            let u7 = vget_low_f32(u7u8);
-                            let u8 = vget_high_f32(u7u8);
-
-                            // Radix-10 butterfly
-
-                            let mid0 = self.bf5.exec(
-                                vcombine_f32(u0, u5),
-                                vcombine_f32(u2, u7),
-                                vcombine_f32(u4, u9),
-                                vcombine_f32(u6, u1),
-                                vcombine_f32(u8, u3),
-                                rot_sign,
-                            );
-
-                            // Since this is good-thomas algorithm, we don't need twiddle factors
-                            let (y0, y5) = NeonButterfly::butterfly2h_f32(
-                                vget_low_f32(mid0.0),
-                                vget_high_f32(mid0.0),
-                            );
-                            let (y6, y1) = NeonButterfly::butterfly2h_f32(
-                                vget_low_f32(mid0.1),
-                                vget_high_f32(mid0.1),
-                            );
-                            let (y2, y7) = NeonButterfly::butterfly2h_f32(
-                                vget_low_f32(mid0.2),
-                                vget_high_f32(mid0.2),
-                            );
-                            let (y8, y3) = NeonButterfly::butterfly2h_f32(
-                                vget_low_f32(mid0.3),
-                                vget_high_f32(mid0.3),
-                            );
-                            let (y4, y9) = NeonButterfly::butterfly2h_f32(
-                                vget_low_f32(mid0.4),
-                                vget_high_f32(mid0.4),
-                            );
-
-                            // Store results
-                            vst1_f32(data.get_unchecked_mut(j..).as_mut_ptr().cast(), y0);
-                            vst1_f32(data.get_unchecked_mut(j + tenth..).as_mut_ptr().cast(), y1);
-                            vst1_f32(
-                                data.get_unchecked_mut(j + 2 * tenth..).as_mut_ptr().cast(),
-                                y2,
-                            );
-                            vst1_f32(
-                                data.get_unchecked_mut(j + 3 * tenth..).as_mut_ptr().cast(),
-                                y3,
-                            );
-                            vst1_f32(
-                                data.get_unchecked_mut(j + 4 * tenth..).as_mut_ptr().cast(),
-                                y4,
-                            );
-                            vst1_f32(
-                                data.get_unchecked_mut(j + 5 * tenth..).as_mut_ptr().cast(),
-                                y5,
-                            );
-                            vst1_f32(
-                                data.get_unchecked_mut(j + 6 * tenth..).as_mut_ptr().cast(),
-                                y6,
-                            );
-                            vst1_f32(
-                                data.get_unchecked_mut(j + 7 * tenth..).as_mut_ptr().cast(),
-                                y7,
-                            );
-                            vst1_f32(
-                                data.get_unchecked_mut(j + 8 * tenth..).as_mut_ptr().cast(),
-                                y8,
-                            );
-                            vst1_f32(
-                                data.get_unchecked_mut(j + 9 * tenth..).as_mut_ptr().cast(),
-                                y9,
-                            );
-                        }
-                    }
-
-                    m_twiddles = &m_twiddles[columns * 9..];
-                }
-            }
+        for chunk in in_place.chunks_exact_mut(self.execution_length) {
+            // Digit-reversal permutation
+            neon_bitreversed_transpose_f32_radix10(self.butterfly_length, chunk, scratch);
+            self.butterfly.execute_out_of_place(scratch, chunk)?;
+            self.base_run(chunk);
         }
         Ok(())
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, &mut [])
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        for (dst, src) in dst
+            .chunks_exact_mut(self.execution_length)
+            .zip(src.chunks_exact(self.execution_length))
+        {
+            // Digit-reversal permutation
+            neon_bitreversed_transpose_f32_radix10(self.butterfly_length, src, dst);
+            self.butterfly.execute(dst)?;
+            self.base_run(dst);
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f32>],
+        dst: &mut [Complex<f32>],
+        scratch: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
@@ -717,6 +824,19 @@ impl FftExecutor<f32> for NeonRadix10<f32> {
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.execution_length
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 

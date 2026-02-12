@@ -27,12 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::traits::FftTrigonometry;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::util::validate_oof_sizes;
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 use std::arch::aarch64::*;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 pub(crate) struct NeonFcmaButterfly4<T> {
     direction: FftDirection,
@@ -61,6 +61,45 @@ impl FftExecutor<f32> for NeonFcmaButterfly4<f32> {
         }
     }
 
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute(in_place)
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        unsafe {
+            match self.direction {
+                FftDirection::Forward => self.execute_forward_out(src, dst),
+                FftDirection::Inverse => self.execute_backward_out(src, dst),
+            }
+        }
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f32>],
+        dst: &mut [Complex<f32>],
+        _: &mut [Complex<f32>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
     fn direction(&self) -> FftDirection {
         self.direction
     }
@@ -69,11 +108,23 @@ impl FftExecutor<f32> for NeonFcmaButterfly4<f32> {
     fn length(&self) -> usize {
         4
     }
+
+    fn scratch_length(&self) -> usize {
+        0
+    }
+
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
+    }
 }
 
 impl NeonFcmaButterfly4<f32> {
     #[target_feature(enable = "fcma")]
-    unsafe fn execute_forward(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+    fn execute_forward(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -181,17 +232,12 @@ impl NeonFcmaButterfly4<f32> {
     }
 
     #[target_feature(enable = "fcma")]
-    unsafe fn execute_forward_out(
+    fn execute_forward_out(
         &self,
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
+        validate_oof_sizes!(src, dst, 4);
 
         for (dst, src) in dst.chunks_exact_mut(16).zip(src.chunks_exact(16)) {
             unsafe {
@@ -403,17 +449,12 @@ impl NeonFcmaButterfly4<f32> {
     }
 
     #[target_feature(enable = "fcma")]
-    unsafe fn execute_backward_out(
+    fn execute_backward_out(
         &self,
         src: &[Complex<f32>],
         dst: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
+        validate_oof_sizes!(src, dst, 4);
 
         for (dst, src) in dst.chunks_exact_mut(16).zip(src.chunks_exact(16)) {
             unsafe {
@@ -527,6 +568,45 @@ impl FftExecutor<f64> for NeonFcmaButterfly4<f64> {
         }
     }
 
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute(in_place)
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe {
+            match self.direction {
+                FftDirection::Forward => self.execute_forward_out(src, dst),
+                FftDirection::Inverse => self.execute_backward_out(src, dst),
+            }
+        }
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<f64>],
+        dst: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place(src, dst)
+    }
+
     fn direction(&self) -> FftDirection {
         self.direction
     }
@@ -535,32 +615,23 @@ impl FftExecutor<f64> for NeonFcmaButterfly4<f64> {
     fn length(&self) -> usize {
         4
     }
-}
 
-impl FftExecutorOutOfPlace<f32> for NeonFcmaButterfly4<f32> {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f32>],
-        dst: &mut [Complex<f32>],
-    ) -> Result<(), ZaftError> {
-        unsafe {
-            match self.direction {
-                FftDirection::Forward => self.execute_forward_out(src, dst),
-                FftDirection::Inverse => self.execute_backward_out(src, dst),
-            }
-        }
+    fn scratch_length(&self) -> usize {
+        0
     }
-}
 
-impl CompositeFftExecutor<f32> for NeonFcmaButterfly4<f32> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f32> + Send + Sync> {
-        self
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 
 impl NeonFcmaButterfly4<f64> {
     #[target_feature(enable = "fcma")]
-    unsafe fn execute_forward(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+    fn execute_forward(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -602,17 +673,12 @@ impl NeonFcmaButterfly4<f64> {
     }
 
     #[target_feature(enable = "fcma")]
-    unsafe fn execute_forward_out(
+    fn execute_forward_out(
         &self,
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
+        validate_oof_sizes!(src, dst, 4);
 
         for (dst, src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
             unsafe {
@@ -648,7 +714,7 @@ impl NeonFcmaButterfly4<f64> {
     }
 
     #[target_feature(enable = "fcma")]
-    unsafe fn execute_backward(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+    fn execute_backward(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(4) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -690,17 +756,12 @@ impl NeonFcmaButterfly4<f64> {
     }
 
     #[target_feature(enable = "fcma")]
-    unsafe fn execute_backward_out(
+    fn execute_backward_out(
         &self,
         src: &[Complex<f64>],
         dst: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(4) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
+        validate_oof_sizes!(src, dst, 4);
 
         for (dst, src) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
             unsafe {
@@ -733,27 +794,6 @@ impl NeonFcmaButterfly4<f64> {
             }
         }
         Ok(())
-    }
-}
-
-impl FftExecutorOutOfPlace<f64> for NeonFcmaButterfly4<f64> {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-    ) -> Result<(), ZaftError> {
-        unsafe {
-            match self.direction {
-                FftDirection::Forward => self.execute_forward_out(src, dst),
-                FftDirection::Inverse => self.execute_backward_out(src, dst),
-            }
-        }
-    }
-}
-
-impl CompositeFftExecutor<f64> for NeonFcmaButterfly4<f64> {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-        self
     }
 }
 

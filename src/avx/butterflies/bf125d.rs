@@ -29,14 +29,14 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::avx::butterflies::shared::{
-    gen_butterfly_separate_cols_twiddles_f64, gen_butterfly_twiddles_f64,
+    boring_avx_butterfly, gen_butterfly_separate_cols_twiddles_f64, gen_butterfly_twiddles_f64,
 };
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly5d};
 use crate::avx::transpose::transpose_f64x2_2x5;
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, ZaftError};
+use crate::store::BidirectionalStore;
+use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
-use std::sync::Arc;
 
 pub(crate) struct ColumnButterfly25d {
     bf5: ColumnButterfly5d,
@@ -244,199 +244,75 @@ impl AvxButterfly125d {
     }
 }
 
-impl FftExecutor<f64> for AvxButterfly125d {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_impl(in_place) }
-    }
+boring_avx_butterfly!(AvxButterfly125d, f64, 125);
 
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
+impl AvxButterfly125d {
     #[inline]
-    fn length(&self) -> usize {
-        125
-    }
-}
-
-impl AvxButterfly125d {
     #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_impl(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(125) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
-        }
-
-        unsafe {
-            let mut rows: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
-            let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 125];
-
-            for chunk in in_place.chunks_exact_mut(125) {
-                // columns
-                for k in 0..12 {
-                    for i in 0..5 {
-                        rows[i] =
-                            AvxStoreD::from_complex_ref(chunk.get_unchecked(i * 25 + k * 2..));
-                    }
-
-                    rows = self.bf25.bf5.exec(rows);
-
-                    for i in 1..5 {
-                        rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
-                    }
-
-                    let transposed = transpose_f64x2_2x5(rows);
-
-                    for i in 0..2 {
-                        transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + i * 2..));
-                        transposed[i * 2 + 1]
-                            .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 5 + i * 2..));
-                    }
-
-                    transposed[4].write_lou(scratch.get_unchecked_mut(k * 2 * 5 + 4..));
-                    transposed[5].write_lou(scratch.get_unchecked_mut((k * 2 + 1) * 5 + 4..));
-                }
-
-                {
-                    let k = 12;
-                    for i in 0..5 {
-                        rows[i] = AvxStoreD::from_complex(chunk.get_unchecked(i * 25 + k * 2));
-                    }
-
-                    rows = self.bf25.bf5.exec(rows);
-
-                    for i in 1..5 {
-                        rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
-                    }
-
-                    let transposed = transpose_f64x2_2x5(rows);
-
-                    transposed[0].write_u(scratch.get_unchecked_mut(k * 2 * 5..));
-                    transposed[2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + 2..));
-                    transposed[4].write_lou(scratch.get_unchecked_mut(k * 2 * 5 + 4..));
-                }
-
-                // rows
-
-                for k in 0..2 {
-                    self.bf25.exec(
-                        scratch.get_unchecked(k * 2..),
-                        chunk.get_unchecked_mut(k * 2..),
-                    );
-                }
-
-                {
-                    let k = 2;
-                    self.bf25.exech(
-                        scratch.get_unchecked(k * 2..),
-                        chunk.get_unchecked_mut(k * 2..),
-                    );
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-impl FftExecutorOutOfPlace<f64> for AvxButterfly125d {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-    ) -> Result<(), ZaftError> {
-        unsafe { self.execute_out_of_place_impl(src, dst) }
-    }
-}
-
-impl AvxButterfly125d {
-    #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_out_of_place_impl(
-        &self,
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-    ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(125) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(125) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
-        }
-
+    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
         let mut rows: [AvxStoreD; 5] = [AvxStoreD::zero(); 5];
         let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 125];
-
         unsafe {
-            for (dst, src) in dst.chunks_exact_mut(125).zip(src.chunks_exact(125)) {
-                // columns
-                for k in 0..12 {
-                    for i in 0..5 {
-                        rows[i] = AvxStoreD::from_complex_ref(src.get_unchecked(i * 25 + k * 2..));
-                    }
-
-                    rows = self.bf25.bf5.exec(rows);
-
-                    for i in 1..5 {
-                        rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
-                    }
-
-                    let transposed = transpose_f64x2_2x5(rows);
-
-                    for i in 0..2 {
-                        transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + i * 2..));
-                        transposed[i * 2 + 1]
-                            .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 5 + i * 2..));
-                    }
-
-                    transposed[4].write_lou(scratch.get_unchecked_mut(k * 2 * 5 + 4..));
-                    transposed[5].write_lou(scratch.get_unchecked_mut((k * 2 + 1) * 5 + 4..));
+            // columns
+            for k in 0..12 {
+                for i in 0..5 {
+                    rows[i] = AvxStoreD::from_complex_ref(chunk.slice_from(i * 25 + k * 2..));
                 }
 
-                {
-                    let k = 12;
-                    for i in 0..5 {
-                        rows[i] = AvxStoreD::from_complex(src.get_unchecked(i * 25 + k * 2));
-                    }
+                rows = self.bf25.bf5.exec(rows);
 
-                    rows = self.bf25.bf5.exec(rows);
-
-                    for i in 1..5 {
-                        rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
-                    }
-
-                    let transposed = transpose_f64x2_2x5(rows);
-
-                    transposed[0].write_u(scratch.get_unchecked_mut(k * 2 * 5..));
-                    transposed[2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + 2..));
-                    transposed[4].write_lou(scratch.get_unchecked_mut(k * 2 * 5 + 4..));
+                for i in 1..5 {
+                    rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
                 }
 
-                // rows
+                let transposed = transpose_f64x2_2x5(rows);
 
-                for k in 0..2 {
-                    self.bf25.exec(
-                        scratch.get_unchecked(k * 2..),
-                        dst.get_unchecked_mut(k * 2..),
-                    );
+                for i in 0..2 {
+                    transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + i * 2..));
+                    transposed[i * 2 + 1]
+                        .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 5 + i * 2..));
                 }
 
-                {
-                    let k = 2;
-                    self.bf25.exech(
-                        scratch.get_unchecked(k * 2..),
-                        dst.get_unchecked_mut(k * 2..),
-                    );
+                transposed[4].write_lou(scratch.get_unchecked_mut(k * 2 * 5 + 4..));
+                transposed[5].write_lou(scratch.get_unchecked_mut((k * 2 + 1) * 5 + 4..));
+            }
+
+            {
+                let k = 12;
+                for i in 0..5 {
+                    rows[i] = AvxStoreD::from_complex(chunk.index(i * 25 + k * 2));
                 }
+
+                rows = self.bf25.bf5.exec(rows);
+
+                for i in 1..5 {
+                    rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 4 * k]);
+                }
+
+                let transposed = transpose_f64x2_2x5(rows);
+
+                transposed[0].write_u(scratch.get_unchecked_mut(k * 2 * 5..));
+                transposed[2].write_u(scratch.get_unchecked_mut(k * 2 * 5 + 2..));
+                transposed[4].write_lou(scratch.get_unchecked_mut(k * 2 * 5 + 4..));
+            }
+
+            // rows
+
+            for k in 0..2 {
+                self.bf25.exec(
+                    scratch.get_unchecked(k * 2..),
+                    chunk.slice_from_mut(k * 2..),
+                );
+            }
+
+            {
+                let k = 2;
+                self.bf25.exech(
+                    scratch.get_unchecked(k * 2..),
+                    chunk.slice_from_mut(k * 2..),
+                );
             }
         }
-        Ok(())
-    }
-}
-
-impl CompositeFftExecutor<f64> for AvxButterfly125d {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-        self
     }
 }
 

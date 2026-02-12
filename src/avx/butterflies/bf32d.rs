@@ -26,20 +26,18 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::butterflies::{AvxButterfly, gen_butterfly_twiddles_interleaved_columns_f64};
+use crate::avx::butterflies::gen_butterfly_twiddles_interleaved_columns_f64;
+use crate::avx::butterflies::shared::boring_avx_butterfly;
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly8d};
 use crate::avx::transpose::transpose_f64x2_2x2;
-use crate::{
-    CompositeFftExecutor, FftDirection, FftExecutor, FftExecutorOutOfPlace, R2CFftExecutor,
-    ZaftError,
-};
+use crate::store::BidirectionalStore;
+use crate::{FftDirection, FftExecutor, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
-use std::sync::Arc;
 
 pub(crate) struct AvxButterfly32d {
     direction: FftDirection,
     twiddles: [AvxStoreD; 12],
-    bf8_column: ColumnButterfly8d,
+    bf8: ColumnButterfly8d,
 }
 
 #[inline]
@@ -90,140 +88,54 @@ impl AvxButterfly32d {
             twiddles: unsafe {
                 gen_butterfly_twiddles_interleaved_columns_f64!(4, 8, 0, direction)
             },
-            bf8_column: unsafe { ColumnButterfly8d::new(direction) },
+            bf8: unsafe { ColumnButterfly8d::new(direction) },
         }
     }
 }
 
+boring_avx_butterfly!(AvxButterfly32d, f64, 32);
+
 impl AvxButterfly32d {
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_f64(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        if !in_place.len().is_multiple_of(32) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                in_place.len(),
-                self.length(),
-            ));
+    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+        let mut rows0 = [AvxStoreD::zero(); 4];
+        let mut rows1 = [AvxStoreD::zero(); 4];
+        for r in 0..4 {
+            rows0[r] = AvxStoreD::from_complex_ref(chunk.slice_from(8 * r..));
+            rows1[r] = AvxStoreD::from_complex_ref(chunk.slice_from(8 * r + 2..));
+        }
+        let mut mid0 = self.bf8.bf4.exec(rows0);
+        let mut mid1 = self.bf8.bf4.exec(rows1);
+        for r in 1..4 {
+            mid0[r] = AvxStoreD::mul_by_complex(mid0[r], self.twiddles[4 * r - 4]);
+            mid1[r] = AvxStoreD::mul_by_complex(mid1[r], self.twiddles[4 * r - 3]);
         }
 
-        unsafe {
-            let mut rows0 = [AvxStoreD::zero(); 4];
-            let mut rows1 = [AvxStoreD::zero(); 4];
-            for chunk in in_place.chunks_exact_mut(32) {
-                for r in 0..4 {
-                    rows0[r] = AvxStoreD::from_complex_ref(chunk.get_unchecked(8 * r..));
-                    rows1[r] = AvxStoreD::from_complex_ref(chunk.get_unchecked(8 * r + 2..));
-                }
-                let mut mid0 =
-                    AvxButterfly::qbutterfly4_f64(rows0, self.bf8_column.rotate.rot_flag);
-                let mut mid1 =
-                    AvxButterfly::qbutterfly4_f64(rows1, self.bf8_column.rotate.rot_flag);
-                for r in 1..4 {
-                    mid0[r] =
-                        AvxStoreD::mul_by_complex(mid0[r], *self.twiddles.get_unchecked(4 * r - 4));
-                    mid1[r] =
-                        AvxStoreD::mul_by_complex(mid1[r], *self.twiddles.get_unchecked(4 * r - 3));
-                }
-
-                // One half is done, so the compiler can spill everything above this. Now do the other set of columns
-                let mut rows2 = [AvxStoreD::zero(); 4];
-                let mut rows3 = [AvxStoreD::zero(); 4];
-                for r in 0..4 {
-                    rows2[r] = AvxStoreD::from_complex_ref(chunk.get_unchecked(8 * r + 4..));
-                    rows3[r] = AvxStoreD::from_complex_ref(chunk.get_unchecked(8 * r + 6..));
-                }
-                let mut mid2 =
-                    AvxButterfly::qbutterfly4_f64(rows2, self.bf8_column.rotate.rot_flag);
-                let mut mid3 =
-                    AvxButterfly::qbutterfly4_f64(rows3, self.bf8_column.rotate.rot_flag);
-                for r in 1..4 {
-                    mid2[r] = AvxStoreD::mul_by_complex(mid2[r], self.twiddles[4 * r - 2]);
-                    mid3[r] = AvxStoreD::mul_by_complex(mid3[r], self.twiddles[4 * r - 1]);
-                }
-
-                // Transpose our 8x4 array to a 4x8 array
-                let (transposed0, transposed1) = transpose_8x4_to_4x8_f64(mid0, mid1, mid2, mid3);
-
-                // Do 4 butterfly 8's down columns of the transposed array
-                let output0 = self.bf8_column.exec(transposed0);
-                #[allow(clippy::needless_range_loop)]
-                for r in 0..8 {
-                    output0[r].write(chunk.get_unchecked_mut(4 * r..));
-                }
-                let output1 = self.bf8_column.exec(transposed1);
-                #[allow(clippy::needless_range_loop)]
-                for r in 0..8 {
-                    output1[r].write(chunk.get_unchecked_mut(4 * r + 2..));
-                }
-            }
-
-            Ok(())
+        let mut rows2 = [AvxStoreD::zero(); 4];
+        let mut rows3 = [AvxStoreD::zero(); 4];
+        for r in 0..4 {
+            rows2[r] = AvxStoreD::from_complex_ref(chunk.slice_from(8 * r + 4..));
+            rows3[r] = AvxStoreD::from_complex_ref(chunk.slice_from(8 * r + 6..));
         }
-    }
-
-    #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_out_of_place_f64(
-        &self,
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-    ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(32) {
-            return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
-        }
-        if !dst.len().is_multiple_of(32) {
-            return Err(ZaftError::InvalidSizeMultiplier(dst.len(), self.length()));
+        let mut mid2 = self.bf8.bf4.exec(rows2);
+        let mut mid3 = self.bf8.bf4.exec(rows3);
+        for r in 1..4 {
+            mid2[r] = AvxStoreD::mul_by_complex(mid2[r], self.twiddles[4 * r - 2]);
+            mid3[r] = AvxStoreD::mul_by_complex(mid3[r], self.twiddles[4 * r - 1]);
         }
 
-        unsafe {
-            let mut rows0 = [AvxStoreD::zero(); 4];
-            let mut rows1 = [AvxStoreD::zero(); 4];
-            for (dst, src) in dst.chunks_exact_mut(32).zip(src.chunks_exact(32)) {
-                for r in 0..4 {
-                    rows0[r] = AvxStoreD::from_complex_ref(src.get_unchecked(8 * r..));
-                    rows1[r] = AvxStoreD::from_complex_ref(src.get_unchecked(8 * r + 2..));
-                }
-                let mut mid0 =
-                    AvxButterfly::qbutterfly4_f64(rows0, self.bf8_column.rotate.rot_flag);
-                let mut mid1 =
-                    AvxButterfly::qbutterfly4_f64(rows1, self.bf8_column.rotate.rot_flag);
-                for r in 1..4 {
-                    mid0[r] =
-                        AvxStoreD::mul_by_complex(mid0[r], *self.twiddles.get_unchecked(4 * r - 4));
-                    mid1[r] =
-                        AvxStoreD::mul_by_complex(mid1[r], *self.twiddles.get_unchecked(4 * r - 3));
-                }
+        let (transposed0, transposed1) = transpose_8x4_to_4x8_f64(mid0, mid1, mid2, mid3);
 
-                let mut rows2 = [AvxStoreD::zero(); 4];
-                let mut rows3 = [AvxStoreD::zero(); 4];
-                for r in 0..4 {
-                    rows2[r] = AvxStoreD::from_complex_ref(src.get_unchecked(8 * r + 4..));
-                    rows3[r] = AvxStoreD::from_complex_ref(src.get_unchecked(8 * r + 6..));
-                }
-                let mut mid2 =
-                    AvxButterfly::qbutterfly4_f64(rows2, self.bf8_column.rotate.rot_flag);
-                let mut mid3 =
-                    AvxButterfly::qbutterfly4_f64(rows3, self.bf8_column.rotate.rot_flag);
-                for r in 1..4 {
-                    mid2[r] = AvxStoreD::mul_by_complex(mid2[r], self.twiddles[4 * r - 2]);
-                    mid3[r] = AvxStoreD::mul_by_complex(mid3[r], self.twiddles[4 * r - 1]);
-                }
-
-                // Transpose our 8x4 array to a 4x8 array
-                let (transposed0, transposed1) = transpose_8x4_to_4x8_f64(mid0, mid1, mid2, mid3);
-
-                // Do 4 butterfly 8's down columns of the transposed array
-                let output0 = self.bf8_column.exec(transposed0);
-                #[allow(clippy::needless_range_loop)]
-                for r in 0..8 {
-                    output0[r].write(dst.get_unchecked_mut(4 * r..));
-                }
-                let output1 = self.bf8_column.exec(transposed1);
-                #[allow(clippy::needless_range_loop)]
-                for r in 0..8 {
-                    output1[r].write(dst.get_unchecked_mut(4 * r + 2..));
-                }
-            }
-
-            Ok(())
+        let output0 = self.bf8.exec(transposed0);
+        #[allow(clippy::needless_range_loop)]
+        for r in 0..8 {
+            output0[r].write(chunk.slice_from_mut(4 * r..));
+        }
+        let output1 = self.bf8.exec(transposed1);
+        #[allow(clippy::needless_range_loop)]
+        for r in 0..8 {
+            output1[r].write(chunk.slice_from_mut(4 * r + 2..));
         }
     }
 
@@ -258,10 +170,8 @@ impl AvxButterfly32d {
                     rows0[r] = v0;
                     rows1[r] = v1;
                 }
-                let mut mid0 =
-                    AvxButterfly::qbutterfly4_f64(rows0, self.bf8_column.rotate.rot_flag);
-                let mut mid1 =
-                    AvxButterfly::qbutterfly4_f64(rows1, self.bf8_column.rotate.rot_flag);
+                let mut mid0 = self.bf8.bf4.exec(rows0);
+                let mut mid1 = self.bf8.bf4.exec(rows1);
                 for r in 1..4 {
                     mid0[r] =
                         AvxStoreD::mul_by_complex(mid0[r], *self.twiddles.get_unchecked(4 * r - 4));
@@ -277,10 +187,8 @@ impl AvxButterfly32d {
                     rows2[r] = v0;
                     rows3[r] = v1;
                 }
-                let mut mid2 =
-                    AvxButterfly::qbutterfly4_f64(rows2, self.bf8_column.rotate.rot_flag);
-                let mut mid3 =
-                    AvxButterfly::qbutterfly4_f64(rows3, self.bf8_column.rotate.rot_flag);
+                let mut mid2 = self.bf8.bf4.exec(rows2);
+                let mut mid3 = self.bf8.bf4.exec(rows3);
                 for r in 1..4 {
                     mid2[r] = AvxStoreD::mul_by_complex(mid2[r], self.twiddles[4 * r - 2]);
                     mid3[r] = AvxStoreD::mul_by_complex(mid3[r], self.twiddles[4 * r - 1]);
@@ -290,13 +198,13 @@ impl AvxButterfly32d {
                 let (transposed0, transposed1) = transpose_8x4_to_4x8_f64(mid0, mid1, mid2, mid3);
 
                 // Do 4 butterfly 8's down columns of the transposed array
-                let output0 = self.bf8_column.exec(transposed0);
+                let output0 = self.bf8.exec(transposed0);
                 #[allow(clippy::needless_range_loop)]
                 for r in 0..4 {
                     output0[r].write(dst.get_unchecked_mut(4 * r..));
                 }
                 output0[4].write_lo(dst.get_unchecked_mut(16..));
-                let output1 = self.bf8_column.exec(transposed1);
+                let output1 = self.bf8.exec(transposed1);
                 #[allow(clippy::needless_range_loop)]
                 for r in 0..4 {
                     output1[r].write(dst.get_unchecked_mut(4 * r + 2..));
@@ -313,6 +221,15 @@ impl R2CFftExecutor<f64> for AvxButterfly32d {
         unsafe { self.execute_r2c(input, output) }
     }
 
+    fn execute_with_scratch(
+        &self,
+        input: &[f64],
+        output: &mut [Complex<f64>],
+        _: &mut [Complex<f64>],
+    ) -> Result<(), ZaftError> {
+        unsafe { self.execute_r2c(input, output) }
+    }
+
     fn real_length(&self) -> usize {
         32
     }
@@ -320,35 +237,9 @@ impl R2CFftExecutor<f64> for AvxButterfly32d {
     fn complex_length(&self) -> usize {
         17
     }
-}
 
-impl FftExecutorOutOfPlace<f64> for AvxButterfly32d {
-    fn execute_out_of_place(
-        &self,
-        src: &[Complex<f64>],
-        dst: &mut [Complex<f64>],
-    ) -> Result<(), ZaftError> {
-        unsafe { self.execute_out_of_place_f64(src, dst) }
-    }
-}
-
-impl CompositeFftExecutor<f64> for AvxButterfly32d {
-    fn into_fft_executor(self: Arc<Self>) -> Arc<dyn FftExecutor<f64> + Send + Sync> {
-        self
-    }
-}
-
-impl FftExecutor<f64> for AvxButterfly32d {
-    fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        unsafe { self.execute_f64(in_place) }
-    }
-
-    fn direction(&self) -> FftDirection {
-        self.direction
-    }
-
-    fn length(&self) -> usize {
-        32
+    fn complex_scratch_length(&self) -> usize {
+        0
     }
 }
 

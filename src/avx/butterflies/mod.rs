@@ -30,6 +30,8 @@
 mod bf10;
 mod bf100d;
 mod bf100f;
+mod bf1024d;
+mod bf1024f;
 mod bf108d;
 mod bf108f;
 mod bf11;
@@ -69,11 +71,11 @@ mod bf256d;
 mod bf256f;
 mod bf27d;
 mod bf27f;
-mod bf29;
+mod bf28d;
+mod bf28f;
 mod bf3;
 mod bf30d;
 mod bf30f;
-mod bf31;
 mod bf32d;
 mod bf32f;
 mod bf35d;
@@ -115,10 +117,6 @@ mod bf88f;
 mod bf9;
 mod bf96d;
 mod bf96f;
-mod fast_bf3;
-mod fast_bf4;
-mod fast_bf5;
-mod fast_bf8;
 mod shared;
 
 pub(crate) use bf2::AvxButterfly2;
@@ -126,13 +124,13 @@ pub(crate) use bf3::AvxButterfly3;
 pub(crate) use bf4::AvxButterfly4;
 pub(crate) use bf5::AvxButterfly5;
 pub(crate) use bf6::{AvxButterfly6d, AvxButterfly6f};
-pub(crate) use bf7::AvxButterfly7;
+pub(crate) use bf7::{AvxButterfly7d, AvxButterfly7f};
 pub(crate) use bf8::{AvxButterfly8d, AvxButterfly8f};
 pub(crate) use bf9::{AvxButterfly9d, AvxButterfly9f};
 pub(crate) use bf10::{AvxButterfly10d, AvxButterfly10f};
-pub(crate) use bf11::{AvxButterfly11, AvxButterfly11d};
+pub(crate) use bf11::{AvxButterfly11d, AvxButterfly11f};
 pub(crate) use bf12::{AvxButterfly12d, AvxButterfly12f};
-pub(crate) use bf13::{AvxButterfly13, AvxButterfly13d};
+pub(crate) use bf13::{AvxButterfly13d, AvxButterfly13f};
 pub(crate) use bf14::{AvxButterfly14d, AvxButterfly14f};
 pub(crate) use bf15::{AvxButterfly15d, AvxButterfly15f};
 pub(crate) use bf16::{AvxButterfly16d, AvxButterfly16f};
@@ -148,10 +146,10 @@ pub(crate) use bf24f::AvxButterfly24f;
 pub(crate) use bf25::{AvxButterfly25d, AvxButterfly25f};
 pub(crate) use bf27d::AvxButterfly27d;
 pub(crate) use bf27f::AvxButterfly27f;
-pub(crate) use bf29::AvxButterfly29;
+pub(crate) use bf28d::AvxButterfly28d;
+pub(crate) use bf28f::AvxButterfly28f;
 pub(crate) use bf30d::AvxButterfly30d;
 pub(crate) use bf30f::AvxButterfly30f;
-pub(crate) use bf31::AvxButterfly31;
 pub(crate) use bf32d::AvxButterfly32d;
 pub(crate) use bf32f::AvxButterfly32f;
 pub(crate) use bf35d::AvxButterfly35d;
@@ -209,10 +207,8 @@ pub(crate) use bf256d::AvxButterfly256d;
 pub(crate) use bf256f::AvxButterfly256f;
 pub(crate) use bf512d::AvxButterfly512d;
 pub(crate) use bf512f::AvxButterfly512f;
-pub(crate) use fast_bf3::AvxFastButterfly3;
-pub(crate) use fast_bf4::AvxFastButterfly4;
-pub(crate) use fast_bf5::{AvxFastButterfly5d, AvxFastButterfly5f};
-pub(crate) use fast_bf8::AvxFastButterfly8;
+pub(crate) use bf1024d::AvxButterfly1024d;
+pub(crate) use bf1024f::AvxButterfly1024f;
 use num_complex::Complex;
 pub(crate) use shared::AvxButterfly;
 
@@ -245,43 +241,6 @@ macro_rules! shift_storel {
 }
 
 pub(crate) use shift_storel;
-
-macro_rules! shift_load8 {
-    ($chunk: expr, $size: expr, $offset0: expr) => {{
-        let q0 = _mm256_loadu_ps($chunk.get_unchecked($offset0..).as_ptr().cast());
-        let q1 = _mm256_loadu_ps($chunk.get_unchecked($offset0 + $size..).as_ptr().cast());
-        let q2 = _mm256_loadu_ps($chunk.get_unchecked($offset0 + $size * 2..).as_ptr().cast());
-        let q3 = _mm256_loadu_ps($chunk.get_unchecked($offset0 + $size * 3..).as_ptr().cast());
-        let u0u1 = _mm256_castps256_ps128(q0);
-        let u2u3 = _mm256_extractf128_ps::<1>(q0);
-        let u0u1_1 = _mm256_castps256_ps128(q1);
-        let u2u3_1 = _mm256_extractf128_ps::<1>(q1);
-        let u0u1_2 = _mm256_castps256_ps128(q2);
-        let u2u3_2 = _mm256_extractf128_ps::<1>(q2);
-        let u0u1_3 = _mm256_castps256_ps128(q3);
-        let u2u3_3 = _mm256_extractf128_ps::<1>(q3);
-        (
-            _mm256_setr_m128(
-                _mm_unpacklo_ps64(u0u1, u0u1_1),
-                _mm_unpacklo_ps64(u0u1_2, u0u1_3),
-            ),
-            _mm256_setr_m128(
-                _mm_unpackhi_ps64(u0u1, u0u1_1),
-                _mm_unpackhi_ps64(u0u1_2, u0u1_3),
-            ),
-            _mm256_setr_m128(
-                _mm_unpacklo_ps64(u2u3, u2u3_1),
-                _mm_unpacklo_ps64(u2u3_2, u2u3_3),
-            ),
-            _mm256_setr_m128(
-                _mm_unpackhi_ps64(u2u3, u2u3_1),
-                _mm_unpackhi_ps64(u2u3_2, u2u3_3),
-            ),
-        )
-    }};
-}
-
-pub(crate) use shift_load8;
 
 macro_rules! shift_load4 {
     ($chunk: expr, $size: expr, $offset0: expr) => {{
@@ -386,55 +345,6 @@ macro_rules! shift_store4 {
 }
 
 pub(crate) use shift_store4;
-
-macro_rules! shift_store8 {
-    ($chunk: expr, $size: expr, $offset0: expr, $q0: expr, $q1: expr, $q2: expr, $q3: expr) => {{
-        let r0 = _mm256_castps256_ps128($q0);
-        let r1 = _mm256_castps256_ps128($q1);
-        let r2 = _mm256_castps256_ps128($q2);
-        let r3 = _mm256_castps256_ps128($q3);
-        let l0 = _mm_unpacklo_ps64(r0, r1);
-        let l1 = _mm_unpacklo_ps64(r2, r3);
-        _mm256_storeu_ps(
-            $chunk.get_unchecked_mut($offset0..).as_mut_ptr().cast(),
-            _mm256_setr_m128(l0, l1),
-        );
-        let q0 = _mm_unpackhi_ps64(r0, r1);
-        let q1 = _mm_unpackhi_ps64(r2, r3);
-        _mm256_storeu_ps(
-            $chunk
-                .get_unchecked_mut($offset0 + $size..)
-                .as_mut_ptr()
-                .cast(),
-            _mm256_setr_m128(q0, q1),
-        );
-
-        let r0 = _mm256_extractf128_ps::<1>($q0);
-        let r1 = _mm256_extractf128_ps::<1>($q1);
-        let r2 = _mm256_extractf128_ps::<1>($q2);
-        let r3 = _mm256_extractf128_ps::<1>($q3);
-        let l0 = _mm_unpacklo_ps64(r0, r1);
-        let l1 = _mm_unpacklo_ps64(r2, r3);
-        _mm256_storeu_ps(
-            $chunk
-                .get_unchecked_mut($offset0 + $size * 2..)
-                .as_mut_ptr()
-                .cast(),
-            _mm256_setr_m128(l0, l1),
-        );
-        let q0 = _mm_unpackhi_ps64(r0, r1);
-        let q1 = _mm_unpackhi_ps64(r2, r3);
-        _mm256_storeu_ps(
-            $chunk
-                .get_unchecked_mut($offset0 + $size * 3..)
-                .as_mut_ptr()
-                .cast(),
-            _mm256_setr_m128(q0, q1),
-        );
-    }};
-}
-
-pub(crate) use shift_store8;
 
 #[inline]
 #[target_feature(enable = "avx2")]

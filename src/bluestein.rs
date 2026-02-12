@@ -30,7 +30,7 @@ use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
 use crate::spectrum_arithmetic::ComplexArith;
 use crate::traits::FftTrigonometry;
-use crate::util::compute_twiddle;
+use crate::util::{compute_twiddle, validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, Zero};
@@ -44,6 +44,7 @@ pub(crate) struct BluesteinFft<T> {
     execution_length: usize,
     direction: FftDirection,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
+    convolve_scratch_length: usize,
 }
 
 pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
@@ -119,6 +120,8 @@ where
         let mut twiddles = try_vec![Complex::zero(); size];
         make_bluesteins_twiddles(&mut twiddles, direction);
 
+        let convolve_scratch_length = convolve_fft.scratch_length();
+
         Ok(BluesteinFft {
             convolve_fft,
             convolve_fft_twiddles,
@@ -126,6 +129,7 @@ where
             execution_length: size,
             direction,
             spectrum_ops: T::make_complex_arith(),
+            convolve_scratch_length,
         })
     }
 }
@@ -135,6 +139,15 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        self.execute_with_scratch(in_place, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -142,11 +155,11 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.convolve_fft_twiddles.len()];
+        let scratch = validate_scratch!(scratch, self.scratch_length());
+        let (inner_input, convolve_scratch) =
+            scratch.split_at_mut(self.convolve_fft_twiddles.len());
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            let (inner_input, _) = scratch.split_at_mut(self.convolve_fft_twiddles.len());
-
             // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
             self.spectrum_ops
                 .mul(chunk, &self.twiddles, &mut inner_input[..chunk.len()]);
@@ -156,14 +169,16 @@ where
             }
 
             // run our inner forward FFT
-            self.convolve_fft.execute(inner_input)?;
+            self.convolve_fft
+                .execute_with_scratch(inner_input, convolve_scratch)?;
 
             // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
             self.spectrum_ops
                 .mul_conjugate_in_place(inner_input, &self.convolve_fft_twiddles);
 
-            // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
-            self.convolve_fft.execute(inner_input)?;
+            // inverse FFT. we're computing a forward but we're converting it into an inverse by conjugating the inputs and outputs
+            self.convolve_fft
+                .execute_with_scratch(inner_input, convolve_scratch)?;
 
             // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
             self.spectrum_ops.conjugate_mul_by_b(
@@ -175,11 +190,89 @@ where
         Ok(())
     }
 
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
+        self.execute_out_of_place_with_scratch(src, dst, &mut scratch)
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
+        let (inner_input, convolve_scratch) =
+            scratch.split_at_mut(self.convolve_fft_twiddles.len());
+
+        for (chunk, output_chunk) in src
+            .chunks_exact(self.execution_length)
+            .zip(dst.chunks_exact_mut(self.execution_length))
+        {
+            // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
+            self.spectrum_ops
+                .mul(chunk, &self.twiddles, &mut inner_input[..chunk.len()]);
+
+            for inner in inner_input[chunk.len()..].iter_mut() {
+                *inner = Complex::zero();
+            }
+
+            // run our inner forward FFT
+            self.convolve_fft
+                .execute_with_scratch(inner_input, convolve_scratch)?;
+
+            // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
+            self.spectrum_ops
+                .mul_conjugate_in_place(inner_input, &self.convolve_fft_twiddles);
+
+            // inverse FFT. we're computing a forward but we're converting it into an inverse by conjugating the inputs and outputs
+            self.convolve_fft
+                .execute_with_scratch(inner_input, convolve_scratch)?;
+
+            // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
+            self.spectrum_ops.conjugate_mul_by_b(
+                &inner_input[..chunk.len()],
+                &self.twiddles,
+                output_chunk,
+            );
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
+    }
+
     fn direction(&self) -> FftDirection {
         self.direction
     }
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.convolve_scratch_length + self.convolve_fft_twiddles.len()
+    }
+
+    #[inline]
+    fn out_of_place_scratch_length(&self) -> usize {
+        self.convolve_scratch_length + self.convolve_fft_twiddles.len()
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        self.out_of_place_scratch_length()
     }
 }

@@ -28,12 +28,13 @@
  */
 use crate::err::try_vec;
 use crate::transpose::TransposeExecutor;
-use crate::{C2RFftExecutor, ExecutorWithScratch, FftExecutor, ZaftError};
+use crate::util::validate_scratch;
+use crate::{C2RFftExecutor, FftExecutor, ZaftError};
 use novtb::{ParallelZonedIterator, TbSliceMut};
 use num_complex::Complex;
 use std::sync::Arc;
 
-pub trait TwoDimensionalExecutorC2R<T>: ExecutorWithScratch {
+pub trait TwoDimensionalExecutorC2R<T> {
     /// Executes the 2D Real-to-Complex FFT using an internal scratch buffer.
     ///
     /// The size of the `source` slice must be equal to `self.real_size()`, and the size of the
@@ -52,7 +53,7 @@ pub trait TwoDimensionalExecutorC2R<T>: ExecutorWithScratch {
     /// internal memory allocations.
     ///
     /// The size requirements for `source` and `output` are the same as `execute`. The `scratch`
-    /// slice must meet the size requirement specified by the inherited `ExecutorWithScratch::required_scratch_size()`.
+    /// slice must meet the size requirement specified by the inherited `ExecutorWithScratch::required_scratch_length()`.
     ///
     /// # Parameters
     /// * `source`: The **real-valued** 2D input array.
@@ -80,6 +81,7 @@ pub trait TwoDimensionalExecutorC2R<T>: ExecutorWithScratch {
     /// This value accounts for the Hermitian symmetry property of the R2C FFT.
     /// For an input of size `W x H`, the complex size is typically `H * (W/2 + 1)`.
     fn complex_size(&self) -> usize;
+    fn scratch_length(&self) -> usize;
 }
 
 pub(crate) struct TwoDimensionalC2R<T> {
@@ -89,11 +91,13 @@ pub(crate) struct TwoDimensionalC2R<T> {
     pub(crate) thread_count: usize,
     pub(crate) width: usize,
     pub(crate) height: usize,
+    pub(crate) width_scratch_length: usize,
+    pub(crate) height_scratch_length: usize,
 }
 
 impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorC2R<T> for TwoDimensionalC2R<T> {
     fn execute(&self, source: &mut [Complex<T>], output: &mut [T]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::<T>::default(); self.required_scratch_size()];
+        let mut scratch = try_vec![Complex::<T>::default(); self.scratch_length()];
         self.execute_with_scratch(source, output, &mut scratch)
     }
 
@@ -103,12 +107,6 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorC2R<T> for TwoDimens
         output: &mut [T],
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if scratch.len() < self.required_scratch_size() {
-            return Err(ZaftError::ScratchBufferIsTooSmall(
-                scratch.len(),
-                self.required_scratch_size(),
-            ));
-        }
         let complex_size = self.complex_size();
         if !source.len().is_multiple_of(complex_size) {
             return Err(ZaftError::InvalidSizeMultiplier(output.len(), complex_size));
@@ -125,27 +123,50 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorC2R<T> for TwoDimens
                 source.len() / complex_size,
             ));
         }
+
         let complex_row_size = (self.width / 2) + 1;
-        let (scratch, _) = scratch.split_at_mut(self.required_scratch_size());
+        let scratch = validate_scratch!(scratch, self.scratch_length());
+        let (scratch, rem_scratch) = scratch.split_at_mut(self.complex_size());
+
         let pool = novtb::ThreadPool::new(self.thread_count);
 
         for (src, dst) in source
             .chunks_exact_mut(self.complex_size())
             .zip(output.chunks_exact_mut(self.real_size()))
         {
-            src.tb_par_chunks_exact_mut(self.height)
-                .for_each(&pool, |row| {
-                    _ = self.height_c2c_executor.execute(row);
-                });
+            if self.thread_count > 1 {
+                src.tb_par_chunks_exact_mut(self.height)
+                    .for_each(&pool, |row| {
+                        _ = self.height_c2c_executor.execute(row);
+                    });
+            } else {
+                let (sl, _) = rem_scratch.split_at_mut(self.height_scratch_length);
+                for row in src.chunks_exact_mut(self.height) {
+                    _ = self.height_c2c_executor.execute_with_scratch(row, sl);
+                }
+            }
 
             self.transpose_height_to_width
                 .transpose(src, scratch, self.height, complex_row_size);
 
-            dst.tb_par_chunks_exact_mut(self.width)
-                .for_each_enumerated(&pool, |idx, column| {
-                    let arena_src = &scratch[complex_row_size * idx..complex_row_size * (idx + 1)];
-                    _ = self.width_c2r_executor.execute(arena_src, column);
-                });
+            if self.thread_count > 1 {
+                dst.tb_par_chunks_exact_mut(self.width).for_each_enumerated(
+                    &pool,
+                    |idx, column| {
+                        let arena_src =
+                            &scratch[complex_row_size * idx..complex_row_size * (idx + 1)];
+                        _ = self.width_c2r_executor.execute(arena_src, column);
+                    },
+                );
+            } else {
+                let (sl, _) = rem_scratch.split_at_mut(self.width_scratch_length);
+                for (row, src) in dst
+                    .chunks_exact_mut(self.width)
+                    .zip(scratch.chunks_exact(complex_row_size))
+                {
+                    _ = self.width_c2r_executor.execute_with_scratch(src, row, sl);
+                }
+            }
         }
         Ok(())
     }
@@ -169,11 +190,14 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorC2R<T> for TwoDimens
     fn complex_size(&self) -> usize {
         ((self.width / 2) + 1) * self.height
     }
-}
 
-impl<T> ExecutorWithScratch for TwoDimensionalC2R<T> {
     #[inline]
-    fn required_scratch_size(&self) -> usize {
+    fn scratch_length(&self) -> usize {
         ((self.width / 2) + 1) * self.height
+            + if self.thread_count > 1 {
+                0
+            } else {
+                self.width_scratch_length.max(self.height_scratch_length)
+            }
     }
 }

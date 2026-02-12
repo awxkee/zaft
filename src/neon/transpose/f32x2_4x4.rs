@@ -30,7 +30,7 @@ use crate::neon::transpose::f32x2_2x2::neon_transpose_f32x2_2x2_impl;
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
-#[inline]
+#[inline(always)]
 pub(crate) fn transpose_f32x2_4x4(
     r0: float32x4x2_t,
     r1: float32x4x2_t,

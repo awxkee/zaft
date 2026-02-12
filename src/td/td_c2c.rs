@@ -28,12 +28,13 @@
  */
 use crate::err::try_vec;
 use crate::transpose::TransposeExecutor;
-use crate::{ExecutorWithScratch, FftExecutor, ZaftError};
+use crate::util::validate_scratch;
+use crate::{FftExecutor, ZaftError};
 use novtb::{ParallelZonedIterator, TbSliceMut};
 use num_complex::Complex;
 use std::sync::Arc;
 
-pub trait TwoDimensionalFftExecutor<T>: ExecutorWithScratch {
+pub trait TwoDimensionalFftExecutor<T> {
     /// Executes a 2D FFT on source and writes the result into output.
     ///
     /// Both source and output must have length equal to width() * height().
@@ -56,6 +57,7 @@ pub trait TwoDimensionalFftExecutor<T>: ExecutorWithScratch {
     fn width(&self) -> usize;
     /// Returns the **height** (number of rows, Y-dimension) of the 2D input data grid.
     fn height(&self) -> usize;
+    fn scratch_length(&self) -> usize;
 }
 
 pub(crate) struct TwoDimensionalC2C<T> {
@@ -65,11 +67,13 @@ pub(crate) struct TwoDimensionalC2C<T> {
     pub(crate) thread_count: usize,
     pub(crate) width: usize,
     pub(crate) height: usize,
+    pub(crate) oof_width_scratch_size: usize,
+    pub(crate) height_scratch_size: usize,
 }
 
 impl<T: Copy + Default + Send + Sync> TwoDimensionalFftExecutor<T> for TwoDimensionalC2C<T> {
     fn execute(&self, data: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::<T>::default(); self.required_scratch_size()];
+        let mut scratch = try_vec![Complex::<T>::default(); self.scratch_length()];
         self.execute_with_scratch(data, &mut scratch)
     }
 
@@ -78,36 +82,55 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalFftExecutor<T> for TwoDimens
         data: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if scratch.len() < self.required_scratch_size() {
-            return Err(ZaftError::ScratchBufferIsTooSmall(
-                scratch.len(),
-                self.required_scratch_size(),
-            ));
-        }
         let full_size = self.width * self.height;
         if !data.len().is_multiple_of(full_size) {
             return Err(ZaftError::InvalidSizeMultiplier(data.len(), full_size));
         }
-        let (scratch, _) = scratch.split_at_mut(self.required_scratch_size());
+
+        let scratch = validate_scratch!(scratch, self.scratch_length());
+
+        let block_size = self.width * self.height;
+        let (scratch, r) = scratch.split_at_mut(block_size);
+        let (width_scratch, height_scratch) = r.split_at_mut(self.oof_width_scratch_size);
+
         let pool = novtb::ThreadPool::new(self.thread_count);
 
         for chunk in data.chunks_exact_mut(full_size) {
-            scratch.copy_from_slice(chunk);
-
-            scratch
-                .tb_par_chunks_exact_mut(self.width)
-                .for_each(&pool, |row| {
-                    _ = self.width_c2c_executor.execute(row);
-                });
+            if self.thread_count <= 1 {
+                for (row, src_row) in scratch
+                    .chunks_exact_mut(self.width)
+                    .zip(chunk.chunks_exact_mut(self.width))
+                {
+                    self.width_c2c_executor.execute_out_of_place_with_scratch(
+                        src_row,
+                        row,
+                        width_scratch,
+                    )?;
+                }
+            } else {
+                scratch
+                    .tb_par_chunks_exact_mut(self.width)
+                    .for_each_enumerated(&pool, |y, row| {
+                        let src_row = &chunk[y * self.width..(y + 1) * self.width];
+                        _ = self.width_c2c_executor.execute_out_of_place(src_row, row);
+                    });
+            }
 
             self.transpose_width_to_height
                 .transpose(scratch, chunk, self.width, self.height);
 
-            chunk
-                .tb_par_chunks_exact_mut(self.height)
-                .for_each(&pool, |column| {
-                    _ = self.height_c2c_executor.execute(column);
-                });
+            if self.thread_count <= 1 {
+                for column in chunk.chunks_exact_mut(self.height) {
+                    self.height_c2c_executor
+                        .execute_with_scratch(column, height_scratch)?;
+                }
+            } else {
+                chunk
+                    .tb_par_chunks_exact_mut(self.height)
+                    .for_each(&pool, |column| {
+                        _ = self.height_c2c_executor.execute(column);
+                    });
+            }
         }
         Ok(())
     }
@@ -121,11 +144,19 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalFftExecutor<T> for TwoDimens
     fn height(&self) -> usize {
         self.height
     }
-}
 
-impl<T> ExecutorWithScratch for TwoDimensionalC2C<T> {
     #[inline]
-    fn required_scratch_size(&self) -> usize {
+    fn scratch_length(&self) -> usize {
         self.width * self.height
+            + if self.thread_count <= 1 {
+                self.oof_width_scratch_size
+            } else {
+                0
+            }
+            + if self.thread_count <= 1 {
+                self.height_scratch_size
+            } else {
+                0
+            }
     }
 }

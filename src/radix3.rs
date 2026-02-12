@@ -31,11 +31,11 @@ use crate::err::try_vec;
 use crate::mla::fmla;
 use crate::util::{
     bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_three,
-    radixn_floating_twiddles_from_base,
+    radixn_floating_twiddles_from_base, validate_oof_sizes, validate_scratch,
 };
-use crate::{CompositeFftExecutor, FftDirection, FftExecutor, FftSample, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 #[allow(unused)]
@@ -44,7 +44,7 @@ pub(crate) struct Radix3<T> {
     execution_length: usize,
     twiddle: Complex<T>,
     direction: FftDirection,
-    base_fft: Arc<dyn CompositeFftExecutor<T> + Send + Sync>,
+    base_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     base_len: usize,
 }
 
@@ -121,11 +121,79 @@ where
     }
 }
 
+impl<T: FftSample> Radix3<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn base_run(&self, chunk: &mut [Complex<T>]) {
+        let mut len = self.base_len;
+
+        unsafe {
+            let mut m_twiddles = self.twiddles.as_slice();
+
+            while len < self.execution_length {
+                let columns = len;
+                len *= 3;
+                let third = len / 3;
+
+                for data in chunk.chunks_exact_mut(len) {
+                    for j in 0..third {
+                        let u0 = *data.get_unchecked(j);
+                        let u1 = c_mul_fast(
+                            *data.get_unchecked(j + third),
+                            *m_twiddles.get_unchecked(2 * j),
+                        );
+                        let u2 = c_mul_fast(
+                            *data.get_unchecked(j + 2 * third),
+                            *m_twiddles.get_unchecked(2 * j + 1),
+                        );
+
+                        // Radix-3 butterfly
+                        let xp = u1 + u2;
+                        let xn = u1 - u2;
+                        let sum = u0 + xp;
+
+                        let w_1 = Complex {
+                            re: fmla(self.twiddle.re, xp.re, u0.re),
+                            im: fmla(self.twiddle.re, xp.im, u0.im),
+                        };
+
+                        let y0 = sum;
+                        let y1 = Complex {
+                            re: fmla(-self.twiddle.im, xn.im, w_1.re),
+                            im: fmla(self.twiddle.im, xn.re, w_1.im),
+                        }; //w_1 + w_2;
+                        let y2 = Complex {
+                            re: fmla(self.twiddle.im, xn.im, w_1.re),
+                            im: fmla(-self.twiddle.im, xn.re, w_1.im),
+                        }; //w_1 - w_2;
+
+                        *data.get_unchecked_mut(j) = y0;
+                        *data.get_unchecked_mut(j + third) = y1;
+                        *data.get_unchecked_mut(j + 2 * third) = y2;
+                    }
+                }
+
+                m_twiddles = &m_twiddles[columns * 2..];
+            }
+        }
+    }
+}
+
 impl<T: FftSample> FftExecutor<T> for Radix3<T>
 where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        self.execute_with_scratch(in_place, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -133,75 +201,75 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::<T>::default(); self.execution_length];
+        let scratch = validate_scratch!(scratch, self.scratch_length());
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
-            bitreversed_transpose::<Complex<T>, 3>(self.base_len, chunk, &mut scratch);
-
-            self.base_fft.execute_out_of_place(&scratch, chunk)?;
-
-            let mut len = self.base_len;
-
-            unsafe {
-                let mut m_twiddles = self.twiddles.as_slice();
-
-                while len < self.execution_length {
-                    let columns = len;
-                    len *= 3;
-                    let third = len / 3;
-
-                    for data in chunk.chunks_exact_mut(len) {
-                        for j in 0..third {
-                            let u0 = *data.get_unchecked(j);
-                            let u1 = c_mul_fast(
-                                *data.get_unchecked(j + third),
-                                *m_twiddles.get_unchecked(2 * j),
-                            );
-                            let u2 = c_mul_fast(
-                                *data.get_unchecked(j + 2 * third),
-                                *m_twiddles.get_unchecked(2 * j + 1),
-                            );
-
-                            // Radix-3 butterfly
-                            let xp = u1 + u2;
-                            let xn = u1 - u2;
-                            let sum = u0 + xp;
-
-                            let w_1 = Complex {
-                                re: fmla(self.twiddle.re, xp.re, u0.re),
-                                im: fmla(self.twiddle.re, xp.im, u0.im),
-                            };
-
-                            let y0 = sum;
-                            let y1 = Complex {
-                                re: fmla(-self.twiddle.im, xn.im, w_1.re),
-                                im: fmla(self.twiddle.im, xn.re, w_1.im),
-                            }; //w_1 + w_2;
-                            let y2 = Complex {
-                                re: fmla(self.twiddle.im, xn.im, w_1.re),
-                                im: fmla(-self.twiddle.im, xn.re, w_1.im),
-                            }; //w_1 - w_2;
-
-                            *data.get_unchecked_mut(j) = y0;
-                            *data.get_unchecked_mut(j + third) = y1;
-                            *data.get_unchecked_mut(j + 2 * third) = y2;
-                        }
-                    }
-
-                    m_twiddles = &m_twiddles[columns * 2..];
-                }
-            }
+            bitreversed_transpose::<Complex<T>, 3>(self.base_len, chunk, scratch);
+            self.base_fft.execute_out_of_place(scratch, chunk)?;
+            self.base_run(chunk);
         }
         Ok(())
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, &mut [])
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        _: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        for (dst, src) in dst
+            .chunks_exact_mut(self.execution_length)
+            .zip(src.chunks_exact(self.execution_length))
+        {
+            // Digit-reversal permutation
+            bitreversed_transpose::<Complex<T>, 3>(self.base_len, src, dst);
+            self.base_fft.execute(dst)?;
+            self.base_run(dst);
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 
     fn direction(&self) -> FftDirection {
         self.direction
     }
 
+    #[inline]
     fn length(&self) -> usize {
         self.execution_length
+    }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.execution_length
+    }
+
+    #[inline]
+    fn out_of_place_scratch_length(&self) -> usize {
+        0
+    }
+
+    fn destructive_scratch_length(&self) -> usize {
+        0
     }
 }
 

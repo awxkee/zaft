@@ -208,7 +208,6 @@ impl NeonButterfly {
     pub(crate) fn butterfly2h_f32(u0: float32x2_t, u1: float32x2_t) -> (float32x2_t, float32x2_t) {
         unsafe {
             let t = vadd_f32(u0, u1);
-
             let y1 = vsub_f32(u0, u1);
             let y0 = t;
             (y0, y1)
@@ -219,7 +218,6 @@ impl NeonButterfly {
     pub(crate) fn butterfly2_f32(u0: float32x4_t, u1: float32x4_t) -> (float32x4_t, float32x4_t) {
         unsafe {
             let t = vaddq_f32(u0, u1);
-
             let y1 = vsubq_f32(u0, u1);
             let y0 = t;
             (y0, y1)
@@ -269,32 +267,6 @@ impl NeonButterfly {
         let y1 = vcmlaq_rot90_f64(w_1, tw_w_2, xn);
         let y2 = vcmlaq_rot270_f64(w_1, tw_w_2, xn);
         (y0, y1, y2)
-    }
-
-    #[inline]
-    pub(crate) fn butterfly4_f64(
-        a: float64x2_t,
-        b: float64x2_t,
-        c: float64x2_t,
-        d: float64x2_t,
-        rotate: float64x2_t,
-    ) -> (float64x2_t, float64x2_t, float64x2_t, float64x2_t) {
-        unsafe {
-            let t0 = vaddq_f64(a, c);
-            let t1 = vsubq_f64(a, c);
-            let t2 = vaddq_f64(b, d);
-            let mut t3 = vsubq_f64(b, d);
-            t3 = vreinterpretq_f64_u64(veorq_u64(
-                vreinterpretq_u64_f64(vextq_f64::<1>(t3, t3)),
-                vreinterpretq_u64_f64(rotate),
-            ));
-            (
-                vaddq_f64(t0, t2),
-                vaddq_f64(t1, t3),
-                vsubq_f64(t0, t2),
-                vsubq_f64(t1, t3),
-            )
-        }
     }
 
     #[inline]
@@ -362,22 +334,13 @@ impl NeonButterfly {
 }
 
 #[cfg(feature = "fcma")]
-pub(crate) struct FastFcmaBf4f {
-    pub(crate) rot_sign: float32x4_t,
-}
+pub(crate) struct FastFcmaBf4f<const FORWARD: bool> {}
 
 #[cfg(feature = "fcma")]
-impl FastFcmaBf4f {
+impl<const FORWARD: bool> FastFcmaBf4f<FORWARD> {
     #[inline]
-    pub(crate) fn new(direction: FftDirection) -> Self {
-        Self {
-            rot_sign: unsafe {
-                match direction {
-                    FftDirection::Forward => vdupq_n_f32(-1.0),
-                    FftDirection::Inverse => vdupq_n_f32(1.0),
-                }
-            },
-        }
+    pub(crate) fn new() -> Self {
+        Self {}
     }
 
     #[inline]
@@ -393,12 +356,21 @@ impl FastFcmaBf4f {
         let t1 = vsubq_f32(a, c);
         let t2 = vaddq_f32(b, d);
         let t3 = vsubq_f32(b, d);
-        (
-            vaddq_f32(t0, t2),
-            vcmlaq_rot90_f32(t1, self.rot_sign, t3),
-            vsubq_f32(t0, t2),
-            vcmlaq_rot270_f32(t1, self.rot_sign, t3),
-        )
+        if FORWARD {
+            (
+                vaddq_f32(t0, t2),
+                vcaddq_rot270_f32(t1, t3),
+                vsubq_f32(t0, t2),
+                vcaddq_rot90_f32(t1, t3),
+            )
+        } else {
+            (
+                vaddq_f32(t0, t2),
+                vcaddq_rot90_f32(t1, t3),
+                vsubq_f32(t0, t2),
+                vcaddq_rot270_f32(t1, t3),
+            )
+        }
     }
 
     #[inline]
@@ -414,53 +386,21 @@ impl FastFcmaBf4f {
         let t1 = vsub_f32(a, c);
         let t2 = vadd_f32(b, d);
         let t3 = vsub_f32(b, d);
-        (
-            vadd_f32(t0, t2),
-            vcmla_rot90_f32(t1, vget_low_f32(self.rot_sign), t3),
-            vsub_f32(t0, t2),
-            vcmla_rot270_f32(t1, vget_low_f32(self.rot_sign), t3),
-        )
-    }
-}
-
-#[cfg(feature = "fcma")]
-pub(crate) struct FastFcmaBf4d {
-    pub(crate) rot_sign: float64x2_t,
-}
-
-#[cfg(feature = "fcma")]
-impl FastFcmaBf4d {
-    #[inline]
-    pub(crate) fn new(direction: FftDirection) -> Self {
-        Self {
-            rot_sign: unsafe {
-                match direction {
-                    FftDirection::Forward => vdupq_n_f64(-1.0),
-                    FftDirection::Inverse => vdupq_n_f64(1.0),
-                }
-            },
+        if FORWARD {
+            (
+                vadd_f32(t0, t2),
+                vcadd_rot270_f32(t1, t3),
+                vsub_f32(t0, t2),
+                vcadd_rot90_f32(t1, t3),
+            )
+        } else {
+            (
+                vadd_f32(t0, t2),
+                vcadd_rot90_f32(t1, t3),
+                vsub_f32(t0, t2),
+                vcadd_rot270_f32(t1, t3),
+            )
         }
-    }
-
-    #[inline]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn exec(
-        &self,
-        a: float64x2_t,
-        b: float64x2_t,
-        c: float64x2_t,
-        d: float64x2_t,
-    ) -> (float64x2_t, float64x2_t, float64x2_t, float64x2_t) {
-        let t0 = vaddq_f64(a, c);
-        let t1 = vsubq_f64(a, c);
-        let t2 = vaddq_f64(b, d);
-        let t3 = vsubq_f64(b, d);
-        (
-            vaddq_f64(t0, t2),
-            vcmlaq_rot90_f64(t1, self.rot_sign, t3),
-            vsubq_f64(t0, t2),
-            vcmlaq_rot270_f64(t1, self.rot_sign, t3),
-        )
     }
 }
 
@@ -558,3 +498,310 @@ impl NeonFcmaRotate90D {
         vcaddq_rot90_f64(vdupq_n_f64(0.), values)
     }
 }
+
+macro_rules! boring_simple_neon_butterfly {
+    ($bf_name: ident, $f_type: ident, $size: expr) => {
+        impl FftExecutor<$f_type> for $bf_name<$f_type> {
+            fn execute(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of($size) {
+                    return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
+                }
+
+                for chunk in in_place.chunks_exact_mut($size) {
+                    self.run(&mut InPlaceStore::new(chunk));
+                }
+
+                Ok(())
+            }
+
+            fn execute_with_scratch(
+                &self,
+                in_place: &mut [Complex<f64>],
+                _: &mut [Complex<f64>],
+            ) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of($size) {
+                    return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
+                }
+
+                for chunk in in_place.chunks_exact_mut($size) {
+                    use crate::store::InPlaceStore;
+                    self.run(&mut InPlaceStore::new(chunk));
+                }
+
+                Ok(())
+            }
+
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                self.execute_out_of_place_with_scratch(src, dst, &mut [])
+            }
+
+            fn execute_out_of_place_with_scratch(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                use crate::util::validate_oof_sizes;
+                validate_oof_sizes!(src, dst, $size);
+
+                for (dst, src) in dst.chunks_exact_mut($size).zip(src.chunks_exact($size)) {
+                    use crate::store::BiStore;
+                    self.run(&mut BiStore::new(src, dst));
+                }
+                Ok(())
+            }
+
+            fn execute_destructive_with_scratch(
+                &self,
+                src: &mut [Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                self.execute_out_of_place_with_scratch(src, dst, &mut [])
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            fn length(&self) -> usize {
+                $size
+            }
+
+            fn scratch_length(&self) -> usize {
+                0
+            }
+
+            fn out_of_place_scratch_length(&self) -> usize {
+                0
+            }
+
+            fn destructive_scratch_length(&self) -> usize {
+                0
+            }
+        }
+    };
+}
+
+pub(crate) use boring_simple_neon_butterfly;
+
+macro_rules! boring_neon_butterfly {
+    ($bf_name: ident, $features: literal, $f_type: ident, $size: expr) => {
+        impl $bf_name {
+            #[target_feature(enable = $features)]
+            fn execute_impl(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of($size) {
+                    return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
+                }
+
+                for chunk in in_place.chunks_exact_mut($size) {
+                    use crate::store::InPlaceStore;
+                    self.run(&mut InPlaceStore::new(chunk));
+                }
+
+                Ok(())
+            }
+
+            #[target_feature(enable = $features)]
+            fn execute_oof_impl(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                use crate::util::validate_oof_sizes;
+                validate_oof_sizes!(src, dst, $size);
+
+                for (dst, src) in dst.chunks_exact_mut($size).zip(src.chunks_exact($size)) {
+                    use crate::store::BiStore;
+                    self.run(&mut BiStore::new(src, dst));
+                }
+                Ok(())
+            }
+        }
+
+        impl FftExecutor<$f_type> for $bf_name {
+            fn execute(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                FftExecutor::execute_with_scratch(self, in_place, &mut [])
+            }
+
+            fn execute_with_scratch(
+                &self,
+                in_place: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
+            }
+
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(src, dst) }
+            }
+
+            fn execute_out_of_place_with_scratch(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(src, dst) }
+            }
+
+            fn execute_destructive_with_scratch(
+                &self,
+                src: &mut [Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                self.execute_out_of_place_with_scratch(src, dst, &mut [])
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            fn length(&self) -> usize {
+                $size
+            }
+
+            fn scratch_length(&self) -> usize {
+                0
+            }
+
+            fn out_of_place_scratch_length(&self) -> usize {
+                0
+            }
+
+            fn destructive_scratch_length(&self) -> usize {
+                0
+            }
+        }
+    };
+}
+
+pub(crate) use boring_neon_butterfly;
+
+macro_rules! boring_neon_butterfly2 {
+    ($bf_name: ident, $features: literal, $f_type: ident, $size: expr) => {
+        impl $bf_name {
+            #[target_feature(enable = $features)]
+            fn execute_impl(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of($size) {
+                    return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
+                }
+
+                for chunk in in_place.chunks_exact_mut($size * 2) {
+                    use crate::store::InPlaceStore;
+                    self.run2(&mut InPlaceStore::new(chunk));
+                }
+
+                let rem = in_place.chunks_exact_mut($size * 2).into_remainder();
+
+                for chunk in rem.chunks_exact_mut($size) {
+                    use crate::store::InPlaceStore;
+                    self.run(&mut InPlaceStore::new(chunk));
+                }
+
+                Ok(())
+            }
+
+            #[target_feature(enable = $features)]
+            fn execute_oof_impl(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                use crate::util::validate_oof_sizes;
+                validate_oof_sizes!(src, dst, $size);
+
+                for (dst, src) in dst
+                    .chunks_exact_mut($size * 2)
+                    .zip(src.chunks_exact($size * 2))
+                {
+                    use crate::store::BiStore;
+                    self.run2(&mut BiStore::new(src, dst));
+                }
+
+                let rem_dst = dst.chunks_exact_mut($size * 2).into_remainder();
+                let rem_src = src.chunks_exact($size * 2).remainder();
+
+                for (dst, src) in rem_dst
+                    .chunks_exact_mut($size)
+                    .zip(rem_src.chunks_exact($size))
+                {
+                    use crate::store::BiStore;
+                    self.run(&mut BiStore::new(src, dst));
+                }
+                Ok(())
+            }
+        }
+
+        impl FftExecutor<$f_type> for $bf_name {
+            fn execute(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
+                FftExecutor::execute_with_scratch(self, in_place, &mut [])
+            }
+
+            fn execute_with_scratch(
+                &self,
+                in_place: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_impl(in_place) }
+            }
+
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(src, dst) }
+            }
+
+            fn execute_out_of_place_with_scratch(
+                &self,
+                src: &[Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(src, dst) }
+            }
+
+            fn execute_destructive_with_scratch(
+                &self,
+                src: &mut [Complex<$f_type>],
+                dst: &mut [Complex<$f_type>],
+                _: &mut [Complex<$f_type>],
+            ) -> Result<(), ZaftError> {
+                self.execute_out_of_place_with_scratch(src, dst, &mut [])
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            fn length(&self) -> usize {
+                $size
+            }
+
+            fn scratch_length(&self) -> usize {
+                0
+            }
+
+            fn out_of_place_scratch_length(&self) -> usize {
+                0
+            }
+
+            fn destructive_scratch_length(&self) -> usize {
+                0
+            }
+        }
+    };
+}
+
+pub(crate) use boring_neon_butterfly2;

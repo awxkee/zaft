@@ -27,50 +27,39 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::neon::butterflies::{NeonButterfly, NeonFastButterfly5};
+use crate::neon::butterflies::NeonButterfly;
 use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
+use crate::neon::mixed::{ColumnButterfly5d, ColumnButterfly5f};
+#[cfg(feature = "fcma")]
+use crate::neon::mixed::{ColumnFcmaButterfly5d, ColumnFcmaButterfly5f};
 use std::arch::aarch64::*;
 
 pub(crate) struct ColumnButterfly10d {
-    bf5: NeonFastButterfly5<f64>,
-    rotate: float64x2_t,
+    bf5: ColumnButterfly5d,
 }
 
 impl ColumnButterfly10d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        unsafe {
-            Self {
-                bf5: NeonFastButterfly5::new(fft_direction),
-                rotate: vld1q_f64([-0.0f64, 0.0, -0.0f64, 0.0].as_ptr().cast()),
-            }
+        Self {
+            bf5: ColumnButterfly5d::new(fft_direction),
         }
     }
 
     #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreD; 10]) -> [NeonStoreD; 10] {
-        let mid0 = self.bf5.exec(
-            store[0].v,
-            store[2].v,
-            store[4].v,
-            store[6].v,
-            store[8].v,
-            self.rotate,
-        );
-        let mid1 = self.bf5.exec(
-            store[5].v,
-            store[7].v,
-            store[9].v,
-            store[1].v,
-            store[3].v,
-            self.rotate,
-        );
+        let mid0 = self
+            .bf5
+            .exec([store[0], store[2], store[4], store[6], store[8]]);
+        let mid1 = self
+            .bf5
+            .exec([store[5], store[7], store[9], store[1], store[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
-        let (y0, y1) = NeonButterfly::butterfly2_f64(mid0.0, mid1.0);
-        let (y2, y3) = NeonButterfly::butterfly2_f64(mid0.1, mid1.1);
-        let (y4, y5) = NeonButterfly::butterfly2_f64(mid0.2, mid1.2);
-        let (y6, y7) = NeonButterfly::butterfly2_f64(mid0.3, mid1.3);
-        let (y8, y9) = NeonButterfly::butterfly2_f64(mid0.4, mid1.4);
+        let (y0, y1) = NeonButterfly::butterfly2_f64(mid0[0].v, mid1[0].v);
+        let (y2, y3) = NeonButterfly::butterfly2_f64(mid0[1].v, mid1[1].v);
+        let (y4, y5) = NeonButterfly::butterfly2_f64(mid0[2].v, mid1[2].v);
+        let (y6, y7) = NeonButterfly::butterfly2_f64(mid0[3].v, mid1[3].v);
+        let (y8, y9) = NeonButterfly::butterfly2_f64(mid0[4].v, mid1[4].v);
 
         [
             NeonStoreD::raw(y0),
@@ -89,14 +78,14 @@ impl ColumnButterfly10d {
 
 #[cfg(feature = "fcma")]
 pub(crate) struct ColumnFcmaButterfly10d {
-    bf5: NeonFastButterfly5<f64>,
+    bf5: ColumnFcmaButterfly5d,
 }
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly10d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
-            bf5: NeonFastButterfly5::new(fft_direction),
+            bf5: ColumnFcmaButterfly5d::new(fft_direction),
         }
     }
 
@@ -105,17 +94,17 @@ impl ColumnFcmaButterfly10d {
     pub(crate) fn exec(&self, store: [NeonStoreD; 10]) -> [NeonStoreD; 10] {
         let mid0 = self
             .bf5
-            .exec_fcma(store[0].v, store[2].v, store[4].v, store[6].v, store[8].v);
+            .exec([store[0], store[2], store[4], store[6], store[8]]);
         let mid1 = self
             .bf5
-            .exec_fcma(store[5].v, store[7].v, store[9].v, store[1].v, store[3].v);
+            .exec([store[5], store[7], store[9], store[1], store[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
-        let (y0, y1) = NeonButterfly::butterfly2_f64(mid0.0, mid1.0);
-        let (y2, y3) = NeonButterfly::butterfly2_f64(mid0.1, mid1.1);
-        let (y4, y5) = NeonButterfly::butterfly2_f64(mid0.2, mid1.2);
-        let (y6, y7) = NeonButterfly::butterfly2_f64(mid0.3, mid1.3);
-        let (y8, y9) = NeonButterfly::butterfly2_f64(mid0.4, mid1.4);
+        let (y0, y1) = NeonButterfly::butterfly2_f64(mid0[0].v, mid1[0].v);
+        let (y2, y3) = NeonButterfly::butterfly2_f64(mid0[1].v, mid1[1].v);
+        let (y4, y5) = NeonButterfly::butterfly2_f64(mid0[2].v, mid1[2].v);
+        let (y6, y7) = NeonButterfly::butterfly2_f64(mid0[3].v, mid1[3].v);
+        let (y8, y9) = NeonButterfly::butterfly2_f64(mid0[4].v, mid1[4].v);
 
         [
             NeonStoreD::raw(y0),
@@ -133,45 +122,31 @@ impl ColumnFcmaButterfly10d {
 }
 
 pub(crate) struct ColumnButterfly10f {
-    bf5: NeonFastButterfly5<f32>,
-    rotate: float32x4_t,
+    bf5: ColumnButterfly5f,
 }
 
 impl ColumnButterfly10f {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        unsafe {
-            Self {
-                bf5: NeonFastButterfly5::new(fft_direction),
-                rotate: vld1q_f32([-0.0f32, 0.0, -0.0f32, 0.0].as_ptr().cast()),
-            }
+        Self {
+            bf5: ColumnButterfly5f::new(fft_direction),
         }
     }
 
     #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreF; 10]) -> [NeonStoreF; 10] {
-        let mid0 = self.bf5.exec(
-            store[0].v,
-            store[2].v,
-            store[4].v,
-            store[6].v,
-            store[8].v,
-            self.rotate,
-        );
-        let mid1 = self.bf5.exec(
-            store[5].v,
-            store[7].v,
-            store[9].v,
-            store[1].v,
-            store[3].v,
-            self.rotate,
-        );
+        let mid0 = self
+            .bf5
+            .exec([store[0], store[2], store[4], store[6], store[8]]);
+        let mid1 = self
+            .bf5
+            .exec([store[5], store[7], store[9], store[1], store[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
-        let (y0, y1) = NeonButterfly::butterfly2_f32(mid0.0, mid1.0);
-        let (y2, y3) = NeonButterfly::butterfly2_f32(mid0.1, mid1.1);
-        let (y4, y5) = NeonButterfly::butterfly2_f32(mid0.2, mid1.2);
-        let (y6, y7) = NeonButterfly::butterfly2_f32(mid0.3, mid1.3);
-        let (y8, y9) = NeonButterfly::butterfly2_f32(mid0.4, mid1.4);
+        let (y0, y1) = NeonButterfly::butterfly2_f32(mid0[0].v, mid1[0].v);
+        let (y2, y3) = NeonButterfly::butterfly2_f32(mid0[1].v, mid1[1].v);
+        let (y4, y5) = NeonButterfly::butterfly2_f32(mid0[2].v, mid1[2].v);
+        let (y6, y7) = NeonButterfly::butterfly2_f32(mid0[3].v, mid1[3].v);
+        let (y8, y9) = NeonButterfly::butterfly2_f32(mid0[4].v, mid1[4].v);
 
         [
             NeonStoreF::raw(y0),
@@ -190,26 +165,25 @@ impl ColumnButterfly10f {
     #[inline(always)]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 10]) -> [NeonStoreFh; 10] {
         unsafe {
-            let mid0 = self.bf5.exec(
-                vcombine_f32(store[0].v, store[5].v),
-                vcombine_f32(store[2].v, store[7].v),
-                vcombine_f32(store[4].v, store[9].v),
-                vcombine_f32(store[6].v, store[1].v),
-                vcombine_f32(store[8].v, store[3].v),
-                self.rotate,
-            );
+            let mid0 = self.bf5.exec([
+                NeonStoreF::raw(vcombine_f32(store[0].v, store[5].v)),
+                NeonStoreF::raw(vcombine_f32(store[2].v, store[7].v)),
+                NeonStoreF::raw(vcombine_f32(store[4].v, store[9].v)),
+                NeonStoreF::raw(vcombine_f32(store[6].v, store[1].v)),
+                NeonStoreF::raw(vcombine_f32(store[8].v, store[3].v)),
+            ]);
 
             // Since this is good-thomas algorithm, we don't need twiddle factors
             let (y0, y1) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.0), vget_high_f32(mid0.0));
+                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[0].v), vget_high_f32(mid0[0].v));
             let (y2, y3) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.1), vget_high_f32(mid0.1));
+                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[1].v), vget_high_f32(mid0[1].v));
             let (y4, y5) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.2), vget_high_f32(mid0.2));
+                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[2].v), vget_high_f32(mid0[2].v));
             let (y6, y7) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.3), vget_high_f32(mid0.3));
+                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[3].v), vget_high_f32(mid0[3].v));
             let (y8, y9) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.4), vget_high_f32(mid0.4));
+                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[4].v), vget_high_f32(mid0[4].v));
 
             [
                 NeonStoreFh::raw(y0),
@@ -229,14 +203,14 @@ impl ColumnButterfly10f {
 
 #[cfg(feature = "fcma")]
 pub(crate) struct ColumnFcmaButterfly10f {
-    bf5: NeonFastButterfly5<f32>,
+    bf5: ColumnFcmaButterfly5f,
 }
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly10f {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
-            bf5: NeonFastButterfly5::new(fft_direction),
+            bf5: ColumnFcmaButterfly5f::new(fft_direction),
         }
     }
 
@@ -245,17 +219,17 @@ impl ColumnFcmaButterfly10f {
     pub(crate) fn exec(&self, store: [NeonStoreF; 10]) -> [NeonStoreF; 10] {
         let mid0 = self
             .bf5
-            .exec_fcma(store[0].v, store[2].v, store[4].v, store[6].v, store[8].v);
+            .exec([store[0], store[2], store[4], store[6], store[8]]);
         let mid1 = self
             .bf5
-            .exec_fcma(store[5].v, store[7].v, store[9].v, store[1].v, store[3].v);
+            .exec([store[5], store[7], store[9], store[1], store[3]]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
-        let (y0, y1) = NeonButterfly::butterfly2_f32(mid0.0, mid1.0);
-        let (y2, y3) = NeonButterfly::butterfly2_f32(mid0.1, mid1.1);
-        let (y4, y5) = NeonButterfly::butterfly2_f32(mid0.2, mid1.2);
-        let (y6, y7) = NeonButterfly::butterfly2_f32(mid0.3, mid1.3);
-        let (y8, y9) = NeonButterfly::butterfly2_f32(mid0.4, mid1.4);
+        let (y0, y1) = NeonButterfly::butterfly2_f32(mid0[0].v, mid1[0].v);
+        let (y2, y3) = NeonButterfly::butterfly2_f32(mid0[1].v, mid1[1].v);
+        let (y4, y5) = NeonButterfly::butterfly2_f32(mid0[2].v, mid1[2].v);
+        let (y6, y7) = NeonButterfly::butterfly2_f32(mid0[3].v, mid1[3].v);
+        let (y8, y9) = NeonButterfly::butterfly2_f32(mid0[4].v, mid1[4].v);
 
         [
             NeonStoreF::raw(y0),
@@ -274,20 +248,25 @@ impl ColumnFcmaButterfly10f {
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 10]) -> [NeonStoreFh; 10] {
-        let mid0 = self.bf5.exec_fcma(
-            vcombine_f32(store[0].v, store[5].v),
-            vcombine_f32(store[2].v, store[7].v),
-            vcombine_f32(store[4].v, store[9].v),
-            vcombine_f32(store[6].v, store[1].v),
-            vcombine_f32(store[8].v, store[3].v),
-        );
+        let mid0 = self.bf5.exec([
+            NeonStoreF::raw(vcombine_f32(store[0].v, store[5].v)),
+            NeonStoreF::raw(vcombine_f32(store[2].v, store[7].v)),
+            NeonStoreF::raw(vcombine_f32(store[4].v, store[9].v)),
+            NeonStoreF::raw(vcombine_f32(store[6].v, store[1].v)),
+            NeonStoreF::raw(vcombine_f32(store[8].v, store[3].v)),
+        ]);
 
         // Since this is good-thomas algorithm, we don't need twiddle factors
-        let (y0, y1) = NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.0), vget_high_f32(mid0.0));
-        let (y2, y3) = NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.1), vget_high_f32(mid0.1));
-        let (y4, y5) = NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.2), vget_high_f32(mid0.2));
-        let (y6, y7) = NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.3), vget_high_f32(mid0.3));
-        let (y8, y9) = NeonButterfly::butterfly2h_f32(vget_low_f32(mid0.4), vget_high_f32(mid0.4));
+        let (y0, y1) =
+            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[0].v), vget_high_f32(mid0[0].v));
+        let (y2, y3) =
+            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[1].v), vget_high_f32(mid0[1].v));
+        let (y4, y5) =
+            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[2].v), vget_high_f32(mid0[2].v));
+        let (y6, y7) =
+            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[3].v), vget_high_f32(mid0[3].v));
+        let (y8, y9) =
+            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[4].v), vget_high_f32(mid0[4].v));
 
         [
             NeonStoreFh::raw(y0),

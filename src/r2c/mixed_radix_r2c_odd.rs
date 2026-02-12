@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::spectrum_arithmetic::ComplexArith;
 use crate::transpose::{TransposeExecutor, TransposeExecutorReal};
-use crate::util::compute_twiddle;
+use crate::util::{compute_twiddle, validate_scratch};
 use crate::{FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
@@ -46,6 +46,9 @@ pub(crate) struct MixedRadixR2cOdd<T> {
     width_transpose_real: Box<dyn TransposeExecutorReal<T> + Send + Sync>,
     height_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
     width_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
+    second_stage_len: usize,
+    width_scratch_length: usize,
+    height_scratch_length: usize,
 }
 
 impl<T: FftSample> MixedRadixR2cOdd<T>
@@ -85,6 +88,10 @@ where
 
         let to_remove_second_stage = (width - 1) / 2;
 
+        let second_stage_len = complex_height * width;
+        let width_scratch_length = width_executor.scratch_length();
+        let height_scratch_length = height_executor.scratch_length();
+
         Ok(MixedRadixR2cOdd {
             execution_length: width * height,
             width_executor,
@@ -96,6 +103,9 @@ where
             width_transpose_real: T::transpose_strategy_real(width, height),
             height_transpose: T::transpose_strategy(complex_height, width),
             width_transpose: T::transpose_strategy(width - to_remove_second_stage, complex_height),
+            second_stage_len,
+            width_scratch_length,
+            height_scratch_length,
         })
     }
 }
@@ -105,6 +115,16 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
+        self.execute_with_scratch(input, output, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !input.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 input.len(),
@@ -126,16 +146,9 @@ where
 
         let complex_length = self.complex_length();
 
-        let first_stage_remove = (self.width * self.height - self.width) / 2;
-
-        let first_stages = first_stage_remove / (self.execution_length / self.height);
-        let complex_height = self.height - first_stages;
-
-        let second_stage_len = complex_height * self.width;
-
-        let mut scratch_initial = try_vec![Complex::<T>::zero(); self.execution_length];
-        let mut scratch_complex2 = try_vec![Complex::<T>::zero(); second_stage_len * 2];
-        let (scratch_complex0, scratch_complex1) = scratch_complex2.split_at_mut(second_stage_len);
+        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
+        let (scratch_initial, rem_scratch) = scratch.split_at_mut(self.execution_length);
+        let (scratch_complex1, rem_scratch) = rem_scratch.split_at_mut(self.second_stage_len);
 
         let to_remove = (self.height - 1) / 2;
         let complex_height = self.height - to_remove;
@@ -146,15 +159,13 @@ where
             .zip(output.chunks_exact_mut(complex_length))
         {
             // STEP 1: transpose
-            self.width_transpose_real.transpose(
-                input,
-                &mut scratch_initial,
-                self.width,
-                self.height,
-            );
+            self.width_transpose_real
+                .transpose(input, scratch_initial, self.width, self.height);
 
             // STEP 2: perform FFTs of size `height`
-            self.height_executor.execute(&mut scratch_initial)?;
+            let (height_scratch, _) = rem_scratch.split_at_mut(self.height_scratch_length);
+            self.height_executor
+                .execute_with_scratch(scratch_initial, height_scratch)?;
 
             // STEP 3: Apply twiddle factors
             for (dst, &src) in scratch_complex1[..complex_height]
@@ -172,6 +183,8 @@ where
                 &mut scratch_complex1[complex_height..],
             );
 
+            let (scratch_complex0, _) = scratch_initial.split_at_mut(self.second_stage_len);
+
             // STEP 4: transpose again
             self.height_transpose.transpose(
                 scratch_complex1,
@@ -181,7 +194,9 @@ where
             );
 
             // STEP 5: perform FFTs of size `width`
-            self.width_executor.execute(scratch_complex0)?;
+            let (width_scratch, _) = rem_scratch.split_at_mut(self.width_scratch_length);
+            self.width_executor
+                .execute_with_scratch(scratch_complex0, width_scratch)?;
 
             // first stage with removed redundancy
             // for x in 0..(self.width - to_remove_second_stage) {
@@ -226,6 +241,12 @@ where
 
     fn complex_length(&self) -> usize {
         self.execution_length / 2 + 1
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        self.execution_length
+            + self.second_stage_len
+            + self.width_scratch_length.max(self.height_scratch_length)
     }
 }
 

@@ -30,7 +30,7 @@ use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
 use crate::prime_factors::{PrimeFactors, primitive_root};
 use crate::spectrum_arithmetic::ComplexArith;
-use crate::util::compute_twiddle;
+use crate::util::{compute_twiddle, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_integer::Integer;
@@ -44,6 +44,7 @@ pub(crate) struct RadersRfft<T> {
     input_indices: Vec<usize>,
     output_indices: Vec<usize>,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
+    convolve_scratch_length: usize,
 }
 
 impl<T: FftSample> RadersRfft<T>
@@ -115,6 +116,8 @@ where
             }
         }
 
+        let convolve_scratch_length = convolve_fft.scratch_length();
+
         Ok(RadersRfft {
             execution_length: size,
             convolve_fft,
@@ -122,6 +125,7 @@ where
             input_indices,
             output_indices: z_output,
             spectrum_ops: T::make_complex_arith(),
+            convolve_scratch_length,
         })
     }
 }
@@ -131,6 +135,16 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
+        self.execute_with_scratch(input, output, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !input.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 input.len(),
@@ -150,7 +164,8 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.execution_length];
+        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
+        let (scratch, convolve_scratch) = scratch.split_at_mut(self.execution_length);
 
         for (input, complex) in input
             .chunks_exact(self.execution_length)
@@ -171,7 +186,8 @@ where
 
             // perform the first of two inner FFTs
 
-            self.convolve_fft.execute(scratch)?;
+            self.convolve_fft
+                .execute_with_scratch(scratch, convolve_scratch)?;
 
             // scratch[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
             complex[0] = buffer_first_val + scratch[0];
@@ -187,7 +203,8 @@ where
             scratch[0] = scratch[0] + buffer_first_val.conj();
 
             // execute the second FFT
-            self.convolve_fft.execute(scratch)?;
+            self.convolve_fft
+                .execute_with_scratch(scratch, convolve_scratch)?;
 
             // copy the final values into the output, reordering as we go
 
@@ -208,6 +225,11 @@ where
     #[inline]
     fn complex_length(&self) -> usize {
         self.execution_length / 2 + 1
+    }
+
+    #[inline]
+    fn complex_scratch_length(&self) -> usize {
+        self.execution_length + self.convolve_scratch_length
     }
 }
 

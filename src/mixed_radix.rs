@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::spectrum_arithmetic::ComplexArith;
 use crate::transpose::TransposeExecutor;
-use crate::util::compute_twiddle;
+use crate::util::{compute_twiddle, validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
@@ -46,6 +46,9 @@ pub(crate) struct MixedRadix<T> {
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
     width_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
     height_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
+    width_scratch_length: usize,
+    height_scratch_length: usize,
+    width_destructive_scratch_length: usize,
 }
 
 impl<T: FftSample> MixedRadix<T>
@@ -81,6 +84,10 @@ where
             }
         }
 
+        let width_scratch_length = width_executor.scratch_length();
+        let width_destructive_scratch_length = width_executor.scratch_length();
+        let height_scratch_length = height_executor.scratch_length();
+
         Ok(MixedRadix {
             execution_length: width * height,
             width_executor,
@@ -92,6 +99,9 @@ where
             spectrum_ops: T::make_complex_arith(),
             width_transpose: T::transpose_strategy(width, height),
             height_transpose: T::transpose_strategy(height, width),
+            width_scratch_length,
+            height_scratch_length,
+            width_destructive_scratch_length,
         })
     }
 }
@@ -101,6 +111,15 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+        self.execute_with_scratch(in_place, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        in_place: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !in_place.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 in_place.len(),
@@ -108,15 +127,18 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::zero(); self.execution_length];
+        let scratch = validate_scratch!(scratch, self.scratch_length());
+        let (scratch, scratch_rem) = scratch.split_at_mut(self.execution_length);
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // STEP 1: transpose
             self.width_transpose
-                .transpose(chunk, &mut scratch, self.width, self.height);
+                .transpose(chunk, scratch, self.width, self.height);
 
             // STEP 2: perform FFTs of size `height`
-            self.height_executor.execute(&mut scratch)?;
+            let (height_scratch, _) = scratch_rem.split_at_mut(self.height_scratch_length);
+            self.height_executor
+                .execute_with_scratch(scratch, height_scratch)?;
 
             // STEP 3: Apply twiddle factors
             for (dst, &src) in chunk[..self.height]
@@ -133,14 +155,133 @@ where
 
             // STEP 4: transpose again
             self.height_transpose
-                .transpose(chunk, &mut scratch, self.height, self.width);
+                .transpose(chunk, scratch, self.height, self.width);
 
             // STEP 5: perform FFTs of size `width`
-            self.width_executor.execute(&mut scratch)?;
+            let (width_scratch, _) = scratch_rem.split_at_mut(self.width_scratch_length);
+            self.width_executor
+                .execute_with_scratch(scratch, width_scratch)?;
 
             // STEP 6: transpose again
             self.width_transpose
-                .transpose(&scratch, chunk, self.width, self.height);
+                .transpose(scratch, chunk, self.width, self.height);
+        }
+        Ok(())
+    }
+
+    fn execute_out_of_place(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
+        self.execute_out_of_place_with_scratch(src, dst, &mut scratch)
+    }
+
+    fn execute_out_of_place_with_scratch(
+        &self,
+        src: &[Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
+        let (scratch, scratch_rem) = scratch.split_at_mut(self.execution_length);
+
+        for (chunk, output_chunk) in src
+            .chunks_exact(self.execution_length)
+            .zip(dst.chunks_exact_mut(self.execution_length))
+        {
+            // STEP 1: transpose
+            self.width_transpose
+                .transpose(chunk, scratch, self.width, self.height);
+
+            // STEP 2: perform FFTs of size `height`
+            let (height_scratch, _) = scratch_rem.split_at_mut(self.height_scratch_length);
+            self.height_executor
+                .execute_with_scratch(scratch, height_scratch)?;
+
+            // STEP 3: Apply twiddle factors
+            for (dst, &src) in output_chunk[..self.height]
+                .iter_mut()
+                .zip(scratch[..self.height].iter())
+            {
+                *dst = src;
+            }
+            self.spectrum_ops.mul(
+                &scratch[self.height..],
+                &self.twiddles,
+                &mut output_chunk[self.height..],
+            );
+
+            // STEP 4: transpose again
+            self.height_transpose
+                .transpose(output_chunk, scratch, self.height, self.width);
+
+            // STEP 5: perform FFTs of size `width`
+            let (width_scratch, _) = scratch_rem.split_at_mut(self.width_scratch_length);
+            self.width_executor
+                .execute_with_scratch(scratch, width_scratch)?;
+
+            // STEP 6: transpose again
+            self.width_transpose
+                .transpose(scratch, output_chunk, self.width, self.height);
+        }
+        Ok(())
+    }
+
+    fn execute_destructive_with_scratch(
+        &self,
+        src: &mut [Complex<T>],
+        dst: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        let scratch = validate_scratch!(scratch, self.destructive_scratch_length());
+
+        for (src_chunk, output_chunk) in src
+            .chunks_exact_mut(self.execution_length)
+            .zip(dst.chunks_exact_mut(self.execution_length))
+        {
+            // STEP 1: transpose
+            self.width_transpose
+                .transpose(src_chunk, output_chunk, self.width, self.height);
+
+            // STEP 2: perform FFTs of size `height`
+            let (height_scratch, _) = scratch.split_at_mut(self.height_scratch_length);
+            self.height_executor
+                .execute_with_scratch(output_chunk, height_scratch)?;
+
+            // STEP 3: Apply twiddle factors
+            for (dst, &src) in src_chunk[..self.height]
+                .iter_mut()
+                .zip(output_chunk[..self.height].iter())
+            {
+                *dst = src;
+            }
+            self.spectrum_ops.mul(
+                &output_chunk[self.height..],
+                &self.twiddles,
+                &mut src_chunk[self.height..],
+            );
+
+            // STEP 4: transpose again
+            self.height_transpose
+                .transpose(src_chunk, output_chunk, self.height, self.width);
+
+            // STEP 5: perform FFTs of size `width`
+            let (width_scratch, _) = scratch.split_at_mut(self.width_destructive_scratch_length);
+            self.width_executor.execute_destructive_with_scratch(
+                output_chunk,
+                src_chunk,
+                width_scratch,
+            )?;
+
+            // STEP 6: transpose again
+            self.width_transpose
+                .transpose(src_chunk, output_chunk, self.width, self.height);
         }
         Ok(())
     }
@@ -151,6 +292,22 @@ where
 
     fn length(&self) -> usize {
         self.execution_length
+    }
+
+    #[inline]
+    fn scratch_length(&self) -> usize {
+        self.execution_length + self.width_scratch_length.max(self.height_scratch_length)
+    }
+
+    #[inline]
+    fn out_of_place_scratch_length(&self) -> usize {
+        self.scratch_length()
+    }
+
+    #[inline]
+    fn destructive_scratch_length(&self) -> usize {
+        self.height_scratch_length
+            .max(self.width_destructive_scratch_length)
     }
 }
 

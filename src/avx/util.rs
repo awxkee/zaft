@@ -26,11 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::traits::FftTrigonometry;
 use crate::util::{compute_twiddle, int_logarithm, reverse_bits};
 use crate::{FftDirection, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, Zero};
 use std::any::TypeId;
 use std::arch::x86_64::*;
 
@@ -472,7 +473,7 @@ where
         let mut i = 0usize;
 
         if TypeId::of::<T>() == TypeId::of::<f32>() {
-            while i + 4 < num_columns {
+            while i + 4 <= num_columns {
                 for k in 1..N {
                     let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
                     let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
@@ -487,7 +488,7 @@ where
             }
         }
 
-        while i + 2 < num_columns {
+        while i + 2 <= num_columns {
             for k in 1..N {
                 let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
                 let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
@@ -505,6 +506,105 @@ where
         }
     }
     Ok(twiddles)
+}
+
+#[target_feature(enable = "avx2", enable = "fma")]
+pub(crate) fn create_avx_twiddles_f<const N: usize>(
+    base: usize,
+    size: usize,
+    fft_direction: FftDirection,
+) -> Vec<AvxStoreF> {
+    let mut twiddles = Vec::new();
+
+    let mut cross_fft_len = base;
+    while cross_fft_len < size {
+        let num_columns = cross_fft_len;
+        cross_fft_len *= N;
+
+        let mut i = 0usize;
+
+        let mut tw: [Complex<f32>; 4] = [Complex::zero(); 4];
+
+        while i + 4 <= num_columns {
+            for k in 1..N {
+                let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                let twiddle2 = compute_twiddle((i + 2) * k, cross_fft_len, fft_direction);
+                let twiddle3 = compute_twiddle((i + 3) * k, cross_fft_len, fft_direction);
+                tw[0] = twiddle0;
+                tw[1] = twiddle1;
+                tw[2] = twiddle2;
+                tw[3] = twiddle3;
+                twiddles.push(AvxStoreF::from_complex_ref(tw.as_slice()));
+            }
+            i += 4;
+        }
+
+        tw = [Complex::zero(); 4];
+
+        while i + 2 <= num_columns {
+            for k in 1..N {
+                let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                tw[0] = twiddle0;
+                tw[1] = twiddle1;
+                twiddles.push(AvxStoreF::from_complex_ref(tw.as_slice()));
+            }
+            i += 2;
+        }
+
+        tw = [Complex::zero(); 4];
+
+        for i in i..num_columns {
+            for k in 1..N {
+                let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                tw[0] = twiddle;
+                twiddles.push(AvxStoreF::from_complex_ref(tw.as_slice()));
+            }
+        }
+    }
+    twiddles
+}
+
+#[target_feature(enable = "avx2", enable = "fma")]
+pub(crate) fn create_avx_twiddles_d<const N: usize>(
+    base: usize,
+    size: usize,
+    fft_direction: FftDirection,
+) -> Vec<AvxStoreD> {
+    let mut twiddles = Vec::new();
+
+    let mut cross_fft_len = base;
+    while cross_fft_len < size {
+        let num_columns = cross_fft_len;
+        cross_fft_len *= N;
+
+        let mut i = 0usize;
+
+        let mut tw: [Complex<f64>; 4] = [Complex::zero(); 4];
+
+        while i + 2 <= num_columns {
+            for k in 1..N {
+                let twiddle0 = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                let twiddle1 = compute_twiddle((i + 1) * k, cross_fft_len, fft_direction);
+                tw[0] = twiddle0;
+                tw[1] = twiddle1;
+                twiddles.push(AvxStoreD::from_complex_ref(tw.as_slice()));
+            }
+            i += 2;
+        }
+
+        tw = [Complex::zero(); 4];
+
+        for i in i..num_columns {
+            for k in 1..N {
+                let twiddle = compute_twiddle(i * k, cross_fft_len, fft_direction);
+                tw[0] = twiddle;
+                twiddles.push(AvxStoreD::from_complex_ref(tw.as_slice()));
+            }
+        }
+    }
+    twiddles
 }
 
 pub(crate) fn create_avx4_1_twiddles<T: FftTrigonometry + 'static + Float + Sized, const N: usize>(

@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::r2c::R2CTwiddlesHandler;
 use crate::r2c::c2r_twiddles::C2RTwiddlesFactory;
-use crate::util::compute_twiddle;
+use crate::util::{compute_twiddle, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
@@ -48,12 +48,19 @@ pub trait C2RFftExecutor<T> {
     /// # Errors
     /// Returns a `ZaftError` if the execution fails (e.g., due to incorrect slice lengths or internal computation errors).
     fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError>;
+    fn execute_with_scratch(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [T],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError>;
     /// Returns the **length** of the final **real-valued** output array (N).
     ///
     /// This is the size of the time-domain vector that results from the inverse transform.
     fn real_length(&self) -> usize;
     /// Returns the **length** of the **complex-valued** input array (`N/2 + 1`).
     fn complex_length(&self) -> usize;
+    fn complex_scratch_length(&self) -> usize;
 }
 
 pub(crate) struct C2RFftEvenInterceptor<T> {
@@ -62,6 +69,7 @@ pub(crate) struct C2RFftEvenInterceptor<T> {
     length: usize,
     complex_length: usize,
     twiddles_handler: Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>,
+    intercept_scratch_length: usize,
 }
 
 impl<T: FftSample + C2RTwiddlesFactory<T>> C2RFftEvenInterceptor<T>
@@ -93,12 +101,16 @@ where
         for (i, twiddle) in twiddles.iter_mut().enumerate() {
             *twiddle = compute_twiddle(i + 1, length, FftDirection::Inverse);
         }
+
+        let intercept_scratch_length = intercept.scratch_length();
+
         Ok(Self {
             intercept,
             twiddles,
             length,
             complex_length: length / 2 + 1,
             twiddles_handler: T::make_c2r_twiddles_handler(),
+            intercept_scratch_length,
         })
     }
 }
@@ -108,6 +120,16 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
+        self.execute_with_scratch(input, output, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [T],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !output.len().is_multiple_of(self.length) {
             return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
         }
@@ -118,7 +140,8 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::<T>::zero(); self.complex_length];
+        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
+        let (scratch, intercept_scratch) = scratch.split_at_mut(self.complex_length);
 
         for (input, output) in input
             .chunks_exact(self.complex_length)
@@ -159,7 +182,8 @@ where
                 scratch[input.len() / 2] = doubled.conj();
             }
 
-            self.intercept.execute(&mut scratch[..output.len() / 2])?;
+            self.intercept
+                .execute_with_scratch(&mut scratch[..output.len() / 2], intercept_scratch)?;
 
             for (dst, src) in output.chunks_exact_mut(2).zip(scratch.iter()) {
                 dst[0] = src.re;
@@ -177,12 +201,17 @@ where
     fn complex_length(&self) -> usize {
         self.complex_length
     }
+
+    fn complex_scratch_length(&self) -> usize {
+        self.complex_length + self.intercept_scratch_length
+    }
 }
 
 pub(crate) struct C2RFftOddInterceptor<T> {
     intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
     length: usize,
     complex_length: usize,
+    intercept_scratch_length: usize,
 }
 
 impl<T: FftSample> C2RFftOddInterceptor<T>
@@ -205,10 +234,13 @@ where
             "Complex to real fft must be inverse"
         );
 
+        let intercept_scratch_length = intercept.scratch_length();
+
         Ok(Self {
             intercept,
             length,
             complex_length: length / 2 + 1,
+            intercept_scratch_length,
         })
     }
 }
@@ -218,6 +250,16 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError> {
+        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
+        self.execute_with_scratch(input, output, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        input: &[Complex<T>],
+        output: &mut [T],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
         if !output.len().is_multiple_of(self.length) {
             return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
         }
@@ -228,7 +270,8 @@ where
             ));
         }
 
-        let mut scratch = try_vec![Complex::<T>::zero(); self.length];
+        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
+        let (scratch, intercept_scratch) = scratch.split_at_mut(self.length);
 
         for (input, output) in input
             .chunks_exact(self.complex_length)
@@ -244,7 +287,8 @@ where
             {
                 *buf = val.conj();
             }
-            self.intercept.execute(&mut scratch)?;
+            self.intercept
+                .execute_with_scratch(scratch, intercept_scratch)?;
             for (dst, src) in output.iter_mut().zip(scratch.iter()) {
                 *dst = src.re;
             }
@@ -259,5 +303,9 @@ where
 
     fn complex_length(&self) -> usize {
         self.complex_length
+    }
+
+    fn complex_scratch_length(&self) -> usize {
+        self.length + self.intercept_scratch_length
     }
 }

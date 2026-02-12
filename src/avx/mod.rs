@@ -46,25 +46,26 @@ mod util;
 
 pub(crate) use butterflies::{
     AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5, AvxButterfly6d, AvxButterfly6f,
-    AvxButterfly7, AvxButterfly8d, AvxButterfly8f, AvxButterfly9d, AvxButterfly9f, AvxButterfly10d,
-    AvxButterfly10f, AvxButterfly11, AvxButterfly11d, AvxButterfly12d, AvxButterfly12f,
-    AvxButterfly13, AvxButterfly13d, AvxButterfly14d, AvxButterfly14f, AvxButterfly15d,
-    AvxButterfly15f, AvxButterfly16d, AvxButterfly16f, AvxButterfly17, AvxButterfly18d,
-    AvxButterfly18f, AvxButterfly19, AvxButterfly20d, AvxButterfly20f, AvxButterfly21d,
-    AvxButterfly21f, AvxButterfly23, AvxButterfly24d, AvxButterfly24f, AvxButterfly25d,
-    AvxButterfly25f, AvxButterfly27d, AvxButterfly27f, AvxButterfly29, AvxButterfly30d,
-    AvxButterfly30f, AvxButterfly31, AvxButterfly32d, AvxButterfly32f, AvxButterfly35d,
-    AvxButterfly35f, AvxButterfly36d, AvxButterfly36f, AvxButterfly40d, AvxButterfly40f,
-    AvxButterfly42d, AvxButterfly42f, AvxButterfly48d, AvxButterfly48f, AvxButterfly49d,
-    AvxButterfly49f, AvxButterfly54d, AvxButterfly54f, AvxButterfly63d, AvxButterfly63f,
-    AvxButterfly64d, AvxButterfly64f, AvxButterfly66d, AvxButterfly66f, AvxButterfly70d,
-    AvxButterfly70f, AvxButterfly72d, AvxButterfly72f, AvxButterfly78d, AvxButterfly78f,
-    AvxButterfly81d, AvxButterfly81f, AvxButterfly88d, AvxButterfly88f, AvxButterfly96d,
-    AvxButterfly96f, AvxButterfly100d, AvxButterfly100f, AvxButterfly108d, AvxButterfly108f,
-    AvxButterfly121d, AvxButterfly121f, AvxButterfly125d, AvxButterfly125f, AvxButterfly128d,
-    AvxButterfly128f, AvxButterfly144d, AvxButterfly144f, AvxButterfly169d, AvxButterfly169f,
-    AvxButterfly192d, AvxButterfly192f, AvxButterfly216d, AvxButterfly216f, AvxButterfly243d,
-    AvxButterfly243f, AvxButterfly256d, AvxButterfly256f, AvxButterfly512d, AvxButterfly512f,
+    AvxButterfly7d, AvxButterfly7f, AvxButterfly8d, AvxButterfly8f, AvxButterfly9d, AvxButterfly9f,
+    AvxButterfly10d, AvxButterfly10f, AvxButterfly11d, AvxButterfly11f, AvxButterfly12d,
+    AvxButterfly12f, AvxButterfly13d, AvxButterfly13f, AvxButterfly14d, AvxButterfly14f,
+    AvxButterfly15d, AvxButterfly15f, AvxButterfly16d, AvxButterfly16f, AvxButterfly17,
+    AvxButterfly18d, AvxButterfly18f, AvxButterfly19, AvxButterfly20d, AvxButterfly20f,
+    AvxButterfly21d, AvxButterfly21f, AvxButterfly23, AvxButterfly24d, AvxButterfly24f,
+    AvxButterfly25d, AvxButterfly25f, AvxButterfly27d, AvxButterfly27f, AvxButterfly28d,
+    AvxButterfly28f, AvxButterfly30d, AvxButterfly30f, AvxButterfly32d, AvxButterfly32f,
+    AvxButterfly35d, AvxButterfly35f, AvxButterfly36d, AvxButterfly36f, AvxButterfly40d,
+    AvxButterfly40f, AvxButterfly42d, AvxButterfly42f, AvxButterfly48d, AvxButterfly48f,
+    AvxButterfly49d, AvxButterfly49f, AvxButterfly54d, AvxButterfly54f, AvxButterfly63d,
+    AvxButterfly63f, AvxButterfly64d, AvxButterfly64f, AvxButterfly66d, AvxButterfly66f,
+    AvxButterfly70d, AvxButterfly70f, AvxButterfly72d, AvxButterfly72f, AvxButterfly78d,
+    AvxButterfly78f, AvxButterfly81d, AvxButterfly81f, AvxButterfly88d, AvxButterfly88f,
+    AvxButterfly96d, AvxButterfly96f, AvxButterfly100d, AvxButterfly100f, AvxButterfly108d,
+    AvxButterfly108f, AvxButterfly121d, AvxButterfly121f, AvxButterfly125d, AvxButterfly125f,
+    AvxButterfly128d, AvxButterfly128f, AvxButterfly144d, AvxButterfly144f, AvxButterfly169d,
+    AvxButterfly169f, AvxButterfly192d, AvxButterfly192f, AvxButterfly216d, AvxButterfly216f,
+    AvxButterfly243d, AvxButterfly243f, AvxButterfly256d, AvxButterfly256f, AvxButterfly512d,
+    AvxButterfly512f, AvxButterfly1024d, AvxButterfly1024f,
 };
 pub(crate) use c2r::C2RAvxTwiddles;
 pub(crate) use mixed::{
@@ -81,7 +82,7 @@ pub(crate) use mixed::{
 pub(crate) use r2c::R2CAvxTwiddles;
 pub(crate) use raders::AvxRadersFft;
 pub(crate) use radix3::AvxFmaRadix3;
-pub(crate) use radix4::AvxFmaRadix4;
+pub(crate) use radix4::{AvxFmaRadix4d, AvxFmaRadix4f};
 pub(crate) use radix5::AvxFmaRadix5;
 pub(crate) use radix6::AvxFmaRadix6;
 pub(crate) use radix7::AvxFmaRadix7;
