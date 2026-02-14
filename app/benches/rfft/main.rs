@@ -7,6 +7,7 @@
 use criterion::measurement::WallTime;
 use criterion::{BatchSize, BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
+use num_traits::Zero;
 use rand::Rng;
 use rustfft::FftPlanner;
 use std::time::Duration;
@@ -108,6 +109,25 @@ fn check_power_groups(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String)
     });
 }
 
+fn check_power_groups_c2r(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) {
+    let mut input_power = vec![Complex::<f64>::default(); n / 2 + 1];
+    for z in input_power.iter_mut() {
+        *z = Complex::new(rand::rng().random(), rand::rng().random());
+    }
+
+    c.bench_function(format!("zaft c2r_{group}s").as_str(), |b| {
+        let plan = Zaft::make_c2r_fft_f32(n).unwrap();
+        let mut output = vec![f32::zero(); n];
+        let working = input_power
+            .iter()
+            .map(|&x| Complex::new(x.re as f32, x.im as f32))
+            .collect::<Vec<_>>();
+        b.iter(|| {
+            plan.execute(&working, &mut output).unwrap();
+        })
+    });
+}
+
 fn check_power_groupd(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) {
     let mut input_power = vec![f64::default(); n];
     for z in input_power.iter_mut() {
@@ -130,13 +150,20 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         .measurement_time(Duration::from_millis(750))
         .warm_up_time(Duration::from_millis(750));
 
-    check_power_groups(c, 1803, "1803".to_string());
-    check_power_groupd(c, 1803, "1803".to_string());
+    check_power_groups_c2r(c, 32, "32".to_string());
+    check_power_groups_c2r(c, 64, "64".to_string());
+    check_power_groups_c2r(c, 128, "128".to_string());
+    check_power_groups_c2r(c, 256, "256".to_string());
+    check_power_groups_c2r(c, 512, "512".to_string());
+    check_power_groups_c2r(c, 1024, "1024".to_string());
 
-    check_power_groups(c, 2187, "2187".to_string());
-    check_power_groupd(c, 2187, "2187".to_string());
-    check_power_groups(c, 2565, "2565".to_string());
-    check_power_groupd(c, 2565, "2565".to_string());
+    // check_power_groups(c, 1803, "1803".to_string());
+    // check_power_groupd(c, 1803, "1803".to_string());
+    //
+    // check_power_groups(c, 2187, "2187".to_string());
+    // check_power_groupd(c, 2187, "2187".to_string());
+    // check_power_groups(c, 2565, "2565".to_string());
+    // check_power_groupd(c, 2565, "2565".to_string());
 
     // check_power_groups(c, 14, "14".to_string());
     // check_power_groupd(c, 14, "14".to_string());

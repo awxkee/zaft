@@ -40,6 +40,17 @@ pub(crate) trait R2CTwiddlesHandler<T> {
     fn handle(&self, twiddles: &[Complex<T>], left: &mut [Complex<T>], right: &mut [Complex<T>]);
 }
 
+pub(crate) trait C2RTwiddlesHandler<T> {
+    fn handle(
+        &self,
+        twiddles: &[Complex<T>],
+        left_input: &[Complex<T>],
+        right_input: &[Complex<T>],
+        left: &mut [Complex<T>],
+        right: &mut [Complex<T>],
+    );
+}
+
 #[allow(unused)]
 struct R2CHandler<T> {
     phantom_data: PhantomData<T>,
@@ -126,6 +137,52 @@ where
             let output_twiddled_im = twiddled_im_sum - twiddled_re_diff;
 
             // We finally have all the data we need to write the transformed data back out where we found it.
+            *out = Complex {
+                re: half_sum_re + output_twiddled_real,
+                im: half_diff_im + output_twiddled_im,
+            };
+
+            *out_rev = Complex {
+                re: half_sum_re - output_twiddled_real,
+                im: output_twiddled_im - half_diff_im,
+            };
+        }
+    }
+}
+
+impl<T: FftSample> C2RTwiddlesHandler<T> for R2CHandler<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn handle(
+        &self,
+        twiddles: &[Complex<T>],
+        left_input: &[Complex<T>],
+        right_input: &[Complex<T>],
+        left: &mut [Complex<T>],
+        right: &mut [Complex<T>],
+    ) {
+        for ((((twiddle, out), out_rev), input), input_rev) in twiddles
+            .iter()
+            .zip(left.iter_mut())
+            .zip(right.iter_mut().rev())
+            .zip(left_input.iter())
+            .zip(right_input.iter().rev())
+        {
+            let sum = *input + *input_rev;
+            let diff = *input - *input_rev;
+            let half: T = 0.5f64.as_();
+            //
+            let twiddled_re_sum = sum.im * twiddle.re;
+            let twiddled_im_sum = sum.im * twiddle.im;
+            let twiddled_re_diff = diff.re * twiddle.re;
+            let twiddled_im_diff = diff.re * twiddle.im;
+            let half_sum_re = half * sum.re;
+            let half_diff_im = half * diff.im;
+
+            let output_twiddled_real = twiddled_re_sum + twiddled_im_diff;
+            let output_twiddled_im = twiddled_im_sum - twiddled_re_diff;
+
             *out = Complex {
                 re: half_sum_re + output_twiddled_real,
                 im: half_diff_im + output_twiddled_im,

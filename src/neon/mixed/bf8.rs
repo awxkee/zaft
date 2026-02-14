@@ -311,42 +311,6 @@ impl ColumnFcmaButterfly8f {
             NeonStoreF::raw(zy7),
         ]
     }
-
-    #[inline]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn exech(&self, store: [NeonStoreFh; 8]) -> [NeonStoreFh; 8] {
-        let [u0, u2, u4, u6] = self.bf4.exech([store[0], store[2], store[4], store[6]]);
-        let [u1, u3, u5, u7] = self.bf4.exech([store[1], store[3], store[5], store[7]]);
-
-        let u3 = vmul_n_f32(
-            vcmla_rot90_f32(u3.v, vget_low_f32(self.bf4.rot_sign), u3.v),
-            self.root2,
-        );
-        let u5 = vcmla_rot90_f32(vdup_n_f32(0.), vget_low_f32(self.bf4.rot_sign), u5.v);
-        let u7 = vmul_n_f32(
-            vsub_f32(
-                vcmla_rot90_f32(vdup_n_f32(0.), vget_low_f32(self.bf4.rot_sign), u7.v),
-                u7.v,
-            ),
-            self.root2,
-        );
-
-        let (zy0, zy1) = NeonButterfly::butterfly2h_f32(u0.v, u1.v);
-        let (zy2, zy3) = NeonButterfly::butterfly2h_f32(u2.v, u3);
-        let (zy4, zy5) = NeonButterfly::butterfly2h_f32(u4.v, u5);
-        let (zy6, zy7) = NeonButterfly::butterfly2h_f32(u6.v, u7);
-
-        [
-            NeonStoreFh::raw(zy0),
-            NeonStoreFh::raw(zy2),
-            NeonStoreFh::raw(zy4),
-            NeonStoreFh::raw(zy6),
-            NeonStoreFh::raw(zy1),
-            NeonStoreFh::raw(zy3),
-            NeonStoreFh::raw(zy5),
-            NeonStoreFh::raw(zy7),
-        ]
-    }
 }
 
 #[cfg(feature = "fcma")]

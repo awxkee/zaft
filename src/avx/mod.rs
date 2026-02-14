@@ -28,6 +28,7 @@
  */
 mod butterflies;
 mod c2r;
+mod c2r_expand;
 mod mixed;
 mod r2c;
 mod raders;
@@ -68,16 +69,16 @@ pub(crate) use butterflies::{
     AvxButterfly512f, AvxButterfly1024d, AvxButterfly1024f,
 };
 pub(crate) use c2r::C2RAvxTwiddles;
+pub(crate) use c2r_expand::AvxC2RExpander;
 pub(crate) use mixed::{
     AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,
     AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d, AvxMixedRadix10d, AvxMixedRadix11d,
-    AvxMixedRadix12d, AvxMixedRadix13d, AvxMixedRadix14d, AvxMixedRadix14f, AvxMixedRadix15d,
-    AvxMixedRadix16d,
+    AvxMixedRadix12d, AvxMixedRadix13d,
 };
 pub(crate) use mixed::{
     AvxMixedRadix2f, AvxMixedRadix3f, AvxMixedRadix4f, AvxMixedRadix5f, AvxMixedRadix6f,
     AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
-    AvxMixedRadix12f, AvxMixedRadix13f, AvxMixedRadix15f, AvxMixedRadix16f,
+    AvxMixedRadix12f, AvxMixedRadix13f,
 };
 pub(crate) use r2c::R2CAvxTwiddles;
 pub(crate) use raders::AvxRadersFft;

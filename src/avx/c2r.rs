@@ -27,21 +27,23 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::mixed::{AvxStoreD, AvxStoreF};
-use crate::r2c::R2CTwiddlesHandler;
+use crate::r2c::C2RTwiddlesHandler;
 use num_complex::Complex;
 use num_traits::MulAdd;
 
 pub(crate) struct C2RAvxTwiddles {}
 
-impl R2CTwiddlesHandler<f64> for C2RAvxTwiddles {
+impl C2RTwiddlesHandler<f64> for C2RAvxTwiddles {
     fn handle(
         &self,
         twiddles: &[Complex<f64>],
+        left_input: &[Complex<f64>],
+        right_input: &[Complex<f64>],
         left: &mut [Complex<f64>],
         right: &mut [Complex<f64>],
     ) {
         unsafe {
-            self.handle_impl(twiddles, left, right);
+            self.handle_impl(twiddles, left_input, right_input, left, right);
         }
     }
 }
@@ -51,20 +53,24 @@ impl C2RAvxTwiddles {
     fn handle_impl(
         &self,
         twiddles: &[Complex<f64>],
+        left_input: &[Complex<f64>],
+        right_input: &[Complex<f64>],
         left: &mut [Complex<f64>],
         right: &mut [Complex<f64>],
     ) {
-        let conj = AvxStoreD::set_values(0.0, -0.0, 0.0, -0.0);
+        let conj = AvxStoreD::conj_flag();
 
-        for ((twiddle, s_out), s_out_rev) in twiddles
+        for ((((twiddle, s_out), s_out_rev), left_input), right_input) in twiddles
             .chunks_exact(2)
             .zip(left.chunks_exact_mut(2))
             .zip(right.rchunks_exact_mut(2))
+            .zip(left_input.chunks_exact(2))
+            .zip(right_input.rchunks_exact(2))
         {
             let [twiddle_re, twiddle_im] = AvxStoreD::from_complex_ref(twiddle).dup_even_odds();
             let twiddle_re = twiddle_re.xor(conj);
-            let out = AvxStoreD::from_complex_ref(s_out);
-            let out_rev = AvxStoreD::from_complex_ref(s_out_rev).reverse_complex();
+            let out = AvxStoreD::from_complex_ref(left_input);
+            let out_rev = AvxStoreD::from_complex_ref(right_input).reverse_complex();
 
             let sum = out + out_rev;
             let diff = out - out_rev;
@@ -88,18 +94,22 @@ impl C2RAvxTwiddles {
             let rem_twiddles = twiddles.chunks_exact(2).remainder();
             let min_length = left.len().min(right.len());
             let rem_left = left.chunks_exact_mut(2).into_remainder();
+            let rem_left_input = left_input.chunks_exact(2).remainder();
             let full_right_chunks = right.len() - (min_length / 2) * 2;
             let rem_right = &mut right[..full_right_chunks];
+            let rem_right_input = &right_input[..full_right_chunks];
 
-            for ((twiddle, s_out), s_out_rev) in rem_twiddles
+            for ((((twiddle, s_out), s_out_rev), left_input), right_input) in rem_twiddles
                 .iter()
                 .zip(rem_left.iter_mut())
                 .zip(rem_right.iter_mut().rev())
+                .zip(rem_left_input.iter())
+                .zip(rem_right_input.iter().rev())
             {
                 let [twiddle_re, twiddle_im] = AvxStoreD::from_complex(twiddle).dup_even_odds();
                 let twiddle_re = twiddle_re.xor(conj);
-                let out = AvxStoreD::from_complex(s_out);
-                let out_rev = AvxStoreD::from_complex(s_out_rev);
+                let out = AvxStoreD::from_complex(left_input);
+                let out_rev = AvxStoreD::from_complex(right_input);
 
                 let sum = out + out_rev;
                 let diff = out - out_rev;
@@ -121,15 +131,17 @@ impl C2RAvxTwiddles {
     }
 }
 
-impl R2CTwiddlesHandler<f32> for C2RAvxTwiddles {
+impl C2RTwiddlesHandler<f32> for C2RAvxTwiddles {
     fn handle(
         &self,
         twiddles: &[Complex<f32>],
+        left_input: &[Complex<f32>],
+        right_input: &[Complex<f32>],
         left: &mut [Complex<f32>],
         right: &mut [Complex<f32>],
     ) {
         unsafe {
-            self.handle_impl_f32(twiddles, left, right);
+            self.handle_impl_f32(twiddles, left_input, right_input, left, right);
         }
     }
 }
@@ -139,20 +151,24 @@ impl C2RAvxTwiddles {
     fn handle_impl_f32(
         &self,
         twiddles: &[Complex<f32>],
+        left_input: &[Complex<f32>],
+        right_input: &[Complex<f32>],
         left: &mut [Complex<f32>],
         right: &mut [Complex<f32>],
     ) {
-        let conj = AvxStoreF::set_values8(0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0);
+        let conj = AvxStoreF::conj_flag();
 
-        for ((twiddle, s_out), s_out_rev) in twiddles
+        for ((((twiddle, s_out), s_out_rev), left_input), right_input) in twiddles
             .chunks_exact(4)
             .zip(left.chunks_exact_mut(4))
             .zip(right.rchunks_exact_mut(4))
+            .zip(left_input.chunks_exact(4))
+            .zip(right_input.rchunks_exact(4))
         {
             let [twiddle_re, twiddle_im] = AvxStoreF::from_complex_ref(twiddle).dup_even_odds();
             let twiddle_re = twiddle_re.xor(conj);
-            let out = AvxStoreF::from_complex_ref(s_out);
-            let out_rev = AvxStoreF::from_complex_ref(s_out_rev).reverse_complex();
+            let out = AvxStoreF::from_complex_ref(left_input);
+            let out_rev = AvxStoreF::from_complex_ref(right_input).reverse_complex();
 
             let sum = out + out_rev;
             let diff = out - out_rev;
@@ -176,18 +192,22 @@ impl C2RAvxTwiddles {
             let rem_twiddles = twiddles.chunks_exact(4).remainder();
             let min_length = left.len().min(right.len());
             let rem_left = left.chunks_exact_mut(4).into_remainder();
+            let rem_left_input = left_input.chunks_exact(4).remainder();
             let full_right_chunks = right.len() - (min_length / 4) * 4;
             let rem_right = &mut right[..full_right_chunks];
+            let rem_right_input = &right_input[..full_right_chunks];
 
-            for ((twiddle, s_out), s_out_rev) in rem_twiddles
+            for ((((twiddle, s_out), s_out_rev), left_input), right_input) in rem_twiddles
                 .iter()
                 .zip(rem_left.iter_mut())
                 .zip(rem_right.iter_mut().rev())
+                .zip(rem_left_input.iter())
+                .zip(rem_right_input.iter().rev())
             {
                 let [twiddle_re, twiddle_im] = AvxStoreF::from_complex(twiddle).dup_even_odds();
                 let twiddle_re = twiddle_re.xor(conj);
-                let out = AvxStoreF::from_complex(s_out);
-                let out_rev = AvxStoreF::from_complex(s_out_rev);
+                let out = AvxStoreF::from_complex(left_input);
+                let out_rev = AvxStoreF::from_complex(right_input);
 
                 let sum = out + out_rev;
                 let diff = out - out_rev;

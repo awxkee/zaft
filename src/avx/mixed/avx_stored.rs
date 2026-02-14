@@ -81,6 +81,12 @@ impl AvxStoreD {
 
     #[inline]
     #[target_feature(enable = "avx2")]
+    pub(crate) fn conj_flag() -> Self {
+        AvxStoreD::set_values(0.0, -0.0, 0.0, -0.0)
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn blend_real_img(&self, other: Self) -> Self {
         AvxStoreD::raw(_mm256_blend_pd::<0b1010>(self.v, other.v))
     }

@@ -35,7 +35,8 @@ extern crate core;
 
 use crate::raders_reshuffle::raders_reshuffle;
 use crate::split_radix::{make_twiddles, split_radix_fft};
-use criterion::{BatchSize, Criterion};
+use criterion::measurement::WallTime;
+use criterion::{BatchSize, BenchmarkGroup, Criterion};
 use num_traits::Zero;
 use primal_check::miller_rabin;
 use rand::Rng;
@@ -313,7 +314,24 @@ pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
 //     false
 // }
 
+fn check_power_groups_c2r(n: usize) {
+    let c_length = n / 2 + 1;
+    let mut input_power = vec![Complex::<f64>::default(); c_length];
+    for z in input_power.iter_mut() {
+        *z = Complex::new(rand::rng().random(), rand::rng().random());
+    }
+
+    let plan = Zaft::make_c2r_fft_f32(n).unwrap();
+    let mut output = vec![f32::zero(); n];
+    let working = input_power
+        .iter()
+        .map(|&x| Complex::new(x.re as f32, x.im as f32))
+        .collect::<Vec<_>>();
+    plan.execute(&working, &mut output).unwrap();
+}
+
 fn main() {
+    check_power_groups_c2r(32);
     //input [2, 8, 26, 18, 25, 15, 16, 19, 28, 24, 12, 7, 23, 9, 29, 27, 21, 3, 11, 4, 14, 13, 10, 1, 5, 17, 22, 6, 20, 0]
     // output [20, 6, 22, 17, 5, 1, 10, 13, 14, 4, 11, 3, 21, 27, 29, 9, 23, 7, 12, 24, 28, 19, 16, 15, 25, 18, 26, 8, 2, 0]
     let rs = raders_reshuffle(
@@ -346,7 +364,7 @@ fn main() {
     // let planned_fft_inv = planner.plan_fft_inverse(data.len());
 
     // let mut output = vec![Complex::zero(); o_data.len()];
-    forward.execute(& mut data).unwrap();
+    forward.execute(&mut data).unwrap();
     // planned_fft.process(&mut cvt);
 
     println!("Rust fft forward -----");

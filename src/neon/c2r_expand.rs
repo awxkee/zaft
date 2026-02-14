@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 10/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk 2/2026. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -26,32 +26,53 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-mod bf10;
-mod bf11;
-mod bf12;
-mod bf13;
-mod bf16;
-mod bf18;
-mod bf2;
-mod bf3;
-mod bf4;
-mod bf5;
-mod bf6;
-mod bf7;
-mod bf8;
-mod bf9;
+use crate::neon::mixed::NeonStoreF;
+use crate::r2c::C2ROddExpander;
+use num_complex::Complex;
+use num_traits::AsPrimitive;
 
-pub(crate) use bf2::{ColumnButterfly2d, ColumnButterfly2f};
-pub(crate) use bf3::{ColumnButterfly3d, ColumnButterfly3f};
-pub(crate) use bf4::{ColumnButterfly4d, ColumnButterfly4f};
-pub(crate) use bf5::{ColumnButterfly5d, ColumnButterfly5f};
-pub(crate) use bf6::{ColumnButterfly6d, ColumnButterfly6f};
-pub(crate) use bf7::{ColumnButterfly7d, ColumnButterfly7f};
-pub(crate) use bf8::{ColumnButterfly8d, ColumnButterfly8f};
-pub(crate) use bf9::{ColumnButterfly9d, ColumnButterfly9f};
-pub(crate) use bf10::{ColumnButterfly10d, ColumnButterfly10f};
-pub(crate) use bf11::{ColumnButterfly11d, ColumnButterfly11f};
-pub(crate) use bf12::{ColumnButterfly12d, ColumnButterfly12f};
-pub(crate) use bf13::{ColumnButterfly13d, ColumnButterfly13f};
-pub(crate) use bf16::{ColumnButterfly16d, ColumnButterfly16f};
-pub(crate) use bf18::{ColumnButterfly18d, ColumnButterfly18f};
+#[derive(Default)]
+pub(crate) struct NeonC2RExpanderF {}
+
+impl C2ROddExpander<f32> for NeonC2RExpanderF {
+    fn expand(
+        &self,
+        input: &[Complex<f32>],
+        output: &mut [Complex<f32>],
+        complex_length: usize,
+        _: usize,
+    ) {
+        let mut start = &input[1..];
+        let (mut out_left, mut out_right) = output.split_at_mut(complex_length);
+
+        out_left = &mut out_left[1..];
+
+        let conj = NeonStoreF::conj_flag();
+
+        for ((buf_left, buf_right), val) in out_left
+            .chunks_exact_mut(2)
+            .zip(out_right.rchunks_exact_mut(2))
+            .zip(start.chunks_exact(2))
+        {
+            let val = NeonStoreF::from_complex_ref(val);
+            val.write(buf_left);
+            val.xor(conj).reverse_complex().write(buf_right);
+        }
+
+        out_left = out_left.chunks_exact_mut(2).into_remainder();
+        out_right = out_right.rchunks_exact_mut(2).into_remainder();
+        start = start.chunks_exact(2).remainder();
+
+        for ((buf_left, buf_right), val) in out_left
+            .iter_mut()
+            .zip(out_right.iter_mut().rev())
+            .zip(start)
+        {
+            *buf_left = *val;
+            *buf_right = val.conj();
+        }
+
+        output[0].re = input[0].re;
+        output[0].im = 0.0.as_();
+    }
+}

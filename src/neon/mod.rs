@@ -28,6 +28,7 @@
  */
 mod butterflies;
 mod c2r;
+mod c2r_expand;
 mod mixed;
 mod r2c;
 mod raders;
@@ -116,6 +117,7 @@ pub(crate) use butterflies::{
     NeonFcmaForwardButterfly1024f, NeonFcmaInverseButterfly1024f,
 };
 pub(crate) use c2r::C2RNeonTwiddles;
+pub(crate) use c2r_expand::NeonC2RExpanderF;
 #[cfg(feature = "fcma")]
 pub(crate) use mixed::{
     NeonFcmaForwardMixedRadix4f, NeonFcmaForwardMixedRadix8f, NeonFcmaInverseMixedRadix4f,
@@ -124,17 +126,14 @@ pub(crate) use mixed::{
     NeonFcmaMixedRadix6, NeonFcmaMixedRadix6f, NeonFcmaMixedRadix7, NeonFcmaMixedRadix7f,
     NeonFcmaMixedRadix8, NeonFcmaMixedRadix9, NeonFcmaMixedRadix9f, NeonFcmaMixedRadix10,
     NeonFcmaMixedRadix10f, NeonFcmaMixedRadix11, NeonFcmaMixedRadix11f, NeonFcmaMixedRadix12,
-    NeonFcmaMixedRadix12f, NeonFcmaMixedRadix13, NeonFcmaMixedRadix13f, NeonFcmaMixedRadix14,
-    NeonFcmaMixedRadix14f, NeonFcmaMixedRadix15, NeonFcmaMixedRadix15f, NeonFcmaMixedRadix16,
-    NeonFcmaMixedRadix16f,
+    NeonFcmaMixedRadix12f, NeonFcmaMixedRadix13, NeonFcmaMixedRadix13f,
 };
 pub(crate) use mixed::{
     NeonMixedRadix2, NeonMixedRadix2f, NeonMixedRadix3, NeonMixedRadix3f, NeonMixedRadix4,
     NeonMixedRadix4f, NeonMixedRadix5, NeonMixedRadix5f, NeonMixedRadix6, NeonMixedRadix6f,
     NeonMixedRadix7, NeonMixedRadix7f, NeonMixedRadix8, NeonMixedRadix8f, NeonMixedRadix9,
     NeonMixedRadix9f, NeonMixedRadix10, NeonMixedRadix10f, NeonMixedRadix11, NeonMixedRadix11f,
-    NeonMixedRadix12, NeonMixedRadix12f, NeonMixedRadix13, NeonMixedRadix13f, NeonMixedRadix14,
-    NeonMixedRadix14f, NeonMixedRadix15, NeonMixedRadix15f, NeonMixedRadix16, NeonMixedRadix16f,
+    NeonMixedRadix12, NeonMixedRadix12f, NeonMixedRadix13, NeonMixedRadix13f,
 };
 pub(crate) use r2c::R2CNeonTwiddles;
 pub(crate) use raders::NeonRadersFft;

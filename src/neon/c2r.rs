@@ -27,32 +27,36 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::neon::mixed::{NeonStoreD, NeonStoreF};
-use crate::r2c::R2CTwiddlesHandler;
+use crate::r2c::C2RTwiddlesHandler;
 use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::aarch64::*;
 
 pub(crate) struct C2RNeonTwiddles {}
 
-impl R2CTwiddlesHandler<f64> for C2RNeonTwiddles {
+impl C2RTwiddlesHandler<f64> for C2RNeonTwiddles {
     fn handle(
         &self,
         twiddles: &[Complex<f64>],
+        left_input: &[Complex<f64>],
+        right_input: &[Complex<f64>],
         left: &mut [Complex<f64>],
         right: &mut [Complex<f64>],
     ) {
         let conj = NeonStoreD::set_values(0.0, -0.0);
         let blend_mask = NeonStoreD::set_values(f64::from_bits(0xFFFF_FFFF_FFFF_FFFFu64), 0.0);
 
-        for ((twiddle, s_out), s_out_rev) in twiddles
+        for ((((twiddle, s_out), s_out_rev), left_input), right_input) in twiddles
             .iter()
             .zip(left.iter_mut())
             .zip(right.iter_mut().rev())
+            .zip(left_input.iter())
+            .zip(right_input.iter().rev())
         {
             let [twiddle_re, twiddle_im] = NeonStoreD::from_complex(twiddle).dup_even_odds();
             let twiddle_re = twiddle_re.xor(conj);
-            let out = NeonStoreD::from_complex(s_out);
-            let out_rev = NeonStoreD::from_complex(s_out_rev);
+            let out = NeonStoreD::from_complex(left_input);
+            let out_rev = NeonStoreD::from_complex(right_input);
 
             let sum = out + out_rev;
             let diff = out - out_rev;
@@ -72,16 +76,17 @@ impl R2CTwiddlesHandler<f64> for C2RNeonTwiddles {
     }
 }
 
-impl R2CTwiddlesHandler<f32> for C2RNeonTwiddles {
+impl C2RTwiddlesHandler<f32> for C2RNeonTwiddles {
     fn handle(
         &self,
         twiddles: &[Complex<f32>],
+        left_input: &[Complex<f32>],
+        right_input: &[Complex<f32>],
         left: &mut [Complex<f32>],
         right: &mut [Complex<f32>],
     ) {
         unsafe {
-            static ROT_270: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
-            let conj = NeonStoreF::raw(vld1q_f32(ROT_270.as_ptr().cast()));
+            let conj = NeonStoreF::conj_flag();
 
             let blend_mask = NeonStoreF::raw(vreinterpretq_f32_u32(vld1q_u32(
                 [0xFFFFFFFFu32, 0, 0xFFFFFFFF, 0].as_ptr(),
@@ -89,16 +94,18 @@ impl R2CTwiddlesHandler<f32> for C2RNeonTwiddles {
 
             let _right_len = right.len();
 
-            for ((twiddle, s_out), s_out_rev) in twiddles
+            for ((((twiddle, s_out), s_out_rev), left_input), right_input) in twiddles
                 .chunks_exact(2)
                 .zip(left.chunks_exact_mut(2))
                 .zip(right.rchunks_exact_mut(2))
+                .zip(left_input.chunks_exact(2))
+                .zip(right_input.rchunks_exact(2))
             {
                 let [twiddle_re, twiddle_im] =
                     NeonStoreF::from_complex_ref(twiddle).dup_even_odds();
                 let twiddle_re = twiddle_re.xor(conj);
-                let out = NeonStoreF::from_complex_ref(s_out);
-                let out_rev = NeonStoreF::from_complex_ref(s_out_rev).reverse_complex();
+                let out = NeonStoreF::from_complex_ref(left_input);
+                let out_rev = NeonStoreF::from_complex_ref(right_input).reverse_complex();
 
                 let sum = out + out_rev;
                 let diff = out - out_rev;
@@ -123,19 +130,23 @@ impl R2CTwiddlesHandler<f32> for C2RNeonTwiddles {
                 let rem_twiddles = twiddles.chunks_exact(2).remainder();
                 let min_length = left.len().min(right.len());
                 let rem_left = left.chunks_exact_mut(2).into_remainder();
+                let rem_left_input = left_input.chunks_exact(2).remainder();
                 let full_right_chunks = right.len() - (min_length / 2) * 2;
                 let rem_right = &mut right[..full_right_chunks];
+                let rem_right_input = &right_input[..full_right_chunks];
 
-                for ((twiddle, s_out), s_out_rev) in rem_twiddles
+                for ((((twiddle, s_out), s_out_rev), left_input), right_input) in rem_twiddles
                     .iter()
                     .zip(rem_left.iter_mut())
                     .zip(rem_right.iter_mut().rev())
+                    .zip(rem_left_input.iter())
+                    .zip(rem_right_input.iter().rev())
                 {
                     let [twiddle_re, twiddle_im] =
                         NeonStoreF::from_complex(twiddle).dup_even_odds();
                     let twiddle_re = twiddle_re.xor(conj);
-                    let out = NeonStoreF::from_complex(s_out);
-                    let out_rev = NeonStoreF::from_complex(s_out_rev);
+                    let out = NeonStoreF::from_complex(left_input);
+                    let out_rev = NeonStoreF::from_complex(right_input);
 
                     let sum = out + out_rev;
                     let diff = out - out_rev;

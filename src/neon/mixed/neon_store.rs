@@ -214,6 +214,12 @@ impl NeonStoreF {
     }
 
     #[inline]
+    pub(crate) fn conj_flag() -> NeonStoreF {
+        static CONJ: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
+        unsafe { NeonStoreF::raw(vld1q_f32(CONJ.as_ptr().cast())) }
+    }
+
+    #[inline]
     pub(crate) fn load(ptr: &[f32]) -> Self {
         unsafe {
             NeonStoreF {

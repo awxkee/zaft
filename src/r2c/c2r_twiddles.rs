@@ -27,14 +27,14 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftSample;
-use crate::r2c::R2CTwiddlesHandler;
+use crate::r2c::C2RTwiddlesHandler;
 use num_complex::Complex;
 use num_traits::AsPrimitive;
 use std::marker::PhantomData;
 use std::sync::{Arc, OnceLock};
 
 pub(crate) trait C2RTwiddlesFactory<T> {
-    fn make_c2r_twiddles_handler() -> Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>;
+    fn make_c2r_twiddles_handler() -> Arc<dyn C2RTwiddlesHandler<T> + Send + Sync>;
 }
 
 #[allow(unused)]
@@ -43,8 +43,8 @@ pub(crate) struct C2RHandler<T> {
 }
 
 impl C2RTwiddlesFactory<f32> for f32 {
-    fn make_c2r_twiddles_handler() -> Arc<dyn R2CTwiddlesHandler<f32> + Send + Sync> {
-        static Q: OnceLock<Arc<dyn R2CTwiddlesHandler<f32> + Send + Sync>> = OnceLock::new();
+    fn make_c2r_twiddles_handler() -> Arc<dyn C2RTwiddlesHandler<f32> + Send + Sync> {
+        static Q: OnceLock<Arc<dyn C2RTwiddlesHandler<f32> + Send + Sync>> = OnceLock::new();
         Q.get_or_init(|| {
             #[cfg(all(target_arch = "aarch64", feature = "neon"))]
             {
@@ -71,8 +71,8 @@ impl C2RTwiddlesFactory<f32> for f32 {
 }
 
 impl C2RTwiddlesFactory<f64> for f64 {
-    fn make_c2r_twiddles_handler() -> Arc<dyn R2CTwiddlesHandler<f64> + Send + Sync> {
-        static Q: OnceLock<Arc<dyn R2CTwiddlesHandler<f64> + Send + Sync>> = OnceLock::new();
+    fn make_c2r_twiddles_handler() -> Arc<dyn C2RTwiddlesHandler<f64> + Send + Sync> {
+        static Q: OnceLock<Arc<dyn C2RTwiddlesHandler<f64> + Send + Sync>> = OnceLock::new();
         Q.get_or_init(|| {
             #[cfg(all(target_arch = "aarch64", feature = "neon"))]
             {
@@ -98,18 +98,27 @@ impl C2RTwiddlesFactory<f64> for f64 {
     }
 }
 
-impl<T: FftSample> R2CTwiddlesHandler<T> for C2RHandler<T>
+impl<T: FftSample> C2RTwiddlesHandler<T> for C2RHandler<T>
 where
     f64: AsPrimitive<T>,
 {
-    fn handle(&self, twiddles: &[Complex<T>], left: &mut [Complex<T>], right: &mut [Complex<T>]) {
-        for ((twiddle, fft_input), fft_input_rev) in twiddles
+    fn handle(
+        &self,
+        twiddles: &[Complex<T>],
+        left_input: &[Complex<T>],
+        right_input: &[Complex<T>],
+        left: &mut [Complex<T>],
+        right: &mut [Complex<T>],
+    ) {
+        for ((((twiddle, fft_input), fft_input_rev), left_input), right_input) in twiddles
             .iter()
             .zip(left.iter_mut())
             .zip(right.iter_mut().rev())
+            .zip(left_input.iter())
+            .zip(right_input.iter().rev())
         {
-            let sum = *fft_input + *fft_input_rev;
-            let diff = *fft_input - *fft_input_rev;
+            let sum = *left_input + *right_input;
+            let diff = *left_input - *right_input;
 
             let twiddled_re_sum = sum.im * twiddle.re;
             let twiddled_im_sum = sum.im * twiddle.im;
