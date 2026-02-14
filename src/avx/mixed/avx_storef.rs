@@ -187,6 +187,12 @@ impl AvxStoreF {
 
     #[inline]
     #[target_feature(enable = "avx2")]
+    pub(crate) fn conj_flag() -> Self {
+        AvxStoreF::set_values8(0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0)
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn dup(p0: f32) -> Self {
         AvxStoreF::raw(_mm256_set1_ps(p0))
     }

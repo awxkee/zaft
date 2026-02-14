@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::r2c::R2CTwiddlesHandler;
+use crate::r2c::C2RTwiddlesHandler;
 use crate::r2c::c2r_twiddles::C2RTwiddlesFactory;
 use crate::util::{compute_twiddle, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
@@ -68,7 +68,7 @@ pub(crate) struct C2RFftEvenInterceptor<T> {
     twiddles: Vec<Complex<T>>,
     length: usize,
     complex_length: usize,
-    twiddles_handler: Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>,
+    twiddles_handler: Arc<dyn C2RTwiddlesHandler<T> + Send + Sync>,
     intercept_scratch_length: usize,
 }
 
@@ -147,35 +147,46 @@ where
             .chunks_exact(self.complex_length)
             .zip(output.chunks_exact_mut(self.length))
         {
-            scratch.copy_from_slice(input);
+            scratch[0].re = input[0].re;
             scratch[0].im = 0.0f64.as_();
+            scratch.last_mut().unwrap().re = input.last().unwrap().re;
             scratch.last_mut().unwrap().im = 0.0f64.as_();
 
             let (mut input_left, mut input_right) = scratch.split_at_mut(input.len() / 2);
+            let (mut input_left_source, mut input_right_source) = input.split_at(input.len() / 2);
 
-            // We have to preprocess the input in-place before we send it to the FFT.
-            // The first and centermost values have to be preprocessed separately from the rest, so do that now.
-            match (input_left.first_mut(), input_right.last_mut()) {
-                (Some(first_input), Some(last_input)) => {
+            match (
+                input_left.first_mut(),
+                input_right.last_mut(),
+                input_left_source.first(),
+                input_right_source.last(),
+            ) {
+                (Some(first_out), Some(_), Some(first_input), Some(last_input)) => {
                     let first_sum = *first_input + *last_input;
                     let first_diff = *first_input - *last_input;
 
-                    *first_input = Complex {
+                    *first_out = Complex {
                         re: first_sum.re - first_sum.im,
                         im: first_diff.re - first_diff.im,
                     };
 
                     input_left = &mut input_left[1..];
+                    input_left_source = &input_left_source[1..];
                     let right_len = input_right.len();
                     input_right = &mut input_right[..right_len - 1];
+                    input_right_source = &input_right_source[..right_len - 1];
                 }
                 _ => return Ok(()),
             };
 
-            self.twiddles_handler
-                .handle(&self.twiddles, input_left, input_right);
+            self.twiddles_handler.handle(
+                &self.twiddles,
+                input_left_source,
+                input_right_source,
+                input_left,
+                input_right,
+            );
 
-            // If the output len is odd, the loop above can't preprocess the centermost element, so handle that separately
             if scratch.len() % 2 == 1 {
                 let center_element = input[input.len() / 2];
                 let doubled = center_element + center_element;
@@ -202,110 +213,8 @@ where
         self.complex_length
     }
 
+    #[inline]
     fn complex_scratch_length(&self) -> usize {
         self.complex_length + self.intercept_scratch_length
-    }
-}
-
-pub(crate) struct C2RFftOddInterceptor<T> {
-    intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
-    length: usize,
-    complex_length: usize,
-    intercept_scratch_length: usize,
-}
-
-impl<T: FftSample> C2RFftOddInterceptor<T>
-where
-    f64: AsPrimitive<T>,
-{
-    pub(crate) fn install(
-        length: usize,
-        intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Self, ZaftError> {
-        assert_ne!(length % 2, 0, "R2C must be even in even interceptor");
-        assert_eq!(
-            intercept.length(),
-            length,
-            "Underlying interceptor must have full length of real values"
-        );
-        assert_eq!(
-            intercept.direction(),
-            FftDirection::Inverse,
-            "Complex to real fft must be inverse"
-        );
-
-        let intercept_scratch_length = intercept.scratch_length();
-
-        Ok(Self {
-            intercept,
-            length,
-            complex_length: length / 2 + 1,
-            intercept_scratch_length,
-        })
-    }
-}
-
-impl<T: FftSample> C2RFftExecutor<T> for C2RFftOddInterceptor<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
-        self.execute_with_scratch(input, output, &mut scratch)
-    }
-
-    fn execute_with_scratch(
-        &self,
-        input: &[Complex<T>],
-        output: &mut [T],
-        scratch: &mut [Complex<T>],
-    ) -> Result<(), ZaftError> {
-        if !output.len().is_multiple_of(self.length) {
-            return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
-        }
-        if !input.len().is_multiple_of(self.complex_length) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                output.len(),
-                self.complex_length,
-            ));
-        }
-
-        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
-        let (scratch, intercept_scratch) = scratch.split_at_mut(self.length);
-
-        for (input, output) in input
-            .chunks_exact(self.complex_length)
-            .zip(output.chunks_exact_mut(self.length))
-        {
-            scratch[..input.len()].copy_from_slice(input);
-            scratch[0].im = 0.0.as_();
-            for (buf, val) in scratch
-                .iter_mut()
-                .rev()
-                .take(self.length / 2)
-                .zip(input.iter().skip(1))
-            {
-                *buf = val.conj();
-            }
-            self.intercept
-                .execute_with_scratch(scratch, intercept_scratch)?;
-            for (dst, src) in output.iter_mut().zip(scratch.iter()) {
-                *dst = src.re;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn real_length(&self) -> usize {
-        self.length
-    }
-
-    fn complex_length(&self) -> usize {
-        self.complex_length
-    }
-
-    fn complex_scratch_length(&self) -> usize {
-        self.length + self.intercept_scratch_length
     }
 }

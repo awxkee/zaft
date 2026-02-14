@@ -36,8 +36,7 @@ use crate::avx::mixed::butterflies::{
     ColumnButterfly7d, ColumnButterfly7f, ColumnButterfly8d, ColumnButterfly8f, ColumnButterfly9d,
     ColumnButterfly9f, ColumnButterfly10d, ColumnButterfly10f, ColumnButterfly11d,
     ColumnButterfly11f, ColumnButterfly12d, ColumnButterfly12f, ColumnButterfly13d,
-    ColumnButterfly13f, ColumnButterfly14d, ColumnButterfly14f, ColumnButterfly15d,
-    ColumnButterfly15f, ColumnButterfly16d, ColumnButterfly16f,
+    ColumnButterfly13f,
 };
 use crate::err::try_vec;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
@@ -1015,12 +1014,6 @@ define_mixed_radixd!(AvxMixedRadix12d, ColumnButterfly12d, 12);
 define_mixed_radixf!(AvxMixedRadix12f, ColumnButterfly12f, 12);
 define_mixed_radixd!(AvxMixedRadix13d, ColumnButterfly13d, 13);
 define_mixed_radixf!(AvxMixedRadix13f, ColumnButterfly13f, 13);
-define_mixed_radixd!(AvxMixedRadix14d, ColumnButterfly14d, 14);
-define_mixed_radixf!(AvxMixedRadix14f, ColumnButterfly14f, 14);
-define_mixed_radixd!(AvxMixedRadix15d, ColumnButterfly15d, 15);
-define_mixed_radixf!(AvxMixedRadix15f, ColumnButterfly15f, 15);
-define_mixed_radixd!(AvxMixedRadix16d, ColumnButterfly16d, 16);
-define_mixed_radixf!(AvxMixedRadix16f, ColumnButterfly16f, 16);
 
 #[cfg(test)]
 mod tests {
@@ -1549,76 +1542,6 @@ mod tests {
             AvxMixedRadix12d::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
         let bf8 = MixedRadix::new(
             Zaft::strategy(12, FftDirection::Forward).unwrap(),
-            Zaft::strategy(2, FftDirection::Forward).unwrap(),
-        )
-        .unwrap();
-        let mut reference_value = src.to_vec();
-        bf8.execute(&mut reference_value).unwrap();
-        let mut test_value = src.to_vec();
-        neon_mixed_rust.execute(&mut test_value).unwrap();
-        reference_value
-            .iter()
-            .zip(test_value.iter())
-            .enumerate()
-            .for_each(|(idx, (a, b))| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-9,
-                    "a_re {} != b_re {} for at {idx}",
-                    a.re,
-                    b.re,
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-9,
-                    "a_im {} != b_im {} for at {idx}",
-                    a.im,
-                    b.im,
-                );
-            });
-    }
-
-    #[test]
-    fn test_avx_mixed_radix16_f64() {
-        if !has_valid_avx() {
-            return;
-        }
-        let src: [Complex<f64>; 32] = [
-            Complex::new(1.3, 1.6),
-            Complex::new(1.7, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(0.9, 0.13),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(-0.45, -0.4),
-            Complex::new(0.45, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(0.9, 0.13),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(-0.45, -0.4),
-            Complex::new(0.45, -0.4),
-            Complex::new(0.9, 0.13),
-            Complex::new(3.25, 2.7),
-            Complex::new(1.7, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(0.45, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(-0.45, -0.4),
-            Complex::new(0.45, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(0.9, 0.13),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-        ];
-        let neon_mixed_rust =
-            AvxMixedRadix16d::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
-        let bf8 = MixedRadix::new(
-            Zaft::strategy(16, FftDirection::Forward).unwrap(),
             Zaft::strategy(2, FftDirection::Forward).unwrap(),
         )
         .unwrap();
@@ -2335,72 +2258,6 @@ mod tests {
         let neon_mixed_rust =
             AvxMixedRadix13f::new(Zaft::strategy(3, FftDirection::Forward).unwrap()).unwrap();
         let bf8 = Zaft::strategy(39, FftDirection::Forward).unwrap();
-        let mut reference_value = src.to_vec();
-        bf8.execute(&mut reference_value).unwrap();
-        let mut test_value = src.to_vec();
-        neon_mixed_rust.execute(&mut test_value).unwrap();
-        reference_value
-            .iter()
-            .zip(test_value.iter())
-            .enumerate()
-            .for_each(|(idx, (a, b))| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-4,
-                    "a_re {} != b_re {} for at {idx}",
-                    a.re,
-                    b.re,
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-4,
-                    "a_im {} != b_im {} for at {idx}",
-                    a.im,
-                    b.im,
-                );
-            });
-    }
-
-    #[test]
-    fn test_avx_mixed_radix16_f32() {
-        if !has_valid_avx() {
-            return;
-        }
-        let src: [Complex<f32>; 32] = [
-            Complex::new(1.3, 1.6),
-            Complex::new(1.7, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(0.9, 0.13),
-            Complex::new(-0.45, -0.4),
-            Complex::new(0.45, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(0.9, 0.13),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(-0.45, -0.4),
-            Complex::new(0.45, -0.4),
-            Complex::new(1.3, 1.6),
-            Complex::new(1.7, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(7.54, -0.6534),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(-0.45, -0.4),
-            Complex::new(0.45, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(0.9, 0.13),
-            Complex::new(3.25, 2.7),
-            Complex::new(0.654, 0.324),
-            Complex::new(3.25, 2.7),
-            Complex::new(-0.45, -0.4),
-            Complex::new(0.45, -0.4),
-            Complex::new(8.2, -0.1),
-            Complex::new(0.45, -0.4),
-            Complex::new(8.2, -0.1),
-        ];
-        let neon_mixed_rust =
-            AvxMixedRadix16f::new(Zaft::strategy(2, FftDirection::Forward).unwrap()).unwrap();
-        let bf8 = Zaft::strategy(32, FftDirection::Forward).unwrap();
         let mut reference_value = src.to_vec();
         bf8.execute(&mut reference_value).unwrap();
         let mut test_value = src.to_vec();

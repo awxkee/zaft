@@ -453,20 +453,6 @@ pub(crate) trait AlgorithmFactory<T> {
         right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
 
-    #[allow(unused)]
-    fn mixed_radix_butterfly14(
-        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
-    #[allow(unused)]
-    fn mixed_radix_butterfly15(
-        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
-
-    #[allow(unused)]
-    fn mixed_radix_butterfly16(
-        right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>;
-
     fn good_thomas(
         left_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         right_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
@@ -1592,42 +1578,6 @@ impl AlgorithmFactory<f32> for f32 {
             AvxMixedRadix13f,
             NeonMixedRadix13f,
             NeonFcmaMixedRadix13f
-        )
-    }
-
-    #[allow(unused)]
-    fn mixed_radix_butterfly14(
-        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
-        make_mixed_radix!(
-            right_fft,
-            AvxMixedRadix14f,
-            NeonMixedRadix14f,
-            NeonFcmaMixedRadix14f
-        )
-    }
-
-    #[allow(unused)]
-    fn mixed_radix_butterfly15(
-        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
-        make_mixed_radix!(
-            right_fft,
-            AvxMixedRadix15f,
-            NeonMixedRadix15f,
-            NeonFcmaMixedRadix15f
-        )
-    }
-
-    #[allow(unused)]
-    fn mixed_radix_butterfly16(
-        right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>, ZaftError> {
-        make_mixed_radix!(
-            right_fft,
-            AvxMixedRadix16f,
-            NeonMixedRadix16f,
-            NeonFcmaMixedRadix16f
         )
     }
 

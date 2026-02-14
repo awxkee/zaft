@@ -28,6 +28,7 @@
  */
 
 mod c2r;
+mod c2r_odd;
 mod c2r_twiddles;
 mod factory_d;
 mod factory_f;
@@ -40,11 +41,14 @@ mod rfft_raders;
 mod strategy;
 
 use crate::ZaftError;
+pub(crate) use c2r::C2RFftEvenInterceptor;
 pub use c2r::C2RFftExecutor;
-pub(crate) use c2r::{C2RFftEvenInterceptor, C2RFftOddInterceptor};
+#[allow(unused_imports)]
+pub(crate) use c2r_odd::{C2RFftOddInterceptor, C2ROddExpander, C2ROddExpanderFactory};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
-pub(crate) use r2c_twiddles::{R2CTwiddlesFactory, R2CTwiddlesHandler};
+#[allow(unused_imports)]
+pub(crate) use r2c_twiddles::{C2RTwiddlesHandler, R2CTwiddlesFactory, R2CTwiddlesHandler};
 pub(crate) use real_factory::R2cAlgorithmFactory;
 pub(crate) use real_to_complex::R2CFftEvenInterceptor;
 pub use real_to_complex::R2CFftExecutor;

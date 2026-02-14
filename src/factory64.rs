@@ -1266,42 +1266,6 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
-    #[allow(unused)]
-    fn mixed_radix_butterfly14(
-        right_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
-        make_mixed_radix!(
-            right_fft,
-            AvxMixedRadix14d,
-            NeonMixedRadix14,
-            NeonFcmaMixedRadix14
-        )
-    }
-
-    #[allow(unused)]
-    fn mixed_radix_butterfly15(
-        right_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
-        make_mixed_radix!(
-            right_fft,
-            AvxMixedRadix15d,
-            NeonMixedRadix15,
-            NeonFcmaMixedRadix15
-        )
-    }
-
-    #[allow(unused)]
-    fn mixed_radix_butterfly16(
-        right_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
-    ) -> Result<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
-        make_mixed_radix!(
-            right_fft,
-            AvxMixedRadix16d,
-            NeonMixedRadix16,
-            NeonFcmaMixedRadix16
-        )
-    }
-
     fn mixed_radix(
         left_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
         right_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,

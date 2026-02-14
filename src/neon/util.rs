@@ -74,14 +74,6 @@ pub(crate) fn vfcmulq_b_conj_fcma_f32(lhs: float32x4_t, rhs: float32x4_t) -> flo
     vcmlaq_rot270_f32(vcmlaq_f32(vdupq_n_f32(0.), rhs, lhs), rhs, lhs)
 }
 
-#[inline]
-#[cfg(feature = "fcma")]
-#[target_feature(enable = "fcma")]
-pub(crate) fn vfcmul_b_conj_fcma_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
-    // Multiply lhs * conj(rhs)
-    vcmla_rot270_f32(vcmla_f32(vdup_n_f32(0.), rhs, lhs), rhs, lhs)
-}
-
 #[inline(always)]
 pub(crate) fn vfcmul_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
     unsafe {
@@ -209,18 +201,6 @@ pub(crate) fn vfcmulq_conj_b_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x
         let temp3 = vmulq_f32(temp2, lhs);
         let temp4 = vrev64q_f32(temp3);
         vfmaq_f32(temp4, temp1, lhs)
-    }
-}
-
-#[inline(always)]
-pub(crate) fn vfcmul_conj_b_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
-    unsafe {
-        let temp1 = vtrn1_f32(rhs, rhs);
-        let v_rhs = vneg_f32(rhs);
-        let temp2 = vtrn2_f32(v_rhs, vneg_f32(v_rhs));
-        let temp3 = vmul_f32(temp2, lhs);
-        let temp4 = vrev64_f32(temp3);
-        vfma_f32(temp4, temp1, lhs)
     }
 }
 

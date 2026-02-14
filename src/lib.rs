@@ -96,8 +96,8 @@ use crate::prime_factors::{
     PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
 };
 use crate::r2c::{
-    C2RFftEvenInterceptor, C2RFftOddInterceptor, OneSizedRealFft, R2CTwiddlesFactory,
-    R2cAlgorithmFactory, strategy_r2c,
+    C2RFftEvenInterceptor, C2RFftOddInterceptor, C2ROddExpanderFactory, OneSizedRealFft,
+    R2CTwiddlesFactory, R2cAlgorithmFactory, strategy_r2c,
 };
 use crate::spectrum_arithmetic::ComplexArithFactory;
 use crate::td::{TwoDimensionalC2C, TwoDimensionalC2R, TwoDimensionalR2C};
@@ -132,6 +132,7 @@ pub(crate) trait FftSample:
     + Debug
     + R2cAlgorithmFactory<Self>
     + R2CTwiddlesFactory<Self>
+    + C2ROddExpanderFactory
 {
     const HALF: Self;
     const SQRT_3_OVER_2: Self;
@@ -401,7 +402,7 @@ impl Zaft {
             let min_length = _n_length.min(_q_length);
             let max_length = _n_length.max(_q_length);
 
-            if !(2..=16).contains(&min_length) {
+            if !(2..=13).contains(&min_length) {
                 // If no butterfly exists, return None
                 return Ok(None);
             }
@@ -422,11 +423,8 @@ impl Zaft {
                 11 => T::mixed_radix_butterfly11(q_fft),
                 12 => T::mixed_radix_butterfly12(q_fft),
                 13 => T::mixed_radix_butterfly13(q_fft),
-                14 => T::mixed_radix_butterfly14(q_fft),
-                15 => T::mixed_radix_butterfly15(q_fft),
-                16 => T::mixed_radix_butterfly16(q_fft),
                 // This arm is covered by the early exit, but is required if the early exit is removed.
-                _ => unreachable!("min_length is outside the supported range [2, 16]."),
+                _ => unreachable!("min_length is outside the supported range [2, 13]."),
             };
 
             // 3. Handle the result once.
@@ -724,12 +722,6 @@ impl Zaft {
                     get_mixed_butterflies!(4, product / 4)
                 }
                 get_mixed_butterflies!(8, product / 8)
-            }
-            if product.is_multiple_of(14) {
-                get_mixed_butterflies!(14, product / 14)
-            }
-            if product.is_multiple_of(15) {
-                get_mixed_butterflies!(15, product / 15)
             }
             if product.is_multiple_of(12) {
                 get_mixed_butterflies!(12, product / 12)
