@@ -336,6 +336,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
+    check_power_group(c, 125, "125".to_string());
+
     check_power_group(c, 512, "512".to_string());
     check_power_group(c, 1024, "1024".to_string());
     check_power_group(c, 2048, "2048".to_string());
