@@ -173,10 +173,8 @@ impl AvxButterfly32d {
                 let mut mid0 = self.bf8.bf4.exec(rows0);
                 let mut mid1 = self.bf8.bf4.exec(rows1);
                 for r in 1..4 {
-                    mid0[r] =
-                        AvxStoreD::mul_by_complex(mid0[r], *self.twiddles.get_unchecked(4 * r - 4));
-                    mid1[r] =
-                        AvxStoreD::mul_by_complex(mid1[r], *self.twiddles.get_unchecked(4 * r - 3));
+                    mid0[r] = AvxStoreD::mul_by_complex(mid0[r], self.twiddles[4 * r - 4]);
+                    mid1[r] = AvxStoreD::mul_by_complex(mid1[r], self.twiddles[4 * r - 3]);
                 }
 
                 let mut rows2 = [AvxStoreD::zero(); 4];

@@ -8,7 +8,7 @@ use criterion::measurement::WallTime;
 use criterion::{BatchSize, BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
 use num_traits::Zero;
-use rand::Rng;
+use rand::RngExt;
 use rustfft::FftPlanner;
 use std::time::Duration;
 use zaft::Zaft;
@@ -147,15 +147,16 @@ fn check_power_groupd(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String)
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("group");
     let c = group
-        .measurement_time(Duration::from_millis(750))
-        .warm_up_time(Duration::from_millis(750));
+        .measurement_time(Duration::from_millis(2500))
+        .warm_up_time(Duration::from_millis(2500));
 
+    check_power_groups_c2r(c, 16, "16".to_string());
     check_power_groups_c2r(c, 32, "32".to_string());
-    check_power_groups_c2r(c, 64, "64".to_string());
-    check_power_groups_c2r(c, 128, "128".to_string());
-    check_power_groups_c2r(c, 256, "256".to_string());
-    check_power_groups_c2r(c, 512, "512".to_string());
-    check_power_groups_c2r(c, 1024, "1024".to_string());
+    // check_power_groups_c2r(c, 64, "64".to_string());
+    // check_power_groups_c2r(c, 128, "128".to_string());
+    // check_power_groups_c2r(c, 256, "256".to_string());
+    // check_power_groups_c2r(c, 512, "512".to_string());
+    // check_power_groups_c2r(c, 1024, "1024".to_string());
 
     // check_power_groups(c, 1803, "1803".to_string());
     // check_power_groupd(c, 1803, "1803".to_string());

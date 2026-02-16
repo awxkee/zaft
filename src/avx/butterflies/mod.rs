@@ -455,7 +455,7 @@ macro_rules! test_avx_butterfly {
             let radix_forward = $butterfly::new(FftDirection::Forward);
             let radix_inverse = $butterfly::new(FftDirection::Inverse);
             assert_eq!(radix_forward.length(), $scale);
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..20 {
                 let val = $scale as usize;
                 let size = val * i;
@@ -534,7 +534,7 @@ macro_rules! test_oof_avx_butterfly {
             if !has_valid_avx() {
                 return;
             }
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..20 {
                 let kern = $scale;
                 let size = (kern as usize) * i;
@@ -622,7 +622,7 @@ macro_rules! test_r2c_avx_butterfly {
         #[test]
         fn $method_name() {
             use crate::util::has_valid_avx;
-            use rand::Rng;
+            use rand::RngExt;
             if !has_valid_avx() {
                 return;
             }

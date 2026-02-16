@@ -43,7 +43,7 @@ pub(crate) struct MixedRadix<T> {
     width: usize,
     height_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     height: usize,
-    spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
+    complex_arithm: Arc<dyn ComplexArith<T> + Send + Sync>,
     width_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
     height_transpose: Box<dyn TransposeExecutor<T> + Send + Sync>,
     width_scratch_length: usize,
@@ -96,7 +96,7 @@ where
             height,
             direction,
             twiddles,
-            spectrum_ops: T::make_complex_arith(),
+            complex_arithm: T::make_complex_arith(),
             width_transpose: T::transpose_strategy(width, height),
             height_transpose: T::transpose_strategy(height, width),
             width_scratch_length,
@@ -131,38 +131,32 @@ where
         let (scratch, scratch_rem) = scratch.split_at_mut(self.execution_length);
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // STEP 1: transpose
             self.width_transpose
                 .transpose(chunk, scratch, self.width, self.height);
 
-            // STEP 2: perform FFTs of size `height`
             let (height_scratch, _) = scratch_rem.split_at_mut(self.height_scratch_length);
             self.height_executor
                 .execute_with_scratch(scratch, height_scratch)?;
 
-            // STEP 3: Apply twiddle factors
             for (dst, &src) in chunk[..self.height]
                 .iter_mut()
                 .zip(scratch[..self.height].iter())
             {
                 *dst = src;
             }
-            self.spectrum_ops.mul(
+            self.complex_arithm.mul(
                 &scratch[self.height..],
                 &self.twiddles,
                 &mut chunk[self.height..],
             );
 
-            // STEP 4: transpose again
             self.height_transpose
                 .transpose(chunk, scratch, self.height, self.width);
 
-            // STEP 5: perform FFTs of size `width`
             let (width_scratch, _) = scratch_rem.split_at_mut(self.width_scratch_length);
             self.width_executor
                 .execute_with_scratch(scratch, width_scratch)?;
 
-            // STEP 6: transpose again
             self.width_transpose
                 .transpose(scratch, chunk, self.width, self.height);
         }
@@ -209,7 +203,7 @@ where
             {
                 *dst = src;
             }
-            self.spectrum_ops.mul(
+            self.complex_arithm.mul(
                 &scratch[self.height..],
                 &self.twiddles,
                 &mut output_chunk[self.height..],
@@ -261,7 +255,7 @@ where
             {
                 *dst = src;
             }
-            self.spectrum_ops.mul(
+            self.complex_arithm.mul(
                 &output_chunk[self.height..],
                 &self.twiddles,
                 &mut src_chunk[self.height..],
@@ -313,7 +307,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::good_thomas_small::GoodThomasSmallFft;
+    use crate::good_thomas::GoodThomasFft;
     use crate::mixed_radix::MixedRadix;
     use crate::{FftDirection, FftExecutor, Zaft};
     use num_complex::Complex;
@@ -344,7 +338,7 @@ mod tests {
             Complex::new(0.45, -0.4),
             Complex::new(8.2, -0.1),
         ];
-        let good_thomas20 = GoodThomasSmallFft::new(
+        let good_thomas20 = GoodThomasFft::new(
             Zaft::strategy(11, FftDirection::Forward).unwrap(),
             Zaft::strategy(2, FftDirection::Forward).unwrap(),
         )

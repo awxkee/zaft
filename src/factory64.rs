@@ -31,7 +31,6 @@ use crate::butterflies::Butterfly1;
 use crate::dft::Dft;
 use crate::factory::AlgorithmFactory;
 use crate::good_thomas::GoodThomasFft;
-use crate::good_thomas_small::GoodThomasSmallFft;
 use crate::mixed_radix::MixedRadix;
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 use crate::util::has_valid_avx;
@@ -1278,11 +1277,6 @@ impl AlgorithmFactory<f64> for f64 {
         left_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
         right_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        let length = left_fft.length() * right_fft.length();
-        if length < (u16::MAX - 100) as usize {
-            return GoodThomasSmallFft::new(left_fft, right_fft)
-                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>);
-        }
         GoodThomasFft::new(left_fft, right_fft)
             .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>)
     }

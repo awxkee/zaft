@@ -168,9 +168,8 @@ pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
 pub(crate) use spectrum_arithmetic_fcma::NeonFcmaSpectrumArithmetic;
 pub(crate) use transpose::{
     NeonTranspose2x2F32, NeonTranspose2x2F64, NeonTranspose4x3F64, NeonTranspose4x4F32,
-    NeonTranspose4x4F64, NeonTranspose4x7F32, NeonTranspose5x7F32, NeonTranspose6x4F32,
-    NeonTranspose6x5F32, NeonTranspose7x2F32, NeonTranspose7x3F32, NeonTranspose7x5F32,
-    NeonTranspose7x6F32, NeonTranspose7x7F32, NeonTranspose8x3F32, NeonTranspose9x2F32,
+    NeonTranspose4x4F64, NeonTranspose5x7F32, NeonTranspose6x4F32, NeonTranspose6x5F32,
+    NeonTranspose7x5F32, NeonTranspose7x6F32, NeonTranspose7x7F32, NeonTranspose9x2F32,
     NeonTranspose11x2F32, NeonTransposeDReal4x4, NeonTransposeNx2F32, NeonTransposeNx2F64,
     NeonTransposeNx3F32, NeonTransposeNx3F64, NeonTransposeNx4F32, NeonTransposeNx4F64,
     NeonTransposeNx5F32, NeonTransposeNx5F64, NeonTransposeNx6F32, NeonTransposeNx6F64,
@@ -196,7 +195,7 @@ macro_rules! test_fcma_radix {
             use crate::FftDirection;
             use crate::FftExecutor;
             use num_complex::Complex;
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..$iters {
                 let val = $scale as usize;
                 let size = val.pow(i);

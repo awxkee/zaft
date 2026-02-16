@@ -7,7 +7,7 @@
 use criterion::measurement::WallTime;
 use criterion::{BatchSize, BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
-use rand::Rng;
+use rand::RngExt;
 use rustfft::FftPlanner;
 use std::time::Duration;
 use zaft::Zaft;
@@ -335,6 +335,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             im: rand::rng().random(),
         };
     }
+
+    check_power_group(c, 125, "125".to_string());
 
     check_power_group(c, 512, "512".to_string());
     check_power_group(c, 1024, "1024".to_string());

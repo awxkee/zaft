@@ -71,8 +71,10 @@ macro_rules! gen_bf169d {
 
                         rows = self.bf13.exec(rows);
 
-                        for i in 1..13 {
-                            rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 12 * k]);
+                        if k > 0 {
+                            for i in 1..13 {
+                                rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 12 * k]);
+                            }
                         }
 
                         for i in 0..13 {
