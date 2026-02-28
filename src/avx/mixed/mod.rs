@@ -30,6 +30,7 @@ mod avx_stored;
 mod avx_storef;
 mod butterflies;
 mod mixed_radix;
+mod mixed_radix_r2c;
 
 pub(super) use avx_stored::AvxStoreD;
 pub(super) use avx_storef::{AvxStoreF, SseStoreF};
@@ -51,4 +52,9 @@ pub(crate) use mixed_radix::{
     AvxMixedRadix2f, AvxMixedRadix3f, AvxMixedRadix4f, AvxMixedRadix5f, AvxMixedRadix6f,
     AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
     AvxMixedRadix12f, AvxMixedRadix13f,
+};
+pub(crate) use mixed_radix_r2c::{
+    AvxR2CMixedRadix3d, AvxR2CMixedRadix3f, AvxR2CMixedRadix5d, AvxR2CMixedRadix5f,
+    AvxR2CMixedRadix7d, AvxR2CMixedRadix7f, AvxR2CMixedRadix9d, AvxR2CMixedRadix9f,
+    AvxR2CMixedRadix11d, AvxR2CMixedRadix11f, AvxR2CMixedRadix13d, AvxR2CMixedRadix13f,
 };

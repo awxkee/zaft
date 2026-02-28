@@ -41,6 +41,7 @@ mod bf7;
 mod bf8;
 mod bf9;
 mod mixed_radix;
+mod mixed_radix_r2c;
 mod neon_store;
 
 pub(crate) use bf2::{ColumnButterfly2d, ColumnButterfly2f};
@@ -102,5 +103,17 @@ pub(crate) use mixed_radix::{
     NeonMixedRadix7, NeonMixedRadix7f, NeonMixedRadix8, NeonMixedRadix8f, NeonMixedRadix9,
     NeonMixedRadix9f, NeonMixedRadix10, NeonMixedRadix10f, NeonMixedRadix11, NeonMixedRadix11f,
     NeonMixedRadix12, NeonMixedRadix12f, NeonMixedRadix13, NeonMixedRadix13f,
+};
+#[cfg(feature = "fcma")]
+pub(crate) use mixed_radix_r2c::{
+    NeonFcmaR2CMixedRadix3d, NeonFcmaR2CMixedRadix3f, NeonFcmaR2CMixedRadix5d,
+    NeonFcmaR2CMixedRadix5f, NeonFcmaR2CMixedRadix7d, NeonFcmaR2CMixedRadix7f,
+    NeonFcmaR2CMixedRadix9d, NeonFcmaR2CMixedRadix9f, NeonFcmaR2CMixedRadix11d,
+    NeonFcmaR2CMixedRadix11f, NeonFcmaR2CMixedRadix13d, NeonFcmaR2CMixedRadix13f,
+};
+pub(crate) use mixed_radix_r2c::{
+    NeonR2CMixedRadix3d, NeonR2CMixedRadix3f, NeonR2CMixedRadix5d, NeonR2CMixedRadix5f,
+    NeonR2CMixedRadix7d, NeonR2CMixedRadix7f, NeonR2CMixedRadix9d, NeonR2CMixedRadix9f,
+    NeonR2CMixedRadix11d, NeonR2CMixedRadix11f, NeonR2CMixedRadix13d, NeonR2CMixedRadix13f,
 };
 pub(crate) use neon_store::{NeonStoreD, NeonStoreF};

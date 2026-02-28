@@ -93,6 +93,45 @@ impl ColumnButterfly5d {
             ]
         }
     }
+
+    #[inline(always)]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreD; 5]) -> [NeonStoreD; 3] {
+        unsafe {
+            let x14p = vaddq_f64(store[1].v, store[4].v);
+            let x14n = vsubq_f64(store[1].v, store[4].v);
+            let x23p = vaddq_f64(store[2].v, store[3].v);
+            let x23n = vsubq_f64(store[2].v, store[3].v);
+            let y0 = vaddq_f64(vaddq_f64(store[0].v, x14p), x23p);
+
+            let temp_b1_1 = vmulq_n_f64(x14n, self.twiddle1.im);
+            let temp_b2_1 = vmulq_n_f64(x14n, self.twiddle2.im);
+
+            let temp_a1 = vfmaq_n_f64(
+                vfmaq_n_f64(store[0].v, x14p, self.twiddle1.re),
+                x23p,
+                self.twiddle2.re,
+            );
+            let temp_a2 = vfmaq_n_f64(
+                vfmaq_n_f64(store[0].v, x14p, self.twiddle2.re),
+                x23p,
+                self.twiddle1.re,
+            );
+
+            let temp_b1 = vfmaq_n_f64(temp_b1_1, x23n, self.twiddle2.im);
+            let temp_b2 = vfmsq_n_f64(temp_b2_1, x23n, self.twiddle1.im);
+
+            let temp_b1_rot = v_rotate90_f64(temp_b1, self.rotate);
+            let temp_b2_rot = v_rotate90_f64(temp_b2, self.rotate);
+
+            let y1 = vaddq_f64(temp_a1, temp_b1_rot);
+            let y2 = vaddq_f64(temp_a2, temp_b2_rot);
+            [
+                NeonStoreD::raw(y0),
+                NeonStoreD::raw(y1),
+                NeonStoreD::raw(y2),
+            ]
+        }
+    }
 }
 
 #[cfg(feature = "fcma")]
@@ -150,6 +189,44 @@ impl ColumnFcmaButterfly5d {
             NeonStoreD::raw(y2),
             NeonStoreD::raw(y3),
             NeonStoreD::raw(y4),
+        ]
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreD; 5]) -> [NeonStoreD; 3] {
+        let x14p = vaddq_f64(store[1].v, store[4].v);
+        let x14n = vsubq_f64(store[1].v, store[4].v);
+        let x23p = vaddq_f64(store[2].v, store[3].v);
+        let x23n = vsubq_f64(store[2].v, store[3].v);
+        let y0 = vaddq_f64(vaddq_f64(store[0].v, x14p), x23p);
+
+        let temp_b1_1 = vmulq_n_f64(x14n, self.twiddle1.im);
+        let temp_b2_1 = vmulq_n_f64(x14n, self.twiddle2.im);
+
+        let temp_a1 = vfmaq_n_f64(
+            vfmaq_n_f64(store[0].v, x14p, self.twiddle1.re),
+            x23p,
+            self.twiddle2.re,
+        );
+        let temp_a2 = vfmaq_n_f64(
+            vfmaq_n_f64(store[0].v, x14p, self.twiddle2.re),
+            x23p,
+            self.twiddle1.re,
+        );
+
+        let temp_b1 = vfmaq_n_f64(temp_b1_1, x23n, self.twiddle2.im);
+        let temp_b2 = vfmsq_n_f64(temp_b2_1, x23n, self.twiddle1.im);
+
+        let temp_b1_rot = vcaddq_rot90_f64(vdupq_n_f64(0.), temp_b1);
+        let temp_b2_rot = vcaddq_rot90_f64(vdupq_n_f64(0.), temp_b2);
+
+        let y1 = vaddq_f64(temp_a1, temp_b1_rot);
+        let y2 = vaddq_f64(temp_a2, temp_b2_rot);
+        [
+            NeonStoreD::raw(y0),
+            NeonStoreD::raw(y1),
+            NeonStoreD::raw(y2),
         ]
     }
 }
@@ -211,6 +288,45 @@ impl ColumnButterfly5f {
                 NeonStoreF::raw(y2),
                 NeonStoreF::raw(y3),
                 NeonStoreF::raw(y4),
+            ]
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreF; 5]) -> [NeonStoreF; 3] {
+        unsafe {
+            let x14p = vaddq_f32(store[1].v, store[4].v);
+            let x14n = vsubq_f32(store[1].v, store[4].v);
+            let x23p = vaddq_f32(store[2].v, store[3].v);
+            let x23n = vsubq_f32(store[2].v, store[3].v);
+            let y0 = vaddq_f32(vaddq_f32(store[0].v, x14p), x23p);
+
+            let temp_b1_1 = vmulq_n_f32(x14n, self.twiddle1.im);
+            let temp_b2_1 = vmulq_n_f32(x14n, self.twiddle2.im);
+
+            let temp_a1 = vfmaq_n_f32(
+                vfmaq_n_f32(store[0].v, x14p, self.twiddle1.re),
+                x23p,
+                self.twiddle2.re,
+            );
+            let temp_a2 = vfmaq_n_f32(
+                vfmaq_n_f32(store[0].v, x14p, self.twiddle2.re),
+                x23p,
+                self.twiddle1.re,
+            );
+
+            let temp_b1 = vfmaq_n_f32(temp_b1_1, x23n, self.twiddle2.im);
+            let temp_b2 = vfmsq_n_f32(temp_b2_1, x23n, self.twiddle1.im);
+
+            let temp_b1_rot = v_rotate90_f32(temp_b1, self.rotate);
+            let temp_b2_rot = v_rotate90_f32(temp_b2, self.rotate);
+
+            let y1 = vaddq_f32(temp_a1, temp_b1_rot);
+            let y2 = vaddq_f32(temp_a2, temp_b2_rot);
+            [
+                NeonStoreF::raw(y0),
+                NeonStoreF::raw(y1),
+                NeonStoreF::raw(y2),
             ]
         }
     }
@@ -314,6 +430,44 @@ impl ColumnFcmaButterfly5f {
             NeonStoreF::raw(y2),
             NeonStoreF::raw(y3),
             NeonStoreF::raw(y4),
+        ]
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreF; 5]) -> [NeonStoreF; 3] {
+        let x14p = vaddq_f32(store[1].v, store[4].v);
+        let x14n = vsubq_f32(store[1].v, store[4].v);
+        let x23p = vaddq_f32(store[2].v, store[3].v);
+        let x23n = vsubq_f32(store[2].v, store[3].v);
+        let y0 = vaddq_f32(vaddq_f32(store[0].v, x14p), x23p);
+
+        let temp_b1_1 = vmulq_n_f32(x14n, self.twiddle1.im);
+        let temp_b2_1 = vmulq_n_f32(x14n, self.twiddle2.im);
+
+        let temp_a1 = vfmaq_n_f32(
+            vfmaq_n_f32(store[0].v, x14p, self.twiddle1.re),
+            x23p,
+            self.twiddle2.re,
+        );
+        let temp_a2 = vfmaq_n_f32(
+            vfmaq_n_f32(store[0].v, x14p, self.twiddle2.re),
+            x23p,
+            self.twiddle1.re,
+        );
+
+        let temp_b1 = vfmaq_n_f32(temp_b1_1, x23n, self.twiddle2.im);
+        let temp_b2 = vfmsq_n_f32(temp_b2_1, x23n, self.twiddle1.im);
+
+        let temp_b1_rot = vcaddq_rot90_f32(vdupq_n_f32(0.), temp_b1);
+        let temp_b2_rot = vcaddq_rot90_f32(vdupq_n_f32(0.), temp_b2);
+
+        let y1 = vaddq_f32(temp_a1, temp_b1_rot);
+        let y2 = vaddq_f32(temp_a2, temp_b2_rot);
+        [
+            NeonStoreF::raw(y0),
+            NeonStoreF::raw(y1),
+            NeonStoreF::raw(y2),
         ]
     }
 

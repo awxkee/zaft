@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_r2c_and_c2r() {
-        for i in 1..180 {
+        for i in 1..256 {
             let data = (0..i)
                 .map(|_| {
                     Complex::<f32>::new(
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_r2c_and_c2r_f64() {
-        for i in 1..128 {
+        for i in 1..256 {
             let data = (0..i)
                 .map(|_| {
                     Complex::<f64>::new(

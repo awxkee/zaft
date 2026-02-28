@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::{R2CFftExecutor, ZaftError};
+use crate::{FftExecutor, R2CFftExecutor, ZaftError};
 use std::sync::Arc;
 
 pub(crate) trait R2cAlgorithmFactory<T> {
@@ -53,4 +53,22 @@ pub(crate) trait R2cAlgorithmFactory<T> {
     fn r2c_butterfly32() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_raders(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send + Sync>, ZaftError>;
     fn r2c_bluestein(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send + Sync>, ZaftError>;
+    fn r2c_mixed_radix3(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix5(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix7(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix9(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix11(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix13(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
 }

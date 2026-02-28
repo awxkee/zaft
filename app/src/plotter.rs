@@ -411,7 +411,7 @@ pub fn benchmark_compare_any(start: usize, end: usize) {
     .unwrap();
     plot_absolute_pair(
         &format!("fft_absolute_r2c_{start}to{end}_{arch}.png"),
-        "RustFFT R2C",
+        "RealFft R2C",
         &realfft,
         "Zaft R2C",
         &zaft_c2c,
@@ -428,14 +428,14 @@ pub fn benchmark_compare_any(start: usize, end: usize) {
         "Zaft R2C",
         &zaft_r2c
             .iter()
-            .filter(|x| !(x.0 as usize).is_multiple_of(2))
+            .filter(|x| (x.0 as usize).is_multiple_of(2))
             .map(|&x| x)
             .collect::<Vec<_>>(),
     )
     .unwrap();
     plot_absolute_pair(
         &format!("fft_zaft_c2c_vs_r2c_odd_{start}to{end}_{arch}.png"),
-        "Zaft Cc2c",
+        "Zaft C2C",
         &zaft_c2c
             .into_iter()
             .filter(|x| !(x.0 as usize).is_multiple_of(2))
@@ -487,14 +487,14 @@ pub fn benchmark_compare_powers_2() {
     )
     .unwrap();
     plot_ratio(
-        "RealFFT / ZAFT R2C Time Ratio",
+        "RealFFT / ZAFT R2C Time Ratio log2",
         &format!("fft_r2c_power2_ratio_{arch}.png"),
         &realfft,
         &zaft_r2c,
     )
     .unwrap();
     plot_ratio(
-        "RustFFT / ZAFT C2C Time Ratio",
+        "RustFFT / ZAFT C2C Time Ratio log2",
         &format!("fft_c2c_power2_ratio_{arch}.png"),
         &rustfft,
         &zaft_c2c,
