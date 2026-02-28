@@ -93,9 +93,8 @@ pub(crate) use radix13::AvxFmaRadix13;
 #[allow(unused)]
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;
 pub(crate) use transpose::{
-    AvxTransposeDReal4x4, AvxTransposeF323x8, AvxTransposeF325x5, AvxTransposeF327x2,
-    AvxTransposeF327x3, AvxTransposeF327x5, AvxTransposeF327x6, AvxTransposeF327x7,
-    AvxTransposeF328x3, AvxTransposeF644x4, AvxTransposeFReal4x4, AvxTransposeNx2F32,
+    AvxTransposeDReal4x4, AvxTransposeF325x5, AvxTransposeF327x5, AvxTransposeF327x6,
+    AvxTransposeF327x7, AvxTransposeF644x4, AvxTransposeFReal4x4, AvxTransposeNx2F32,
     AvxTransposeNx2F64, AvxTransposeNx3F32, AvxTransposeNx3F64, AvxTransposeNx4F32,
     AvxTransposeNx4F64, AvxTransposeNx5F32, AvxTransposeNx5F64, AvxTransposeNx6F32,
     AvxTransposeNx6F64, AvxTransposeNx7F32, AvxTransposeNx7F64, AvxTransposeNx8F32,
@@ -119,7 +118,7 @@ macro_rules! test_avx_radix {
             use crate::FftDirection;
             use crate::FftExecutor;
             use num_complex::Complex;
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..$iters {
                 let val = $scale as usize;
                 let size = val.pow(i);
@@ -202,7 +201,7 @@ macro_rules! test_avx_radix_fast {
             use crate::FftDirection;
             use crate::FftExecutor;
             use num_complex::Complex;
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..$iters {
                 let val = $scale as usize;
                 let size = val.pow(i);

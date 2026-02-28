@@ -210,8 +210,10 @@ macro_rules! gen_bf243d {
 
                        rows = self.bf27.bf9.exec(rows);
 
-                       for i in 1..9 {
-                           rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 8 * k]);
+                       if k > 0 {
+                           for i in 1..9 {
+                               rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 8 * k]);
+                           }
                        }
 
                        for i in 0..9 {

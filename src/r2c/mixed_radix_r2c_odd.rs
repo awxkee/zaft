@@ -158,16 +158,13 @@ where
             .chunks_exact(self.execution_length)
             .zip(output.chunks_exact_mut(complex_length))
         {
-            // STEP 1: transpose
             self.width_transpose_real
                 .transpose(input, scratch_initial, self.width, self.height);
 
-            // STEP 2: perform FFTs of size `height`
             let (height_scratch, _) = rem_scratch.split_at_mut(self.height_scratch_length);
             self.height_executor
                 .execute_with_scratch(scratch_initial, height_scratch)?;
 
-            // STEP 3: Apply twiddle factors
             for (dst, &src) in scratch_complex1[..complex_height]
                 .iter_mut()
                 .zip(scratch_initial[..complex_height].iter())
@@ -185,7 +182,6 @@ where
 
             let (scratch_complex0, _) = scratch_initial.split_at_mut(self.second_stage_len);
 
-            // STEP 4: transpose again
             self.height_transpose.transpose(
                 scratch_complex1,
                 scratch_complex0,
@@ -193,7 +189,6 @@ where
                 self.width,
             );
 
-            // STEP 5: perform FFTs of size `width`
             let (width_scratch, _) = rem_scratch.split_at_mut(self.width_scratch_length);
             self.width_executor
                 .execute_with_scratch(scratch_complex0, width_scratch)?;

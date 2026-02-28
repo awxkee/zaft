@@ -136,7 +136,6 @@ where
             let output_twiddled_real = twiddled_re_sum + twiddled_im_diff;
             let output_twiddled_im = twiddled_im_sum - twiddled_re_diff;
 
-            // We finally have all the data we need to write the transformed data back out where we found it.
             *out = Complex {
                 re: half_sum_re + output_twiddled_real,
                 im: half_diff_im + output_twiddled_im,

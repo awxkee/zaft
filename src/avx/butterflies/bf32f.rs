@@ -143,10 +143,8 @@ impl AvxButterfly32f {
 
                 // apply twiddle factors
                 for r in 1..4 {
-                    mid0[r] =
-                        AvxStoreF::mul_by_complex(mid0[r], *self.twiddles.get_unchecked(2 * r - 2));
-                    mid1[r] =
-                        AvxStoreF::mul_by_complex(mid1[r], *self.twiddles.get_unchecked(2 * r - 1));
+                    mid0[r] = AvxStoreF::mul_by_complex(mid0[r], self.twiddles[2 * r - 2]);
+                    mid1[r] = AvxStoreF::mul_by_complex(mid1[r], self.twiddles[2 * r - 1]);
                 }
 
                 // Transpose our 8x4 array to an 4x8 array

@@ -71,7 +71,6 @@ where
         let mut convolve_fft_twiddles = try_vec![Complex::zero(); convolve_fft_len];
         make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse());
 
-        // Scale the computed twiddles and copy them to the end of the array
         convolve_fft_twiddles[0] = convolve_fft_twiddles[0] * inner_fft_scale;
         for i in 1..size {
             let twiddle = convolve_fft_twiddles[i] * inner_fft_scale;
@@ -82,7 +81,6 @@ where
         //Compute the inner fft
         convolve_fft.execute(&mut convolve_fft_twiddles)?;
 
-        // also compute some more mundane twiddle factors to start and end with
         let mut twiddles = try_vec![Complex::zero(); size];
         make_bluesteins_twiddles(&mut twiddles, direction);
 

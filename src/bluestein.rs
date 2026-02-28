@@ -55,7 +55,6 @@ pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
 {
     let twice_len = destination.len() * 2;
 
-    // Standard bluestein's twiddle computation requires us to square the index before usingit to compute a twiddle factor
     if destination.len() < u32::MAX as usize {
         let twice_len_reduced = DividerU64::new(twice_len as u64);
 
@@ -65,12 +64,9 @@ pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
             *e = compute_twiddle(i_mod as usize, twice_len, direction);
         }
     } else {
-        // Sadly, the len doesn't fit in a u64, so we have to crank it up to u128 arithmetic
         let twice_len_reduced = twice_len as u128;
 
         for (i, e) in destination.iter_mut().enumerate() {
-            // Standard bluestein's twiddle computation requires us to square the index before usingit to compute a twiddle factor
-            // And since twiddle factors are cyclic, we can improve precision once the squared index gets converted to floating point by taking a modulo
             let i_squared = i as u128 * i as u128;
             let i_mod = i_squared.rem(twice_len_reduced);
             *e = compute_twiddle(i_mod as usize, twice_len, direction);

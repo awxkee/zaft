@@ -420,7 +420,7 @@ macro_rules! test_fcma_butterfly {
             if !std::arch::is_aarch64_feature_detected!("fcma") {
                 return;
             }
-            use rand::Rng;
+            use rand::RngExt;
             let radix_forward = $butterfly::new(FftDirection::Forward);
             let radix_inverse = $butterfly::new(FftDirection::Inverse);
             assert_eq!(radix_forward.length(), $scale);
@@ -503,7 +503,7 @@ macro_rules! test_oof_fcma_butterfly {
             if !std::arch::is_aarch64_feature_detected!("fcma") {
                 return;
             }
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..20 {
                 let kern = $scale;
                 let size = (kern as usize) * i;

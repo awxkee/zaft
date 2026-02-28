@@ -95,14 +95,6 @@ impl TransposeFactory<f32> for f32 {
                 use crate::neon::NeonTranspose7x5F32;
                 return Box::new(NeonTranspose7x5F32::default());
             }
-            if _width.is_multiple_of(7) && _height.is_multiple_of(3) {
-                use crate::neon::NeonTranspose7x3F32;
-                return Box::new(NeonTranspose7x3F32::default());
-            }
-            if _width.is_multiple_of(7) && _height.is_multiple_of(2) {
-                use crate::neon::NeonTranspose7x2F32;
-                return Box::new(NeonTranspose7x2F32::default());
-            }
             if _width.is_multiple_of(4) && _height.is_multiple_of(4) {
                 use crate::neon::NeonTranspose4x4F32;
                 return Box::new(NeonTranspose4x4F32::default());
@@ -111,17 +103,9 @@ impl TransposeFactory<f32> for f32 {
                 use crate::neon::NeonTranspose2x2F32;
                 return Box::new(NeonTranspose2x2F32::default());
             }
-            if _width.is_multiple_of(8) && _height.is_multiple_of(3) {
-                use crate::neon::NeonTranspose8x3F32;
-                return Box::new(NeonTranspose8x3F32::default());
-            }
             if _width.is_multiple_of(5) && _height.is_multiple_of(7) {
                 use crate::neon::NeonTranspose5x7F32;
                 return Box::new(NeonTranspose5x7F32::default());
-            }
-            if _width.is_multiple_of(4) && _height.is_multiple_of(7) {
-                use crate::neon::NeonTranspose4x7F32;
-                return Box::new(NeonTranspose4x7F32::default());
             }
             if _width.is_multiple_of(9) && _height.is_multiple_of(2) {
                 use crate::neon::NeonTranspose9x2F32;
@@ -231,22 +215,6 @@ impl TransposeFactory<f32> for f32 {
                     if _width.is_multiple_of(7) && _height.is_multiple_of(6) {
                         use crate::avx::AvxTransposeF327x6;
                         return Box::new(AvxTransposeF327x6::default());
-                    }
-                    if _width.is_multiple_of(7) && _height.is_multiple_of(3) {
-                        use crate::avx::AvxTransposeF327x3;
-                        return Box::new(AvxTransposeF327x3::default());
-                    }
-                    if _width.is_multiple_of(7) && _height.is_multiple_of(2) {
-                        use crate::avx::AvxTransposeF327x2;
-                        return Box::new(AvxTransposeF327x2::default());
-                    }
-                    if _width.is_multiple_of(8) && _height.is_multiple_of(3) {
-                        use crate::avx::AvxTransposeF328x3;
-                        return Box::new(AvxTransposeF328x3::default());
-                    }
-                    if _width.is_multiple_of(3) && _height.is_multiple_of(8) {
-                        use crate::avx::AvxTransposeF323x8;
-                        return Box::new(AvxTransposeF323x8::default());
                     }
 
                     // generic multiple of N

@@ -161,10 +161,8 @@ where
 
             let (mut output_left, mut output_right) = output.split_at_mut(output.len() / 2);
 
-            // The first and last element don't require any twiddle factors, so skip that work
             match (output_left.first_mut(), output_right.last_mut()) {
                 (Some(first_element), Some(last_element)) => {
-                    // The first and last elements are just a sum and difference of the first value's real and imaginary values
                     let first_value = *first_element;
                     *first_element = Complex {
                         re: first_value.re + first_value.im,
@@ -175,7 +173,6 @@ where
                         im: T::zero(),
                     };
 
-                    // Chop the first and last element off of our slices so that the loop below doesn't have to deal with them
                     output_left = &mut output_left[1..];
                     let right_len = output_right.len();
                     output_right = &mut output_right[..right_len - 1];

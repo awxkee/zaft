@@ -231,10 +231,6 @@ impl R2cAlgorithmFactory<f32> for f32 {
     }
 
     fn r2c_bluestein(n: usize) -> Result<Arc<dyn R2CFftExecutor<f32> + Send + Sync>, ZaftError> {
-        // we want to use bluestein's algorithm. we have a free choice of which inner FFT length to use
-        // the only restriction is that it has to be (2 * len - 1) or larger. So we want the fastest FFT we can compute at or above that size.
-
-        // the most obvious choice is the next-highest power of two, but there's one trick we can pull to get a smaller fft that we can be 100% certain will be faster
         let min_inner_len = 2 * n - 1;
         let inner_len_pow2 = min_inner_len.checked_next_power_of_two().unwrap();
         let inner_len_factor3 = inner_len_pow2 / 4 * 3;

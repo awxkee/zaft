@@ -171,7 +171,6 @@ where
             .chunks_exact(self.execution_length)
             .zip(output.chunks_exact_mut(self.complex_length()))
         {
-            // The first output element is just the sum of all the input elements, and we need to store off the first input value
             let (buffer_first, buffer) = input.split_first().unwrap();
             let buffer_first_val = Complex::new(*buffer_first, T::zero());
 
@@ -184,29 +183,19 @@ where
                     Complex::new(unsafe { *buffer.get_unchecked(buffer_idx) }, T::zero());
             }
 
-            // perform the first of two inner FFTs
-
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
             // scratch[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
             complex[0] = buffer_first_val + scratch[0];
 
-            // multiply the inner result with our cached setup data
-            // also conjugate every entry. this sets us up to do an inverse FFT
-            // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
             self.spectrum_ops
                 .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
 
-            // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
-            // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
             scratch[0] = scratch[0] + buffer_first_val.conj();
 
-            // execute the second FFT
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
-
-            // copy the final values into the output, reordering as we go
 
             for (dst, &buffer_idx) in complex.iter_mut().skip(1).zip(self.output_indices.iter()) {
                 unsafe {

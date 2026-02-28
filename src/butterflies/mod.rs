@@ -140,7 +140,7 @@ macro_rules! test_butterfly {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
         fn $method_name() {
-            use rand::Rng;
+            use rand::RngExt;
             let radix_forward = $butterfly::new(FftDirection::Forward);
             let radix_inverse = $butterfly::new(FftDirection::Inverse);
             assert_eq!(radix_forward.length(), $scale);
@@ -219,7 +219,7 @@ macro_rules! test_butterfly_small {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
         fn $method_name() {
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..2 {
                 let val = $scale as usize;
                 let size = val.pow(i);
@@ -297,7 +297,7 @@ macro_rules! test_oof_butterfly {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
         fn $method_name() {
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..20 {
                 let kern = $scale;
                 let size = (kern as usize) * i;
@@ -382,7 +382,7 @@ macro_rules! test_oof_butterfly_small {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
         fn $method_name() {
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..2 {
                 let kern = $scale;
                 let size = (kern as usize).pow(i);

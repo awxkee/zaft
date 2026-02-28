@@ -139,7 +139,7 @@ macro_rules! test_r2c_butterfly {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
         #[test]
         fn $method_name() {
-            use rand::Rng;
+            use rand::RngExt;
             let radix_forward = $butterfly::new(FftDirection::Forward);
             assert_eq!(radix_forward.real_length(), $scale);
             assert_eq!(radix_forward.complex_length(), $scale / 2 + 1);
@@ -198,7 +198,7 @@ pub(crate) use test_r2c_butterfly;
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use rand::Rng;
+    use rand::RngExt;
 
     #[test]
     fn test_r2c_and_c2r() {

@@ -144,8 +144,5 @@ where
             Zaft::strategy((len as u64 / factor_out) as usize, FftDirection::Forward)?,
             Zaft::strategy(factor_out as usize, FftDirection::Forward)?,
         )?))
-
-        // R2CFftOddInterceptor::install(len, Zaft::strategy(len, FftDirection::Forward)?)
-        //     .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<T> + Send + Sync>)
     }
 }

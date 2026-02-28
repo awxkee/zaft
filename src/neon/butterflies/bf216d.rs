@@ -76,8 +76,11 @@ macro_rules! gen_bf216d {
 
                         rows12 = self.bf12.exec(rows12);
 
-                        for i in 1..12 {
-                            rows12[i] = NeonStoreD::$mul(rows12[i], self.twiddles[i - 1 + 11 * k]);
+                        if k > 0 {
+                            for i in 1..12 {
+                                rows12[i] =
+                                    NeonStoreD::$mul(rows12[i], self.twiddles[i - 1 + 11 * k]);
+                            }
                         }
 
                         for i in 0..12 {

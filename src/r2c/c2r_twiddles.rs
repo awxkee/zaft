@@ -128,7 +128,6 @@ where
             let output_twiddled_real = twiddled_re_sum + twiddled_im_diff;
             let output_twiddled_im = twiddled_im_sum - twiddled_re_diff;
 
-            // We finally have all the data we need to write our preprocessed data back where we got it from.
             *fft_input = Complex {
                 re: sum.re - output_twiddled_real,
                 im: diff.im - output_twiddled_im,

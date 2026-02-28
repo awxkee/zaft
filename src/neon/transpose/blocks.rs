@@ -452,8 +452,6 @@ macro_rules! define_transposed {
 define_transpose!(NeonTranspose7x7F32, f32, block_transpose_f32x2_7x7, 7, 7);
 define_transpose!(NeonTranspose7x6F32, f32, block_transpose_f32x2_7x6, 7, 6);
 define_transpose!(NeonTranspose7x5F32, f32, block_transpose_f32x2_7x5, 7, 5);
-define_transpose!(NeonTranspose7x3F32, f32, block_transpose_f32x2_7x3, 7, 3);
-define_transpose!(NeonTranspose7x2F32, f32, block_transpose_f32x2_7x2, 7, 2);
 define_transpose!(NeonTranspose6x4F32, f32, neon_transpose_f32x2_6x4, 6, 4);
 define_transpose!(NeonTranspose6x5F32, f32, block_transpose_f32x2_6x5, 6, 5);
 define_transpose_evenf!(NeonTransposeNx20F32, f32, transpose_2x20, 2, 20);
@@ -481,8 +479,6 @@ define_transpose!(NeonTranspose2x2F32, f32, block_transpose_f32x2_2x2, 2, 2);
 define_transpose!(NeonTranspose2x2F64, f64, neon_transpose_f64x2_2x2, 2, 2);
 define_transpose!(NeonTranspose4x4F64, f64, block_transpose_f64x2_4x4, 4, 4);
 define_transpose!(NeonTranspose4x3F64, f64, block_transpose_f64x2_4x3, 4, 3);
-define_transpose!(NeonTranspose8x3F32, f32, block_transpose_f32x2_8x3, 8, 3);
-define_transpose!(NeonTranspose4x7F32, f32, block_transpose_f32x2_4x7, 4, 7);
 define_transpose!(NeonTranspose5x7F32, f32, block_transpose_f32x2_5x7, 5, 7);
 define_transpose!(NeonTranspose9x2F32, f32, block_transpose_f32x2_9x2, 9, 2);
 define_transposed!(NeonTransposeNx2F64, f64, 1, 2);

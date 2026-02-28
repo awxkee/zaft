@@ -2,7 +2,7 @@ workspace = { members = ["app"], exclude = ["fuzz"] }
 
 [package]
 name = "zaft"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2024"
 description = "Fast fourier transform"
 readme = "README.md"
@@ -24,7 +24,7 @@ num-integer = "0.1.46"
 novtb = "0.1.7"
 
 [dev-dependencies]
-rand = "0.9"
+rand = "0.10.0"
 
 [features]
 default = ["neon", "avx"]

@@ -470,7 +470,7 @@ macro_rules! test_radix {
             use crate::FftDirection;
             use crate::FftExecutor;
             use num_complex::Complex;
-            use rand::Rng;
+            use rand::RngExt;
             for i in 1..$iters {
                 let val = $scale as usize;
                 let size = val.pow(i);
