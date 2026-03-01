@@ -156,6 +156,14 @@ where
                     return Ok(mx5);
                 }
             }
+            if len.is_multiple_of(11) {
+                if let Some(mx7) = T::r2c_mixed_radix11(Zaft::strategy(
+                    (len as u64 / 11) as usize,
+                    FftDirection::Forward,
+                )?)? {
+                    return Ok(mx7);
+                }
+            }
             if len.is_multiple_of(3) {
                 if let Some(mx3) = T::r2c_mixed_radix3(Zaft::strategy(
                     (len as u64 / 3) as usize,

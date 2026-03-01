@@ -56,4 +56,5 @@ pub(crate) use mixed_radix::{
 pub(crate) use mixed_radix_r2c::{
     AvxR2CMixedRadix3d, AvxR2CMixedRadix3f, AvxR2CMixedRadix5d, AvxR2CMixedRadix5f,
     AvxR2CMixedRadix7d, AvxR2CMixedRadix7f, AvxR2CMixedRadix9d, AvxR2CMixedRadix9f,
+    AvxR2CMixedRadix11d, AvxR2CMixedRadix11f,
 };

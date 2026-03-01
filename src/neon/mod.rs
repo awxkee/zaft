@@ -132,7 +132,8 @@ pub(crate) use mixed::{
 pub(crate) use mixed::{
     NeonFcmaR2CMixedRadix3d, NeonFcmaR2CMixedRadix3f, NeonFcmaR2CMixedRadix5d,
     NeonFcmaR2CMixedRadix5f, NeonFcmaR2CMixedRadix7d, NeonFcmaR2CMixedRadix7f,
-    NeonFcmaR2CMixedRadix9d, NeonFcmaR2CMixedRadix9f,
+    NeonFcmaR2CMixedRadix9d, NeonFcmaR2CMixedRadix9f, NeonFcmaR2CMixedRadix11d,
+    NeonFcmaR2CMixedRadix11f,
 };
 pub(crate) use mixed::{
     NeonMixedRadix2, NeonMixedRadix2f, NeonMixedRadix3, NeonMixedRadix3f, NeonMixedRadix4,
@@ -144,6 +145,7 @@ pub(crate) use mixed::{
 pub(crate) use mixed::{
     NeonR2CMixedRadix3d, NeonR2CMixedRadix3f, NeonR2CMixedRadix5d, NeonR2CMixedRadix5f,
     NeonR2CMixedRadix7d, NeonR2CMixedRadix7f, NeonR2CMixedRadix9d, NeonR2CMixedRadix9f,
+    NeonR2CMixedRadix11d, NeonR2CMixedRadix11f,
 };
 pub(crate) use r2c::R2CNeonTwiddles;
 pub(crate) use raders::NeonRadersFft;
