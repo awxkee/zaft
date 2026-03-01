@@ -69,6 +69,23 @@ impl ColumnButterfly9d {
         let [y2, y5, y8] = self.bf3.exec([u6, u7, u8]);
         [y0, y1, y2, y3, y4, y5, y6, y7, y8]
     }
+
+    #[inline(always)]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreD; 9]) -> [NeonStoreD; 5] {
+        let [u0, u3, u6] = self.bf3.exec([store[0], store[3], store[6]]);
+        let [u1, mut u4, mut u7] = self.bf3.exec([store[1], store[4], store[7]]);
+        let [u2, mut u5, mut u8] = self.bf3.exec([store[2], store[5], store[8]]);
+
+        u4 = NeonStoreD::mul_by_complex(u4, self.tw1);
+        u7 = NeonStoreD::mul_by_complex(u7, self.tw2);
+        u5 = NeonStoreD::mul_by_complex(u5, self.tw2);
+        u8 = NeonStoreD::mul_by_complex(u8, self.tw4);
+
+        let [y0, y3, _] = self.bf3.exec([u0, u1, u2]);
+        let [y1, y4, _] = self.bf3.exec([u3, u4, u5]);
+        let [y2, _, _] = self.bf3.exec([u6, u7, u8]);
+        [y0, y1, y2, y3, y4]
+    }
 }
 
 #[cfg(feature = "fcma")]
@@ -110,6 +127,24 @@ impl ColumnFcmaButterfly9d {
         let [y2, y5, y8] = self.bf3.exec([u6, u7, u8]);
         [y0, y1, y2, y3, y4, y5, y6, y7, y8]
     }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreD; 9]) -> [NeonStoreD; 5] {
+        let [u0, u3, u6] = self.bf3.exec([store[0], store[3], store[6]]);
+        let [u1, mut u4, mut u7] = self.bf3.exec([store[1], store[4], store[7]]);
+        let [u2, mut u5, mut u8] = self.bf3.exec([store[2], store[5], store[8]]);
+
+        u4 = NeonStoreD::fcmul_fcma(u4, self.tw1);
+        u7 = NeonStoreD::fcmul_fcma(u7, self.tw2);
+        u5 = NeonStoreD::fcmul_fcma(u5, self.tw2);
+        u8 = NeonStoreD::fcmul_fcma(u8, self.tw4);
+
+        let [y0, y3, _] = self.bf3.exec([u0, u1, u2]);
+        let [y1, y4, _] = self.bf3.exec([u3, u4, u5]);
+        let [y2, _, _] = self.bf3.exec([u6, u7, u8]);
+        [y0, y1, y2, y3, y4]
+    }
 }
 
 pub(crate) struct ColumnButterfly9f {
@@ -147,6 +182,23 @@ impl ColumnButterfly9f {
         let [y1, y4, y7] = self.bf3.exec([u3, u4, u5]);
         let [y2, y5, y8] = self.bf3.exec([u6, u7, u8]);
         [y0, y1, y2, y3, y4, y5, y6, y7, y8]
+    }
+
+    #[inline(always)]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreF; 9]) -> [NeonStoreF; 5] {
+        let [u0, u3, u6] = self.bf3.exec([store[0], store[3], store[6]]);
+        let [u1, mut u4, mut u7] = self.bf3.exec([store[1], store[4], store[7]]);
+        let [u2, mut u5, mut u8] = self.bf3.exec([store[2], store[5], store[8]]);
+
+        u4 = NeonStoreF::mul_by_complex(u4, self.tw1);
+        u7 = NeonStoreF::mul_by_complex(u7, self.tw2);
+        u5 = NeonStoreF::mul_by_complex(u5, self.tw2);
+        u8 = NeonStoreF::mul_by_complex(u8, self.tw4);
+
+        let [y0, y3, _] = self.bf3.exec([u0, u1, u2]);
+        let [y1, y4, _] = self.bf3.exec([u3, u4, u5]);
+        let [y2, _, _] = self.bf3.exec([u6, u7, u8]);
+        [y0, y1, y2, y3, y4]
     }
 
     #[inline(always)]
@@ -205,6 +257,24 @@ impl ColumnFcmaButterfly9f {
         let [y1, y4, y7] = self.bf3.exec([u3, u4, u5]);
         let [y2, y5, y8] = self.bf3.exec([u6, u7, u8]);
         [y0, y1, y2, y3, y4, y5, y6, y7, y8]
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreF; 9]) -> [NeonStoreF; 5] {
+        let [u0, u3, u6] = self.bf3.exec([store[0], store[3], store[6]]);
+        let [u1, mut u4, mut u7] = self.bf3.exec([store[1], store[4], store[7]]);
+        let [u2, mut u5, mut u8] = self.bf3.exec([store[2], store[5], store[8]]);
+
+        u4 = NeonStoreF::fcmul_fcma(u4, self.tw1);
+        u7 = NeonStoreF::fcmul_fcma(u7, self.tw2);
+        u5 = NeonStoreF::fcmul_fcma(u5, self.tw2);
+        u8 = NeonStoreF::fcmul_fcma(u8, self.tw4);
+
+        let [y0, y3, _] = self.bf3.exec([u0, u1, u2]);
+        let [y1, y4, _] = self.bf3.exec([u3, u4, u5]);
+        let [y2, _, _] = self.bf3.exec([u6, u7, u8]);
+        [y0, y1, y2, y3, y4]
     }
 
     #[inline]

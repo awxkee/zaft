@@ -183,7 +183,7 @@ impl NeonFcmaSpectrumArithmetic<f32> {
         {
             let mut src_x = 0usize;
 
-            while src_x + 8 < cut_width {
+            while src_x + 8 <= cut_width {
                 let s0 = NeonStoreF::from_complex_ref(unsafe { source.get_unchecked(src_x..) });
                 let s1 = NeonStoreF::from_complex_ref(unsafe { source.get_unchecked(src_x + 2..) });
                 let s2 = NeonStoreF::from_complex_ref(unsafe { source.get_unchecked(src_x + 4..) });
@@ -210,7 +210,7 @@ impl NeonFcmaSpectrumArithmetic<f32> {
                 src_x += 8;
             }
 
-            while src_x + 4 < cut_width {
+            while src_x + 4 <= cut_width {
                 let s0 = NeonStoreF::from_complex_ref(unsafe { source.get_unchecked(src_x..) });
                 let s1 = NeonStoreF::from_complex_ref(unsafe { source.get_unchecked(src_x + 2..) });
 

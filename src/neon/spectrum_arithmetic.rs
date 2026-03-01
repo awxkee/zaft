@@ -112,7 +112,7 @@ impl ComplexArith<f32> for NeonSpectrumArithmetic<f32> {
             .zip(dst.chunks_exact_mut(cut_width))
         {
             let mut src_x = 0usize;
-            while src_x + 4 < cut_width {
+            while src_x + 4 <= cut_width {
                 let s0 = NeonStoreF::from_complex_ref(unsafe { source.get_unchecked(src_x..) });
                 let s1 = NeonStoreF::from_complex_ref(unsafe { source.get_unchecked(src_x + 2..) });
 
@@ -129,7 +129,7 @@ impl ComplexArith<f32> for NeonSpectrumArithmetic<f32> {
                 src_x += 4;
             }
 
-            while src_x + 2 < cut_width {
+            while src_x + 2 <= cut_width {
                 let s0 = NeonStoreF::from_complex_ref(unsafe { source.get_unchecked(src_x..) });
                 let tw0 = NeonStoreF::from_complex_ref(unsafe { twiddle.get_unchecked(src_x..) });
                 let p0 = NeonStoreF::mul_by_complex(s0, tw0);

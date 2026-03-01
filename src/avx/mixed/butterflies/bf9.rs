@@ -72,6 +72,24 @@ impl ColumnButterfly9d {
         let [y2, y5, y8] = self.bf3.exec([u6, u7, u8]);
         [y0, y1, y2, y3, y4, y5, y6, y7, y8]
     }
+
+    #[target_feature(enable = "avx2", enable = "fma")]
+    #[inline]
+    pub(crate) fn exec_r2c(&self, v: [AvxStoreD; 9]) -> [AvxStoreD; 5] {
+        let [u0, u3, u6] = self.bf3.exec([v[0], v[3], v[6]]);
+        let [u1, mut u4, mut u7] = self.bf3.exec([v[1], v[4], v[7]]);
+        let [u2, mut u5, mut u8] = self.bf3.exec([v[2], v[5], v[8]]);
+
+        u4 = AvxStoreD::mul_by_complex(u4, self.twiddle1);
+        u7 = AvxStoreD::mul_by_complex(u7, self.twiddle2);
+        u5 = AvxStoreD::mul_by_complex(u5, self.twiddle2);
+        u8 = AvxStoreD::mul_by_complex(u8, self.twiddle4);
+
+        let [y0, y3, _] = self.bf3.exec([u0, u1, u2]);
+        let [y1, y4, _] = self.bf3.exec([u3, u4, u5]);
+        let [y2, _, _] = self.bf3.exec([u6, u7, u8]);
+        [y0, y1, y2, y3, y4]
+    }
 }
 
 pub(crate) struct ColumnButterfly9f {
@@ -112,5 +130,22 @@ impl ColumnButterfly9f {
         let [y1, y4, y7] = self.bf3.exec([u3, u4, u5]);
         let [y2, y5, y8] = self.bf3.exec([u6, u7, u8]);
         [y0, y1, y2, y3, y4, y5, y6, y7, y8]
+    }
+
+    #[inline(always)]
+    pub(crate) fn exec_r2c(&self, v: [AvxStoreF; 9]) -> [AvxStoreF; 5] {
+        let [u0, u3, u6] = self.bf3.exec([v[0], v[3], v[6]]);
+        let [u1, mut u4, mut u7] = self.bf3.exec([v[1], v[4], v[7]]);
+        let [u2, mut u5, mut u8] = self.bf3.exec([v[2], v[5], v[8]]);
+
+        u4 = AvxStoreF::mul_by_complex(u4, self.twiddle1);
+        u7 = AvxStoreF::mul_by_complex(u7, self.twiddle2);
+        u5 = AvxStoreF::mul_by_complex(u5, self.twiddle2);
+        u8 = AvxStoreF::mul_by_complex(u8, self.twiddle4);
+
+        let [y0, y3, _] = self.bf3.exec([u0, u1, u2]);
+        let [y1, y4, _] = self.bf3.exec([u3, u4, u5]);
+        let [y2, _, _] = self.bf3.exec([u6, u7, u8]);
+        [y0, y1, y2, y3, y4]
     }
 }
