@@ -156,6 +156,14 @@ where
                     return Ok(mx5);
                 }
             }
+            if len.is_multiple_of(7) {
+                if let Some(mx7) = T::r2c_mixed_radix7(Zaft::strategy(
+                    (len as u64 / 7) as usize,
+                    FftDirection::Forward,
+                )?)? {
+                    return Ok(mx7);
+                }
+            }
             if len.is_multiple_of(11) {
                 if let Some(mx7) = T::r2c_mixed_radix11(Zaft::strategy(
                     (len as u64 / 11) as usize,
@@ -172,9 +180,9 @@ where
                     return Ok(mx3);
                 }
             }
-            if len.is_multiple_of(7) {
-                if let Some(mx7) = T::r2c_mixed_radix7(Zaft::strategy(
-                    (len as u64 / 7) as usize,
+            if len.is_multiple_of(13) {
+                if let Some(mx7) = T::r2c_mixed_radix13(Zaft::strategy(
+                    (len as u64 / 13) as usize,
                     FftDirection::Forward,
                 )?)? {
                     return Ok(mx7);

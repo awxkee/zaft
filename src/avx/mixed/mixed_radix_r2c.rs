@@ -716,6 +716,20 @@ define_mixed_radix_avx_f!(
     6,
     mul_by_complex
 );
+define_mixed_radix_avx_d!(
+    AvxR2CMixedRadix13d,
+    ColumnButterfly13d,
+    13,
+    7,
+    mul_by_complex
+);
+define_mixed_radix_avx_f!(
+    AvxR2CMixedRadix13f,
+    ColumnButterfly13f,
+    13,
+    7,
+    mul_by_complex
+);
 
 #[cfg(test)]
 mod tests {

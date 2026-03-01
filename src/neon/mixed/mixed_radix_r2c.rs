@@ -717,6 +717,41 @@ define_mixed_radix_neon_d!(
     fcmul_fcma
 );
 
+define_mixed_radix_neon_f!(
+    NeonR2CMixedRadix13f,
+    "neon",
+    ColumnButterfly13f,
+    13,
+    7,
+    mul_by_complex
+);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_f!(
+    NeonFcmaR2CMixedRadix13f,
+    "fcma",
+    ColumnFcmaButterfly13f,
+    13,
+    7,
+    fcmul_fcma
+);
+define_mixed_radix_neon_d!(
+    NeonR2CMixedRadix13d,
+    "neon",
+    ColumnButterfly13d,
+    13,
+    7,
+    mul_by_complex
+);
+#[cfg(feature = "fcma")]
+define_mixed_radix_neon_d!(
+    NeonFcmaR2CMixedRadix13d,
+    "fcma",
+    ColumnFcmaButterfly13d,
+    13,
+    7,
+    fcmul_fcma
+);
+
 #[cfg(test)]
 mod tests {
     use crate::dft::Dft;
