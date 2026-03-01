@@ -58,6 +58,11 @@ macro_rules! define_mixed_radix_neon_d {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
+                
+                assert!(
+                    !width.is_multiple_of(2),
+                    "This is an UB to call Odd Mixed-Radix R2C with even `width`"
+                );
 
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
@@ -286,6 +291,11 @@ macro_rules! define_mixed_radix_neon_f {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
+                
+                assert!(
+                    !width.is_multiple_of(2),
+                    "This is an UB to call Odd Mixed-Radix R2C with even `width`"
+                );
 
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
