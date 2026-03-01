@@ -141,51 +141,45 @@ where
 
         if Zaft::could_do_split_mixed_radix() {
             if len.is_multiple_of(9) {
-                if let Some(mx7) = T::r2c_mixed_radix9(Zaft::strategy(
-                    (len as u64 / 9) as usize,
-                    FftDirection::Forward,
-                )?)? {
-                    return Ok(mx7);
+                if let Some(mx9) =
+                    T::r2c_mixed_radix9(Zaft::strategy(len / 9, FftDirection::Forward)?)?
+                {
+                    return Ok(mx9);
                 }
             }
             if len.is_multiple_of(5) {
-                if let Some(mx5) = T::r2c_mixed_radix5(Zaft::strategy(
-                    (len as u64 / 5) as usize,
-                    FftDirection::Forward,
-                )?)? {
+                if let Some(mx5) =
+                    T::r2c_mixed_radix5(Zaft::strategy(len / 5, FftDirection::Forward)?)?
+                {
                     return Ok(mx5);
                 }
             }
             if len.is_multiple_of(7) {
-                if let Some(mx7) = T::r2c_mixed_radix7(Zaft::strategy(
-                    (len as u64 / 7) as usize,
-                    FftDirection::Forward,
-                )?)? {
+                if let Some(mx7) =
+                    T::r2c_mixed_radix7(Zaft::strategy(len / 7, FftDirection::Forward)?)?
+                {
                     return Ok(mx7);
                 }
             }
             if len.is_multiple_of(11) {
-                if let Some(mx7) = T::r2c_mixed_radix11(Zaft::strategy(
-                    (len as u64 / 11) as usize,
-                    FftDirection::Forward,
-                )?)? {
+                if let Some(mx7) =
+                    T::r2c_mixed_radix11(Zaft::strategy(len / 11, FftDirection::Forward)?)?
+                {
                     return Ok(mx7);
                 }
             }
             if len.is_multiple_of(3) {
-                if let Some(mx3) = T::r2c_mixed_radix3(Zaft::strategy(
-                    (len as u64 / 3) as usize,
-                    FftDirection::Forward,
-                )?)? {
+                if let Some(mx3) =
+                    T::r2c_mixed_radix3(Zaft::strategy(len / 3, FftDirection::Forward)?)?
+                {
                     return Ok(mx3);
                 }
             }
             if len.is_multiple_of(13) {
-                if let Some(mx7) = T::r2c_mixed_radix13(Zaft::strategy(
-                    (len as u64 / 13) as usize,
-                    FftDirection::Forward,
-                )?)? {
-                    return Ok(mx7);
+                if let Some(mx13) =
+                    T::r2c_mixed_radix13(Zaft::strategy(len / 13, FftDirection::Forward)?)?
+                {
+                    return Ok(mx13);
                 }
             }
         }
