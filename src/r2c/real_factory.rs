@@ -65,4 +65,10 @@ pub(crate) trait R2cAlgorithmFactory<T> {
     fn r2c_mixed_radix9(
         width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix11(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix13(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
 }

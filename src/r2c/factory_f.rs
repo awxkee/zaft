@@ -323,4 +323,26 @@ impl R2cAlgorithmFactory<f32> for f32 {
             NeonFcmaR2CMixedRadix9f
         )
     }
+
+    fn r2c_mixed_radix11(
+        _width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<f32> + Send + Sync>>, ZaftError> {
+        make_mixed_radix!(
+            _width_executor,
+            AvxR2CMixedRadix11f,
+            NeonR2CMixedRadix11f,
+            NeonFcmaR2CMixedRadix11f
+        )
+    }
+
+    fn r2c_mixed_radix13(
+        _width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<f32> + Send + Sync>>, ZaftError> {
+        make_mixed_radix!(
+            _width_executor,
+            AvxR2CMixedRadix13f,
+            NeonR2CMixedRadix13f,
+            NeonFcmaR2CMixedRadix13f
+        )
+    }
 }

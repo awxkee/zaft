@@ -702,6 +702,34 @@ define_mixed_radix_avx_d!(AvxR2CMixedRadix7d, ColumnButterfly7d, 7, 4, mul_by_co
 define_mixed_radix_avx_f!(AvxR2CMixedRadix7f, ColumnButterfly7f, 7, 4, mul_by_complex);
 define_mixed_radix_avx_d!(AvxR2CMixedRadix9d, ColumnButterfly9d, 9, 5, mul_by_complex);
 define_mixed_radix_avx_f!(AvxR2CMixedRadix9f, ColumnButterfly9f, 9, 5, mul_by_complex);
+define_mixed_radix_avx_d!(
+    AvxR2CMixedRadix11d,
+    ColumnButterfly11d,
+    11,
+    6,
+    mul_by_complex
+);
+define_mixed_radix_avx_f!(
+    AvxR2CMixedRadix11f,
+    ColumnButterfly11f,
+    11,
+    6,
+    mul_by_complex
+);
+define_mixed_radix_avx_d!(
+    AvxR2CMixedRadix13d,
+    ColumnButterfly13d,
+    13,
+    7,
+    mul_by_complex
+);
+define_mixed_radix_avx_f!(
+    AvxR2CMixedRadix13f,
+    ColumnButterfly13f,
+    13,
+    7,
+    mul_by_complex
+);
 
 #[cfg(test)]
 mod tests {
