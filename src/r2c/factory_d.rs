@@ -71,6 +71,38 @@ macro_rules! make_vec_default_butterfly {
     }};
 }
 
+macro_rules! make_mixed_radix {
+    ($right_fft: expr, $avx_name: ident, $neon_name: ident, $fcma_name: ident) => {{
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::$fcma_name;
+                    return $fcma_name::new($right_fft)
+                        .map(|x| Some(Arc::new(x) as Arc<dyn R2CFftExecutor<f64> + Send + Sync>));
+                }
+            }
+            use crate::neon::$neon_name;
+            $neon_name::new($right_fft)
+                .map(|x| Some(Arc::new(x) as Arc<dyn R2CFftExecutor<f64> + Send + Sync>))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                use crate::util::has_valid_avx;
+                if has_valid_avx() {
+                    use crate::avx::$avx_name;
+                    return $avx_name::new($right_fft)
+                        .map(|x| Some(Arc::new(x) as Arc<dyn R2CFftExecutor<f64> + Send + Sync>));
+                }
+            }
+            Ok(None)
+        }
+    }};
+}
+
 macro_rules! make_vec_default_butterfly2 {
     ($scalar_name: ident, $avx_name: ident, $neon_name: ident, $fcma_name: ident) => {{
         use crate::FftDirection;
@@ -248,9 +280,47 @@ impl R2cAlgorithmFactory<f64> for f64 {
         )?))
     }
 
-    fn r2c_mixed_radix5(
-        _: Arc<dyn FftExecutor<f64> + Send + Sync>,
+    fn r2c_mixed_radix3(
+        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Arc<dyn R2CFftExecutor<f64> + Send + Sync>>, ZaftError> {
-        Ok(None)
+        make_mixed_radix!(
+            _width_executor,
+            AvxR2CMixedRadix3d,
+            NeonR2CMixedRadix3d,
+            NeonFcmaR2CMixedRadix3d
+        )
+    }
+
+    fn r2c_mixed_radix5(
+        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<f64> + Send + Sync>>, ZaftError> {
+        make_mixed_radix!(
+            _width_executor,
+            AvxR2CMixedRadix5d,
+            NeonR2CMixedRadix5d,
+            NeonFcmaR2CMixedRadix5d
+        )
+    }
+
+    fn r2c_mixed_radix7(
+        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<f64> + Send + Sync>>, ZaftError> {
+        make_mixed_radix!(
+            _width_executor,
+            AvxR2CMixedRadix7d,
+            NeonR2CMixedRadix7d,
+            NeonFcmaR2CMixedRadix7d
+        )
+    }
+
+    fn r2c_mixed_radix9(
+        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<f64> + Send + Sync>>, ZaftError> {
+        make_mixed_radix!(
+            _width_executor,
+            AvxR2CMixedRadix9d,
+            NeonR2CMixedRadix9d,
+            NeonFcmaR2CMixedRadix9d
+        )
     }
 }

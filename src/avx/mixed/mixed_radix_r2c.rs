@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 9/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk 3/2026. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -26,9 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#![allow(clippy::modulo_one)]
-use crate::err::try_vec;
-use crate::neon::mixed::neon_store::NeonStoreF;
+use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::transpose::{TransposeExecutor, TransposeFactory};
 use crate::util::compute_twiddle;
 use crate::{FftExecutor, R2CFftExecutor, ZaftError};
@@ -36,12 +34,12 @@ use num_complex::Complex;
 use num_traits::Zero;
 use std::sync::Arc;
 
-macro_rules! define_mixed_radix_neon_d {
-    ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
-        use crate::neon::mixed::$bf_name;
+macro_rules! define_mixed_radix_avx_d {
+    ($radix_name: ident, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
+        use crate::avx::mixed::butterflies::$bf_name;
         pub(crate) struct $radix_name {
             execution_length: usize,
-            twiddles: Vec<NeonStoreD>,
+            twiddles: Vec<AvxStoreD>,
             width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             width: usize,
             height: usize,
@@ -55,6 +53,15 @@ macro_rules! define_mixed_radix_neon_d {
             pub(crate) fn new(
                 width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
+                unsafe {
+                    Self::new_impl(width_executor)
+                }
+            }
+
+            #[target_feature(enable = "avx2", enable = "fma")]
+            pub(crate) fn new_impl(
+                width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+            ) -> Result<Self, ZaftError> {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
@@ -66,7 +73,7 @@ macro_rules! define_mixed_radix_neon_d {
                 let len_per_row = width_executor.length();
 
                 let len = len_per_row * ROW_COUNT;
-                const COMPLEX_PER_VECTOR: usize = 1;
+                const COMPLEX_PER_VECTOR: usize = 2;
 
                 let quotient = len_per_row / COMPLEX_PER_VECTOR;
                 let remainder = len_per_row % COMPLEX_PER_VECTOR;
@@ -86,7 +93,7 @@ macro_rules! define_mixed_radix_neon_d {
                             data[i] =
                                 compute_twiddle(y * (x * COMPLEX_PER_VECTOR + i), len, direction);
                         }
-                        twiddles.push(NeonStoreD::from_complex_ref(data.as_ref()));
+                        twiddles.push(AvxStoreD::from_complex_ref(data.as_ref()));
                     }
                 }
 
@@ -112,6 +119,7 @@ macro_rules! define_mixed_radix_neon_d {
 
         impl R2CFftExecutor<f64> for $radix_name {
             fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                use crate::err::try_vec;
                 let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, &mut scratch)
             }
@@ -136,7 +144,7 @@ macro_rules! define_mixed_radix_neon_d {
         }
 
         impl $radix_name {
-            #[target_feature(enable = $features)]
+            #[target_feature(enable = "avx2", enable = "fma")]
             fn process_columns(
                 &self,
                 src: &[f64],
@@ -145,7 +153,7 @@ macro_rules! define_mixed_radix_neon_d {
                 const ROW_COUNT: usize = $row_count;
                 const COMPLEX_ROW_COUNT: usize = $complex_row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
-                const COMPLEX_PER_VECTOR: usize = 1;
+                const COMPLEX_PER_VECTOR: usize = 2;
 
                 let len_per_row = self.real_length() / ROW_COUNT;
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
@@ -159,10 +167,10 @@ macro_rules! define_mixed_radix_neon_d {
                         let index_base = c * COMPLEX_PER_VECTOR;
 
                         // Load columns from the input into registers
-                        let mut columns = [NeonStoreD::default(); ROW_COUNT];
+                        let mut columns = [AvxStoreD::zero(); ROW_COUNT];
                         for i in 0..ROW_COUNT {
                             unsafe {
-                                let q = NeonStoreD::load(
+                                let q = AvxStoreD::load2(
                                     src.get_unchecked(index_base + len_per_row * i..),
                                 );
                                 columns[i] = q.to_complex()[0];
@@ -170,22 +178,22 @@ macro_rules! define_mixed_radix_neon_d {
                         }
 
                         #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                        let output = unsafe { self.inner_bf.exec(columns) };
 
                         unsafe {
                             output[0].write(complex.get_unchecked_mut(index_base..));
                         }
 
-                        // here LLVM doesn't "see" NeonStoreD as the same type returned by output
+                        // here LLVM doesn't "see" AvxStoreD as the same type returned by output
                         // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreD::default(); COMPLEX_ROW_COUNT - 1];
+                        let mut twiddles = [AvxStoreD::zero(); COMPLEX_ROW_COUNT - 1];
                         for i in 0..COMPLEX_ROW_COUNT - 1 {
                             twiddles[i] = twiddle_chunk[i];
                         }
 
                         for i in 1..COMPLEX_ROW_COUNT {
                             let twiddle = twiddles[i - 1];
-                            let output = NeonStoreD::$mul(output[i], twiddle);
+                            let output = AvxStoreD::$mul(output[i], twiddle);
                             unsafe {
                                 output.write(
                                     complex.get_unchecked_mut(index_base + len_per_row * i..),
@@ -193,9 +201,57 @@ macro_rules! define_mixed_radix_neon_d {
                             }
                         }
                     }
+
+                    let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
+                    if partial_remainder > 0 {
+                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                        let partial_remainder_twiddle_base =
+                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                        let mut columns = [AvxStoreD::zero(); ROW_COUNT];
+                        for i in 0..ROW_COUNT {
+                            unsafe {
+                                columns[i] = AvxStoreD::load1(
+                                    src
+                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
+                                );
+                            }
+                        }
+
+                        // apply our butterfly function down the columns
+                        #[allow(unused_unsafe)]
+                        let output = unsafe { self.inner_bf.exec_r2c(columns) };
+
+                        // always write the first row without twiddles
+                        unsafe {
+                            output[0].write_lo(complex.get_unchecked_mut(partial_remainder_base..));
+                        }
+
+                        // here LLVM doesn't "see" AvxStoreD as the same type returned by output
+                        // so we need to force cast it onwards to the same type
+                        let mut twiddles = [AvxStoreD::zero(); COMPLEX_ROW_COUNT - 1];
+                        for i in 0..COMPLEX_ROW_COUNT - 1 {
+                            twiddles[i] = final_twiddle_chunk[i];
+                        }
+
+                        // for the remaining rows, apply twiddle factors and then write back to memory
+                        for i in 1..COMPLEX_ROW_COUNT {
+                            let twiddle = twiddles[i - 1];
+                            let output = AvxStoreD::$mul(output[i], twiddle);
+                            unsafe {
+                                output.write_lo(
+                                    complex.get_unchecked_mut(
+                                        partial_remainder_base + len_per_row * i..,
+                                    ),
+                                );
+                            }
+                        }
+                    }
+
             }
 
-            #[target_feature(enable = $features)]
+            #[target_feature(enable = "avx2", enable = "fma")]
             fn execute_oof_impl(
                 &self,
                 src: &[f64],
@@ -264,12 +320,12 @@ macro_rules! define_mixed_radix_neon_d {
     };
 }
 
-macro_rules! define_mixed_radix_neon_f {
-    ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
-        use crate::neon::mixed::$bf_name;
+macro_rules! define_mixed_radix_avx_f {
+    ($radix_name: ident, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
+        use crate::avx::mixed::butterflies::$bf_name;
         pub(crate) struct $radix_name {
             execution_length: usize,
-            twiddles: Vec<NeonStoreF>,
+            twiddles: Vec<AvxStoreF>,
             width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             width: usize,
             height: usize,
@@ -283,6 +339,15 @@ macro_rules! define_mixed_radix_neon_f {
             pub(crate) fn new(
                 width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
+                unsafe {
+                    Self::new_impl(width_executor)
+                }
+            }
+
+            #[target_feature(enable = "avx2", enable = "fma")]
+            pub(crate) fn new_impl(
+                width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
+            ) -> Result<Self, ZaftError> {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
@@ -294,7 +359,7 @@ macro_rules! define_mixed_radix_neon_f {
                 let len_per_row = width_executor.length();
 
                 let len = len_per_row * ROW_COUNT;
-                const COMPLEX_PER_VECTOR: usize = 2;
+                const COMPLEX_PER_VECTOR: usize = 4;
 
                 let quotient = len_per_row / COMPLEX_PER_VECTOR;
                 let remainder = len_per_row % COMPLEX_PER_VECTOR;
@@ -314,7 +379,7 @@ macro_rules! define_mixed_radix_neon_f {
                             data[i] =
                                 compute_twiddle(y * (x * COMPLEX_PER_VECTOR + i), len, direction);
                         }
-                        twiddles.push(NeonStoreF::from_complex_ref(data.as_ref()));
+                        twiddles.push(AvxStoreF::from_complex_ref(data.as_ref()));
                     }
                 }
 
@@ -340,6 +405,7 @@ macro_rules! define_mixed_radix_neon_f {
 
         impl R2CFftExecutor<f32> for $radix_name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                use crate::err::try_vec;
                 let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, &mut scratch)
             }
@@ -364,7 +430,7 @@ macro_rules! define_mixed_radix_neon_f {
         }
 
         impl $radix_name {
-            #[target_feature(enable = $features)]
+            #[target_feature(enable = "avx2", enable = "fma")]
             fn process_columns(
                 &self,
                 src: &[f32],
@@ -373,7 +439,7 @@ macro_rules! define_mixed_radix_neon_f {
                 const ROW_COUNT: usize = $row_count;
                 const COMPLEX_ROW_COUNT: usize = $complex_row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
-                const COMPLEX_PER_VECTOR: usize = 2;
+                const COMPLEX_PER_VECTOR: usize = 4;
 
                 let len_per_row = self.real_length() / ROW_COUNT;
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
@@ -387,10 +453,10 @@ macro_rules! define_mixed_radix_neon_f {
                         let index_base = c * COMPLEX_PER_VECTOR;
 
                         // Load columns from the input into registers
-                        let mut columns = [NeonStoreF::default(); ROW_COUNT];
+                        let mut columns = [AvxStoreF::zero(); ROW_COUNT];
                         for i in 0..ROW_COUNT {
                             unsafe {
-                                let q = NeonStoreF::load2(
+                                let q = AvxStoreF::load4(
                                     src.get_unchecked(index_base + len_per_row * i..),
                                 );
                                 columns[i] = q.to_complex()[0];
@@ -404,16 +470,16 @@ macro_rules! define_mixed_radix_neon_f {
                             output[0].write(complex.get_unchecked_mut(index_base..));
                         }
 
-                        // here LLVM doesn't "see" NeonStoreF as the same type returned by output
+                        // here LLVM doesn't "see" AvxStoreF as the same type returned by output
                         // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreF::default(); COMPLEX_ROW_COUNT - 1];
+                        let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
                         for i in 0..COMPLEX_ROW_COUNT - 1 {
                             twiddles[i] = twiddle_chunk[i];
                         }
 
                         for i in 1..COMPLEX_ROW_COUNT {
                             let twiddle = twiddles[i - 1];
-                            let output = NeonStoreF::$mul(output[i], twiddle);
+                            let output = AvxStoreF::$mul(output[i], twiddle);
                             unsafe {
                                 output.write(
                                     complex.get_unchecked_mut(index_base + len_per_row * i..),
@@ -423,16 +489,104 @@ macro_rules! define_mixed_radix_neon_f {
                     }
 
                     let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                    if partial_remainder > 0 {
+                    if partial_remainder == 3 {
                         let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
                         let partial_remainder_twiddle_base =
                             self.twiddles.len() - TWIDDLES_PER_COLUMN;
                         let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
-                        let mut columns = [NeonStoreF::default(); ROW_COUNT];
+                        let mut columns = [AvxStoreF::zero(); ROW_COUNT];
                         for i in 0..ROW_COUNT {
                             unsafe {
-                                columns[i] = NeonStoreF::load1(
+                                columns[i] = AvxStoreF::load3(
+                                    src
+                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
+                                ).to_complex()[0];
+                            }
+                        }
+
+                        // apply our butterfly function down the columns
+                        #[allow(unused_unsafe)]
+                        let output = unsafe { self.inner_bf.exec_r2c(columns) };
+
+                        // always write the first row without twiddles
+                        unsafe {
+                            output[0].write_lo3(complex.get_unchecked_mut(partial_remainder_base..));
+                        }
+
+                        // here LLVM doesn't "see" AvxStoreF as the same type returned by output
+                        // so we need to force cast it onwards to the same type
+                        let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
+                        for i in 0..COMPLEX_ROW_COUNT - 1 {
+                            twiddles[i] = final_twiddle_chunk[i];
+                        }
+
+                        // for the remaining rows, apply twiddle factors and then write back to memory
+                        for i in 1..COMPLEX_ROW_COUNT {
+                            let twiddle = twiddles[i - 1];
+                            let output = AvxStoreF::$mul(output[i], twiddle);
+                            unsafe {
+                                output.write_lo3(
+                                    complex.get_unchecked_mut(
+                                        partial_remainder_base + len_per_row * i..,
+                                    ),
+                                );
+                            }
+                        }
+                    } else if partial_remainder == 2 {
+                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                        let partial_remainder_twiddle_base =
+                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                        let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                        for i in 0..ROW_COUNT {
+                            unsafe {
+                                columns[i] = AvxStoreF::load2(
+                                    src
+                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
+                                ).to_complex()[0];
+                            }
+                        }
+
+                        // apply our butterfly function down the columns
+                        #[allow(unused_unsafe)]
+                        let output = unsafe { self.inner_bf.exec_r2c(columns) };
+
+                        // always write the first row without twiddles
+                        unsafe {
+                            output[0].write_lo2(complex.get_unchecked_mut(partial_remainder_base..));
+                        }
+
+                        // here LLVM doesn't "see" AvxStoreF as the same type returned by output
+                        // so we need to force cast it onwards to the same type
+                        let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
+                        for i in 0..COMPLEX_ROW_COUNT - 1 {
+                            twiddles[i] = final_twiddle_chunk[i];
+                        }
+
+                        // for the remaining rows, apply twiddle factors and then write back to memory
+                        for i in 1..COMPLEX_ROW_COUNT {
+                            let twiddle = twiddles[i - 1];
+                            let output = AvxStoreF::$mul(output[i], twiddle);
+                            unsafe {
+                                output.write_lo2(
+                                    complex.get_unchecked_mut(
+                                        partial_remainder_base + len_per_row * i..,
+                                    ),
+                                );
+                            }
+                        }
+                    } else if partial_remainder == 1 {
+                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                        let partial_remainder_twiddle_base =
+                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                        let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                        for i in 0..ROW_COUNT {
+                            unsafe {
+                                columns[i] = AvxStoreF::load1(
                                     src
                                         .get_unchecked(partial_remainder_base + len_per_row * i..)
                                 );
@@ -445,12 +599,12 @@ macro_rules! define_mixed_radix_neon_f {
 
                         // always write the first row without twiddles
                         unsafe {
-                            output[0].write_lo(complex.get_unchecked_mut(partial_remainder_base..));
+                            output[0].write_lo1(complex.get_unchecked_mut(partial_remainder_base..));
                         }
 
-                        // here LLVM doesn't "see" NeonStoreF as the same type returned by output
+                        // here LLVM doesn't "see" AvxStoreF as the same type returned by output
                         // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreF::default(); COMPLEX_ROW_COUNT - 1];
+                        let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
                         for i in 0..COMPLEX_ROW_COUNT - 1 {
                             twiddles[i] = final_twiddle_chunk[i];
                         }
@@ -458,9 +612,9 @@ macro_rules! define_mixed_radix_neon_f {
                         // for the remaining rows, apply twiddle factors and then write back to memory
                         for i in 1..COMPLEX_ROW_COUNT {
                             let twiddle = twiddles[i - 1];
-                            let output = NeonStoreF::$mul(output[i], twiddle);
+                            let output = AvxStoreF::$mul(output[i], twiddle);
                             unsafe {
-                                output.write_lo(
+                                output.write_lo1(
                                     complex.get_unchecked_mut(
                                         partial_remainder_base + len_per_row * i..,
                                     ),
@@ -471,7 +625,7 @@ macro_rules! define_mixed_radix_neon_f {
 
             }
 
-            #[target_feature(enable = $features)]
+            #[target_feature(enable = "avx2", enable = "fma")]
             fn execute_oof_impl(
                 &self,
                 src: &[f32],
@@ -540,158 +694,29 @@ macro_rules! define_mixed_radix_neon_f {
     };
 }
 
-use crate::neon::mixed::NeonStoreD;
-
-define_mixed_radix_neon_f!(
-    NeonR2CMixedRadix3f,
-    "neon",
-    ColumnButterfly3f,
-    3,
-    2,
-    mul_by_complex
-);
-#[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
-    NeonFcmaR2CMixedRadix3f,
-    "fcma",
-    ColumnFcmaButterfly3f,
-    3,
-    2,
-    fcmul_fcma
-);
-define_mixed_radix_neon_d!(
-    NeonR2CMixedRadix3d,
-    "neon",
-    ColumnButterfly3d,
-    3,
-    2,
-    mul_by_complex
-);
-#[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
-    NeonFcmaR2CMixedRadix3d,
-    "fcma",
-    ColumnFcmaButterfly3d,
-    3,
-    2,
-    fcmul_fcma
-);
-
-define_mixed_radix_neon_f!(
-    NeonR2CMixedRadix5f,
-    "neon",
-    ColumnButterfly5f,
-    5,
-    3,
-    mul_by_complex
-);
-#[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
-    NeonFcmaR2CMixedRadix5f,
-    "fcma",
-    ColumnFcmaButterfly5f,
-    5,
-    3,
-    fcmul_fcma
-);
-define_mixed_radix_neon_d!(
-    NeonR2CMixedRadix5d,
-    "neon",
-    ColumnButterfly5d,
-    5,
-    3,
-    mul_by_complex
-);
-#[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
-    NeonFcmaR2CMixedRadix5d,
-    "fcma",
-    ColumnFcmaButterfly5d,
-    5,
-    3,
-    fcmul_fcma
-);
-
-define_mixed_radix_neon_f!(
-    NeonR2CMixedRadix7f,
-    "neon",
-    ColumnButterfly7f,
-    7,
-    4,
-    mul_by_complex
-);
-#[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
-    NeonFcmaR2CMixedRadix7f,
-    "fcma",
-    ColumnFcmaButterfly7f,
-    7,
-    4,
-    fcmul_fcma
-);
-define_mixed_radix_neon_d!(
-    NeonR2CMixedRadix7d,
-    "neon",
-    ColumnButterfly7d,
-    7,
-    4,
-    mul_by_complex
-);
-#[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
-    NeonFcmaR2CMixedRadix7d,
-    "fcma",
-    ColumnFcmaButterfly7d,
-    7,
-    4,
-    fcmul_fcma
-);
-
-define_mixed_radix_neon_f!(
-    NeonR2CMixedRadix9f,
-    "neon",
-    ColumnButterfly9f,
-    9,
-    5,
-    mul_by_complex
-);
-#[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
-    NeonFcmaR2CMixedRadix9f,
-    "fcma",
-    ColumnFcmaButterfly9f,
-    9,
-    5,
-    fcmul_fcma
-);
-define_mixed_radix_neon_d!(
-    NeonR2CMixedRadix9d,
-    "neon",
-    ColumnButterfly9d,
-    9,
-    5,
-    mul_by_complex
-);
-#[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
-    NeonFcmaR2CMixedRadix9d,
-    "fcma",
-    ColumnFcmaButterfly9d,
-    9,
-    5,
-    fcmul_fcma
-);
+define_mixed_radix_avx_d!(AvxR2CMixedRadix3d, ColumnButterfly3d, 3, 2, mul_by_complex);
+define_mixed_radix_avx_f!(AvxR2CMixedRadix3f, ColumnButterfly3f, 3, 2, mul_by_complex);
+define_mixed_radix_avx_d!(AvxR2CMixedRadix5d, ColumnButterfly5d, 5, 3, mul_by_complex);
+define_mixed_radix_avx_f!(AvxR2CMixedRadix5f, ColumnButterfly5f, 5, 3, mul_by_complex);
+define_mixed_radix_avx_d!(AvxR2CMixedRadix7d, ColumnButterfly7d, 7, 4, mul_by_complex);
+define_mixed_radix_avx_f!(AvxR2CMixedRadix7f, ColumnButterfly7f, 7, 4, mul_by_complex);
+define_mixed_radix_avx_d!(AvxR2CMixedRadix9d, ColumnButterfly9d, 9, 5, mul_by_complex);
+define_mixed_radix_avx_f!(AvxR2CMixedRadix9f, ColumnButterfly9f, 9, 5, mul_by_complex);
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::dft::Dft;
-    use crate::neon::mixed::mixed_radix_r2c::{NeonR2CMixedRadix5d, NeonR2CMixedRadix5f};
+    use crate::util::has_valid_avx;
     use crate::{FftDirection, FftExecutor, R2CFftExecutor, Zaft};
     use num_complex::Complex;
     use num_traits::Zero;
 
     #[test]
     fn test_mixed_radixf() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [f32; 15] = [
             7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 2.1, 3.2, 3.3, 9.8, 5.1,
         ];
@@ -710,7 +735,7 @@ mod tests {
         }
 
         let local_r2c =
-            NeonR2CMixedRadix5f::new(Zaft::strategy(3, FftDirection::Forward).unwrap()).unwrap();
+            AvxR2CMixedRadix5f::new(Zaft::strategy(3, FftDirection::Forward).unwrap()).unwrap();
         let mut complex_output = vec![Complex::zero(); 15 / 2 + 1];
         local_r2c.execute(&src, &mut complex_output).unwrap();
 
@@ -736,6 +761,9 @@ mod tests {
 
     #[test]
     fn test_mixed_radixd() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [f64; 15] = [
             7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 2.1, 3.2, 3.3, 9.8, 5.1,
         ];
@@ -754,7 +782,7 @@ mod tests {
         }
 
         let local_r2c =
-            NeonR2CMixedRadix5d::new(Zaft::strategy(3, FftDirection::Forward).unwrap()).unwrap();
+            AvxR2CMixedRadix5d::new(Zaft::strategy(3, FftDirection::Forward).unwrap()).unwrap();
         let mut complex_output = vec![Complex::zero(); 15 / 2 + 1];
         local_r2c.execute(&src, &mut complex_output).unwrap();
 

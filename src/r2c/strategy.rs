@@ -140,12 +140,36 @@ where
         }
 
         if Zaft::could_do_split_mixed_radix() {
+            if len.is_multiple_of(9) {
+                if let Some(mx7) = T::r2c_mixed_radix9(Zaft::strategy(
+                    (len as u64 / 9) as usize,
+                    FftDirection::Forward,
+                )?)? {
+                    return Ok(mx7);
+                }
+            }
             if len.is_multiple_of(5) {
-                if let Some(radix5) = T::r2c_mixed_radix5(Zaft::strategy(
+                if let Some(mx5) = T::r2c_mixed_radix5(Zaft::strategy(
                     (len as u64 / 5) as usize,
                     FftDirection::Forward,
                 )?)? {
-                    return Ok(radix5);
+                    return Ok(mx5);
+                }
+            }
+            if len.is_multiple_of(3) {
+                if let Some(mx3) = T::r2c_mixed_radix3(Zaft::strategy(
+                    (len as u64 / 3) as usize,
+                    FftDirection::Forward,
+                )?)? {
+                    return Ok(mx3);
+                }
+            }
+            if len.is_multiple_of(7) {
+                if let Some(mx7) = T::r2c_mixed_radix7(Zaft::strategy(
+                    (len as u64 / 7) as usize,
+                    FftDirection::Forward,
+                )?)? {
+                    return Ok(mx7);
                 }
             }
         }

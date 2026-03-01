@@ -53,7 +53,16 @@ pub(crate) trait R2cAlgorithmFactory<T> {
     fn r2c_butterfly32() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_raders(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send + Sync>, ZaftError>;
     fn r2c_bluestein(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send + Sync>, ZaftError>;
+    fn r2c_mixed_radix3(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
     fn r2c_mixed_radix5(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix7(
+        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
+    fn r2c_mixed_radix9(
         width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
     ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError>;
 }

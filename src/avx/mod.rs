@@ -80,6 +80,10 @@ pub(crate) use mixed::{
     AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
     AvxMixedRadix12f, AvxMixedRadix13f,
 };
+pub(crate) use mixed::{
+    AvxR2CMixedRadix5d, AvxR2CMixedRadix5f, AvxR2CMixedRadix7d, AvxR2CMixedRadix7f,
+    AvxR2CMixedRadix9d, AvxR2CMixedRadix9f,
+};
 pub(crate) use r2c::R2CAvxTwiddles;
 pub(crate) use raders::AvxRadersFft;
 pub(crate) use radix3::AvxFmaRadix3;

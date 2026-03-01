@@ -64,7 +64,7 @@ impl ColumnButterfly3d {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreD; 3]) -> [NeonStoreD; 3] {
         unsafe {
             let xp = vaddq_f64(store[1].v, store[2].v);
@@ -83,6 +83,23 @@ impl ColumnButterfly3d {
                 NeonStoreD::raw(y1),
                 NeonStoreD::raw(y2),
             ]
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreD; 3]) -> [NeonStoreD; 2] {
+        unsafe {
+            let xp = vaddq_f64(store[1].v, store[2].v);
+            let xn = vsubq_f64(store[1].v, store[2].v);
+            let sum = vaddq_f64(store[0].v, xp);
+
+            let w_1 = vfmaq_f64(store[0].v, self.tw_re, xp);
+
+            let xn_rot = vextq_f64::<1>(xn, xn);
+
+            let y0 = sum;
+            let y1 = vfmaq_f64(w_1, self.tw_im, xn_rot);
+            [NeonStoreD::raw(y0), NeonStoreD::raw(y1)]
         }
     }
 }
@@ -117,6 +134,20 @@ impl ColumnFcmaButterfly3d {
             NeonStoreD::raw(y1),
             NeonStoreD::raw(y2),
         ]
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreD; 3]) -> [NeonStoreD; 2] {
+        let xp = vaddq_f64(store[1].v, store[2].v);
+        let xn = vsubq_f64(store[1].v, store[2].v);
+        let sum = vaddq_f64(store[0].v, xp);
+
+        let w_1 = vfmaq_f64(store[0].v, self.tw_re, xp);
+
+        let y0 = sum;
+        let y1 = vcmlaq_rot90_f64(w_1, self.tw_im, xn);
+        [NeonStoreD::raw(y0), NeonStoreD::raw(y1)]
     }
 }
 
@@ -154,6 +185,23 @@ impl ColumnButterfly3f {
                 NeonStoreF::raw(y1),
                 NeonStoreF::raw(y2),
             ]
+        }
+    }
+
+    #[inline]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreF; 3]) -> [NeonStoreF; 2] {
+        unsafe {
+            let xp = vaddq_f32(store[1].v, store[2].v);
+            let xn = vsubq_f32(store[1].v, store[2].v);
+            let sum = vaddq_f32(store[0].v, xp);
+
+            let w_1 = vfmaq_f32(store[0].v, self.tw_re, xp);
+
+            let xn_rot = vrev64q_f32(xn);
+
+            let y0 = sum;
+            let y1 = vfmaq_f32(w_1, self.tw_im, xn_rot);
+            [NeonStoreF::raw(y0), NeonStoreF::raw(y1)]
         }
     }
 
@@ -214,6 +262,20 @@ impl ColumnFcmaButterfly3f {
             NeonStoreF::raw(y1),
             NeonStoreF::raw(y2),
         ]
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn exec_r2c(&self, store: [NeonStoreF; 3]) -> [NeonStoreF; 2] {
+        let xp = vaddq_f32(store[1].v, store[2].v);
+        let xn = vsubq_f32(store[1].v, store[2].v);
+        let sum = vaddq_f32(store[0].v, xp);
+
+        let w_1 = vfmaq_f32(store[0].v, self.tw_re, xp);
+
+        let y0 = sum;
+        let y1 = vcmlaq_rot90_f32(w_1, self.tw_im, xn);
+        [NeonStoreF::raw(y0), NeonStoreF::raw(y1)]
     }
 
     #[inline]
