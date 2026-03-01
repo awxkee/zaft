@@ -99,6 +99,41 @@ impl ColumnButterfly5d {
             ]
         }
     }
+
+    #[inline(always)]
+    pub(crate) fn exec_r2c(&self, v: [AvxStoreD; 5]) -> [AvxStoreD; 3] {
+        unsafe {
+            let x14p = _mm256_add_pd(v[1].v, v[4].v);
+            let x14n = _mm256_sub_pd(v[1].v, v[4].v);
+            let x23p = _mm256_add_pd(v[2].v, v[3].v);
+            let x23n = _mm256_sub_pd(v[2].v, v[3].v);
+            let y0 = _mm256_add_pd(_mm256_add_pd(v[0].v, x14p), x23p);
+
+            let temp_b1_1 = _mm256_mul_pd(self.tw1_im, x14n);
+            let temp_b2_1 = _mm256_mul_pd(self.tw2_im, x14n);
+
+            let temp_a1 = _mm256_fmadd_pd(
+                self.tw2_re,
+                x23p,
+                _mm256_fmadd_pd(self.tw1_re, x14p, v[0].v),
+            );
+            let temp_a2 = _mm256_fmadd_pd(
+                self.tw1_re,
+                x23p,
+                _mm256_fmadd_pd(self.tw2_re, x14p, v[0].v),
+            );
+
+            let temp_b1 = _mm256_fmadd_pd(self.tw2_im, x23n, temp_b1_1);
+            let temp_b2 = _mm256_fnmadd_pd(self.tw1_im, x23n, temp_b2_1);
+
+            let temp_b1_rot = self.rotate.rotate_m256d(temp_b1);
+            let temp_b2_rot = self.rotate.rotate_m256d(temp_b2);
+
+            let y1 = _mm256_add_pd(temp_a1, temp_b1_rot);
+            let y2 = _mm256_add_pd(temp_a2, temp_b2_rot);
+            [AvxStoreD::raw(y0), AvxStoreD::raw(y1), AvxStoreD::raw(y2)]
+        }
+    }
 }
 
 pub(crate) struct ColumnButterfly5f {
@@ -165,6 +200,41 @@ impl ColumnButterfly5f {
                 AvxStoreF::raw(y3),
                 AvxStoreF::raw(y4),
             ]
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn exec_r2c(&self, v: [AvxStoreF; 5]) -> [AvxStoreF; 3] {
+        unsafe {
+            let x14p = _mm256_add_ps(v[1].v, v[4].v);
+            let x14n = _mm256_sub_ps(v[1].v, v[4].v);
+            let x23p = _mm256_add_ps(v[2].v, v[3].v);
+            let x23n = _mm256_sub_ps(v[2].v, v[3].v);
+            let y0 = _mm256_add_ps(_mm256_add_ps(v[0].v, x14p), x23p);
+
+            let temp_b1_1 = _mm256_mul_ps(self.tw1_im, x14n);
+            let temp_b2_1 = _mm256_mul_ps(self.tw2_im, x14n);
+
+            let temp_a1 = _mm256_fmadd_ps(
+                self.tw2_re,
+                x23p,
+                _mm256_fmadd_ps(self.tw1_re, x14p, v[0].v),
+            );
+            let temp_a2 = _mm256_fmadd_ps(
+                self.tw1_re,
+                x23p,
+                _mm256_fmadd_ps(self.tw2_re, x14p, v[0].v),
+            );
+
+            let temp_b1 = _mm256_fmadd_ps(self.tw2_im, x23n, temp_b1_1);
+            let temp_b2 = _mm256_fnmadd_ps(self.tw1_im, x23n, temp_b2_1);
+
+            let temp_b1_rot = self.rotate.rotate_m256(temp_b1);
+            let temp_b2_rot = self.rotate.rotate_m256(temp_b2);
+
+            let y1 = _mm256_add_ps(temp_a1, temp_b1_rot);
+            let y2 = _mm256_add_ps(temp_a2, temp_b2_rot);
+            [AvxStoreF::raw(y0), AvxStoreF::raw(y1), AvxStoreF::raw(y2)]
         }
     }
 }
