@@ -139,6 +139,17 @@ where
             return make_prime(len);
         }
 
+        if Zaft::could_do_split_mixed_radix() {
+            if len.is_multiple_of(5) {
+                if let Some(radix5) = T::r2c_mixed_radix5(Zaft::strategy(
+                    (len as u64 / 5) as usize,
+                    FftDirection::Forward,
+                )?)? {
+                    return Ok(radix5);
+                }
+            }
+        }
+
         let factor_out = pick_odd_factor(len as u64, &prime_factors.factorization);
         Ok(Arc::new(MixedRadixR2cOdd::new(
             Zaft::strategy((len as u64 / factor_out) as usize, FftDirection::Forward)?,

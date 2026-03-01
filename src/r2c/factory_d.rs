@@ -29,7 +29,7 @@
 use crate::r2c::rfft_bluestein::BluesteinRfft;
 use crate::r2c::rfft_raders::RadersRfft;
 use crate::r2c::{OneSizedRealFft, R2cAlgorithmFactory};
-use crate::{FftDirection, R2CFftExecutor, Zaft, ZaftError};
+use crate::{FftDirection, FftExecutor, R2CFftExecutor, Zaft, ZaftError};
 use std::sync::Arc;
 
 macro_rules! make_default_butterfly {
@@ -246,5 +246,11 @@ impl R2cAlgorithmFactory<f64> for f64 {
             convolve_fft,
             FftDirection::Forward,
         )?))
+    }
+
+    fn r2c_mixed_radix5(
+        _: Arc<dyn FftExecutor<f64> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<f64> + Send + Sync>>, ZaftError> {
+        Ok(None)
     }
 }

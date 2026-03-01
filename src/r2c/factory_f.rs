@@ -29,7 +29,7 @@
 use crate::r2c::rfft_bluestein::BluesteinRfft;
 use crate::r2c::rfft_raders::RadersRfft;
 use crate::r2c::{OneSizedRealFft, R2cAlgorithmFactory};
-use crate::{FftDirection, R2CFftExecutor, Zaft, ZaftError};
+use crate::{FftDirection, FftExecutor, R2CFftExecutor, Zaft, ZaftError};
 use std::sync::Arc;
 
 macro_rules! make_default_butterfly {
@@ -246,5 +246,25 @@ impl R2cAlgorithmFactory<f32> for f32 {
             convolve_fft,
             FftDirection::Forward,
         )?))
+    }
+
+    fn r2c_mixed_radix5(
+        _width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<f32> + Send + Sync>>, ZaftError> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::NeonFcmaR2CMixedRadix5f;
+                    return NeonFcmaR2CMixedRadix5f::new(_width_executor)
+                        .map(|x| Some(Arc::new(x) as Arc<dyn R2CFftExecutor<f32> + Send + Sync>));
+                }
+            }
+            use crate::neon::NeonR2CMixedRadix5f;
+            return NeonR2CMixedRadix5f::new(_width_executor)
+                .map(|x| Some(Arc::new(x) as Arc<dyn R2CFftExecutor<f32> + Send + Sync>));
+        }
+        Ok(None)
     }
 }

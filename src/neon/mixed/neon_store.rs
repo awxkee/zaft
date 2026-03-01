@@ -470,7 +470,7 @@ impl NeonStoreFh {
         NeonStoreFh { v: r }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn load(ptr: *const f32) -> Self {
         unsafe { NeonStoreFh { v: vld1_f32(ptr) } }
     }

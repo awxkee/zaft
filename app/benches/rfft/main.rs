@@ -150,6 +150,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         .measurement_time(Duration::from_millis(2500))
         .warm_up_time(Duration::from_millis(2500));
 
+    check_power_groups(c, 3125, "3125".to_string());
+
     check_power_groups_c2r(c, 16, "16".to_string());
     check_power_groups_c2r(c, 32, "32".to_string());
     // check_power_groups_c2r(c, 64, "64".to_string());

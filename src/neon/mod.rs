@@ -128,6 +128,8 @@ pub(crate) use mixed::{
     NeonFcmaMixedRadix10f, NeonFcmaMixedRadix11, NeonFcmaMixedRadix11f, NeonFcmaMixedRadix12,
     NeonFcmaMixedRadix12f, NeonFcmaMixedRadix13, NeonFcmaMixedRadix13f,
 };
+#[cfg(feature = "fcma")]
+pub(crate) use mixed::{NeonFcmaR2CMixedRadix5d, NeonFcmaR2CMixedRadix5f};
 pub(crate) use mixed::{
     NeonMixedRadix2, NeonMixedRadix2f, NeonMixedRadix3, NeonMixedRadix3f, NeonMixedRadix4,
     NeonMixedRadix4f, NeonMixedRadix5, NeonMixedRadix5f, NeonMixedRadix6, NeonMixedRadix6f,
@@ -135,6 +137,7 @@ pub(crate) use mixed::{
     NeonMixedRadix9f, NeonMixedRadix10, NeonMixedRadix10f, NeonMixedRadix11, NeonMixedRadix11f,
     NeonMixedRadix12, NeonMixedRadix12f, NeonMixedRadix13, NeonMixedRadix13f,
 };
+pub(crate) use mixed::{NeonR2CMixedRadix5d, NeonR2CMixedRadix5f};
 pub(crate) use r2c::R2CNeonTwiddles;
 pub(crate) use raders::NeonRadersFft;
 pub(crate) use radix3::NeonRadix3;
