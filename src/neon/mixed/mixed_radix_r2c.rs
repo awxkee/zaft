@@ -58,7 +58,7 @@ macro_rules! define_mixed_radix_neon_d {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
-                
+
                 assert!(
                     !width.is_multiple_of(2),
                     "This is an UB to call Odd Mixed-Radix R2C with even `width`"
@@ -167,10 +167,10 @@ macro_rules! define_mixed_radix_neon_d {
                         let mut columns = [NeonStoreD::default(); ROW_COUNT];
                         for i in 0..ROW_COUNT {
                             unsafe {
-                                let q = NeonStoreD::load(
+                                let q = NeonStoreD::load1(
                                     src.get_unchecked(index_base + len_per_row * i..),
                                 );
-                                columns[i] = q.to_complex()[0];
+                                columns[i] = q;
                             }
                         }
 
@@ -291,7 +291,7 @@ macro_rules! define_mixed_radix_neon_f {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
-                
+
                 assert!(
                     !width.is_multiple_of(2),
                     "This is an UB to call Odd Mixed-Radix R2C with even `width`"
