@@ -28,32 +28,38 @@
  */
 
 mod c2r;
+mod c2r_factory;
+mod c2r_factory_d;
+mod c2r_factory_f;
 mod c2r_odd;
 mod c2r_twiddles;
-mod factory_d;
-mod factory_f;
 mod mixed_radix_r2c_odd;
+mod r2c_factory;
+mod r2c_factory_d;
+mod r2c_factory_f;
 mod r2c_twiddles;
-mod real_factory;
 mod real_to_complex;
 mod rfft_bluestein;
 mod rfft_raders;
-mod strategy;
+mod strategy_c2r;
+mod strategy_r2c;
 
 use crate::ZaftError;
 pub(crate) use c2r::C2RFftEvenInterceptor;
 pub use c2r::C2RFftExecutor;
+pub(crate) use c2r_factory::C2RAlgorithmFactory;
 #[allow(unused_imports)]
 pub(crate) use c2r_odd::{C2RFftOddInterceptor, C2ROddExpander, C2ROddExpanderFactory};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
+pub(crate) use r2c_factory::R2CAlgorithmFactory;
 #[allow(unused_imports)]
 pub(crate) use r2c_twiddles::{C2RTwiddlesHandler, R2CTwiddlesFactory, R2CTwiddlesHandler};
-pub(crate) use real_factory::R2cAlgorithmFactory;
 pub(crate) use real_to_complex::R2CFftEvenInterceptor;
 pub use real_to_complex::R2CFftExecutor;
 use std::marker::PhantomData;
-pub(crate) use strategy::strategy_r2c;
+pub(crate) use strategy_c2r::strategy_c2r;
+pub(crate) use strategy_r2c::strategy_r2c;
 
 pub(crate) struct OneSizedRealFft<T> {
     pub(crate) phantom_data: PhantomData<T>,

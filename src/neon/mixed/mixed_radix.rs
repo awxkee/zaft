@@ -289,6 +289,63 @@ macro_rules! define_mixed_radix_neon_d {
             }
 
             #[target_feature(enable = $features)]
+            fn process_oof_columns(
+                &self,
+                chunk: &[Complex<f64>],
+                scratch: &mut [Complex<f64>],
+            ) {
+                const ROW_COUNT: usize = $row_count;
+                const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
+                const COMPLEX_PER_VECTOR: usize = 1;
+
+                let len_per_row = self.length() / ROW_COUNT;
+                let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
+
+                // process the column FFTs
+                for (c, twiddle_chunk) in self
+                    .twiddles
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .take(chunk_count)
+                    .enumerate()
+                {
+                    let index_base = c * COMPLEX_PER_VECTOR;
+
+                    let mut columns = [NeonStoreD::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = NeonStoreD::from_complex_ref(
+                                chunk.get_unchecked(index_base + len_per_row * i..),
+                            );
+                        }
+                    }
+
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec(columns) };
+
+                    unsafe {
+                        output[0].write(scratch.get_unchecked_mut(index_base..));
+                    }
+
+                    // here LLVM doesn't "see" NeonStoreD as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [NeonStoreD::default(); ROW_COUNT - 1];
+                    for i in 0..ROW_COUNT - 1 {
+                        twiddles[i] = twiddle_chunk[i];
+                    }
+
+                    for i in 1..ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = NeonStoreD::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write(
+                                scratch.get_unchecked_mut(index_base + len_per_row * i..),
+                            )
+                        }
+                    }
+                }
+            }
+
+            #[target_feature(enable = $features)]
             fn execute_oof_impl(
                 &self,
                 src: &[Complex<f64>],
@@ -302,58 +359,10 @@ macro_rules! define_mixed_radix_neon_d {
                 let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
                 let (scratch, width_scratch) = scratch.split_at_mut(self.execution_length);
 
-                const ROW_COUNT: usize = $row_count;
-                const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
-                const COMPLEX_PER_VECTOR: usize = 1;
-
-                let len_per_row = self.length() / ROW_COUNT;
-                let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
-
                 for (dst_chunk, chunk) in dst
                     .chunks_exact_mut(self.execution_length)
                     .zip(src.chunks_exact(self.execution_length)) {
-                    // process the column FFTs
-                    for (c, twiddle_chunk) in self
-                        .twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN)
-                        .take(chunk_count)
-                        .enumerate()
-                    {
-                        let index_base = c * COMPLEX_PER_VECTOR;
-
-                        let mut columns = [NeonStoreD::default(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = NeonStoreD::from_complex_ref(
-                                    chunk.get_unchecked(index_base + len_per_row * i..),
-                                );
-                            }
-                        }
-
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec(columns) };
-
-                        unsafe {
-                            output[0].write(scratch.get_unchecked_mut(index_base..));
-                        }
-
-                        // here LLVM doesn't "see" NeonStoreD as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreD::default(); ROW_COUNT - 1];
-                        for i in 0..ROW_COUNT - 1 {
-                            twiddles[i] = twiddle_chunk[i];
-                        }
-
-                        for i in 1..ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = NeonStoreD::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    scratch.get_unchecked_mut(index_base + len_per_row * i..),
-                                )
-                            }
-                        }
-                    }
+                    self.process_oof_columns(chunk, scratch);
 
                     self.width_executor
                         .execute_with_scratch(scratch, width_scratch)?;
@@ -603,8 +612,6 @@ macro_rules! define_mixed_radix_neon_f {
                                 columns[i] = NeonStoreFh::load(
                                     chunk
                                         .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                        .as_ptr()
-                                        .cast(),
                                 );
                             }
                         }
@@ -669,30 +676,18 @@ macro_rules! define_mixed_radix_neon_f {
             }
 
             #[target_feature(enable = $features)]
-            fn execute_oof_impl(
+            fn process_oof_columns(
                 &self,
-                src: &[Complex<f32>],
-                dst: &mut [Complex<f32>],
+                chunk: &[Complex<f32>],
                 scratch: &mut [Complex<f32>],
-            ) -> Result<(), ZaftError> {
-                use crate::util::validate_oof_sizes;
-                validate_oof_sizes!(src, dst, self.execution_length);
-
-                use crate::util::validate_scratch;
-                let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
-                let (scratch, width_scratch) = scratch.split_at_mut(self.execution_length);
-
+            ) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
                 const COMPLEX_PER_VECTOR: usize = 2;
 
                 let len_per_row = self.length() / ROW_COUNT;
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
-
-                for (dst_chunk, chunk) in dst
-                    .chunks_exact_mut(self.execution_length)
-                    .zip(src.chunks_exact(self.execution_length)) {
-                    for (c, twiddle_chunk) in self
+                for (c, twiddle_chunk) in self
                         .twiddles
                         .chunks_exact(TWIDDLES_PER_COLUMN)
                         .take(chunk_count)
@@ -748,8 +743,6 @@ macro_rules! define_mixed_radix_neon_f {
                                 columns[i] = NeonStoreFh::load(
                                     chunk
                                         .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                        .as_ptr()
-                                        .cast(),
                                 );
                             }
                         }
@@ -782,7 +775,27 @@ macro_rules! define_mixed_radix_neon_f {
                                 );
                             }
                         }
-                    }
+                }
+            }
+
+            #[target_feature(enable = $features)]
+            fn execute_oof_impl(
+                &self,
+                src: &[Complex<f32>],
+                dst: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                use crate::util::validate_oof_sizes;
+                validate_oof_sizes!(src, dst, self.execution_length);
+
+                use crate::util::validate_scratch;
+                let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
+                let (scratch, width_scratch) = scratch.split_at_mut(self.execution_length);
+
+                for (dst_chunk, chunk) in dst
+                    .chunks_exact_mut(self.execution_length)
+                    .zip(src.chunks_exact(self.execution_length)) {
+                    self.process_oof_columns(chunk, scratch);
 
                     self.width_executor
                         .execute_with_scratch(scratch, width_scratch)?;

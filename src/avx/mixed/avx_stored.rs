@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::util::_mm256_fcmul_pd;
+use crate::avx::util::{_mm256_fcmul_pd, shuffle};
 use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::x86_64::*;
@@ -59,6 +59,15 @@ impl AvxStoreD {
     #[target_feature(enable = "avx2")]
     pub(crate) fn reverse_complex(&self) -> Self {
         AvxStoreD::raw(_mm256_permute2f128_pd::<0x01>(self.v, self.v))
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn dup_lo_complex(&self) -> Self {
+        Self::raw(_mm256_setr_m128d(
+            _mm256_castpd256_pd128(self.v),
+            _mm256_castpd256_pd128(self.v),
+        ))
     }
 
     #[inline]
@@ -246,11 +255,48 @@ impl AvxStoreD {
     }
 
     #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn write_real(&self, to_ref: &mut [f64]) {
+        unsafe { _mm256_storeu_pd(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn write_real_lo1(&self, to_ref: &mut [f64]) {
+        unsafe { _mm_storel_pd(to_ref.as_mut_ptr().cast(), _mm256_castpd256_pd128(self.v)) }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn write_real_lo2(&self, to_ref: &mut [f64]) {
+        unsafe { _mm_storeu_pd(to_ref.as_mut_ptr().cast(), _mm256_castpd256_pd128(self.v)) }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn write_real_lo3(&self, to_ref: &mut [f64]) {
+        unsafe { _mm_storeu_pd(to_ref.as_mut_ptr().cast(), _mm256_castpd256_pd128(self.v)) }
+        unsafe {
+            _mm_storel_pd(
+                to_ref.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                _mm256_extractf128_pd::<1>(self.v),
+            )
+        }
+    }
+
+    #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn mul_by_complex(self, other: AvxStoreD) -> Self {
         AvxStoreD {
             v: _mm256_fcmul_pd(self.v, other.v),
         }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn unpack_evens(&self, other: Self) -> Self {
+        let q = _mm256_unpacklo_pd(self.v, other.v);
+        Self::raw(_mm256_permute4x64_pd::<{ shuffle(3, 1, 2, 0) }>(q))
     }
 }
 

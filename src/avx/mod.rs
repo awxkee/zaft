@@ -71,19 +71,22 @@ pub(crate) use butterflies::{
 pub(crate) use c2r::C2RAvxTwiddles;
 pub(crate) use c2r_expand::AvxC2RExpander;
 pub(crate) use mixed::{
-    AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,
-    AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d, AvxMixedRadix10d, AvxMixedRadix11d,
-    AvxMixedRadix12d, AvxMixedRadix13d,
+    AvxC2RMixedRadix3d, AvxC2RMixedRadix5d, AvxC2RMixedRadix7d, AvxC2RMixedRadix9d,
+    AvxC2RMixedRadix11d, AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d,
+    AvxMixedRadix6d, AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d, AvxMixedRadix10d,
+    AvxMixedRadix11d, AvxMixedRadix12d, AvxMixedRadix13d,
+};
+pub(crate) use mixed::{
+    AvxC2RMixedRadix3f, AvxC2RMixedRadix5f, AvxC2RMixedRadix7f, AvxC2RMixedRadix9f,
+    AvxC2RMixedRadix11f, AvxR2CMixedRadix3d, AvxR2CMixedRadix3f, AvxR2CMixedRadix5d,
+    AvxR2CMixedRadix5f, AvxR2CMixedRadix7d, AvxR2CMixedRadix7f, AvxR2CMixedRadix9d,
+    AvxR2CMixedRadix9f, AvxR2CMixedRadix11d, AvxR2CMixedRadix11f, AvxR2CMixedRadix13d,
+    AvxR2CMixedRadix13f,
 };
 pub(crate) use mixed::{
     AvxMixedRadix2f, AvxMixedRadix3f, AvxMixedRadix4f, AvxMixedRadix5f, AvxMixedRadix6f,
     AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
     AvxMixedRadix12f, AvxMixedRadix13f,
-};
-pub(crate) use mixed::{
-    AvxR2CMixedRadix3d, AvxR2CMixedRadix3f, AvxR2CMixedRadix5d, AvxR2CMixedRadix5f,
-    AvxR2CMixedRadix7d, AvxR2CMixedRadix7f, AvxR2CMixedRadix9d, AvxR2CMixedRadix9f,
-    AvxR2CMixedRadix11d, AvxR2CMixedRadix11f, AvxR2CMixedRadix13d, AvxR2CMixedRadix13f,
 };
 pub(crate) use r2c::R2CAvxTwiddles;
 pub(crate) use raders::AvxRadersFft;
@@ -107,8 +110,12 @@ pub(crate) use transpose::{
     AvxTransposeNx10F64, AvxTransposeNx11F32, AvxTransposeNx11F64, AvxTransposeNx12F32,
     AvxTransposeNx12F64, AvxTransposeNx13F32, AvxTransposeNx13F64, AvxTransposeNx14F32,
     AvxTransposeNx14F64, AvxTransposeNx15F32, AvxTransposeNx15F64, AvxTransposeNx16F32,
-    AvxTransposeNx16F64, avx_transpose_f32x2_2x2, avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4,
-    avx_transpose_f64x2_6x6_impl, avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
+    AvxTransposeNx16F64, AvxTransposeRealInvNx3F32, AvxTransposeRealInvNx3F64,
+    AvxTransposeRealInvNx5F32, AvxTransposeRealInvNx5F64, AvxTransposeRealInvNx7F32,
+    AvxTransposeRealInvNx7F64, AvxTransposeRealInvNx9F32, AvxTransposeRealInvNx9F64,
+    AvxTransposeRealInvNx11F32, AvxTransposeRealInvNx11F64, avx_transpose_f32x2_2x2,
+    avx_transpose_f64x2_2x2, avx_transpose_f64x2_4x4, avx_transpose_f64x2_6x6_impl,
+    avx2_transpose_f32x2_4x4, avx2_transpose_f32x2_8x4,
 };
 
 #[cfg(test)]

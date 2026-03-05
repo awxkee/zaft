@@ -53,6 +53,11 @@ pub(crate) trait TransposeExecutorReal<T> {
     fn transpose(&self, input: &[T], output: &mut [Complex<T>], width: usize, height: usize);
 }
 
+#[allow(unused)]
+pub(crate) trait TransposeExecutorRealInv<T> {
+    fn transpose(&self, input: &[Complex<T>], output: &mut [T], width: usize, height: usize);
+}
+
 pub(crate) trait TransposeFactory<T> {
     fn transpose_strategy(
         width: usize,
@@ -62,6 +67,11 @@ pub(crate) trait TransposeFactory<T> {
         width: usize,
         height: usize,
     ) -> Box<dyn TransposeExecutorReal<T> + Send + Sync>;
+    #[allow(unused)]
+    fn transpose_strategy_real_inv(
+        width: usize,
+        height: usize,
+    ) -> Box<dyn TransposeExecutorRealInv<T> + Send + Sync>;
 }
 
 impl TransposeFactory<f32> for f32 {
@@ -323,6 +333,63 @@ impl TransposeFactory<f32> for f32 {
             })
         }
     }
+
+    fn transpose_strategy_real_inv(
+        _width: usize,
+        _height: usize,
+    ) -> Box<dyn TransposeExecutorRealInv<f32> + Send + Sync> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            if _height.is_multiple_of(11) {
+                use crate::neon::NeonTransposeRealInvNx11F32;
+                return Box::new(NeonTransposeRealInvNx11F32::default());
+            }
+            if _height.is_multiple_of(9) {
+                use crate::neon::NeonTransposeRealInvNx9F32;
+                return Box::new(NeonTransposeRealInvNx9F32::default());
+            }
+            if _height.is_multiple_of(7) {
+                use crate::neon::NeonTransposeRealInvNx7F32;
+                return Box::new(NeonTransposeRealInvNx7F32::default());
+            }
+            if _height.is_multiple_of(5) {
+                use crate::neon::NeonTransposeRealInvNx5F32;
+                return Box::new(NeonTransposeRealInvNx5F32::default());
+            }
+            if _height.is_multiple_of(3) {
+                use crate::neon::NeonTransposeRealInvNx3F32;
+                return Box::new(NeonTransposeRealInvNx3F32::default());
+            }
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2") {
+                if _height.is_multiple_of(11) {
+                    use crate::avx::AvxTransposeRealInvNx11F32;
+                    return Box::new(AvxTransposeRealInvNx11F32::default());
+                }
+                if _height.is_multiple_of(9) {
+                    use crate::avx::AvxTransposeRealInvNx9F32;
+                    return Box::new(AvxTransposeRealInvNx9F32::default());
+                }
+                if _height.is_multiple_of(7) {
+                    use crate::avx::AvxTransposeRealInvNx7F32;
+                    return Box::new(AvxTransposeRealInvNx7F32::default());
+                }
+                if _height.is_multiple_of(5) {
+                    use crate::avx::AvxTransposeRealInvNx5F32;
+                    return Box::new(AvxTransposeRealInvNx5F32::default());
+                }
+                if _height.is_multiple_of(3) {
+                    use crate::avx::AvxTransposeRealInvNx3F32;
+                    return Box::new(AvxTransposeRealInvNx3F32::default());
+                }
+            }
+        }
+        Box::new(TransposeTiny {
+            phantom_data: Default::default(),
+        })
+    }
 }
 
 impl TransposeFactory<f64> for f64 {
@@ -533,6 +600,63 @@ impl TransposeFactory<f64> for f64 {
             })
         }
     }
+
+    fn transpose_strategy_real_inv(
+        _width: usize,
+        _height: usize,
+    ) -> Box<dyn TransposeExecutorRealInv<f64> + Send + Sync> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            if _height.is_multiple_of(11) {
+                use crate::neon::NeonTransposeRealInvNx11F64;
+                return Box::new(NeonTransposeRealInvNx11F64::default());
+            }
+            if _height.is_multiple_of(9) {
+                use crate::neon::NeonTransposeRealInvNx9F64;
+                return Box::new(NeonTransposeRealInvNx9F64::default());
+            }
+            if _height.is_multiple_of(7) {
+                use crate::neon::NeonTransposeRealInvNx7F64;
+                return Box::new(NeonTransposeRealInvNx7F64::default());
+            }
+            if _height.is_multiple_of(5) {
+                use crate::neon::NeonTransposeRealInvNx5F64;
+                return Box::new(NeonTransposeRealInvNx5F64::default());
+            }
+            if _height.is_multiple_of(3) {
+                use crate::neon::NeonTransposeRealInvNx3F64;
+                return Box::new(NeonTransposeRealInvNx3F64::default());
+            }
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2") {
+                if _height.is_multiple_of(11) {
+                    use crate::avx::AvxTransposeRealInvNx11F64;
+                    return Box::new(AvxTransposeRealInvNx11F64::default());
+                }
+                if _height.is_multiple_of(9) {
+                    use crate::avx::AvxTransposeRealInvNx9F64;
+                    return Box::new(AvxTransposeRealInvNx9F64::default());
+                }
+                if _height.is_multiple_of(7) {
+                    use crate::avx::AvxTransposeRealInvNx7F64;
+                    return Box::new(AvxTransposeRealInvNx7F64::default());
+                }
+                if _height.is_multiple_of(5) {
+                    use crate::avx::AvxTransposeRealInvNx5F64;
+                    return Box::new(AvxTransposeRealInvNx5F64::default());
+                }
+                if _height.is_multiple_of(3) {
+                    use crate::avx::AvxTransposeRealInvNx3F64;
+                    return Box::new(AvxTransposeRealInvNx3F64::default());
+                }
+            }
+        }
+        Box::new(TransposeTiny {
+            phantom_data: Default::default(),
+        })
+    }
 }
 
 struct TransposeTiny<T> {
@@ -591,6 +715,21 @@ impl<T: Copy + Zero> TransposeExecutorReal<T> for TransposeTiny<T> {
                 unsafe {
                     *output.get_unchecked_mut(output_index) =
                         Complex::new(*input.get_unchecked(input_index), T::zero());
+                }
+            }
+        }
+    }
+}
+
+impl<T: Copy + Zero> TransposeExecutorRealInv<T> for TransposeTiny<T> {
+    fn transpose(&self, input: &[Complex<T>], output: &mut [T], width: usize, height: usize) {
+        for x in 0..width {
+            for y in 0..height {
+                let input_index = x + y * width;
+                let output_index = y + x * height;
+
+                unsafe {
+                    *output.get_unchecked_mut(output_index) = input.get_unchecked(input_index).re;
                 }
             }
         }

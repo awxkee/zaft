@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::util::{_mm256_create_ps, _mm256_fcmul_ps};
+use crate::avx::util::{_mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, shuffle};
 use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::x86_64::*;
@@ -69,6 +69,32 @@ impl SseStoreF {
     pub(crate) fn raw(r: __m128) -> Self {
         Self { v: r }
     }
+
+    #[inline(always)]
+    pub(crate) fn write_real(self, dst: &mut [f32]) {
+        unsafe { _mm_storeu_ps(dst.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real_lo1(self, dst: &mut [f32]) {
+        unsafe { _mm_store_ss(dst.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real_lo2(self, dst: &mut [f32]) {
+        unsafe { _mm_storel_pd(dst.as_mut_ptr().cast(), _mm_castps_pd(self.v)) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real_lo3(self, dst: &mut [f32]) {
+        unsafe { _mm_storel_pd(dst.as_mut_ptr().cast(), _mm_castps_pd(self.v)) }
+        unsafe {
+            _mm_store_ss(
+                dst.get_unchecked_mut(2..).as_mut_ptr().cast(),
+                _mm_shuffle_ps::<{ shuffle(2, 2, 2, 2) }>(self.v, self.v),
+            )
+        }
+    }
 }
 
 impl AvxStoreF {
@@ -100,6 +126,18 @@ impl AvxStoreF {
         unsafe {
             AvxStoreF {
                 v: _mm256_loadu_ps(complex.as_ptr().cast()),
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn pack_evens(self) -> SseStoreF {
+        unsafe {
+            SseStoreF {
+                v: _mm256_castps256_ps128(_mm256_permutevar8x32_ps(
+                    self.v,
+                    _mm256_set_epi32(7, 5, 3, 1, 6, 4, 2, 0),
+                )),
             }
         }
     }
@@ -142,6 +180,18 @@ impl AvxStoreF {
                     complex as *const Complex<f32> as *const u8,
                 ))),
             }
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_complex_lane<const LANE: i32>(self, complex: Complex<f32>) -> Self {
+        unsafe {
+            let re = complex.re.to_ne_bytes();
+            let im = complex.im.to_ne_bytes();
+            Self::raw(_mm256_castsi256_ps(_mm256_insert_epi64::<LANE>(
+                _mm256_castps_si256(self.v),
+                i64::from_ne_bytes([re[0], re[1], re[2], re[3], im[0], im[1], im[2], im[3]]),
+            )))
         }
     }
 
@@ -429,6 +479,44 @@ impl AvxStoreF {
     pub(crate) fn mul_by_complex(self, other: AvxStoreF) -> Self {
         AvxStoreF {
             v: _mm256_fcmul_ps(self.v, other.v),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn dup_lo_complex(&self) -> Self {
+        unsafe {
+            Self::raw(_mm256_castps128_ps256(_mm_unpacklo_ps64(
+                _mm256_castps256_ps128(self.v),
+                _mm256_castps256_ps128(self.v),
+            )))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn combine_lo_hi(&self, other: Self) -> Self {
+        unsafe {
+            Self::raw(_mm256_setr_m128(
+                _mm256_castps256_ps128(self.v),
+                _mm256_castps256_ps128(other.v),
+            ))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn reverse_complex3(&self) -> Self {
+        unsafe {
+            AvxStoreF::raw(_mm256_castpd_ps(_mm256_permute4x64_pd::<
+                { shuffle(0, 0, 1, 2) },
+            >(_mm256_castps_pd(self.v))))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn reverse_complex2(&self) -> Self {
+        unsafe {
+            AvxStoreF::raw(_mm256_castpd_ps(_mm256_permute4x64_pd::<
+                { shuffle(0, 0, 0, 1) },
+            >(_mm256_castps_pd(self.v))))
         }
     }
 }

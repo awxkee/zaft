@@ -27,67 +27,9 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::neon::mixed::NeonStoreF;
+use crate::neon::transpose::f32x4_4xn::transpose_4x4_f32;
 use crate::transpose::TransposeExecutorReal;
 use num_complex::Complex;
-use std::arch::aarch64::*;
-
-#[inline(always)]
-pub(crate) fn vtrnq_f64_to_f32(a0: float32x4_t, a1: float32x4_t) -> float32x4x2_t {
-    unsafe {
-        let b0 = vreinterpretq_f32_f64(vtrn1q_f64(
-            vreinterpretq_f64_f32(a0),
-            vreinterpretq_f64_f32(a1),
-        ));
-        let b1 = vreinterpretq_f32_f64(vtrn2q_f64(
-            vreinterpretq_f64_f32(a0),
-            vreinterpretq_f64_f32(a1),
-        ));
-        float32x4x2_t(b0, b1)
-    }
-}
-
-#[inline(always)]
-pub(crate) fn transpose_4x4(v0: float32x4x4_t) -> float32x4x4_t {
-    unsafe {
-        // Swap 32 bit elements. Goes from:
-        // a0: 00 01 02 03
-        // a1: 10 11 12 13
-        // a2: 20 21 22 23
-        // a3: 30 31 32 33
-        // to:
-        // b0.0: 00 10 02 12
-        // b0.1: 01 11 03 13
-        // b1.0: 20 30 22 32
-        // b1.1: 21 31 23 33
-
-        let b0 = vtrnq_f32(v0.0, v0.1);
-        let b1 = vtrnq_f32(v0.2, v0.3);
-
-        // Swap 64 bit elements resulting in:
-        // c0.0: 00 10 20 30
-        // c0.1: 02 12 22 32
-        // c1.0: 01 11 21 31
-        // c1.1: 03 13 23 33
-
-        let c0 = vtrnq_f64_to_f32(b0.0, b1.0);
-        let c1 = vtrnq_f64_to_f32(b0.1, b1.1);
-
-        float32x4x4_t(c0.0, c1.0, c0.1, c1.1)
-    }
-}
-
-#[inline(always)]
-fn transpose_4x4_f32(store: [NeonStoreF; 4]) -> [NeonStoreF; 4] {
-    let q = transpose_4x4(float32x4x4_t(
-        store[0].v, store[1].v, store[2].v, store[3].v,
-    ));
-    [
-        NeonStoreF::raw(q.0),
-        NeonStoreF::raw(q.1),
-        NeonStoreF::raw(q.2),
-        NeonStoreF::raw(q.3),
-    ]
-}
 
 pub(crate) struct NeonTransposeReal4x4 {}
 

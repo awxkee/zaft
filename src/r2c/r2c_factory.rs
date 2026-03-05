@@ -29,7 +29,7 @@
 use crate::{FftExecutor, R2CFftExecutor, ZaftError};
 use std::sync::Arc;
 
-pub(crate) trait R2cAlgorithmFactory<T> {
+pub(crate) trait R2CAlgorithmFactory<T> {
     fn r2c_butterfly1() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly2() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly3() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;

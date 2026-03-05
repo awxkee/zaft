@@ -72,6 +72,12 @@ impl NeonStoreD {
         }
     }
 
+    #[inline]
+    pub(crate) fn conj_flag() -> NeonStoreD {
+        static CONJ: [f64; 2] = [0.0, -0.0];
+        unsafe { NeonStoreD::raw(vld1q_f64(CONJ.as_ptr().cast())) }
+    }
+
     #[inline(always)]
     pub(crate) fn dup(p0: f64) -> Self {
         unsafe { NeonStoreD::raw(vdupq_n_f64(p0)) }
@@ -97,6 +103,29 @@ impl NeonStoreD {
                     v: vtrn2q_f64(self.v, self.v),
                 },
             ]
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn transpose_2x2(&self, other: Self) -> [Self; 2] {
+        unsafe {
+            [
+                NeonStoreD {
+                    v: vtrn1q_f64(self.v, other.v),
+                },
+                NeonStoreD {
+                    v: vtrn2q_f64(self.v, other.v),
+                },
+            ]
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn unpack_evens(&self, other: Self) -> Self {
+        unsafe {
+            NeonStoreD {
+                v: vtrn1q_f64(self.v, other.v),
+            }
         }
     }
 
@@ -174,6 +203,16 @@ impl NeonStoreD {
     #[inline(always)]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f64>]) {
         unsafe { vst1q_f64(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real(&self, to_ref: &mut [f64]) {
+        unsafe { vst1q_f64(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real_lo(&self, to_ref: &mut [f64]) {
+        unsafe { vst1q_lane_f64::<0>(to_ref.as_mut_ptr().cast(), self.v) }
     }
 
     #[inline(always)]
@@ -265,6 +304,48 @@ impl NeonStoreF {
                 v: vld1q_f32(complex.as_ptr().cast()),
             }
         }
+    }
+
+    #[inline]
+    pub(crate) fn dup_lo_complex(self) -> Self {
+        unsafe {
+            NeonStoreF {
+                v: vreinterpretq_f32_f64(vtrn1q_f64(
+                    vreinterpretq_f64_f32(self.v),
+                    vreinterpretq_f64_f32(self.v),
+                )),
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn unpack_evens(self, other: Self) -> Self {
+        unsafe {
+            NeonStoreF {
+                v: vuzp1q_f32(self.v, other.v),
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real(&self, to_ref: &mut [f32]) {
+        unsafe { vst1q_f32(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real_lo1(&self, to_ref: &mut [f32]) {
+        unsafe { vst1q_lane_f32::<0>(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real_lo2(&self, to_ref: &mut [f32]) {
+        unsafe { vst1_f32(to_ref.as_mut_ptr().cast(), vget_low_f32(self.v)) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real_lo3(&self, to_ref: &mut [f32]) {
+        unsafe { vst1_f32(to_ref.as_mut_ptr().cast(), vget_low_f32(self.v)) }
+        unsafe { vst1q_lane_f32::<2>(to_ref.get_unchecked_mut(2..).as_mut_ptr().cast(), self.v) }
     }
 
     #[inline(always)]
@@ -471,8 +552,12 @@ impl NeonStoreFh {
     }
 
     #[inline(always)]
-    pub(crate) fn load(ptr: *const f32) -> Self {
-        unsafe { NeonStoreFh { v: vld1_f32(ptr) } }
+    pub(crate) fn load(ptr: &[Complex<f32>]) -> Self {
+        unsafe {
+            NeonStoreFh {
+                v: vld1_f32(ptr.as_ptr().cast()),
+            }
+        }
     }
 
     // #[inline]
@@ -502,6 +587,18 @@ impl NeonStoreFh {
     pub(crate) fn fcmul_fcma(self, other: NeonStoreFh) -> Self {
         NeonStoreFh {
             v: vcmla_rot90_f32(vcmla_f32(vdup_n_f32(0.), self.v, other.v), self.v, other.v),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn xor(&self, other: Self) -> Self {
+        unsafe {
+            NeonStoreFh {
+                v: vreinterpret_f32_u32(veor_u32(
+                    vreinterpret_u32_f32(self.v),
+                    vreinterpret_u32_f32(other.v),
+                )),
+            }
         }
     }
 }

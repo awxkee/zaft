@@ -215,7 +215,7 @@ macro_rules! define_mixed_radix_neon_d {
                 }
                 if !dst.len().is_multiple_of(self.complex_length()) {
                     return Err(ZaftError::InvalidSizeMultiplier(
-                        src.len(),
+                        dst.len(),
                         self.complex_length(),
                     ));
                 }
@@ -496,7 +496,7 @@ macro_rules! define_mixed_radix_neon_f {
                 }
                 if !dst.len().is_multiple_of(self.complex_length()) {
                     return Err(ZaftError::InvalidSizeMultiplier(
-                        src.len(),
+                        dst.len(),
                         self.complex_length(),
                     ));
                 }
