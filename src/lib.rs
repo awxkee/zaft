@@ -95,8 +95,8 @@ use crate::prime_factors::{
     PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
 };
 use crate::r2c::{
-    C2RFftEvenInterceptor, C2RFftOddInterceptor, C2ROddExpanderFactory, OneSizedRealFft,
-    R2CTwiddlesFactory, R2cAlgorithmFactory, strategy_r2c,
+    C2RAlgorithmFactory, C2ROddExpanderFactory, R2CAlgorithmFactory, R2CTwiddlesFactory,
+    strategy_c2r, strategy_r2c,
 };
 use crate::spectrum_arithmetic::ComplexArithFactory;
 use crate::td::{TwoDimensionalC2C, TwoDimensionalC2R, TwoDimensionalR2C};
@@ -129,7 +129,8 @@ pub(crate) trait FftSample:
     + FftPrimeCache<Self>
     + Default
     + Debug
-    + R2cAlgorithmFactory<Self>
+    + R2CAlgorithmFactory<Self>
+    + C2RAlgorithmFactory<Self>
     + R2CTwiddlesFactory<Self>
     + C2ROddExpanderFactory
 {
@@ -1095,18 +1096,7 @@ impl Zaft {
     pub fn make_c2r_fft_f32(
         n: usize,
     ) -> Result<Arc<dyn C2RFftExecutor<f32> + Send + Sync>, ZaftError> {
-        if n == 1 {
-            return Ok(Arc::new(OneSizedRealFft {
-                phantom_data: Default::default(),
-            }));
-        }
-        if n.is_multiple_of(2) {
-            C2RFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Inverse)?)
-                .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<f32> + Send + Sync>)
-        } else {
-            C2RFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Inverse)?)
-                .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<f32> + Send + Sync>)
-        }
+        strategy_c2r(n)
     }
 
     /// Creates a standard Complex-to-Complex Forward FFT plan executor for single-precision floating-point numbers (`f32`).
@@ -1152,18 +1142,7 @@ impl Zaft {
     pub fn make_c2r_fft_f64(
         n: usize,
     ) -> Result<Arc<dyn C2RFftExecutor<f64> + Send + Sync>, ZaftError> {
-        if n == 1 {
-            return Ok(Arc::new(OneSizedRealFft {
-                phantom_data: Default::default(),
-            }));
-        }
-        if n.is_multiple_of(2) {
-            C2RFftEvenInterceptor::install(n, Zaft::strategy(n / 2, FftDirection::Inverse)?)
-                .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<f64> + Send + Sync>)
-        } else {
-            C2RFftOddInterceptor::install(n, Zaft::strategy(n, FftDirection::Inverse)?)
-                .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<f64> + Send + Sync>)
-        }
+        strategy_c2r(n)
     }
 
     /// Creates a Real-to-Complex (R2C) FFT plan executor for double-precision floating-point numbers (`f64`).

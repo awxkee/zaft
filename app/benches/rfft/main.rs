@@ -128,6 +128,25 @@ fn check_power_groups_c2r(c: &mut BenchmarkGroup<WallTime>, n: usize, group: Str
     });
 }
 
+fn check_power_groups_c2d(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) {
+    let mut input_power = vec![Complex::<f64>::default(); n / 2 + 1];
+    for z in input_power.iter_mut() {
+        *z = Complex::new(rand::rng().random(), rand::rng().random());
+    }
+
+    c.bench_function(format!("zaft c2r_{group}d").as_str(), |b| {
+        let plan = Zaft::make_c2r_fft_f64(n).unwrap();
+        let mut output = vec![f64::zero(); n];
+        let working = input_power
+            .iter()
+            .map(|&x| Complex::new(x.re, x.im))
+            .collect::<Vec<_>>();
+        b.iter(|| {
+            plan.execute(&working, &mut output).unwrap();
+        })
+    });
+}
+
 fn check_power_groupd(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) {
     let mut input_power = vec![f64::default(); n];
     for z in input_power.iter_mut() {
@@ -150,14 +169,27 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         .measurement_time(Duration::from_millis(2500))
         .warm_up_time(Duration::from_millis(2500));
 
+    check_power_groups_c2d(c, 9, "9".to_string());
+    check_power_groups_c2d(c, 51, "51".to_string());
+    check_power_groups_c2d(c, 729, "729".to_string());
+    check_power_groups_c2d(c, 625, "625".to_string());
+    check_power_groups_c2d(c, 2401, "2401".to_string());
+    check_power_groups_c2d(c, 14641, "14641".to_string());
+
+    check_power_groups_c2r(c, 9, "9".to_string());
+    check_power_groups_c2r(c, 51, "51".to_string());
+    check_power_groups_c2r(c, 729, "729".to_string());
+    check_power_groups_c2r(c, 625, "625".to_string());
+    check_power_groups_c2r(c, 2401, "2401".to_string());
+    check_power_groups_c2r(c, 1331, "1331".to_string());
+    check_power_groups_c2r(c, 14641, "14641".to_string());
+
     check_power_groups(c, 3125, "3125".to_string());
     check_power_groups(c, 2401, "2401".to_string());
     check_power_groups(c, 6561, "6561".to_string());
     check_power_groups(c, 2197, "2197".to_string());
     check_power_groups(c, 14641, "14641".to_string());
 
-    check_power_groups_c2r(c, 16, "16".to_string());
-    check_power_groups_c2r(c, 32, "32".to_string());
     // check_power_groups_c2r(c, 64, "64".to_string());
     // check_power_groups_c2r(c, 128, "128".to_string());
     // check_power_groups_c2r(c, 256, "256".to_string());

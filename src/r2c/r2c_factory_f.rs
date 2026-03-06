@@ -28,7 +28,7 @@
  */
 use crate::r2c::rfft_bluestein::BluesteinRfft;
 use crate::r2c::rfft_raders::RadersRfft;
-use crate::r2c::{OneSizedRealFft, R2cAlgorithmFactory};
+use crate::r2c::{OneSizedRealFft, R2CAlgorithmFactory};
 use crate::{FftDirection, FftExecutor, R2CFftExecutor, Zaft, ZaftError};
 use std::sync::Arc;
 
@@ -137,7 +137,7 @@ macro_rules! make_mixed_radix {
     }};
 }
 
-impl R2cAlgorithmFactory<f32> for f32 {
+impl R2CAlgorithmFactory<f32> for f32 {
     fn r2c_butterfly1() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
         Arc::new(OneSizedRealFft {
             phantom_data: Default::default(),

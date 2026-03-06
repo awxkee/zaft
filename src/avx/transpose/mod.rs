@@ -28,6 +28,8 @@
  */
 #![allow(clippy::needless_range_loop)]
 mod block;
+mod block_c2r;
+mod block_c2r_oddf;
 mod f32x2_2x2;
 mod f32x2_4x4;
 mod f32x2_4xn;
@@ -38,6 +40,8 @@ mod f64x2_2x2;
 mod f64x2_2xn;
 mod f64x2_4x4;
 mod f64x2_6x6;
+mod f64x4_4xn;
+mod sse_f32x4_4xn;
 mod transpose_5x5;
 mod transpose_real_d;
 mod transpose_real_s;
@@ -52,6 +56,14 @@ pub(crate) use block::{
     AvxTransposeNx11F64, AvxTransposeNx12F32, AvxTransposeNx12F64, AvxTransposeNx13F32,
     AvxTransposeNx13F64, AvxTransposeNx14F32, AvxTransposeNx14F64, AvxTransposeNx15F32,
     AvxTransposeNx15F64, AvxTransposeNx16F32, AvxTransposeNx16F64,
+};
+pub(crate) use block_c2r::{
+    AvxTransposeRealInvNx3F64, AvxTransposeRealInvNx5F64, AvxTransposeRealInvNx7F64,
+    AvxTransposeRealInvNx9F64, AvxTransposeRealInvNx11F64,
+};
+pub(crate) use block_c2r_oddf::{
+    AvxTransposeRealInvNx3F32, AvxTransposeRealInvNx5F32, AvxTransposeRealInvNx7F32,
+    AvxTransposeRealInvNx9F32, AvxTransposeRealInvNx11F32,
 };
 pub(crate) use f32x2_2x2::{avx_transpose_f32x2_2x2, transpose_f32_2x2_impl};
 pub(crate) use f32x2_4x4::{
@@ -78,6 +90,14 @@ pub(crate) use f64x2_2xn::{
 };
 pub(crate) use f64x2_4x4::{avx_transpose_f64x2_4x4, avx_transpose_f64x2_4x4_impl};
 pub(crate) use f64x2_6x6::avx_transpose_f64x2_6x6_impl;
+pub(crate) use f64x4_4xn::{
+    transpose_f64x4_4x3, transpose_f64x4_4x5, transpose_f64x4_4x7, transpose_f64x4_4x9,
+    transpose_f64x4_4x11,
+};
+pub(crate) use sse_f32x4_4xn::{
+    transpose_sse_f32x4_4x3, transpose_sse_f32x4_4x5, transpose_sse_f32x4_4x7,
+    transpose_sse_f32x4_4x9, transpose_sse_f32x4_4x11,
+};
 pub(crate) use transpose_5x5::{block_transpose_f32x2_5x5, transpose_5x5_f32, transpose_5x5_f64};
 pub(crate) use transpose_real_d::AvxTransposeDReal4x4;
 pub(crate) use transpose_real_s::AvxTransposeFReal4x4;

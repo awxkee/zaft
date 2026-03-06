@@ -27,30 +27,9 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::mixed::AvxStoreD;
+use crate::avx::transpose::f64x4_4xn::transpose_4x4_f64;
 use crate::transpose::TransposeExecutorReal;
 use num_complex::Complex;
-use std::arch::x86_64::*;
-
-#[inline]
-#[target_feature(enable = "avx2")]
-fn transpose_4x4_f64(store: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
-    let tmp0 = _mm256_shuffle_pd::<0x0>(store[0].v, store[1].v);
-    let tmp2 = _mm256_shuffle_pd::<0xF>(store[0].v, store[1].v);
-    let tmp1 = _mm256_shuffle_pd::<0x0>(store[2].v, store[3].v);
-    let tmp3 = _mm256_shuffle_pd::<0xF>(store[2].v, store[3].v);
-
-    let row0 = _mm256_permute2f128_pd::<0x20>(tmp0, tmp1);
-    let row1 = _mm256_permute2f128_pd::<0x20>(tmp2, tmp3);
-    let row2 = _mm256_permute2f128_pd::<0x31>(tmp0, tmp1);
-    let row3 = _mm256_permute2f128_pd::<0x31>(tmp2, tmp3);
-
-    [
-        AvxStoreD::raw(row0),
-        AvxStoreD::raw(row1),
-        AvxStoreD::raw(row2),
-        AvxStoreD::raw(row3),
-    ]
-}
 
 pub(crate) struct AvxTransposeDReal4x4 {}
 

@@ -27,9 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::neon::mixed::{NeonStoreD, NeonStoreF};
-use crate::transpose::TransposeExecutor;
+use crate::transpose::{TransposeExecutor, TransposeExecutorRealInv};
 use num_complex::Complex;
-use std::mem::MaybeUninit;
 
 // assumes that execution block is exactly divisible by executor
 pub(crate) fn transpose_fixed_block_executor2d<
@@ -143,7 +142,7 @@ pub(crate) fn transpose_height_block_executor2_f32<
     y
 }
 
-// assumes that execution block is exactly divisible by executor
+// assumes that execution block is not exactly divisible by executor
 pub(crate) fn transpose_height_block_executor2_f32_odd<
     const X_BLOCK_SIZE: usize,
     const Y_BLOCK_SIZE: usize,
@@ -219,6 +218,87 @@ pub(crate) fn transpose_height_block_executor2_f32_odd<
     y
 }
 
+pub(crate) fn transpose_f64x2_complex_to_real<
+    const X_BLOCK_SIZE: usize,
+    const Y_BLOCK_SIZE: usize,
+    const Y_ODD_BLOCK_SIZE: usize,
+    E: Fn([NeonStoreD; Y_BLOCK_SIZE]) -> [NeonStoreD; Y_ODD_BLOCK_SIZE],
+>(
+    input: &[Complex<f64>],
+    input_stride: usize,
+    output: &mut [f64],
+    output_stride: usize,
+    width: usize,
+    height: usize,
+    start_y: usize,
+    exec: E,
+) -> usize {
+    let mut y = start_y;
+    unsafe {
+        let mut store = [NeonStoreD::default(); Y_BLOCK_SIZE];
+        while y + Y_BLOCK_SIZE <= height {
+            let input_y = y;
+
+            let src = input.get_unchecked(input_stride * input_y..);
+
+            let mut x = 0usize;
+
+            while x + X_BLOCK_SIZE <= width {
+                let output_x = x;
+
+                let src = src.get_unchecked(x..);
+
+                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                for i in 0..Y_BLOCK_SIZE {
+                    let r0 = NeonStoreD::from_complex_ref(src.get_unchecked(i * input_stride..));
+                    let r1 =
+                        NeonStoreD::from_complex_ref(src.get_unchecked(i * input_stride + 1..));
+                    store[i] = r0.unpack_evens(r1);
+                }
+
+                let q = exec(store);
+
+                for i in 0..Y_BLOCK_SIZE / 2 {
+                    q[i * 2].write_real(dst.get_unchecked_mut(i * 2..));
+                    q[i * 2 + 1].write_real(dst.get_unchecked_mut(i * 2 + output_stride..));
+                }
+
+                q[(Y_BLOCK_SIZE / 2) * 2]
+                    .write_real_lo(dst.get_unchecked_mut((Y_BLOCK_SIZE / 2) * 2..));
+                q[(Y_BLOCK_SIZE / 2) * 2 + 1]
+                    .write_real_lo(dst.get_unchecked_mut((Y_BLOCK_SIZE / 2) * 2 + output_stride..));
+
+                x += X_BLOCK_SIZE;
+            }
+
+            if x < width {
+                let output_x = x;
+
+                let src = src.get_unchecked(x..);
+                let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                for i in 0..Y_BLOCK_SIZE {
+                    store[i] = NeonStoreD::from_complex(src.get_unchecked(i * input_stride));
+                }
+
+                let q = exec(store);
+
+                for i in 0..Y_BLOCK_SIZE / 2 {
+                    q[i * 2].write_real(dst.get_unchecked_mut(i * 2..));
+                }
+
+                q[(Y_BLOCK_SIZE / 2) * 2]
+                    .write_real_lo(dst.get_unchecked_mut((Y_BLOCK_SIZE / 2) * 2..));
+            }
+
+            y += Y_BLOCK_SIZE;
+        }
+    }
+
+    y
+}
+
 // assumes that execution block is exactly divisible by executor
 pub(crate) fn transpose_height_block_executor2_f64<
     const X_BLOCK_SIZE: usize,
@@ -234,7 +314,6 @@ pub(crate) fn transpose_height_block_executor2_f64<
 ) -> usize {
     let mut y = start_y;
     unsafe {
-        let mut store = [MaybeUninit::<NeonStoreD>::uninit(); Y_BLOCK_SIZE];
         while y + Y_BLOCK_SIZE <= height {
             let input_y = y;
 
@@ -248,14 +327,14 @@ pub(crate) fn transpose_height_block_executor2_f64<
                 let src = src.get_unchecked(x..);
                 let dst = output.get_unchecked_mut(y + output_stride * output_x..);
 
+                let mut store = [NeonStoreD::default(); Y_BLOCK_SIZE];
+
                 for i in 0..Y_BLOCK_SIZE {
-                    store[i] = MaybeUninit::new(NeonStoreD::from_complex_ref(
-                        src.get_unchecked(i * input_stride..),
-                    ));
+                    store[i] = NeonStoreD::from_complex_ref(src.get_unchecked(i * input_stride..));
                 }
 
                 for i in 0..Y_BLOCK_SIZE {
-                    store[i].assume_init().write(dst.get_unchecked_mut(i..));
+                    store[i].write(dst.get_unchecked_mut(i..));
                 }
 
                 x += 1;
@@ -449,6 +528,425 @@ macro_rules! define_transposed {
     };
 }
 
+macro_rules! define_transpose_inv_d {
+    ($rule_name: ident, $block_exec: ident, $complex_type: ident, $block_width: expr, $block_height: expr) => {
+        #[derive(Default)]
+        pub(crate) struct $rule_name {}
+
+        impl TransposeExecutorRealInv<$complex_type> for $rule_name {
+            fn transpose(
+                &self,
+                input: &[Complex<$complex_type>],
+                output: &mut [$complex_type],
+                width: usize,
+                height: usize,
+            ) {
+                use crate::neon::transpose::$block_exec;
+                const R: usize = $block_height + 1;
+                transpose_f64x2_complex_to_real::<
+                    $block_width,
+                    $block_height,
+                    R,
+                    fn([NeonStoreD; $block_height]) -> [NeonStoreD; $block_height + 1],
+                >(input, width, output, height, width, height, 0, $block_exec);
+            }
+        }
+    };
+}
+
+macro_rules! define_transpose_to_real_oddf {
+    ($rule_name: ident, $method_name: ident, $rot_name: ident, $block_width: expr, $block_height: expr, $odd_block_height: expr) => {
+        #[allow(clippy::out_of_bounds_indexing, clippy::reversed_empty_ranges)]
+        pub(crate) fn $method_name(
+            input: &[Complex<f32>],
+            input_stride: usize,
+            output: &mut [f32],
+            output_stride: usize,
+            width: usize,
+            height: usize,
+            start_y: usize,
+        ) -> usize {
+            use crate::neon::transpose::$rot_name;
+            let mut y = start_y;
+            const X_BLOCK_SIZE: usize = $block_width;
+            const Y_BLOCK_SIZE: usize = $block_height;
+            unsafe {
+                let mut store = [NeonStoreF::default(); Y_BLOCK_SIZE];
+
+                const REM: usize = $block_height % 4;
+                const QUO: usize = $block_height / 4;
+
+                while y + Y_BLOCK_SIZE <= height {
+                    let input_y = y;
+
+                    let src = input.get_unchecked(input_stride * input_y..);
+
+                    let mut x = 0usize;
+
+                    if REM == 0 {
+                        while x + X_BLOCK_SIZE <= width {
+                            let output_x = x;
+
+                            let src = src.get_unchecked(x..);
+                            let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                            for i in 0..Y_BLOCK_SIZE {
+                                let q0 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride..),
+                                );
+                                let q1 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride + 2..),
+                                );
+                                let v = q0.unpack_evens(q1);
+                                store[i] = v;
+                            }
+
+                            let q = $rot_name(store);
+
+                            match QUO {
+                                0 => {
+                                    // nothing
+                                }
+
+                                1 => {
+                                    q[0].write_real(dst.get_unchecked_mut(0..));
+                                    q[1].write_real(dst.get_unchecked_mut(output_stride..));
+                                    q[2].write_real(dst.get_unchecked_mut(output_stride * 2..));
+                                    q[3].write_real(dst.get_unchecked_mut(output_stride * 3..));
+                                }
+
+                                2 => {
+                                    // i = 0
+                                    q[0].write_real(dst.get_unchecked_mut(0..));
+                                    q[1].write_real(dst.get_unchecked_mut(output_stride..));
+                                    q[2].write_real(dst.get_unchecked_mut(output_stride * 2..));
+                                    q[3].write_real(dst.get_unchecked_mut(output_stride * 3..));
+
+                                    // i = 1
+                                    q[4].write_real(dst.get_unchecked_mut(4..));
+                                    q[5].write_real(dst.get_unchecked_mut(4 + output_stride..));
+                                    q[6].write_real(dst.get_unchecked_mut(4 + output_stride * 2..));
+                                    q[7].write_real(dst.get_unchecked_mut(4 + output_stride * 3..));
+                                }
+
+                                3 => {
+                                    // i = 0
+                                    q[0].write_real(dst.get_unchecked_mut(0..));
+                                    q[1].write_real(dst.get_unchecked_mut(output_stride..));
+                                    q[2].write_real(dst.get_unchecked_mut(output_stride * 2..));
+                                    q[3].write_real(dst.get_unchecked_mut(output_stride * 3..));
+
+                                    // i = 1
+                                    q[4].write_real(dst.get_unchecked_mut(4..));
+                                    q[5].write_real(dst.get_unchecked_mut(4 + output_stride..));
+                                    q[6].write_real(dst.get_unchecked_mut(4 + output_stride * 2..));
+                                    q[7].write_real(dst.get_unchecked_mut(4 + output_stride * 3..));
+
+                                    // i = 2
+                                    q[8].write_real(dst.get_unchecked_mut(8..));
+                                    q[9].write_real(dst.get_unchecked_mut(8 + output_stride..));
+                                    q[10]
+                                        .write_real(dst.get_unchecked_mut(8 + output_stride * 2..));
+                                    q[11]
+                                        .write_real(dst.get_unchecked_mut(8 + output_stride * 3..));
+                                }
+
+                                4 => {
+                                    // i = 0
+                                    q[0].write_real(dst.get_unchecked_mut(0..));
+                                    q[1].write_real(dst.get_unchecked_mut(output_stride..));
+                                    q[2].write_real(dst.get_unchecked_mut(output_stride * 2..));
+                                    q[3].write_real(dst.get_unchecked_mut(output_stride * 3..));
+
+                                    // i = 1
+                                    q[4].write_real(dst.get_unchecked_mut(4..));
+                                    q[5].write_real(dst.get_unchecked_mut(4 + output_stride..));
+                                    q[6].write_real(dst.get_unchecked_mut(4 + output_stride * 2..));
+                                    q[7].write_real(dst.get_unchecked_mut(4 + output_stride * 3..));
+
+                                    // i = 2
+                                    q[8].write_real(dst.get_unchecked_mut(8..));
+                                    q[9].write_real(dst.get_unchecked_mut(8 + output_stride..));
+                                    q[10]
+                                        .write_real(dst.get_unchecked_mut(8 + output_stride * 2..));
+                                    q[11]
+                                        .write_real(dst.get_unchecked_mut(8 + output_stride * 3..));
+
+                                    // i = 3
+                                    q[12].write_real(dst.get_unchecked_mut(12..));
+                                    q[13].write_real(dst.get_unchecked_mut(12 + output_stride..));
+                                    q[14].write_real(
+                                        dst.get_unchecked_mut(12 + output_stride * 2..),
+                                    );
+                                    q[15].write_real(
+                                        dst.get_unchecked_mut(12 + output_stride * 3..),
+                                    );
+                                }
+                                _ => {
+                                    unreachable!()
+                                }
+                            }
+
+                            x += X_BLOCK_SIZE;
+                        }
+                    } else if REM == 1 {
+                        while x + X_BLOCK_SIZE <= width {
+                            let output_x = x;
+
+                            let src = src.get_unchecked(x..);
+                            let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                            for i in 0..Y_BLOCK_SIZE {
+                                let q0 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride..),
+                                );
+                                let q1 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride + 2..),
+                                );
+                                let v = q0.unpack_evens(q1);
+                                store[i] = v;
+                            }
+
+                            let q = $rot_name(store);
+
+                            for i in 0..QUO {
+                                q[i * 4].write_real(dst.get_unchecked_mut(i * 4..));
+                                q[i * 4 + 1]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride..));
+                                q[i * 4 + 2]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride * 2..));
+                                q[i * 4 + 3]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride * 3..));
+                            }
+
+                            q[QUO * 4].write_real_lo1(dst.get_unchecked_mut(QUO * 4..));
+                            q[QUO * 4 + 1]
+                                .write_real_lo1(dst.get_unchecked_mut(QUO * 4 + output_stride..));
+                            q[QUO * 4 + 2].write_real_lo1(
+                                dst.get_unchecked_mut(QUO * 4 + output_stride * 2..),
+                            );
+                            q[QUO * 4 + 3].write_real_lo1(
+                                dst.get_unchecked_mut(QUO * 4 + output_stride * 3..),
+                            );
+
+                            x += X_BLOCK_SIZE;
+                        }
+                    } else if REM == 2 {
+                        while x + X_BLOCK_SIZE <= width {
+                            let output_x = x;
+
+                            let src = src.get_unchecked(x..);
+                            let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                            for i in 0..Y_BLOCK_SIZE {
+                                let q0 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride..),
+                                );
+                                let q1 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride + 2..),
+                                );
+                                let v = q0.unpack_evens(q1);
+                                store[i] = v;
+                            }
+
+                            let q = $rot_name(store);
+
+                            for i in 0..QUO {
+                                q[i * 4].write_real(dst.get_unchecked_mut(i * 4..));
+                                q[i * 4 + 1]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride..));
+                                q[i * 4 + 2]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride * 2..));
+                                q[i * 4 + 3]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride * 3..));
+                            }
+
+                            q[QUO * 4].write_real_lo2(dst.get_unchecked_mut(QUO * 4..));
+                            q[QUO * 4 + 1]
+                                .write_real_lo2(dst.get_unchecked_mut(QUO * 4 + output_stride..));
+                            q[QUO * 4 + 2].write_real_lo2(
+                                dst.get_unchecked_mut(QUO * 4 + output_stride * 2..),
+                            );
+                            q[QUO * 4 + 3].write_real_lo2(
+                                dst.get_unchecked_mut(QUO * 4 + output_stride * 3..),
+                            );
+
+                            x += X_BLOCK_SIZE;
+                        }
+                    } else if REM == 3 {
+                        while x + X_BLOCK_SIZE <= width {
+                            let output_x = x;
+
+                            let src = src.get_unchecked(x..);
+                            let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                            for i in 0..Y_BLOCK_SIZE {
+                                let q0 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride..),
+                                );
+                                let q1 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride + 2..),
+                                );
+                                let v = q0.unpack_evens(q1);
+                                store[i] = v;
+                            }
+
+                            let q = $rot_name(store);
+
+                            for i in 0..QUO {
+                                q[i * 4].write_real(dst.get_unchecked_mut(i * 4..));
+                                q[i * 4 + 1]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride..));
+                                q[i * 4 + 2]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride * 2..));
+                                q[i * 4 + 3]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride * 3..));
+                            }
+
+                            q[QUO * 4].write_real_lo3(dst.get_unchecked_mut(QUO * 4..));
+                            q[QUO * 4 + 1]
+                                .write_real_lo3(dst.get_unchecked_mut(QUO * 4 + output_stride..));
+                            q[QUO * 4 + 2].write_real_lo3(
+                                dst.get_unchecked_mut(QUO * 4 + output_stride * 2..),
+                            );
+                            q[QUO * 4 + 3].write_real_lo3(
+                                dst.get_unchecked_mut(QUO * 4 + output_stride * 3..),
+                            );
+
+                            x += X_BLOCK_SIZE;
+                        }
+                    }
+
+                    if x < width {
+                        let rem_x = width - x;
+                        let output_x = x;
+
+                        let src = src.get_unchecked(x..);
+                        let dst = output.get_unchecked_mut(y + output_stride * output_x..);
+
+                        if rem_x == 1 {
+                            for i in 0..Y_BLOCK_SIZE {
+                                store[i] =
+                                    NeonStoreF::from_complex(src.get_unchecked(i * input_stride));
+                            }
+                        } else if rem_x == 2 {
+                            for i in 0..Y_BLOCK_SIZE {
+                                store[i] = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride..),
+                                )
+                                .dup_even_odds()[0];
+                            }
+                        } else if rem_x == 3 {
+                            for i in 0..Y_BLOCK_SIZE {
+                                let q0 = NeonStoreF::from_complex_ref(
+                                    src.get_unchecked(i * input_stride..),
+                                );
+                                let q1 = NeonStoreF::from_complex(
+                                    src.get_unchecked(i * input_stride + 2),
+                                );
+                                let v = q0.unpack_evens(q1);
+                                store[i] = v;
+                            }
+                        }
+
+                        let q = $rot_name(store);
+
+                        if rem_x == 1 {
+                            for i in 0..QUO {
+                                q[i * 4].write_real(dst.get_unchecked_mut(i * 4..));
+                            }
+
+                            if REM == 1 {
+                                q[QUO * 4].write_real_lo1(dst.get_unchecked_mut(QUO * 4..));
+                            } else if REM == 2 {
+                                q[QUO * 4].write_real_lo2(dst.get_unchecked_mut(QUO * 4..));
+                            } else if REM == 3 {
+                                q[QUO * 4].write_real_lo3(dst.get_unchecked_mut(QUO * 4..));
+                            }
+                        } else if rem_x == 2 {
+                            for i in 0..QUO {
+                                q[i * 4].write_real(dst.get_unchecked_mut(i * 4..));
+                                q[i * 4 + 1]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride..));
+                            }
+
+                            if REM == 1 {
+                                q[QUO * 4].write_real_lo1(dst.get_unchecked_mut(QUO * 4..));
+                                q[QUO * 4 + 1].write_real_lo1(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride..),
+                                );
+                            } else if REM == 2 {
+                                q[QUO * 4].write_real_lo2(dst.get_unchecked_mut(QUO * 4..));
+                                q[QUO * 4 + 1].write_real_lo2(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride..),
+                                );
+                            } else if REM == 3 {
+                                q[QUO * 4].write_real_lo3(dst.get_unchecked_mut(QUO * 4..));
+                                q[QUO * 4 + 1].write_real_lo3(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride..),
+                                );
+                            }
+                        } else if rem_x == 3 {
+                            for i in 0..QUO {
+                                q[i * 4].write_real(dst.get_unchecked_mut(i * 4..));
+                                q[i * 4 + 1]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride..));
+                                q[i * 4 + 2]
+                                    .write_real(dst.get_unchecked_mut(i * 4 + output_stride * 2..));
+                            }
+
+                            if REM == 1 {
+                                q[QUO * 4].write_real_lo1(dst.get_unchecked_mut(QUO * 4..));
+                                q[QUO * 4 + 1].write_real_lo1(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride..),
+                                );
+                                q[QUO * 4 + 2].write_real_lo1(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride * 2..),
+                                );
+                            } else if REM == 2 {
+                                q[QUO * 4].write_real_lo2(dst.get_unchecked_mut(QUO * 4..));
+                                q[QUO * 4 + 1].write_real_lo2(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride..),
+                                );
+                                q[QUO * 4 + 2].write_real_lo2(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride * 2..),
+                                );
+                            } else if REM == 3 {
+                                q[QUO * 4].write_real_lo3(dst.get_unchecked_mut(QUO * 4..));
+                                q[QUO * 4 + 1].write_real_lo3(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride..),
+                                );
+                                q[QUO * 4 + 2].write_real_lo3(
+                                    dst.get_unchecked_mut(QUO * 4 + output_stride * 2..),
+                                );
+                            }
+                        }
+                    }
+
+                    y += Y_BLOCK_SIZE;
+                }
+            }
+
+            y
+        }
+
+        #[derive(Default)]
+        pub(crate) struct $rule_name {}
+
+        impl TransposeExecutorRealInv<f32> for $rule_name {
+            fn transpose(
+                &self,
+                input: &[Complex<f32>],
+                output: &mut [f32],
+                width: usize,
+                height: usize,
+            ) {
+                $method_name(input, width, output, height, width, height, 0);
+            }
+        }
+    };
+}
+
 define_transpose!(NeonTranspose7x7F32, f32, block_transpose_f32x2_7x7, 7, 7);
 define_transpose!(NeonTranspose7x6F32, f32, block_transpose_f32x2_7x6, 7, 6);
 define_transpose!(NeonTranspose7x5F32, f32, block_transpose_f32x2_7x5, 7, 5);
@@ -499,3 +997,56 @@ define_transposed!(NeonTransposeNx16F64, f64, 1, 16);
 define_transposed!(NeonTransposeNx17F64, f64, 1, 17);
 define_transposed!(NeonTransposeNx18F64, f64, 1, 18);
 define_transposed!(NeonTransposeNx19F64, f64, 1, 19);
+
+define_transpose_inv_d!(NeonTransposeRealInvNx3F64, transpose_f64x2_2x3, f64, 2, 3);
+define_transpose_inv_d!(NeonTransposeRealInvNx5F64, transpose_f64x2_2x5, f64, 2, 5);
+define_transpose_inv_d!(NeonTransposeRealInvNx7F64, transpose_f64x2_2x7, f64, 2, 7);
+define_transpose_inv_d!(NeonTransposeRealInvNx9F64, transpose_f64x2_2x9, f64, 2, 9);
+define_transpose_inv_d!(
+    NeonTransposeRealInvNx11F64,
+    transpose_f64x2_2x11,
+    f64,
+    2,
+    11
+);
+
+define_transpose_to_real_oddf!(
+    NeonTransposeRealInvNx3F32,
+    neon_f32x4_trns_4x3,
+    transpose_f32x4_4x3,
+    4,
+    3,
+    4
+);
+define_transpose_to_real_oddf!(
+    NeonTransposeRealInvNx5F32,
+    neon_f32x4_trns_4x5,
+    transpose_f32x4_4x5,
+    4,
+    5,
+    8
+);
+define_transpose_to_real_oddf!(
+    NeonTransposeRealInvNx7F32,
+    neon_f32x4_trns_4x7,
+    transpose_f32x4_4x7,
+    4,
+    7,
+    8
+);
+define_transpose_to_real_oddf!(
+    NeonTransposeRealInvNx9F32,
+    neon_f32x4_trns_4x9,
+    transpose_f32x4_4x9,
+    4,
+    9,
+    12
+);
+define_transpose_to_real_oddf!(
+    NeonTransposeRealInvNx11F32,
+    neon_f32x4_trns_4x11,
+    transpose_f32x4_4x11,
+    4,
+    11,
+    12
+);
