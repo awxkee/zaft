@@ -27,12 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::modulo_one)]
-use crate::err::try_vec;
 use crate::neon::mixed::bf2::{ColumnButterfly2d, ColumnButterfly2f};
 use crate::neon::mixed::bf3::*;
 use crate::neon::mixed::bf4::{ColumnButterfly4d, ColumnButterfly4f};
 use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
 use crate::transpose::{TransposeExecutor, TransposeFactory};
+use crate::util::ScratchBuffer;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -113,11 +113,15 @@ macro_rules! define_mixed_radix_neon_d {
 
         impl FftExecutor<f64> for $radix_name {
             fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
-                unsafe { self.execute_impl(in_place, &mut scratch) }
+                let mut scratch = ScratchBuffer::<Complex<f64>, 2048>::new(self.scratch_length());
+                unsafe { self.execute_impl(in_place, scratch.as_mut_slice()) }
             }
 
-            fn execute_with_scratch(&self, in_place: &mut [Complex<f64>], scratch: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+            fn execute_with_scratch(
+                &self,
+                in_place: &mut [Complex<f64>],
+                scratch: &mut [Complex<f64>],
+            ) -> Result<(), ZaftError> {
                 unsafe { self.execute_impl(in_place, scratch) }
             }
 
@@ -126,8 +130,9 @@ macro_rules! define_mixed_radix_neon_d {
                 src: &[Complex<f64>],
                 dst: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
-                self.execute_out_of_place_with_scratch(src, dst, &mut scratch)
+                let mut scratch =
+                    ScratchBuffer::<Complex<f64>, 2048>::new(self.out_of_place_scratch_length());
+                self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
             }
 
             fn execute_out_of_place_with_scratch(
@@ -136,9 +141,7 @@ macro_rules! define_mixed_radix_neon_d {
                 dst: &mut [Complex<f64>],
                 scratch: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                unsafe {
-                    self.execute_oof_impl(src, dst, scratch)
-                }
+                unsafe { self.execute_oof_impl(src, dst, scratch) }
             }
 
             fn execute_destructive_with_scratch(
@@ -147,9 +150,7 @@ macro_rules! define_mixed_radix_neon_d {
                 dst: &mut [Complex<f64>],
                 scratch: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                unsafe {
-                    self.execute_d_oof_impl(src, dst, scratch)
-                }
+                unsafe { self.execute_d_oof_impl(src, dst, scratch) }
             }
 
             fn direction(&self) -> FftDirection {
@@ -168,12 +169,12 @@ macro_rules! define_mixed_radix_neon_d {
 
             #[inline]
             fn out_of_place_scratch_length(&self) -> usize {
-                 self.execution_length + self.oof_width_scratch_length
+                self.execution_length + self.oof_width_scratch_length
             }
 
             #[inline]
             fn destructive_scratch_length(&self) -> usize {
-                 self.oof_width_scratch_length
+                self.oof_width_scratch_length
             }
         }
 
@@ -198,8 +199,11 @@ macro_rules! define_mixed_radix_neon_d {
                 for chunk in in_place.chunks_exact_mut(self.execution_length) {
                     self.process_columns_in_place(chunk);
 
-                    self.width_executor
-                        .execute_destructive_with_scratch(chunk, scratch, width_scratch)?;
+                    self.width_executor.execute_destructive_with_scratch(
+                        chunk,
+                        scratch,
+                        width_scratch,
+                    )?;
 
                     self.transpose_executor
                         .transpose(&scratch, chunk, self.width, self.height);
@@ -208,10 +212,7 @@ macro_rules! define_mixed_radix_neon_d {
             }
 
             #[target_feature(enable = $features)]
-            fn process_columns_in_place(
-                &self,
-                chunk: &mut [Complex<f64>],
-            )  {
+            fn process_columns_in_place(&self, chunk: &mut [Complex<f64>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
                 const COMPLEX_PER_VECTOR: usize = 1;
@@ -254,9 +255,7 @@ macro_rules! define_mixed_radix_neon_d {
                         let twiddle = twiddles[i - 1];
                         let output = NeonStoreD::$mul(output[i], twiddle);
                         unsafe {
-                            output.write(
-                                chunk.get_unchecked_mut(index_base + len_per_row * i..),
-                            )
+                            output.write(chunk.get_unchecked_mut(index_base + len_per_row * i..))
                         }
                     }
                 }
@@ -277,23 +276,25 @@ macro_rules! define_mixed_radix_neon_d {
 
                 for (dst_chunk, src_chunk) in dst
                     .chunks_exact_mut(self.execution_length)
-                    .zip(src.chunks_exact_mut(self.execution_length)) {
+                    .zip(src.chunks_exact_mut(self.execution_length))
+                {
                     self.process_columns_in_place(src_chunk);
 
-                    self.width_executor.execute_with_scratch(src_chunk, scratch)?;
+                    self.width_executor
+                        .execute_with_scratch(src_chunk, scratch)?;
 
-                    self.transpose_executor
-                        .transpose(src_chunk, dst_chunk, self.width, self.height);
+                    self.transpose_executor.transpose(
+                        src_chunk,
+                        dst_chunk,
+                        self.width,
+                        self.height,
+                    );
                 }
                 Ok(())
             }
 
             #[target_feature(enable = $features)]
-            fn process_oof_columns(
-                &self,
-                chunk: &[Complex<f64>],
-                scratch: &mut [Complex<f64>],
-            ) {
+            fn process_oof_columns(&self, chunk: &[Complex<f64>], scratch: &mut [Complex<f64>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
                 const COMPLEX_PER_VECTOR: usize = 1;
@@ -337,9 +338,7 @@ macro_rules! define_mixed_radix_neon_d {
                         let twiddle = twiddles[i - 1];
                         let output = NeonStoreD::$mul(output[i], twiddle);
                         unsafe {
-                            output.write(
-                                scratch.get_unchecked_mut(index_base + len_per_row * i..),
-                            )
+                            output.write(scratch.get_unchecked_mut(index_base + len_per_row * i..))
                         }
                     }
                 }
@@ -361,7 +360,8 @@ macro_rules! define_mixed_radix_neon_d {
 
                 for (dst_chunk, chunk) in dst
                     .chunks_exact_mut(self.execution_length)
-                    .zip(src.chunks_exact(self.execution_length)) {
+                    .zip(src.chunks_exact(self.execution_length))
+                {
                     self.process_oof_columns(chunk, scratch);
 
                     self.width_executor
@@ -450,11 +450,15 @@ macro_rules! define_mixed_radix_neon_f {
 
         impl FftExecutor<f32> for $radix_name {
             fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
-                unsafe { self.execute_impl(in_place, &mut scratch) }
+                let mut scratch = ScratchBuffer::<Complex<f32>, 2048>::new(self.scratch_length());
+                unsafe { self.execute_impl(in_place, scratch.as_mut_slice()) }
             }
 
-            fn execute_with_scratch(&self, in_place: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+            fn execute_with_scratch(
+                &self,
+                in_place: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
                 unsafe { self.execute_impl(in_place, scratch) }
             }
 
@@ -463,8 +467,9 @@ macro_rules! define_mixed_radix_neon_f {
                 src: &[Complex<f32>],
                 dst: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-                let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
-                self.execute_out_of_place_with_scratch(src, dst, &mut scratch)
+                let mut scratch =
+                    ScratchBuffer::<Complex<f32>, 2048>::new(self.out_of_place_scratch_length());
+                self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
             }
 
             fn execute_out_of_place_with_scratch(
@@ -473,9 +478,7 @@ macro_rules! define_mixed_radix_neon_f {
                 dst: &mut [Complex<f32>],
                 scratch: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-                unsafe {
-                    self.execute_oof_impl(src, dst, scratch)
-                }
+                unsafe { self.execute_oof_impl(src, dst, scratch) }
             }
 
             fn execute_destructive_with_scratch(
@@ -484,9 +487,7 @@ macro_rules! define_mixed_radix_neon_f {
                 dst: &mut [Complex<f32>],
                 scratch: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-                unsafe {
-                    self.execute_d_oof_impl(src, dst, scratch)
-                }
+                unsafe { self.execute_d_oof_impl(src, dst, scratch) }
             }
 
             fn direction(&self) -> FftDirection {
@@ -505,12 +506,12 @@ macro_rules! define_mixed_radix_neon_f {
 
             #[inline]
             fn out_of_place_scratch_length(&self) -> usize {
-                 self.execution_length + self.oof_width_scratch_length
+                self.execution_length + self.oof_width_scratch_length
             }
 
             #[inline]
             fn destructive_scratch_length(&self) -> usize {
-                 self.oof_width_scratch_length
+                self.oof_width_scratch_length
             }
         }
 
@@ -535,8 +536,11 @@ macro_rules! define_mixed_radix_neon_f {
                 for chunk in in_place.chunks_exact_mut(self.execution_length) {
                     self.process_columns_in_place(chunk);
 
-                    self.width_executor
-                        .execute_destructive_with_scratch(chunk, scratch, width_scratch)?;
+                    self.width_executor.execute_destructive_with_scratch(
+                        chunk,
+                        scratch,
+                        width_scratch,
+                    )?;
 
                     self.transpose_executor
                         .transpose(&scratch, chunk, self.width, self.height);
@@ -545,10 +549,7 @@ macro_rules! define_mixed_radix_neon_f {
             }
 
             #[target_feature(enable = $features)]
-            fn process_columns_in_place(
-                &self,
-                chunk: &mut [Complex<f32>],
-            ) {
+            fn process_columns_in_place(&self, chunk: &mut [Complex<f32>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
                 const COMPLEX_PER_VECTOR: usize = 2;
@@ -557,95 +558,88 @@ macro_rules! define_mixed_radix_neon_f {
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
 
                 for (c, twiddle_chunk) in self
-                        .twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN)
-                        .take(chunk_count)
-                        .enumerate()
-                    {
-                        let index_base = c * COMPLEX_PER_VECTOR;
+                    .twiddles
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .take(chunk_count)
+                    .enumerate()
+                {
+                    let index_base = c * COMPLEX_PER_VECTOR;
 
-                        // Load columns from the input into registers
-                        let mut columns = [NeonStoreF::default(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = NeonStoreF::from_complex_ref(
-                                    chunk.get_unchecked(index_base + len_per_row * i..),
-                                );
-                            }
-                        }
-
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec(columns) };
-
+                    // Load columns from the input into registers
+                    let mut columns = [NeonStoreF::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
                         unsafe {
-                            output[0].write(chunk.get_unchecked_mut(index_base..));
-                        }
-
-                        // here LLVM doesn't "see" NeonStoreF as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreF::default(); ROW_COUNT - 1];
-                        for i in 0..ROW_COUNT - 1 {
-                            twiddles[i] = twiddle_chunk[i];
-                        }
-
-                        for i in 1..ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = NeonStoreF::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    chunk.get_unchecked_mut(index_base + len_per_row * i..),
-                                )
-                            }
+                            columns[i] = NeonStoreF::from_complex_ref(
+                                chunk.get_unchecked(index_base + len_per_row * i..),
+                            );
                         }
                     }
 
-                    let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                    if partial_remainder > 0 {
-                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                        let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec(columns) };
 
-                        let mut columns = [NeonStoreFh::default(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = NeonStoreFh::load(
-                                    chunk
-                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                );
-                            }
-                        }
+                    unsafe {
+                        output[0].write(chunk.get_unchecked_mut(index_base..));
+                    }
 
-                        // apply our butterfly function down the columns
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exech(columns) };
+                    // here LLVM doesn't "see" NeonStoreF as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [NeonStoreF::default(); ROW_COUNT - 1];
+                    for i in 0..ROW_COUNT - 1 {
+                        twiddles[i] = twiddle_chunk[i];
+                    }
 
-                        // always write the first row without twiddles
+                    for i in 1..ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = NeonStoreF::$mul(output[i], twiddle);
                         unsafe {
-                            output[0].write(chunk.get_unchecked_mut(partial_remainder_base..));
+                            output.write(chunk.get_unchecked_mut(index_base + len_per_row * i..))
                         }
+                    }
+                }
 
-                        // here LLVM doesn't "see" NeonStoreFh as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreFh::default(); ROW_COUNT - 1];
-                        for i in 0..ROW_COUNT - 1 {
-                            twiddles[i] = final_twiddle_chunk[i].lo();
-                        }
+                let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
+                if partial_remainder > 0 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
-                        // for the remaining rows, apply twiddle factors and then write back to memory
-                        for i in 1..ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = NeonStoreFh::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    chunk.get_unchecked_mut(
-                                        partial_remainder_base + len_per_row * i..,
-                                    ),
-                                );
-                            }
+                    let mut columns = [NeonStoreFh::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = NeonStoreFh::load(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            );
                         }
                     }
 
+                    // apply our butterfly function down the columns
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exech(columns) };
+
+                    // always write the first row without twiddles
+                    unsafe {
+                        output[0].write(chunk.get_unchecked_mut(partial_remainder_base..));
+                    }
+
+                    // here LLVM doesn't "see" NeonStoreFh as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [NeonStoreFh::default(); ROW_COUNT - 1];
+                    for i in 0..ROW_COUNT - 1 {
+                        twiddles[i] = final_twiddle_chunk[i].lo();
+                    }
+
+                    // for the remaining rows, apply twiddle factors and then write back to memory
+                    for i in 1..ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = NeonStoreFh::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write(
+                                chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
+                }
             }
 
             #[target_feature(enable = $features)]
@@ -663,24 +657,25 @@ macro_rules! define_mixed_radix_neon_f {
 
                 for (dst_chunk, src_chunk) in dst
                     .chunks_exact_mut(self.execution_length)
-                    .zip(src.chunks_exact_mut(self.execution_length)) {
+                    .zip(src.chunks_exact_mut(self.execution_length))
+                {
                     self.process_columns_in_place(src_chunk);
 
                     self.width_executor
                         .execute_with_scratch(src_chunk, scratch)?;
 
-                    self.transpose_executor
-                        .transpose(src_chunk, dst_chunk, self.width, self.height);
+                    self.transpose_executor.transpose(
+                        src_chunk,
+                        dst_chunk,
+                        self.width,
+                        self.height,
+                    );
                 }
                 Ok(())
             }
 
             #[target_feature(enable = $features)]
-            fn process_oof_columns(
-                &self,
-                chunk: &[Complex<f32>],
-                scratch: &mut [Complex<f32>],
-            ) {
+            fn process_oof_columns(&self, chunk: &[Complex<f32>], scratch: &mut [Complex<f32>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
                 const COMPLEX_PER_VECTOR: usize = 2;
@@ -688,93 +683,88 @@ macro_rules! define_mixed_radix_neon_f {
                 let len_per_row = self.length() / ROW_COUNT;
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
                 for (c, twiddle_chunk) in self
-                        .twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN)
-                        .take(chunk_count)
-                        .enumerate()
-                    {
-                        let index_base = c * COMPLEX_PER_VECTOR;
+                    .twiddles
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .take(chunk_count)
+                    .enumerate()
+                {
+                    let index_base = c * COMPLEX_PER_VECTOR;
 
-                        // Load columns from the input into registers
-                        let mut columns = [NeonStoreF::default(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = NeonStoreF::from_complex_ref(
-                                    chunk.get_unchecked(index_base + len_per_row * i..),
-                                );
-                            }
-                        }
-
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec(columns) };
-
+                    // Load columns from the input into registers
+                    let mut columns = [NeonStoreF::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
                         unsafe {
-                            output[0].write(scratch.get_unchecked_mut(index_base..));
-                        }
-
-                        // here LLVM doesn't "see" NeonStoreF as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreF::default(); ROW_COUNT - 1];
-                        for i in 0..ROW_COUNT - 1 {
-                            twiddles[i] = twiddle_chunk[i];
-                        }
-
-                        for i in 1..ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = NeonStoreF::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    scratch.get_unchecked_mut(index_base + len_per_row * i..),
-                                )
-                            }
+                            columns[i] = NeonStoreF::from_complex_ref(
+                                chunk.get_unchecked(index_base + len_per_row * i..),
+                            );
                         }
                     }
 
-                    let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                    if partial_remainder > 0 {
-                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                        let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec(columns) };
 
-                        let mut columns = [NeonStoreFh::default(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = NeonStoreFh::load(
-                                    chunk
-                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                );
-                            }
-                        }
+                    unsafe {
+                        output[0].write(scratch.get_unchecked_mut(index_base..));
+                    }
 
-                        // apply our butterfly function down the columns
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exech(columns) };
+                    // here LLVM doesn't "see" NeonStoreF as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [NeonStoreF::default(); ROW_COUNT - 1];
+                    for i in 0..ROW_COUNT - 1 {
+                        twiddles[i] = twiddle_chunk[i];
+                    }
 
-                        // always write the first row without twiddles
+                    for i in 1..ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = NeonStoreF::$mul(output[i], twiddle);
                         unsafe {
-                            output[0].write(scratch.get_unchecked_mut(partial_remainder_base..));
+                            output.write(scratch.get_unchecked_mut(index_base + len_per_row * i..))
                         }
+                    }
+                }
 
-                        // here LLVM doesn't "see" NeonStoreFh as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreFh::default(); ROW_COUNT - 1];
-                        for i in 0..ROW_COUNT - 1 {
-                            twiddles[i] = final_twiddle_chunk[i].lo();
-                        }
+                let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
+                if partial_remainder > 0 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
-                        // for the remaining rows, apply twiddle factors and then write back to memory
-                        for i in 1..ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = NeonStoreFh::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    scratch.get_unchecked_mut(
-                                        partial_remainder_base + len_per_row * i..,
-                                    ),
-                                );
-                            }
+                    let mut columns = [NeonStoreFh::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = NeonStoreFh::load(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            );
                         }
+                    }
+
+                    // apply our butterfly function down the columns
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exech(columns) };
+
+                    // always write the first row without twiddles
+                    unsafe {
+                        output[0].write(scratch.get_unchecked_mut(partial_remainder_base..));
+                    }
+
+                    // here LLVM doesn't "see" NeonStoreFh as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [NeonStoreFh::default(); ROW_COUNT - 1];
+                    for i in 0..ROW_COUNT - 1 {
+                        twiddles[i] = final_twiddle_chunk[i].lo();
+                    }
+
+                    // for the remaining rows, apply twiddle factors and then write back to memory
+                    for i in 1..ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = NeonStoreFh::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write(
+                                scratch
+                                    .get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
                 }
             }
 
@@ -794,7 +784,8 @@ macro_rules! define_mixed_radix_neon_f {
 
                 for (dst_chunk, chunk) in dst
                     .chunks_exact_mut(self.execution_length)
-                    .zip(src.chunks_exact(self.execution_length)) {
+                    .zip(src.chunks_exact(self.execution_length))
+                {
                     self.process_oof_columns(chunk, scratch);
 
                     self.width_executor

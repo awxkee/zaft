@@ -29,14 +29,13 @@
 use crate::butterflies::Butterfly2;
 use crate::butterflies::short_butterflies::FastButterfly5;
 use crate::complex_fma::c_mul_fast;
-use crate::err::try_vec;
 use crate::util::{
-    bitreversed_transpose, is_power_of_ten, radixn_floating_twiddles_from_base, validate_oof_sizes,
-    validate_scratch,
+    ScratchBuffer, bitreversed_transpose, is_power_of_ten, radixn_floating_twiddles_from_base,
+    validate_oof_sizes, validate_scratch,
 };
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Zero};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 #[allow(dead_code)]
@@ -203,8 +202,8 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
-        self.execute_with_scratch(in_place, &mut scratch)
+        let mut scratch = ScratchBuffer::<Complex<T>, 2048>::new(self.scratch_length());
+        self.execute_with_scratch(in_place, scratch.as_mut_slice())
     }
 
     fn execute_with_scratch(

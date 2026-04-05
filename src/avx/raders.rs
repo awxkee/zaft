@@ -31,7 +31,7 @@ use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
 use crate::prime_factors::{PrimeFactors, primitive_root};
 use crate::spectrum_arithmetic::ComplexArith;
-use crate::util::{compute_twiddle, validate_oof_sizes, validate_scratch};
+use crate::util::{ScratchBuffer, compute_twiddle, validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_integer::Integer;
@@ -565,8 +565,8 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
-        unsafe { self.execute_impl(in_place, &mut scratch) }
+        let mut scratch = ScratchBuffer::<Complex<T>, 4096>::new(self.scratch_length());
+        unsafe { self.execute_impl(in_place, scratch.as_mut_slice()) }
     }
 
     fn execute_with_scratch(
@@ -582,8 +582,9 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
-        self.execute_out_of_place_with_scratch(src, dst, &mut scratch)
+        let mut scratch =
+            ScratchBuffer::<Complex<T>, 4096>::new(self.out_of_place_scratch_length());
+        self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
     }
 
     fn execute_out_of_place_with_scratch(
@@ -632,8 +633,8 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
-        unsafe { self.execute_r2c(input, output, &mut scratch) }
+        let mut scratch = ScratchBuffer::<Complex<T>, 3076>::new(self.complex_scratch_length());
+        unsafe { self.execute_r2c(input, output, scratch.as_mut_slice()) }
     }
 
     fn execute_with_scratch(

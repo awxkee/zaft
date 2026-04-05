@@ -70,38 +70,6 @@ pub(crate) static ALWAYS_BLUESTEIN_6000: [usize; 69] = [
     5903, 5923, 5927, 5939, 5987,
 ];
 
-// Digit-reversal permutation in base `radix`
-// pub(crate) fn digit_reverse_indices(n: usize, radix: usize) -> Result<Vec<usize>, ZaftError> {
-//     assert!(radix >= 2, "radix must be at least 2");
-//
-//     let mut indices = Vec::new();
-//     indices
-//         .try_reserve_exact(n)
-//         .map_err(|_| ZaftError::OutOfMemory(n))?;
-//
-//     for i in 0..n {
-//         let mut x = i;
-//         let mut rev = 0;
-//
-//         // Count number of digits needed
-//         let mut tmp = n;
-//         let mut digits = 0;
-//         while tmp > 1 {
-//             tmp /= radix;
-//             digits += 1;
-//         }
-//
-//         for _ in 0..digits {
-//             rev = rev * radix + (x % radix);
-//             x /= radix;
-//         }
-//
-//         indices.push(rev);
-//     }
-//
-//     Ok(indices)
-// }
-
 /// Helper function to check if a number is a power of 3.
 pub(crate) fn is_power_of_three(n: u64) -> bool {
     if n == 0 {
@@ -574,3 +542,32 @@ macro_rules! validate_oof_sizes {
 }
 
 pub(crate) use validate_oof_sizes;
+
+pub(crate) enum ScratchBuffer<T, const N: usize> {
+    Stack([T; N], usize),
+    Heap(Vec<T>),
+}
+
+impl<T: Default + Copy, const N: usize> ScratchBuffer<T, N> {
+    pub(crate) fn new(size: usize) -> Self {
+        if size <= N {
+            Self::Stack([T::default(); N], size)
+        } else {
+            Self::Heap(vec![T::default(); size])
+        }
+    }
+
+    pub(crate) fn as_mut_slice(&mut self) -> &mut [T] {
+        match self {
+            Self::Stack(buf, len) => &mut buf[..*len],
+            Self::Heap(buf) => buf.as_mut_slice(),
+        }
+    }
+
+    // pub(crate) fn as_slice(&self) -> &[T] {
+    //     match self {
+    //         Self::Stack(buf, len) => &buf[..*len],
+    //         Self::Heap(buf) => buf.as_slice(),
+    //     }
+    // }
+}

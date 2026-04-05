@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::r2c::C2RTwiddlesHandler;
 use crate::r2c::c2r_twiddles::C2RTwiddlesFactory;
-use crate::util::{compute_twiddle, validate_scratch};
+use crate::util::{ScratchBuffer, compute_twiddle, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
@@ -120,8 +120,8 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
-        self.execute_with_scratch(input, output, &mut scratch)
+        let mut scratch = ScratchBuffer::<Complex<T>, 4096>::new(self.complex_scratch_length());
+        self.execute_with_scratch(input, output, scratch.as_mut_slice())
     }
 
     fn execute_with_scratch(

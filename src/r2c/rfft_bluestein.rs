@@ -29,7 +29,7 @@
 use crate::bluestein::make_bluesteins_twiddles;
 use crate::err::try_vec;
 use crate::spectrum_arithmetic::ComplexArith;
-use crate::util::validate_scratch;
+use crate::util::{ScratchBuffer, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
@@ -102,8 +102,8 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
-        self.execute_with_scratch(input, output, &mut scratch)
+        let mut scratch = ScratchBuffer::<Complex<T>, 2048>::new(self.complex_scratch_length());
+        self.execute_with_scratch(input, output, scratch.as_mut_slice())
     }
 
     fn execute_with_scratch(
