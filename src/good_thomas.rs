@@ -26,13 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::err::try_vec;
 use crate::fast_divider::DividerUsize;
 use crate::transpose::TransposeExecutor;
-use crate::util::{validate_oof_sizes, validate_scratch};
+use crate::util::{ScratchBuffer, validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Zero};
+use num_traits::AsPrimitive;
 use std::sync::Arc;
 
 pub(crate) struct GoodThomasFft<T> {
@@ -207,8 +206,8 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
-        self.execute_with_scratch(in_place, &mut scratch)
+        let mut scratch = ScratchBuffer::<Complex<T>, 1024>::new(self.scratch_length());
+        self.execute_with_scratch(in_place, scratch.as_mut_slice())
     }
 
     fn execute_with_scratch(
@@ -258,8 +257,9 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
-        self.execute_out_of_place_with_scratch(src, dst, &mut scratch)
+        let mut scratch =
+            ScratchBuffer::<Complex<T>, 1024>::new(self.out_of_place_scratch_length());
+        self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
     }
 
     fn execute_out_of_place_with_scratch(

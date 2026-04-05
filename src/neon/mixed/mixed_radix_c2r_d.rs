@@ -54,11 +54,10 @@
     03*02*01*
 */
 
-use crate::err::try_vec;
 use crate::neon::mixed::NeonStoreD;
 use crate::transpose::TransposeExecutorRealInv;
 use crate::transpose::TransposeFactory;
-use crate::util::compute_twiddle;
+use crate::util::{ScratchBuffer, compute_twiddle};
 use crate::{C2RFftExecutor, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
@@ -132,18 +131,22 @@ macro_rules! define_mixed_radix_neon_d {
 
         impl C2RFftExecutor<f64> for $radix_name {
             fn execute(&self, input: &[Complex<f64>], output: &mut [f64]) -> Result<(), ZaftError> {
-                let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
-                self.execute_with_scratch(input, output, &mut scratch)
+                let mut scratch =
+                    ScratchBuffer::<Complex<f64>, 2048>::new(self.complex_scratch_length());
+                self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 
-            fn execute_with_scratch(&self, input: &[Complex<f64>], output: &mut [f64], scratch: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                unsafe {
-                    self.execute_oof_impl(input, output, scratch)
-                }
+            fn execute_with_scratch(
+                &self,
+                input: &[Complex<f64>],
+                output: &mut [f64],
+                scratch: &mut [Complex<f64>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(input, output, scratch) }
             }
 
             fn complex_length(&self) -> usize {
-                 self.execution_length / 2 + 1
+                self.execution_length / 2 + 1
             }
 
             fn complex_scratch_length(&self) -> usize {
@@ -157,11 +160,7 @@ macro_rules! define_mixed_radix_neon_d {
 
         impl $radix_name {
             #[target_feature(enable = $features)]
-            fn process_columns(
-                &self,
-                src: &[Complex<f64>],
-                complex: &mut [Complex<f64>],
-            ) {
+            fn process_columns(&self, src: &[Complex<f64>], complex: &mut [Complex<f64>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = $row_count - 1;
                 const COMPLEX_PER_VECTOR: usize = 1;
@@ -174,146 +173,134 @@ macro_rules! define_mixed_radix_neon_d {
                 let complex_chunks_count = chunk_count / 2 + 1;
 
                 let src_len = src.len();
-                
+
                 // Pass 1: chunks fully within the stored half-spectrum (c < complex_chunks_count).
                 // Both forward and mirror rows load from src without boundary special-casing.
                 for (c, twiddle_chunk) in self
-                        .twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN)
-                        .take(complex_chunks_count)
-                        .enumerate()
-                    {
-                        let index_base = c * COMPLEX_PER_VECTOR;
-                        // Reversed kx index: for kx, the mirror is at position (chunk_count - c)
-                        let reversed_index_base = (chunk_count - c) * COMPLEX_PER_VECTOR;
+                    .twiddles
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .take(complex_chunks_count)
+                    .enumerate()
+                {
+                    let index_base = c * COMPLEX_PER_VECTOR;
+                    // Reversed kx index: for kx, the mirror is at position (chunk_count - c)
+                    let reversed_index_base = (chunk_count - c) * COMPLEX_PER_VECTOR;
 
-                        // Load columns from the input into registers
-                        let mut columns = [NeonStoreD::default(); ROW_COUNT];
-                        for i in 0..ROW_COUNT / 2 + 1 {
-                            unsafe {
-                                let q = NeonStoreD::from_complex_ref(
-                                    src.get_unchecked(index_base + len_per_row * i..),
-                                );
-                                columns[i] = q;
-                            }
-                        }
-                        // Load mirror rows from C2R conjugate-reversed indices
-                        // Row ROW_COUNT-i mirrors row i, but kx is negated:
-                        // physical index = reversed_index_base + len_per_row * (i - 1)
-                        // but kx=0 col stays at offset 0, so reversed chunk index is:
-                        // chunk_count - 1 - c   for the non-DC columns
-                        for i in 1..=ROW_COUNT / 2 {
-                            unsafe {
-                                let mirror_row = ROW_COUNT - i;
-                                // +COMPLEX_PER_VECTOR because kx=0 is at offset 0 and not mirrored
-                                let r = reversed_index_base + len_per_row * (i - 1);
-                                let q = NeonStoreD::from_complex_ref(
-                                    src.get_unchecked(r..),
-                                );
-                                columns[mirror_row] = q.xor(conj_flag);
-                            }
-                        }
-
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec(columns) };
-
+                    // Load columns from the input into registers
+                    let mut columns = [NeonStoreD::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT / 2 + 1 {
                         unsafe {
-                            output[0].write(complex.get_unchecked_mut(index_base..));
+                            let q = NeonStoreD::from_complex_ref(
+                                src.get_unchecked(index_base + len_per_row * i..),
+                            );
+                            columns[i] = q;
                         }
-
-                        // here LLVM doesn't "see" NeonStoreD as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreD::default(); ROW_COUNT - 1];
-                        for i in 0..ROW_COUNT - 1 {
-                            twiddles[i] = twiddle_chunk[i];
-                        }
-
-                        for i in 1..ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = NeonStoreD::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    complex.get_unchecked_mut(index_base + len_per_row * i..),
-                                )
-                            }
+                    }
+                    // Load mirror rows from C2R conjugate-reversed indices
+                    // Row ROW_COUNT-i mirrors row i, but kx is negated:
+                    // physical index = reversed_index_base + len_per_row * (i - 1)
+                    // but kx=0 col stays at offset 0, so reversed chunk index is:
+                    // chunk_count - 1 - c   for the non-DC columns
+                    for i in 1..=ROW_COUNT / 2 {
+                        unsafe {
+                            let mirror_row = ROW_COUNT - i;
+                            // +COMPLEX_PER_VECTOR because kx=0 is at offset 0 and not mirrored
+                            let r = reversed_index_base + len_per_row * (i - 1);
+                            let q = NeonStoreD::from_complex_ref(src.get_unchecked(r..));
+                            columns[mirror_row] = q.xor(conj_flag);
                         }
                     }
 
-                let twiddles = &self.twiddles[complex_chunks_count*TWIDDLES_PER_COLUMN..];
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec(columns) };
+
+                    unsafe {
+                        output[0].write(complex.get_unchecked_mut(index_base..));
+                    }
+
+                    // here LLVM doesn't "see" NeonStoreD as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [NeonStoreD::default(); ROW_COUNT - 1];
+                    for i in 0..ROW_COUNT - 1 {
+                        twiddles[i] = twiddle_chunk[i];
+                    }
+
+                    for i in 1..ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = NeonStoreD::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write(complex.get_unchecked_mut(index_base + len_per_row * i..))
+                        }
+                    }
+                }
+
+                let twiddles = &self.twiddles[complex_chunks_count * TWIDDLES_PER_COLUMN..];
 
                 // Pass 2: chunks that cross or lie beyond the Middle boundary.
                 // The middle row must be assembled from the end of src based on middle_lane.
                 for (c, twiddle_chunk) in twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN)
-                        .take(chunk_count - complex_chunks_count)
-                        .enumerate()
-                    {
-                        let c0 = c;
-                        let c = complex_chunks_count + c;
-                        let index_base = c * COMPLEX_PER_VECTOR;
-                        // Reversed kx index: for kx, the mirror is at position (chunk_count - c)
-                        let reversed_index_base = (chunk_count - c) * COMPLEX_PER_VECTOR;
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .take(chunk_count - complex_chunks_count)
+                    .enumerate()
+                {
+                    let c0 = c;
+                    let c = complex_chunks_count + c;
+                    let index_base = c * COMPLEX_PER_VECTOR;
+                    // Reversed kx index: for kx, the mirror is at position (chunk_count - c)
+                    let reversed_index_base = (chunk_count - c) * COMPLEX_PER_VECTOR;
 
-                        // Load columns from the input into registers
-                        let mut columns = [NeonStoreD::default(); ROW_COUNT];
-                        for i in 0..ROW_COUNT / 2 {
-                            unsafe {
-                                let input = index_base + len_per_row * i;
-                                let q = NeonStoreD::from_complex_ref(
-                                    src.get_unchecked(input..),
-                                );
-                                columns[i] = q;
-                            }
-                        }
+                    // Load columns from the input into registers
+                    let mut columns = [NeonStoreD::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT / 2 {
                         unsafe {
-                            // middle lane after half have odd conjugation we need to handle this
-                            let input = src_len - c0 - 1;
-                            let q = NeonStoreD::from_complex_ref(
-                                src.get_unchecked(input..),
-                            );
-                            columns[ROW_COUNT / 2] = q.xor(conj_flag);
-                        }
-                        // Load mirror rows from C2R conjugate-reversed indices
-                        // Row ROW_COUNT-i mirrors row i, but kx is negated:
-                        // physical index = reversed_index_base + len_per_row * (i - 1)
-                        // but kx=0 col stays at offset 0, so reversed chunk index is:
-                        // chunk_count - 1 - c   for the non-DC columns
-                        for i in 1..=ROW_COUNT / 2 {
-                            unsafe {
-                                let mirror_row = ROW_COUNT - i;
-                                // +COMPLEX_PER_VECTOR because kx=0 is at offset 0 and not mirrored
-                                let r = reversed_index_base + len_per_row * (i - 1);
-                                let q = NeonStoreD::from_complex_ref(
-                                    src.get_unchecked(r..),
-                                );
-                                columns[mirror_row] = q.xor(conj_flag);
-                            }
-                        }
-
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec(columns) };
-
-                        unsafe {
-                            output[0].write(complex.get_unchecked_mut(index_base..));
-                        }
-
-                        // here LLVM doesn't "see" NeonStoreD as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [NeonStoreD::default(); ROW_COUNT - 1];
-                        for i in 0..ROW_COUNT - 1 {
-                            twiddles[i] = twiddle_chunk[i];
-                        }
-
-                        for i in 1..ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = NeonStoreD::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    complex.get_unchecked_mut(index_base + len_per_row * i..),
-                                )
-                            }
+                            let input = index_base + len_per_row * i;
+                            let q = NeonStoreD::from_complex_ref(src.get_unchecked(input..));
+                            columns[i] = q;
                         }
                     }
+                    unsafe {
+                        // middle lane after half have odd conjugation we need to handle this
+                        let input = src_len - c0 - 1;
+                        let q = NeonStoreD::from_complex_ref(src.get_unchecked(input..));
+                        columns[ROW_COUNT / 2] = q.xor(conj_flag);
+                    }
+                    // Load mirror rows from C2R conjugate-reversed indices
+                    // Row ROW_COUNT-i mirrors row i, but kx is negated:
+                    // physical index = reversed_index_base + len_per_row * (i - 1)
+                    // but kx=0 col stays at offset 0, so reversed chunk index is:
+                    // chunk_count - 1 - c   for the non-DC columns
+                    for i in 1..=ROW_COUNT / 2 {
+                        unsafe {
+                            let mirror_row = ROW_COUNT - i;
+                            // +COMPLEX_PER_VECTOR because kx=0 is at offset 0 and not mirrored
+                            let r = reversed_index_base + len_per_row * (i - 1);
+                            let q = NeonStoreD::from_complex_ref(src.get_unchecked(r..));
+                            columns[mirror_row] = q.xor(conj_flag);
+                        }
+                    }
+
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec(columns) };
+
+                    unsafe {
+                        output[0].write(complex.get_unchecked_mut(index_base..));
+                    }
+
+                    // here LLVM doesn't "see" NeonStoreD as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [NeonStoreD::default(); ROW_COUNT - 1];
+                    for i in 0..ROW_COUNT - 1 {
+                        twiddles[i] = twiddle_chunk[i];
+                    }
+
+                    for i in 1..ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = NeonStoreD::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write(complex.get_unchecked_mut(index_base + len_per_row * i..))
+                        }
+                    }
+                }
             }
 
             #[target_feature(enable = $features)]
@@ -323,7 +310,7 @@ macro_rules! define_mixed_radix_neon_d {
                 dst: &mut [f64],
                 scratch: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-              if !src.len().is_multiple_of(self.complex_length()) {
+                if !src.len().is_multiple_of(self.complex_length()) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         src.len(),
                         self.complex_length(),
@@ -348,7 +335,8 @@ macro_rules! define_mixed_radix_neon_d {
 
                 for (dst_chunk, chunk) in dst
                     .chunks_exact_mut(self.execution_length)
-                    .zip(src.chunks_exact(self.complex_length())) {
+                    .zip(src.chunks_exact(self.complex_length()))
+                {
                     self.process_columns(chunk, scratch_complex);
 
                     let (width_scratch, _) = rem_scratch.split_at_mut(self.width_scratch_length);

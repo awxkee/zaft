@@ -26,18 +26,17 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::err::try_vec;
 use crate::neon::butterflies::NeonButterfly;
 use crate::neon::radix13::neon_bitreversed_transpose_f32_radix13;
 use crate::neon::util::{create_neon_twiddles, vfcmulq_fcma_f32, vfcmulq_fcma_f64};
 use crate::radix13::Radix13Twiddles;
 use crate::util::{
-    bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_thirteen,
+    ScratchBuffer, bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_thirteen,
     validate_oof_sizes, validate_scratch,
 };
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::{AsPrimitive, Zero};
+use num_traits::AsPrimitive;
 use std::arch::aarch64::*;
 use std::sync::Arc;
 
@@ -96,8 +95,8 @@ where
 
 impl FftExecutor<f64> for NeonFcmaRadix13<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
-        unsafe { self.execute_f64(in_place, &mut scratch) }
+        let mut scratch = ScratchBuffer::<Complex<f64>, 2048>::new(self.scratch_length());
+        unsafe { self.execute_f64(in_place, scratch.as_mut_slice()) }
     }
 
     fn execute_with_scratch(
@@ -468,8 +467,8 @@ impl NeonFcmaRadix13<f64> {
 
 impl FftExecutor<f32> for NeonFcmaRadix13<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
-        unsafe { self.execute_f32(in_place, &mut scratch) }
+        let mut scratch = ScratchBuffer::<Complex<f32>, 2048>::new(self.scratch_length());
+        unsafe { self.execute_f32(in_place, scratch.as_mut_slice()) }
     }
 
     fn execute_with_scratch(

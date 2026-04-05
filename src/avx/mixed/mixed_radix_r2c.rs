@@ -28,7 +28,7 @@
  */
 use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::transpose::{TransposeExecutor, TransposeFactory};
-use crate::util::compute_twiddle;
+use crate::util::{ScratchBuffer, compute_twiddle};
 use crate::{FftExecutor, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
@@ -53,9 +53,7 @@ macro_rules! define_mixed_radix_avx_d {
             pub(crate) fn new(
                 width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
-                unsafe {
-                    Self::new_impl(width_executor)
-                }
+                unsafe { Self::new_impl(width_executor) }
             }
 
             #[target_feature(enable = "avx2", enable = "fma")]
@@ -113,7 +111,10 @@ macro_rules! define_mixed_radix_avx_d {
                     width,
                     height: ROW_COUNT,
                     twiddles,
-                    transpose_executor: f64::transpose_strategy(width - to_remove_second_stage, $complex_row_count),
+                    transpose_executor: f64::transpose_strategy(
+                        width - to_remove_second_stage,
+                        $complex_row_count,
+                    ),
                     inner_bf: $bf_name::new(direction),
                     width_scratch_length,
                     second_stage_len,
@@ -123,19 +124,22 @@ macro_rules! define_mixed_radix_avx_d {
 
         impl R2CFftExecutor<f64> for $radix_name {
             fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                use crate::err::try_vec;
-                let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
-                self.execute_with_scratch(input, output, &mut scratch)
+                let mut scratch =
+                    ScratchBuffer::<Complex<f64>, 1024>::new(self.complex_scratch_length());
+                self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 
-            fn execute_with_scratch(&self, input: &[f64], output: &mut [Complex<f64>], scratch: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                unsafe {
-                    self.execute_oof_impl(input, output, scratch)
-                }
+            fn execute_with_scratch(
+                &self,
+                input: &[f64],
+                output: &mut [Complex<f64>],
+                scratch: &mut [Complex<f64>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(input, output, scratch) }
             }
 
             fn complex_length(&self) -> usize {
-                 self.execution_length / 2 + 1
+                self.execution_length / 2 + 1
             }
 
             fn complex_scratch_length(&self) -> usize {
@@ -149,11 +153,7 @@ macro_rules! define_mixed_radix_avx_d {
 
         impl $radix_name {
             #[target_feature(enable = "avx2", enable = "fma")]
-            fn process_columns(
-                &self,
-                src: &[f64],
-                complex: &mut [Complex<f64>],
-            ) {
+            fn process_columns(&self, src: &[f64], complex: &mut [Complex<f64>]) {
                 const ROW_COUNT: usize = $row_count;
                 const COMPLEX_ROW_COUNT: usize = $complex_row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
@@ -163,96 +163,89 @@ macro_rules! define_mixed_radix_avx_d {
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
 
                 for (c, twiddle_chunk) in self
-                        .twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN)
-                        .take(chunk_count)
-                        .enumerate()
-                    {
-                        let index_base = c * COMPLEX_PER_VECTOR;
+                    .twiddles
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .take(chunk_count)
+                    .enumerate()
+                {
+                    let index_base = c * COMPLEX_PER_VECTOR;
 
-                        // Load columns from the input into registers
-                        let mut columns = [AvxStoreD::zero(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                let q = AvxStoreD::load2(
-                                    src.get_unchecked(index_base + len_per_row * i..),
-                                );
-                                columns[i] = q.to_complex()[0];
-                            }
-                        }
-
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec(columns) };
-
+                    // Load columns from the input into registers
+                    let mut columns = [AvxStoreD::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
                         unsafe {
-                            output[0].write(complex.get_unchecked_mut(index_base..));
-                        }
-
-                        // here LLVM doesn't "see" AvxStoreD as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [AvxStoreD::zero(); COMPLEX_ROW_COUNT - 1];
-                        for i in 0..COMPLEX_ROW_COUNT - 1 {
-                            twiddles[i] = twiddle_chunk[i];
-                        }
-
-                        for i in 1..COMPLEX_ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = AvxStoreD::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    complex.get_unchecked_mut(index_base + len_per_row * i..),
-                                )
-                            }
+                            let q =
+                                AvxStoreD::load2(src.get_unchecked(index_base + len_per_row * i..));
+                            columns[i] = q.to_complex()[0];
                         }
                     }
 
-                    let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                    if partial_remainder > 0 {
-                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                        let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec(columns) };
 
-                        let mut columns = [AvxStoreD::zero(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = AvxStoreD::load1(
-                                    src
-                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                );
-                            }
-                        }
+                    unsafe {
+                        output[0].write(complex.get_unchecked_mut(index_base..));
+                    }
 
-                        // apply our butterfly function down the columns
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                    // here LLVM doesn't "see" AvxStoreD as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [AvxStoreD::zero(); COMPLEX_ROW_COUNT - 1];
+                    for i in 0..COMPLEX_ROW_COUNT - 1 {
+                        twiddles[i] = twiddle_chunk[i];
+                    }
 
-                        // always write the first row without twiddles
+                    for i in 1..COMPLEX_ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = AvxStoreD::$mul(output[i], twiddle);
                         unsafe {
-                            output[0].write_lo(complex.get_unchecked_mut(partial_remainder_base..));
+                            output.write(complex.get_unchecked_mut(index_base + len_per_row * i..))
                         }
+                    }
+                }
 
-                        // here LLVM doesn't "see" AvxStoreD as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [AvxStoreD::zero(); COMPLEX_ROW_COUNT - 1];
-                        for i in 0..COMPLEX_ROW_COUNT - 1 {
-                            twiddles[i] = final_twiddle_chunk[i];
-                        }
+                let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
+                if partial_remainder > 0 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
-                        // for the remaining rows, apply twiddle factors and then write back to memory
-                        for i in 1..COMPLEX_ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = AvxStoreD::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write_lo(
-                                    complex.get_unchecked_mut(
-                                        partial_remainder_base + len_per_row * i..,
-                                    ),
-                                );
-                            }
+                    let mut columns = [AvxStoreD::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = AvxStoreD::load1(
+                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            );
                         }
                     }
 
+                    // apply our butterfly function down the columns
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+
+                    // always write the first row without twiddles
+                    unsafe {
+                        output[0].write_lo(complex.get_unchecked_mut(partial_remainder_base..));
+                    }
+
+                    // here LLVM doesn't "see" AvxStoreD as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [AvxStoreD::zero(); COMPLEX_ROW_COUNT - 1];
+                    for i in 0..COMPLEX_ROW_COUNT - 1 {
+                        twiddles[i] = final_twiddle_chunk[i];
+                    }
+
+                    // for the remaining rows, apply twiddle factors and then write back to memory
+                    for i in 1..COMPLEX_ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = AvxStoreD::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write_lo(
+                                complex
+                                    .get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
+                }
             }
 
             #[target_feature(enable = "avx2", enable = "fma")]
@@ -262,7 +255,7 @@ macro_rules! define_mixed_radix_avx_d {
                 dst: &mut [Complex<f64>],
                 scratch: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-              if !src.len().is_multiple_of(self.execution_length) {
+                if !src.len().is_multiple_of(self.execution_length) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         src.len(),
                         self.execution_length,
@@ -289,7 +282,8 @@ macro_rules! define_mixed_radix_avx_d {
 
                 for (dst_chunk, chunk) in dst
                     .chunks_exact_mut(self.complex_length())
-                    .zip(src.chunks_exact(self.execution_length)) {
+                    .zip(src.chunks_exact(self.execution_length))
+                {
                     self.process_columns(chunk, scratch_complex1);
 
                     let (width_scratch, _) = rem_scratch.split_at_mut(self.width_scratch_length);
@@ -343,9 +337,7 @@ macro_rules! define_mixed_radix_avx_f {
             pub(crate) fn new(
                 width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
-                unsafe {
-                    Self::new_impl(width_executor)
-                }
+                unsafe { Self::new_impl(width_executor) }
             }
 
             #[target_feature(enable = "avx2", enable = "fma")]
@@ -403,7 +395,10 @@ macro_rules! define_mixed_radix_avx_f {
                     width,
                     height: ROW_COUNT,
                     twiddles,
-                    transpose_executor: f32::transpose_strategy(width - to_remove_second_stage, $complex_row_count),
+                    transpose_executor: f32::transpose_strategy(
+                        width - to_remove_second_stage,
+                        $complex_row_count,
+                    ),
                     inner_bf: $bf_name::new(direction),
                     width_scratch_length,
                     second_stage_len,
@@ -413,19 +408,22 @@ macro_rules! define_mixed_radix_avx_f {
 
         impl R2CFftExecutor<f32> for $radix_name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                use crate::err::try_vec;
-                let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
-                self.execute_with_scratch(input, output, &mut scratch)
+                let mut scratch =
+                    ScratchBuffer::<Complex<f32>, 2048>::new(self.complex_scratch_length());
+                self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 
-            fn execute_with_scratch(&self, input: &[f32], output: &mut [Complex<f32>], scratch: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                unsafe {
-                    self.execute_oof_impl(input, output, scratch)
-                }
+            fn execute_with_scratch(
+                &self,
+                input: &[f32],
+                output: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_impl(input, output, scratch) }
             }
 
             fn complex_length(&self) -> usize {
-                 self.execution_length / 2 + 1
+                self.execution_length / 2 + 1
             }
 
             fn complex_scratch_length(&self) -> usize {
@@ -439,11 +437,7 @@ macro_rules! define_mixed_radix_avx_f {
 
         impl $radix_name {
             #[target_feature(enable = "avx2", enable = "fma")]
-            fn process_columns(
-                &self,
-                src: &[f32],
-                complex: &mut [Complex<f32>],
-            ) {
+            fn process_columns(&self, src: &[f32], complex: &mut [Complex<f32>]) {
                 const ROW_COUNT: usize = $row_count;
                 const COMPLEX_ROW_COUNT: usize = $complex_row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
@@ -453,184 +447,173 @@ macro_rules! define_mixed_radix_avx_f {
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
 
                 for (c, twiddle_chunk) in self
-                        .twiddles
-                        .chunks_exact(TWIDDLES_PER_COLUMN)
-                        .take(chunk_count)
-                        .enumerate()
-                    {
-                        let index_base = c * COMPLEX_PER_VECTOR;
+                    .twiddles
+                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .take(chunk_count)
+                    .enumerate()
+                {
+                    let index_base = c * COMPLEX_PER_VECTOR;
 
-                        // Load columns from the input into registers
-                        let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                let q = AvxStoreF::load4(
-                                    src.get_unchecked(index_base + len_per_row * i..),
-                                );
-                                columns[i] = q.to_complex()[0];
-                            }
-                        }
-
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec(columns) };
-
+                    // Load columns from the input into registers
+                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
                         unsafe {
-                            output[0].write(complex.get_unchecked_mut(index_base..));
-                        }
-
-                        // here LLVM doesn't "see" AvxStoreF as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
-                        for i in 0..COMPLEX_ROW_COUNT - 1 {
-                            twiddles[i] = twiddle_chunk[i];
-                        }
-
-                        for i in 1..COMPLEX_ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = AvxStoreF::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write(
-                                    complex.get_unchecked_mut(index_base + len_per_row * i..),
-                                )
-                            }
+                            let q =
+                                AvxStoreF::load4(src.get_unchecked(index_base + len_per_row * i..));
+                            columns[i] = q.to_complex()[0];
                         }
                     }
 
-                    let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                    if partial_remainder == 3 {
-                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                        let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec(columns) };
 
-                        let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = AvxStoreF::load3(
-                                    src
-                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                ).to_complex()[0];
-                            }
-                        }
+                    unsafe {
+                        output[0].write(complex.get_unchecked_mut(index_base..));
+                    }
 
-                        // apply our butterfly function down the columns
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                    // here LLVM doesn't "see" AvxStoreF as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
+                    for i in 0..COMPLEX_ROW_COUNT - 1 {
+                        twiddles[i] = twiddle_chunk[i];
+                    }
 
-                        // always write the first row without twiddles
+                    for i in 1..COMPLEX_ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = AvxStoreF::$mul(output[i], twiddle);
                         unsafe {
-                            output[0].write_lo3(complex.get_unchecked_mut(partial_remainder_base..));
+                            output.write(complex.get_unchecked_mut(index_base + len_per_row * i..))
                         }
+                    }
+                }
 
-                        // here LLVM doesn't "see" AvxStoreF as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
-                        for i in 0..COMPLEX_ROW_COUNT - 1 {
-                            twiddles[i] = final_twiddle_chunk[i];
-                        }
+                let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
+                if partial_remainder == 3 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
-                        // for the remaining rows, apply twiddle factors and then write back to memory
-                        for i in 1..COMPLEX_ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = AvxStoreF::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write_lo3(
-                                    complex.get_unchecked_mut(
-                                        partial_remainder_base + len_per_row * i..,
-                                    ),
-                                );
-                            }
-                        }
-                    } else if partial_remainder == 2 {
-                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                        let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                        let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = AvxStoreF::load2(
-                                    src
-                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                ).to_complex()[0];
-                            }
-                        }
-
-                        // apply our butterfly function down the columns
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec_r2c(columns) };
-
-                        // always write the first row without twiddles
+                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
                         unsafe {
-                            output[0].write_lo2(complex.get_unchecked_mut(partial_remainder_base..));
-                        }
-
-                        // here LLVM doesn't "see" AvxStoreF as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
-                        for i in 0..COMPLEX_ROW_COUNT - 1 {
-                            twiddles[i] = final_twiddle_chunk[i];
-                        }
-
-                        // for the remaining rows, apply twiddle factors and then write back to memory
-                        for i in 1..COMPLEX_ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = AvxStoreF::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write_lo2(
-                                    complex.get_unchecked_mut(
-                                        partial_remainder_base + len_per_row * i..,
-                                    ),
-                                );
-                            }
-                        }
-                    } else if partial_remainder == 1 {
-                        let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                        let partial_remainder_twiddle_base =
-                            self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                        let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                        let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                        for i in 0..ROW_COUNT {
-                            unsafe {
-                                columns[i] = AvxStoreF::load1(
-                                    src
-                                        .get_unchecked(partial_remainder_base + len_per_row * i..)
-                                );
-                            }
-                        }
-
-                        // apply our butterfly function down the columns
-                        #[allow(unused_unsafe)]
-                        let output = unsafe { self.inner_bf.exec_r2c(columns) };
-
-                        // always write the first row without twiddles
-                        unsafe {
-                            output[0].write_lo1(complex.get_unchecked_mut(partial_remainder_base..));
-                        }
-
-                        // here LLVM doesn't "see" AvxStoreF as the same type returned by output
-                        // so we need to force cast it onwards to the same type
-                        let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
-                        for i in 0..COMPLEX_ROW_COUNT - 1 {
-                            twiddles[i] = final_twiddle_chunk[i];
-                        }
-
-                        // for the remaining rows, apply twiddle factors and then write back to memory
-                        for i in 1..COMPLEX_ROW_COUNT {
-                            let twiddle = twiddles[i - 1];
-                            let output = AvxStoreF::$mul(output[i], twiddle);
-                            unsafe {
-                                output.write_lo1(
-                                    complex.get_unchecked_mut(
-                                        partial_remainder_base + len_per_row * i..,
-                                    ),
-                                );
-                            }
+                            columns[i] = AvxStoreF::load3(
+                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            )
+                            .to_complex()[0];
                         }
                     }
 
+                    // apply our butterfly function down the columns
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+
+                    // always write the first row without twiddles
+                    unsafe {
+                        output[0].write_lo3(complex.get_unchecked_mut(partial_remainder_base..));
+                    }
+
+                    // here LLVM doesn't "see" AvxStoreF as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
+                    for i in 0..COMPLEX_ROW_COUNT - 1 {
+                        twiddles[i] = final_twiddle_chunk[i];
+                    }
+
+                    // for the remaining rows, apply twiddle factors and then write back to memory
+                    for i in 1..COMPLEX_ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = AvxStoreF::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write_lo3(
+                                complex
+                                    .get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
+                } else if partial_remainder == 2 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = AvxStoreF::load2(
+                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            )
+                            .to_complex()[0];
+                        }
+                    }
+
+                    // apply our butterfly function down the columns
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+
+                    // always write the first row without twiddles
+                    unsafe {
+                        output[0].write_lo2(complex.get_unchecked_mut(partial_remainder_base..));
+                    }
+
+                    // here LLVM doesn't "see" AvxStoreF as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
+                    for i in 0..COMPLEX_ROW_COUNT - 1 {
+                        twiddles[i] = final_twiddle_chunk[i];
+                    }
+
+                    // for the remaining rows, apply twiddle factors and then write back to memory
+                    for i in 1..COMPLEX_ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = AvxStoreF::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write_lo2(
+                                complex
+                                    .get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
+                } else if partial_remainder == 1 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = AvxStoreF::load1(
+                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
+
+                    // apply our butterfly function down the columns
+                    #[allow(unused_unsafe)]
+                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+
+                    // always write the first row without twiddles
+                    unsafe {
+                        output[0].write_lo1(complex.get_unchecked_mut(partial_remainder_base..));
+                    }
+
+                    // here LLVM doesn't "see" AvxStoreF as the same type returned by output
+                    // so we need to force cast it onwards to the same type
+                    let mut twiddles = [AvxStoreF::zero(); COMPLEX_ROW_COUNT - 1];
+                    for i in 0..COMPLEX_ROW_COUNT - 1 {
+                        twiddles[i] = final_twiddle_chunk[i];
+                    }
+
+                    // for the remaining rows, apply twiddle factors and then write back to memory
+                    for i in 1..COMPLEX_ROW_COUNT {
+                        let twiddle = twiddles[i - 1];
+                        let output = AvxStoreF::$mul(output[i], twiddle);
+                        unsafe {
+                            output.write_lo1(
+                                complex
+                                    .get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
+                }
             }
 
             #[target_feature(enable = "avx2", enable = "fma")]
@@ -640,7 +623,7 @@ macro_rules! define_mixed_radix_avx_f {
                 dst: &mut [Complex<f32>],
                 scratch: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-              if !src.len().is_multiple_of(self.execution_length) {
+                if !src.len().is_multiple_of(self.execution_length) {
                     return Err(ZaftError::InvalidSizeMultiplier(
                         src.len(),
                         self.execution_length,
@@ -667,7 +650,8 @@ macro_rules! define_mixed_radix_avx_f {
 
                 for (dst_chunk, chunk) in dst
                     .chunks_exact_mut(self.complex_length())
-                    .zip(src.chunks_exact(self.execution_length)) {
+                    .zip(src.chunks_exact(self.execution_length))
+                {
                     self.process_columns(chunk, scratch_complex1);
 
                     let (width_scratch, _) = rem_scratch.split_at_mut(self.width_scratch_length);
