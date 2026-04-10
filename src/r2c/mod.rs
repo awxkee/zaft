@@ -208,6 +208,9 @@ mod tests {
 
     #[test]
     fn test_r2c_and_c2r() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
         for i in 1..512 {
             let data = (0..i)
                 .map(|_| {
@@ -255,6 +258,9 @@ mod tests {
 
     #[test]
     fn test_r2c_and_c2r_f64() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
         for i in 1..512 {
             let data = (0..i)
                 .map(|_| {

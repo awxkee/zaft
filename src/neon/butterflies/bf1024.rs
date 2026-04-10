@@ -386,12 +386,29 @@ mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
 
-    test_butterfly!(test_neon_butterfly1024, f32, NeonButterfly1024f, 1024, 1e-3);
-    test_oof_butterfly!(
-        test_oof_neon_butterfly1024,
-        f32,
-        NeonButterfly1024f,
-        1024,
-        1e-3
-    );
+    #[test]
+    #[allow(unnameable_test_items)]
+    fn capsule1() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
+        test_butterfly!(test_neon_butterfly1024, f32, NeonButterfly1024f, 1024, 1e-3);
+        test_neon_butterfly1024();
+    }
+
+    #[test]
+    #[allow(unnameable_test_items)]
+    fn capsule2() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
+        test_oof_butterfly!(
+            test_oof_neon_butterfly1024,
+            f32,
+            NeonButterfly1024f,
+            1024,
+            1e-3
+        );
+        test_oof_neon_butterfly1024();
+    }
 }

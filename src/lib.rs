@@ -1548,6 +1548,9 @@ mod tests {
 
     #[test]
     fn test_everything_f32() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
         for i in 1..2010 {
             let mut data = vec![Complex::new(0.0019528865, 0.); i];
             for (i, chunk) in data.iter_mut().enumerate() {
@@ -1591,6 +1594,9 @@ mod tests {
 
     #[test]
     fn test_everything_oof_f32() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
         for i in 1..2010 {
             let mut data = vec![Complex::new(0.0019528865, 0.); i];
             let mut scratch = data.to_vec();
@@ -1635,6 +1641,9 @@ mod tests {
 
     #[test]
     fn test_everything_f64() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
         for i in 1..1900 {
             let mut data = vec![Complex::new(0.0019528865, 0.); i];
             for (i, chunk) in data.iter_mut().enumerate() {
@@ -1678,6 +1687,9 @@ mod tests {
 
     #[test]
     fn test_everything_oof_f64() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
         for i in 1..1900 {
             let mut data = vec![Complex::new(0.0019528865, 0.); i];
             let mut scratch = data.clone();
@@ -1722,6 +1734,9 @@ mod tests {
 
     #[test]
     fn test_destructive_everything_f64() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
         for i in 1..1900 {
             let mut data = vec![Complex::new(0.0019528865, 0.); i];
             for (i, chunk) in data.iter_mut().enumerate() {
@@ -1767,6 +1782,9 @@ mod tests {
 
     #[test]
     fn test_destructive_everything_oof_f32() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
         for i in 1..2010 {
             let mut data = vec![Complex::new(0.0019528865, 0.); i];
             for (i, chunk) in data.iter_mut().enumerate() {

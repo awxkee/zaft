@@ -322,8 +322,8 @@ impl AvxButterfly125d {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::butterflies::{test_butterfly, test_oof_butterfly};
+    use crate::avx::butterflies::{test_avx_butterfly, test_oof_avx_butterfly};
 
-    test_butterfly!(test_neon_butterfly125, f64, AvxButterfly125d, 125, 1e-4);
-    test_oof_butterfly!(test_oof_neon_butterfly125, f64, AvxButterfly125d, 125, 1e-4);
+    test_avx_butterfly!(test_neon_butterfly125, f64, AvxButterfly125d, 125, 1e-4);
+    test_oof_avx_butterfly!(test_oof_neon_butterfly125, f64, AvxButterfly125d, 125, 1e-4);
 }

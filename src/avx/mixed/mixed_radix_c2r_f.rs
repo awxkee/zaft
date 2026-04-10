@@ -627,12 +627,16 @@ define_mixed_radix_avx_f!(AvxC2RMixedRadix11f, ColumnButterfly11f, 11, mul_by_co
 mod tests {
     use super::*;
     use crate::dft::Dft;
+    use crate::util::has_valid_avx;
     use crate::{C2RFftExecutor, FftDirection, FftExecutor, Zaft};
     use num_complex::Complex;
     use num_traits::Zero;
 
     #[test]
     fn test_mixed_radix_39f() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [f32; 39] = [
             7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 2.1, 3.2, 3.3, 9.8, 5.1, 7.2, 6.2,
             6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 2.1, 3.2, 3.3, 9.8, 5.1, 1.3, 5.6, 2.6, 6.4,
@@ -678,6 +682,9 @@ mod tests {
 
     #[test]
     fn test_mixed_radix_3f() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [f32; 7] = [7.2, 6.2, 6.4, 7.2, 6.2, 6.4, 1.3];
 
         let mut reference_value = src
@@ -719,6 +726,9 @@ mod tests {
 
     #[test]
     fn test_mixed_radix_15f() {
+        if !has_valid_avx() {
+            return;
+        }
         const R: usize = 39;
         let src: [f32; R] = [
             7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4,
@@ -766,6 +776,9 @@ mod tests {
 
     #[test]
     fn test_mixed_radix_5f() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [f32; 15] = [
             7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 2.1, 3.2, 3.3, 9.8, 5.1,
         ];
@@ -809,6 +822,9 @@ mod tests {
 
     #[test]
     fn test_mixed_radixd_21_7() {
+        if !has_valid_avx() {
+            return;
+        }
         let src: [f32; 21] = [
             7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 2.1, 3.2, 3.3, 9.8, 5.1, 4.1, 5.4,
             1.4, 12.5, 6.2, 7.2,
