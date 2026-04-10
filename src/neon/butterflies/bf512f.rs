@@ -277,6 +277,7 @@ mod tests {
         512,
         1e-3
     );
+
     #[cfg(feature = "fcma")]
     test_oof_fcma_butterfly!(
         test_oof_fcma_butterfly512,

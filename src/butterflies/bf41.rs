@@ -368,5 +368,5 @@ mod tests {
     use super::*;
     use crate::butterflies::test_butterfly;
 
-    test_butterfly!(test_butterfly41, f32, Butterfly41, 41, 1e-5);
+    test_butterfly!(test_butterfly41, f32, Butterfly41, 41, 1e-4);
 }

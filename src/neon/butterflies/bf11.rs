@@ -158,7 +158,7 @@ mod tests {
 
     test_butterfly!(test_neon_butterfly11, f32, NeonButterfly11f, 11, 1e-5);
     #[cfg(feature = "fcma")]
-    test_butterfly!(test_fcma_butterfly11, f32, NeonFcmaButterfly11f, 11, 1e-5);
+    test_fcma_butterfly!(test_fcma_butterfly11, f32, NeonFcmaButterfly11f, 11, 1e-5);
     test_butterfly!(test_neon_butterfly11_f64, f64, NeonButterfly11d, 11, 1e-7);
     #[cfg(feature = "fcma")]
     test_fcma_butterfly!(
