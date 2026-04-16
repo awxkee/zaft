@@ -136,8 +136,8 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorR2C<T> for TwoDimens
             if self.thread_count > 1 {
                 scratch
                     .tb_par_chunks_exact_mut(complex_row_size)
-                    .for_each_enumerated(&pool, |idx, row| {
-                        let arena_src = &src[self.width * idx..(self.width) * (idx + 1)];
+                    .zip(src.chunks_exact(self.width))
+                    .for_each(&pool, |(row, arena_src)| {
                         _ = self.width_r2c_executor.execute(arena_src, row);
                     });
             } else {

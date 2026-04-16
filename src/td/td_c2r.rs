@@ -150,14 +150,11 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorC2R<T> for TwoDimens
                 .transpose(src, scratch, self.height, complex_row_size);
 
             if self.thread_count > 1 {
-                dst.tb_par_chunks_exact_mut(self.width).for_each_enumerated(
-                    &pool,
-                    |idx, column| {
-                        let arena_src =
-                            &scratch[complex_row_size * idx..complex_row_size * (idx + 1)];
+                dst.tb_par_chunks_exact_mut(self.width)
+                    .zip(scratch.chunks_exact(complex_row_size))
+                    .for_each(&pool, |(column, arena_src)| {
                         _ = self.width_c2r_executor.execute(arena_src, column);
-                    },
-                );
+                    });
             } else {
                 let (sl, _) = rem_scratch.split_at_mut(self.width_scratch_length);
                 for (row, src) in dst

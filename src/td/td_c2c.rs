@@ -110,8 +110,8 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalFftExecutor<T> for TwoDimens
             } else {
                 scratch
                     .tb_par_chunks_exact_mut(self.width)
-                    .for_each_enumerated(&pool, |y, row| {
-                        let src_row = &chunk[y * self.width..(y + 1) * self.width];
+                    .zip(chunk.chunks_exact(self.width))
+                    .for_each(&pool, |(row, src_row)| {
                         _ = self.width_c2c_executor.execute_out_of_place(src_row, row);
                     });
             }

@@ -169,12 +169,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         .measurement_time(Duration::from_millis(2500))
         .warm_up_time(Duration::from_millis(2500));
 
-    check_power_groups_c2d(c, 9, "9".to_string());
-    check_power_groups_c2d(c, 51, "51".to_string());
-    check_power_groups_c2d(c, 729, "729".to_string());
-    check_power_groups_c2d(c, 625, "625".to_string());
-    check_power_groups_c2d(c, 2401, "2401".to_string());
-    check_power_groups_c2d(c, 14641, "14641".to_string());
+    // check_power_groups_c2d(c, 9, "9".to_string());
+    // check_power_groups_c2d(c, 51, "51".to_string());
+    // check_power_groups_c2d(c, 729, "729".to_string());
+    // check_power_groups_c2d(c, 625, "625".to_string());
+    // check_power_groups_c2d(c, 2401, "2401".to_string());
+    // check_power_groups_c2d(c, 14641, "14641".to_string());
 
     check_power_groups_c2r(c, 9, "9".to_string());
     check_power_groups_c2r(c, 51, "51".to_string());
@@ -184,8 +184,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     check_power_groups_c2r(c, 1331, "1331".to_string());
     check_power_groups_c2r(c, 14641, "14641".to_string());
 
+    check_power_groups_c2r(c, 3125, "3125".to_string());
+    check_power_groups_c2r(c, 6561, "6561".to_string());
+    check_power_groups_c2r(c, 2197, "2197".to_string());
+
     check_power_groups(c, 3125, "3125".to_string());
-    check_power_groups(c, 2401, "2401".to_string());
     check_power_groups(c, 6561, "6561".to_string());
     check_power_groups(c, 2197, "2197".to_string());
     check_power_groups(c, 14641, "14641".to_string());
