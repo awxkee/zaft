@@ -30,14 +30,6 @@ use crate::neon::RadersIndicer;
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
-#[inline]
-#[target_feature(enable = "sve,sve2")]
-fn make_re_im_idx(pg: svbool_t, idx_ptr: &[u32]) -> [svuint64_t; 2] {
-    let idx = unsafe { svld1uw_u64(pg, idx_ptr.as_ptr()) };
-    let re = svadd_u64_z(pg, idx, idx);
-    [re, svadd_n_u64_z(pg, re, 1)]
-}
-
 pub(crate) struct SveRadersIndicer;
 
 impl SveRadersIndicer {
@@ -120,94 +112,6 @@ impl SveRadersIndicer {
     }
 
     #[target_feature(enable = "sve,sve2")]
-    fn index_inputs_impl_f64(
-        &self,
-        buffer: &[Complex<f64>],
-        output: &mut [Complex<f64>],
-        indices: &[u32],
-    ) {
-        assert_eq!(output.len(), indices.len());
-        let vl = svcntd() as usize;
-
-        for (out, idx) in output
-            .chunks_exact_mut(vl * 4)
-            .zip(indices.chunks_exact(vl * 4))
-        {
-            let pg = svptrue_b64();
-
-            let [re_i0, im_i0] = make_re_im_idx(pg, unsafe { idx.get_unchecked(..vl) });
-            let [re_i1, im_i1] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl..vl * 2) });
-            let [re_i2, im_i2] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl * 2..vl * 3) });
-            let [re_i3, im_i3] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl * 3..vl * 4) });
-
-            let base = buffer.as_ptr() as *const f64;
-
-            let gre0 = unsafe { svld1_gather_u64index_f64(pg, base, re_i0) };
-            let gim0 = unsafe { svld1_gather_u64index_f64(pg, base, im_i0) };
-            let gre1 = unsafe { svld1_gather_u64index_f64(pg, base, re_i1) };
-            let gim1 = unsafe { svld1_gather_u64index_f64(pg, base, im_i1) };
-            let gre2 = unsafe { svld1_gather_u64index_f64(pg, base, re_i2) };
-            let gim2 = unsafe { svld1_gather_u64index_f64(pg, base, im_i2) };
-            let gre3 = unsafe { svld1_gather_u64index_f64(pg, base, re_i3) };
-            let gim3 = unsafe { svld1_gather_u64index_f64(pg, base, im_i3) };
-
-            unsafe {
-                svst2_f64(pg, out.as_mut_ptr().cast(), svcreate2_f64(gre0, gim0));
-                svst2_f64(
-                    pg,
-                    out.get_unchecked_mut(vl..).as_mut_ptr().cast(),
-                    svcreate2_f64(gre1, gim1),
-                );
-                svst2_f64(
-                    pg,
-                    out.get_unchecked_mut(vl * 2..).as_mut_ptr().cast(),
-                    svcreate2_f64(gre2, gim2),
-                );
-                svst2_f64(
-                    pg,
-                    out.get_unchecked_mut(vl * 3..).as_mut_ptr().cast(),
-                    svcreate2_f64(gre3, gim3),
-                );
-            }
-        }
-
-        let out_rem = output.chunks_exact_mut(vl * 4).into_remainder();
-        let idx_rem = indices.chunks_exact(vl * 4).remainder();
-
-        for (out, idx) in out_rem.chunks_exact_mut(vl).zip(idx_rem.chunks_exact(vl)) {
-            let pg_all = svptrue_b64();
-            let [re_idx, im_idx] = make_re_im_idx(pg_all, idx);
-
-            let gre = unsafe { svld1_gather_u64index_f64(pg_all, buffer.as_ptr().cast(), re_idx) };
-            let gim = unsafe { svld1_gather_u64index_f64(pg_all, buffer.as_ptr().cast(), im_idx) };
-            unsafe {
-                svst2_f64(
-                    pg_all,
-                    out.as_mut_ptr() as *mut f64,
-                    svcreate2_f64(gre, gim),
-                );
-            }
-        }
-
-        let out_rem = out_rem.chunks_exact_mut(vl).into_remainder();
-        let idx_rem = idx_rem.chunks_exact(vl).remainder();
-
-        if !out_rem.is_empty() {
-            let pg_tail = svwhilelt_b64_u64(0u64, out_rem.len() as u64);
-            let [re_idx, im_idx] = make_re_im_idx(pg_tail, idx_rem);
-            let gre = unsafe { svld1_gather_u64index_f64(pg_tail, buffer.as_ptr().cast(), re_idx) };
-            let gim = unsafe { svld1_gather_u64index_f64(pg_tail, buffer.as_ptr().cast(), im_idx) };
-            unsafe {
-                svst2_f64(
-                    pg_tail,
-                    out_rem.as_mut_ptr() as *mut f64,
-                    svcreate2_f64(gre, gim),
-                );
-            }
-        }
-    }
-
-    #[target_feature(enable = "sve,sve2")]
     fn output_indices_f32(
         &self,
         buffer: &mut [Complex<f32>],
@@ -215,7 +119,6 @@ impl SveRadersIndicer {
         indices: &[u32],
     ) {
         let vl = svcntd() as usize;
-        let base_ptr = buffer.as_mut_ptr() as *mut u64;
 
         let conj_mask_val: u64 = 0x8000_0000_0000_0000;
 
@@ -242,10 +145,10 @@ impl SveRadersIndicer {
             let i3 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl * 3..).as_ptr()) };
 
             unsafe {
-                svst1_scatter_u64index_u64(pg, base_ptr, i0, v0);
-                svst1_scatter_u64index_u64(pg, base_ptr, i1, v1);
-                svst1_scatter_u64index_u64(pg, base_ptr, i2, v2);
-                svst1_scatter_u64index_u64(pg, base_ptr, i3, v3);
+                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i0, v0);
+                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i1, v1);
+                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i2, v2);
+                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i3, v3);
             }
         }
 
@@ -261,7 +164,7 @@ impl SveRadersIndicer {
             let i0 = unsafe { svld1uw_u64(pg, idx.as_ptr()) };
 
             unsafe {
-                svst1_scatter_u64index_u64(pg, base_ptr, i0, v0);
+                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i0, v0);
             }
         }
 
@@ -274,88 +177,7 @@ impl SveRadersIndicer {
             v0 = sveor_u64_m(pg, v0, conj_mask);
             let i = unsafe { svld1uw_u64(pg, idx_tail.as_ptr()) };
             unsafe {
-                svst1_scatter_u64index_u64(pg, base_ptr, i, v0);
-            }
-        }
-    }
-
-    #[target_feature(enable = "sve,sve2")]
-    fn output_indices_f64(
-        &self,
-        buffer: &mut [Complex<f64>],
-        scratch: &[Complex<f64>],
-        indices: &[u32],
-    ) {
-        assert_eq!(scratch.len(), indices.len());
-
-        let vl = svcntd() as usize;
-
-        for (src, idx) in scratch
-            .chunks_exact(vl * 4)
-            .zip(indices.chunks_exact(vl * 4))
-        {
-            let pg = svptrue_b64();
-
-            let ri0 = unsafe { svld2_f64(pg, src.as_ptr().cast()) };
-            let ri1 = unsafe { svld2_f64(pg, src.get_unchecked(vl..).as_ptr().cast()) };
-            let ri2 = unsafe { svld2_f64(pg, src.get_unchecked(vl * 2..).as_ptr().cast()) };
-            let ri3 = unsafe { svld2_f64(pg, src.get_unchecked(vl * 3..).as_ptr().cast()) };
-
-            let re0 = svget2_f64::<0>(ri0);
-            let im0 = svneg_f64_m(svget2_f64::<1>(ri0), pg, svget2_f64::<1>(ri0));
-            let re1 = svget2_f64::<0>(ri1);
-            let im1 = svneg_f64_m(svget2_f64::<1>(ri1), pg, svget2_f64::<1>(ri1));
-            let re2 = svget2_f64::<0>(ri2);
-            let im2 = svneg_f64_m(svget2_f64::<1>(ri2), pg, svget2_f64::<1>(ri2));
-            let re3 = svget2_f64::<0>(ri3);
-            let im3 = svneg_f64_m(svget2_f64::<1>(ri3), pg, svget2_f64::<1>(ri3));
-
-            let [re_i0, im_i0] = make_re_im_idx(pg, unsafe { idx.get_unchecked(..vl) });
-            let [re_i1, im_i1] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl..vl * 2) });
-            let [re_i2, im_i2] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl * 2..vl * 3) });
-            let [re_i3, im_i3] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl * 3..vl * 4) });
-
-            unsafe {
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i0, re0);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i0, im0);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i1, re1);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i1, im1);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i2, re2);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i2, im2);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i3, re3);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i3, im3);
-            }
-        }
-
-        let src_tail = scratch.chunks_exact(vl * 4).remainder();
-        let idx_tail = indices.chunks_exact(vl * 4).remainder();
-
-        for (src, idx) in src_tail.chunks_exact(vl).zip(idx_tail.chunks_exact(vl)) {
-            let pg = svptrue_b64();
-            let ri = unsafe { svld2_f64(pg, src.as_ptr().cast()) };
-            let re = svget2_f64::<0>(ri);
-            let qi = svget2_f64::<1>(ri);
-            let im = svneg_f64_m(qi, pg, qi);
-            let [re_i, im_i] = make_re_im_idx(pg, idx);
-            unsafe {
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i, re);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i, im);
-            }
-        }
-
-        let src_tail = src_tail.chunks_exact(vl).remainder();
-        let idx_tail = idx_tail.chunks_exact(vl).remainder();
-
-        if !src_tail.is_empty() {
-            let pg = svwhilelt_b64_u64(0u64, src_tail.len() as u64);
-            let ri = unsafe { svld2_f64(pg, src_tail.as_ptr().cast()) };
-            let re = svget2_f64::<0>(ri);
-            let qi = svget2_f64::<1>(ri);
-            let im = svneg_f64_m(qi, pg, qi);
-            let [re_i, im_i] = make_re_im_idx(pg, idx_tail);
-            unsafe {
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i, re);
-                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i, im);
+                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i, v0);
             }
         }
     }
@@ -376,27 +198,6 @@ impl RadersIndicer<f32> for SveRadersIndicer {
     ) {
         unsafe {
             self.output_indices_f32(buffer, scratch, indices);
-        }
-    }
-}
-
-impl RadersIndicer<f64> for SveRadersIndicer {
-    fn index_inputs(&self, buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[u32]) {
-        unsafe {
-            self.index_inputs_impl_f64(buffer, output, indices);
-        }
-    }
-
-    fn output_indices(
-        &self,
-        buffer: &mut [Complex<f64>],
-        scratch: &[Complex<f64>],
-        indices: &[u32],
-    ) {
-        unsafe {
-            unsafe {
-                self.output_indices_f64(buffer, scratch, indices);
-            }
         }
     }
 }
