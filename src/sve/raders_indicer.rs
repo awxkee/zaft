@@ -161,6 +161,78 @@ impl SveRadersIndicer {
             }
         }
     }
+
+    #[target_feature(enable = "sve,sve2")]
+    fn output_indices_f32(
+        &self,
+        buffer: &mut [Complex<f32>],
+        scratch: &[Complex<f32>],
+        indices: &[u32],
+    ) {
+        let vl = svcntd() as usize;
+        let base_ptr = buffer.as_mut_ptr() as *mut u64;
+
+        let conj_mask_val: u64 = 0x8000_0000_0000_0000;
+
+        let conj_mask = svdup_n_u64(conj_mask_val);
+
+        for (src, idx) in scratch
+            .chunks_exact(vl * 4)
+            .zip(indices.chunks_exact(vl * 4))
+        {
+            let pg = svptrue_b64();
+            let mut v0 = unsafe { svld1_u64(pg, src.as_ptr().cast()) };
+            let mut v1 = unsafe { svld1_u64(pg, src.get_unchecked(vl..).as_ptr().cast()) };
+            let mut v2 = unsafe { svld1_u64(pg, src.get_unchecked(vl * 2..).as_ptr().cast()) };
+            let mut v3 = unsafe { svld1_u64(pg, src.get_unchecked(vl * 3..).as_ptr().cast()) };
+
+            v0 = sveor_u64_m(pg, v0, conj_mask);
+            v1 = sveor_u64_m(pg, v1, conj_mask);
+            v2 = sveor_u64_m(pg, v2, conj_mask);
+            v3 = sveor_u64_m(pg, v3, conj_mask);
+
+            let i0 = unsafe { svld1uw_u64(pg, idx.as_ptr()) };
+            let i1 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl..).as_ptr()) };
+            let i2 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl * 2..).as_ptr()) };
+            let i3 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl * 3..).as_ptr()) };
+
+            unsafe {
+                svst1_scatter_u64index_u64(pg, base_ptr, i0, v0);
+                svst1_scatter_u64index_u64(pg, base_ptr, i1, v1);
+                svst1_scatter_u64index_u64(pg, base_ptr, i2, v2);
+                svst1_scatter_u64index_u64(pg, base_ptr, i3, v3);
+            }
+        }
+
+        let src_rem = scratch.chunks_exact(vl * 4).remainder();
+        let idx_rem = indices.chunks_exact(vl * 4).remainder();
+
+        for (src, idx) in src_rem.chunks_exact(vl).zip(idx_rem.chunks_exact(vl)) {
+            let pg = svptrue_b64();
+            let mut v0 = unsafe { svld1_u64(pg, src.as_ptr().cast()) };
+
+            v0 = sveor_u64_m(pg, v0, conj_mask);
+
+            let i0 = unsafe { svld1uw_u64(pg, idx.as_ptr()) };
+
+            unsafe {
+                svst1_scatter_u64index_u64(pg, base_ptr, i0, v0);
+            }
+        }
+
+        let src_tail = src_rem.chunks_exact(vl).remainder();
+        let idx_tail = idx_rem.chunks_exact(vl).remainder();
+
+        if !src_tail.is_empty() {
+            let pg = svwhilelt_b64_u64(0u64, src_tail.len() as u64);
+            let mut v0 = unsafe { svld1_u64(pg, src_tail.as_ptr().cast()) };
+            v0 = sveor_u64_m(pg, v0, conj_mask);
+            let i = unsafe { svld1uw_u64(pg, idx_tail.as_ptr()) };
+            unsafe {
+                svst1_scatter_u64index_u64(pg, base_ptr, i, v0);
+            }
+        }
+    }
 }
 
 impl RadersIndicer<f32> for SveRadersIndicer {
@@ -177,9 +249,7 @@ impl RadersIndicer<f32> for SveRadersIndicer {
         indices: &[u32],
     ) {
         unsafe {
-            for (scratch_element, &buffer_idx) in scratch.iter().zip(indices.iter()) {
-                *buffer.get_unchecked_mut(buffer_idx as usize) = scratch_element.conj();
-            }
+            self.output_indices_f32(buffer, scratch, indices);
         }
     }
 }
