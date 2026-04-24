@@ -29,11 +29,9 @@
  */
 // #![feature(duration_millis_float)]
 extern crate core;
-mod plotter;
 mod raders_reshuffle;
 mod split_radix;
 
-use crate::plotter::benchmark_compare;
 use crate::raders_reshuffle::raders_reshuffle;
 use criterion::{BatchSize, Criterion};
 use num_traits::Zero;
