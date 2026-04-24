@@ -30,10 +30,18 @@ use crate::neon::RadersIndicer;
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
+#[inline]
+#[target_feature(enable = "sve,sve2")]
+fn make_re_im_idx(pg: svbool_t, idx_ptr: &[u32]) -> [svuint64_t; 2] {
+    let idx = unsafe { svld1uw_u64(pg, idx_ptr.as_ptr()) };
+    let re = svadd_u64_z(pg, idx, idx);
+    [re, svadd_n_u64_z(pg, re, 1)]
+}
+
 pub(crate) struct SveRadersIndicer;
 
 impl SveRadersIndicer {
-    #[target_feature(enable = "sve")]
+    #[target_feature(enable = "sve,sve2")]
     fn index_inputs_impl_f32(
         &self,
         buffer: &[Complex<f32>],
@@ -110,6 +118,49 @@ impl SveRadersIndicer {
             }
         }
     }
+
+    #[target_feature(enable = "sve,sve2")]
+    fn index_inputs_impl_f64(
+        &self,
+        buffer: &[Complex<f64>],
+        output: &mut [Complex<f64>],
+        indices: &[u32],
+    ) {
+        assert_eq!(output.len(), indices.len());
+        let vl = svcntd() as usize;
+
+        for (out, idx) in output.chunks_exact_mut(vl).zip(indices.chunks_exact(vl)) {
+            let pg_all = svptrue_b64();
+            let [re_idx, im_idx] = make_re_im_idx(pg_all, idx);
+
+            let gre = unsafe { svld1_gather_u64index_f64(pg_all, buffer.as_ptr().cast(), re_idx) };
+            let gim = unsafe { svld1_gather_u64index_f64(pg_all, buffer.as_ptr().cast(), im_idx) };
+            unsafe {
+                svst2_f64(
+                    pg_all,
+                    out.as_mut_ptr() as *mut f64,
+                    svcreate2_f64(gre, gim),
+                );
+            }
+        }
+
+        let out_rem = output.chunks_exact_mut(vl).into_remainder();
+        let idx_rem = indices.chunks_exact(vl).remainder();
+
+        if !out_rem.is_empty() {
+            let pg_tail = svwhilelt_b64_u64(0u64, out_rem.len() as u64);
+            let [re_idx, im_idx] = make_re_im_idx(pg_tail, idx_rem);
+            let gre = unsafe { svld1_gather_u64index_f64(pg_tail, buffer.as_ptr().cast(), re_idx) };
+            let gim = unsafe { svld1_gather_u64index_f64(pg_tail, buffer.as_ptr().cast(), im_idx) };
+            unsafe {
+                svst2_f64(
+                    pg_tail,
+                    out_rem.as_mut_ptr() as *mut f64,
+                    svcreate2_f64(gre, gim),
+                );
+            }
+        }
+    }
 }
 
 impl RadersIndicer<f32> for SveRadersIndicer {
@@ -136,57 +187,7 @@ impl RadersIndicer<f32> for SveRadersIndicer {
 impl RadersIndicer<f64> for SveRadersIndicer {
     fn index_inputs(&self, buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[u32]) {
         unsafe {
-            for (scratch_element, buffer_idx) in
-                output.chunks_exact_mut(6).zip(indices.chunks_exact(6))
-            {
-                let idx0 = buffer_idx[0] as usize;
-                let idx1 = buffer_idx[1] as usize;
-
-                let v0 = vld1q_f64(buffer.get_unchecked(idx0..).as_ptr().cast());
-                let v1 = vld1q_f64(buffer.get_unchecked(idx1..).as_ptr().cast());
-
-                let idx2 = buffer_idx[2] as usize;
-                let idx3 = buffer_idx[3] as usize;
-
-                let v2 = vld1q_f64(buffer.get_unchecked(idx2..).as_ptr().cast());
-                let v3 = vld1q_f64(buffer.get_unchecked(idx3..).as_ptr().cast());
-
-                let idx4 = buffer_idx[4] as usize;
-                let idx5 = buffer_idx[5] as usize;
-
-                let v4 = vld1q_f64(buffer.get_unchecked(idx4..).as_ptr().cast());
-                let v5 = vld1q_f64(buffer.get_unchecked(idx5..).as_ptr().cast());
-
-                vst1q_f64(scratch_element.as_mut_ptr().cast(), v0);
-                vst1q_f64(
-                    scratch_element.get_unchecked_mut(1..).as_mut_ptr().cast(),
-                    v1,
-                );
-                vst1q_f64(
-                    scratch_element.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    v2,
-                );
-                vst1q_f64(
-                    scratch_element.get_unchecked_mut(3..).as_mut_ptr().cast(),
-                    v3,
-                );
-                vst1q_f64(
-                    scratch_element.get_unchecked_mut(4..).as_mut_ptr().cast(),
-                    v4,
-                );
-                vst1q_f64(
-                    scratch_element.get_unchecked_mut(5..).as_mut_ptr().cast(),
-                    v5,
-                );
-            }
-
-            let rem = output.chunks_exact_mut(6).into_remainder();
-            let rem_indices = indices.chunks_exact(6).remainder();
-
-            for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
-                let v0 = vld1q_f64(buffer.get_unchecked(buffer_idx as usize..).as_ptr().cast());
-                vst1q_f64(scratch_element as *mut Complex<f64> as *mut f64, v0);
-            }
+            self.index_inputs_impl_f64(buffer, output, indices);
         }
     }
 
