@@ -1102,9 +1102,14 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             if n < (u32::MAX - 100_000u32) as usize {
-                use crate::neon::NeonRadersFft;
-                return NeonRadersFft::new(n, convolve_fft, fft_direction)
-                    .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>);
+                use crate::neon::{NeonRadersFft, NeonRadersIndicer};
+                return NeonRadersFft::new(
+                    n,
+                    convolve_fft,
+                    fft_direction,
+                    Arc::new(NeonRadersIndicer),
+                )
+                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>);
             }
         }
         use crate::raders::RadersFft;

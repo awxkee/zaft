@@ -13,7 +13,6 @@ realfft = "3.5"
 primal-check = "0.3.4"
 num-traits = "0.2.19"
 pxfm = "0.1.27"
-plotters = "0.3.7"
 
 [dev-dependencies]
 criterion = "0.8.0"

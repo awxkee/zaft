@@ -48,15 +48,18 @@ pub(crate) struct NeonRadersFft<T> {
     output_indices: Vec<u32>,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
     inner_scratch_length: usize,
+    indicer: Arc<dyn RadersIndicer<T> + Send + Sync>,
 }
 
 pub(crate) trait RadersIndicer<T> {
-    fn index_inputs(buffer: &[Complex<T>], output: &mut [Complex<T>], indices: &[u32]);
-    fn output_indices(buffer: &mut [Complex<T>], scratch: &[Complex<T>], indices: &[u32]);
+    fn index_inputs(&self, buffer: &[Complex<T>], output: &mut [Complex<T>], indices: &[u32]);
+    fn output_indices(&self, buffer: &mut [Complex<T>], scratch: &[Complex<T>], indices: &[u32]);
 }
 
-impl RadersIndicer<f32> for f32 {
-    fn index_inputs(buffer: &[Complex<f32>], output: &mut [Complex<f32>], indices: &[u32]) {
+pub(crate) struct NeonRadersIndicer;
+
+impl RadersIndicer<f32> for NeonRadersIndicer {
+    fn index_inputs(&self, buffer: &[Complex<f32>], output: &mut [Complex<f32>], indices: &[u32]) {
         unsafe {
             for (scratch_element, buffer_idx) in
                 output.chunks_exact_mut(6).zip(indices.chunks_exact(6))
@@ -112,7 +115,12 @@ impl RadersIndicer<f32> for f32 {
         }
     }
 
-    fn output_indices(buffer: &mut [Complex<f32>], scratch: &[Complex<f32>], indices: &[u32]) {
+    fn output_indices(
+        &self,
+        buffer: &mut [Complex<f32>],
+        scratch: &[Complex<f32>],
+        indices: &[u32],
+    ) {
         unsafe {
             static CONJ: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
             let conj = vld1q_f32(CONJ.as_ptr());
@@ -169,8 +177,8 @@ impl RadersIndicer<f32> for f32 {
     }
 }
 
-impl RadersIndicer<f64> for f64 {
-    fn index_inputs(buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[u32]) {
+impl RadersIndicer<f64> for NeonRadersIndicer {
+    fn index_inputs(&self, buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[u32]) {
         unsafe {
             for (scratch_element, buffer_idx) in
                 output.chunks_exact_mut(6).zip(indices.chunks_exact(6))
@@ -226,7 +234,12 @@ impl RadersIndicer<f64> for f64 {
         }
     }
 
-    fn output_indices(buffer: &mut [Complex<f64>], scratch: &[Complex<f64>], indices: &[u32]) {
+    fn output_indices(
+        &self,
+        buffer: &mut [Complex<f64>],
+        scratch: &[Complex<f64>],
+        indices: &[u32],
+    ) {
         unsafe {
             static CONJ: [f64; 2] = [0.0, -0.0];
             let conj = vld1q_f64(CONJ.as_ptr());
@@ -320,6 +333,7 @@ where
         size: usize,
         convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         fft_direction: FftDirection,
+        indicer: Arc<dyn RadersIndicer<T> + Send + Sync>,
     ) -> Result<NeonRadersFft<T>, ZaftError> {
         assert!(
             PrimeFactors::from_number(size as u64).is_prime(),
@@ -384,11 +398,12 @@ where
             output_indices,
             spectrum_ops: T::make_complex_arith(),
             inner_scratch_length,
+            indicer,
         })
     }
 }
 
-impl<T: FftSample + RadersIndicer<T>> FftExecutor<T> for NeonRadersFft<T>
+impl<T: FftSample> FftExecutor<T> for NeonRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -420,7 +435,8 @@ where
             let (scratch, _) = scratch.split_at_mut(self.length() - 1);
 
             // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
-            T::index_inputs(buffer, scratch, &self.input_indices);
+            self.indicer
+                .index_inputs(buffer, scratch, &self.input_indices);
 
             // perform the first of two inner FFTs
 
@@ -445,7 +461,8 @@ where
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
             // copy the final values into the output, reordering as we go
-            T::output_indices(buffer, scratch, &self.output_indices);
+            self.indicer
+                .output_indices(buffer, scratch, &self.output_indices);
         }
         Ok(())
     }
@@ -482,7 +499,8 @@ where
             let (scratch, _) = scratch.split_at_mut(self.length() - 1);
 
             // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
-            T::index_inputs(buffer, scratch, &self.input_indices);
+            self.indicer
+                .index_inputs(buffer, scratch, &self.input_indices);
 
             // perform the first of two inner FFTs
 
@@ -511,7 +529,8 @@ where
             let (_, buffer) = output_chunk.split_first_mut().unwrap();
 
             // copy the final values into the output, reordering as we go
-            T::output_indices(buffer, scratch, &self.output_indices);
+            self.indicer
+                .output_indices(buffer, scratch, &self.output_indices);
         }
         Ok(())
     }

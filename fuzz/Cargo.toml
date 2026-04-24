@@ -21,6 +21,7 @@ default = []
 avx = ["zaft/avx"]
 neon = ["zaft/neon"]
 fcma = ["zaft/fcma"]
+sve = ["zaft/sve"]
 
 [[bin]]
 name = "single_precision"
