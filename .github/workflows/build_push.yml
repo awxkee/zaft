@@ -42,8 +42,8 @@ jobs:
     name: Tests
     strategy:
       matrix:
-        features: [ "", neon, fcma ]
-    runs-on: macos-latest
+        features: [ "", neon, fcma, sve ]
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly
