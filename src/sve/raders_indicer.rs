@@ -40,7 +40,7 @@ impl SveRadersIndicer {
         output: &mut [Complex<f32>],
         indices: &[u32],
     ) {
-        assert_eq!(buffer.len(), indices.len());
+        assert_eq!(output.len(), indices.len());
         let vl = svcntd() as usize;
 
         for (out, idx) in output.chunks_exact_mut(vl).zip(indices.chunks_exact(vl)) {

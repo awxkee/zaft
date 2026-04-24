@@ -1102,6 +1102,7 @@ impl AlgorithmFactory<f64> for f64 {
         #[cfg(all(target_arch = "aarch64", feature = "sve"))]
         {
             if n < (u32::MAX / 2 - 1000u32) as usize {
+                panic!();
                 use crate::neon::NeonRadersFft;
                 use crate::sve::SveRadersIndicer;
                 return NeonRadersFft::new(
