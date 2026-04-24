@@ -38,6 +38,10 @@
     all(feature = "fcma", target_arch = "aarch64"),
     feature(stdarch_neon_fcma)
 )]
+#![cfg_attr(
+    all(feature = "sve", target_arch = "aarch64"),
+    feature(stdarch_aarch64_sve)
+)]
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 mod avx;
 mod bluestein;
@@ -66,6 +70,8 @@ mod radix6;
 mod radix7;
 mod spectrum_arithmetic;
 mod store;
+#[cfg(all(target_arch = "aarch64", feature = "sve"))]
+mod sve;
 mod td;
 mod traits;
 mod transpose;

@@ -155,7 +155,8 @@ pub(crate) use mixed::{
     NeonR2CMixedRadix11d, NeonR2CMixedRadix11f, NeonR2CMixedRadix13d, NeonR2CMixedRadix13f,
 };
 pub(crate) use r2c::R2CNeonTwiddles;
-pub(crate) use raders::NeonRadersFft;
+#[allow(unused_imports)]
+pub(crate) use raders::{NeonRadersFft, NeonRadersIndicer, RadersIndicer};
 pub(crate) use radix3::NeonRadix3;
 #[cfg(feature = "fcma")]
 pub(crate) use radix3_fcma::NeonFcmaRadix3;
