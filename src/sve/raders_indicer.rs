@@ -129,7 +129,52 @@ impl SveRadersIndicer {
         assert_eq!(output.len(), indices.len());
         let vl = svcntd() as usize;
 
-        for (out, idx) in output.chunks_exact_mut(vl).zip(indices.chunks_exact(vl)) {
+        for (out, idx) in output
+            .chunks_exact_mut(vl * 4)
+            .zip(indices.chunks_exact(vl * 4))
+        {
+            let pg = svptrue_b64();
+
+            let [re_i0, im_i0] = make_re_im_idx(pg, unsafe { idx.get_unchecked(..vl) });
+            let [re_i1, im_i1] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl..vl * 2) });
+            let [re_i2, im_i2] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl * 2..vl * 3) });
+            let [re_i3, im_i3] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl * 3..vl * 4) });
+
+            let base = buffer.as_ptr() as *const f64;
+
+            let gre0 = unsafe { svld1_gather_u64index_f64(pg, base, re_i0) };
+            let gim0 = unsafe { svld1_gather_u64index_f64(pg, base, im_i0) };
+            let gre1 = unsafe { svld1_gather_u64index_f64(pg, base, re_i1) };
+            let gim1 = unsafe { svld1_gather_u64index_f64(pg, base, im_i1) };
+            let gre2 = unsafe { svld1_gather_u64index_f64(pg, base, re_i2) };
+            let gim2 = unsafe { svld1_gather_u64index_f64(pg, base, im_i2) };
+            let gre3 = unsafe { svld1_gather_u64index_f64(pg, base, re_i3) };
+            let gim3 = unsafe { svld1_gather_u64index_f64(pg, base, im_i3) };
+
+            unsafe {
+                svst2_f64(pg, out.as_mut_ptr().cast(), svcreate2_f64(gre0, gim0));
+                svst2_f64(
+                    pg,
+                    out.get_unchecked_mut(vl..).as_mut_ptr().cast(),
+                    svcreate2_f64(gre1, gim1),
+                );
+                svst2_f64(
+                    pg,
+                    out.get_unchecked_mut(vl * 2..).as_mut_ptr().cast(),
+                    svcreate2_f64(gre2, gim2),
+                );
+                svst2_f64(
+                    pg,
+                    out.get_unchecked_mut(vl * 3..).as_mut_ptr().cast(),
+                    svcreate2_f64(gre3, gim3),
+                );
+            }
+        }
+
+        let out_rem = output.chunks_exact_mut(vl * 4).into_remainder();
+        let idx_rem = indices.chunks_exact(vl * 4).remainder();
+
+        for (out, idx) in out_rem.chunks_exact_mut(vl).zip(idx_rem.chunks_exact(vl)) {
             let pg_all = svptrue_b64();
             let [re_idx, im_idx] = make_re_im_idx(pg_all, idx);
 
@@ -144,8 +189,8 @@ impl SveRadersIndicer {
             }
         }
 
-        let out_rem = output.chunks_exact_mut(vl).into_remainder();
-        let idx_rem = indices.chunks_exact(vl).remainder();
+        let out_rem = out_rem.chunks_exact_mut(vl).into_remainder();
+        let idx_rem = idx_rem.chunks_exact(vl).remainder();
 
         if !out_rem.is_empty() {
             let pg_tail = svwhilelt_b64_u64(0u64, out_rem.len() as u64);
