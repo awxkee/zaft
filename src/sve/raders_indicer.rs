@@ -43,7 +43,49 @@ impl SveRadersIndicer {
         assert_eq!(output.len(), indices.len());
         let vl = svcntd() as usize;
 
-        for (out, idx) in output.chunks_exact_mut(vl).zip(indices.chunks_exact(vl)) {
+        for (out, idx) in output
+            .chunks_exact_mut(vl * 4)
+            .zip(indices.chunks_exact(vl * 4))
+        {
+            let pg_all = svptrue_b64();
+            let raw_idx0 = unsafe { svld1uw_u64(pg_all, idx.as_ptr()) };
+            let raw_idx1 = unsafe { svld1uw_u64(pg_all, idx.get_unchecked(vl..).as_ptr()) };
+            let raw_idx2 = unsafe { svld1uw_u64(pg_all, idx.get_unchecked(vl * 2..).as_ptr()) };
+            let raw_idx3 = unsafe { svld1uw_u64(pg_all, idx.get_unchecked(vl * 3..).as_ptr()) };
+
+            let gathered0 =
+                unsafe { svld1_gather_u64index_u64(pg_all, buffer.as_ptr().cast(), raw_idx0) };
+            let gathered1 =
+                unsafe { svld1_gather_u64index_u64(pg_all, buffer.as_ptr().cast(), raw_idx1) };
+            let gathered2 =
+                unsafe { svld1_gather_u64index_u64(pg_all, buffer.as_ptr().cast(), raw_idx2) };
+            let gathered3 =
+                unsafe { svld1_gather_u64index_u64(pg_all, buffer.as_ptr().cast(), raw_idx3) };
+
+            unsafe {
+                svst1_u64(pg_all, out.as_mut_ptr().cast(), gathered0);
+                svst1_u64(
+                    pg_all,
+                    out.get_unchecked_mut(vl..).as_mut_ptr().cast(),
+                    gathered1,
+                );
+                svst1_u64(
+                    pg_all,
+                    out.get_unchecked_mut(vl * 2..).as_mut_ptr().cast(),
+                    gathered2,
+                );
+                svst1_u64(
+                    pg_all,
+                    out.get_unchecked_mut(vl * 3..).as_mut_ptr().cast(),
+                    gathered3,
+                );
+            }
+        }
+
+        let out_rem = output.chunks_exact_mut(vl).into_remainder();
+        let idx_rem = indices.chunks_exact(vl).remainder();
+
+        for (out, idx) in out_rem.chunks_exact_mut(vl).zip(idx_rem.chunks_exact(vl)) {
             let pg_all = svptrue_b64();
             let raw_idx: svuint64_t = unsafe { svld1uw_u64(pg_all, idx.as_ptr()) };
 
@@ -55,8 +97,8 @@ impl SveRadersIndicer {
             }
         }
 
-        let out_rem = output.chunks_exact_mut(vl).into_remainder();
-        let idx_rem = indices.chunks_exact(vl).remainder();
+        let out_rem = out_rem.chunks_exact_mut(vl).into_remainder();
+        let idx_rem = idx_rem.chunks_exact(vl).remainder();
 
         if !out_rem.is_empty() {
             let pg_tail = svwhilelt_b64_u64(0u64, out_rem.len() as u64);
