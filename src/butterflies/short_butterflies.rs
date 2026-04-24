@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(unused)]
 use crate::FftDirection;
 use crate::butterflies::rotate_90;
 use crate::mla::fmla;
@@ -36,7 +37,6 @@ use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg, Sub};
 
-#[allow(unused)]
 pub(crate) struct FastButterfly2<T> {
     phantom_data: PhantomData<T>,
     direction: FftDirection,

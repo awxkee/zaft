@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(unused)]
 use crate::fast_divider::DividerU64;
 use crate::spectrum_arithmetic::ComplexArith;
 use crate::util::compute_twiddle;
@@ -35,7 +36,6 @@ use num_integer::Integer;
 use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
-#[allow(unused)]
 pub(crate) struct Butterfly31<T> {
     convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: [Complex<T>; 30],
@@ -44,7 +44,6 @@ pub(crate) struct Butterfly31<T> {
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
 }
 
-#[allow(unused)]
 impl<T: FftSample> Butterfly31<T>
 where
     f64: AsPrimitive<T>,

@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(unused)]
 use crate::FftDirection;
 use crate::butterflies::fast_bf8::FastButterfly8;
 use crate::butterflies::rotate_90;
@@ -37,7 +38,6 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd, Num};
 use std::ops::{Add, Mul, Neg, Sub};
 
-#[allow(unused)]
 pub(crate) struct FastButterfly16<T> {
     direction: FftDirection,
     twiddle1: Complex<T>,

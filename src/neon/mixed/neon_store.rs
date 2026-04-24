@@ -254,8 +254,13 @@ impl NeonStoreF {
 
     #[inline]
     pub(crate) fn conj_flag() -> NeonStoreF {
-        static CONJ: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
-        unsafe { NeonStoreF::raw(vld1q_f32(CONJ.as_ptr().cast())) }
+        const MINUS_ZERO: f32 = -0.0;
+        let b = MINUS_ZERO.to_ne_bytes();
+        unsafe {
+            NeonStoreF::raw(vreinterpretq_f32_u64(vdupq_n_u64(u64::from_ne_bytes([
+                0, 0, 0, 0, b[0], b[1], b[2], b[3],
+            ]))))
+        }
     }
 
     #[inline]

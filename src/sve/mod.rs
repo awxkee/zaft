@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 6/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk 4/2026. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -26,59 +26,6 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::mla::fmla;
-use num_complex::Complex;
-use num_traits::{MulAdd, Num};
-use std::ops::{Mul, Neg};
+mod raders_indicer;
 
-#[inline(always)]
-pub(crate) fn c_mul_fast<
-    T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,
->(
-    a: Complex<T>,
-    b: Complex<T>,
-) -> Complex<T> {
-    let re = fmla(a.re, b.re, -a.im * b.im);
-    let im = fmla(a.re, b.im, a.im * b.re);
-    Complex::new(re, im)
-}
-
-// Multiplies a.conj() by b
-#[inline(always)]
-#[allow(unused)]
-pub(crate) fn c_conj_mul_fast<
-    T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,
->(
-    a: Complex<T>,
-    b: Complex<T>,
-) -> Complex<T> {
-    let re = fmla(a.re, b.re, a.im * b.im);
-    let im = fmla(a.re, b.im, -a.im * b.re);
-    Complex::new(re, im)
-}
-
-// Multiplies a by b.conj()
-#[inline(always)]
-pub(crate) fn c_mul_fast_conj<
-    T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,
->(
-    a: Complex<T>,
-    b: Complex<T>,
-) -> Complex<T> {
-    let re = fmla(a.re, b.re, a.im * b.im);
-    let im = fmla(a.re, -b.im, a.im * b.re);
-    Complex::new(re, im)
-}
-
-#[inline(always)]
-pub(crate) fn c_mul_add_fast<
-    T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,
->(
-    a: Complex<T>,
-    b: Complex<T>,
-    c: Complex<T>,
-) -> Complex<T> {
-    let re = fmla(a.re, b.re, fmla(-a.im, b.im, c.re));
-    let im = fmla(a.im, b.re, fmla(a.re, b.im, c.im));
-    Complex { re, im }
-}
+pub(crate) use raders_indicer::SveRadersIndicer;

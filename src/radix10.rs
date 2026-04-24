@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(unused)]
 use crate::butterflies::Butterfly2;
 use crate::butterflies::short_butterflies::FastButterfly5;
 use crate::complex_fma::c_mul_fast;
@@ -38,7 +39,6 @@ use num_complex::Complex;
 use num_traits::AsPrimitive;
 use std::sync::Arc;
 
-#[allow(dead_code)]
 pub(crate) struct Radix10<T> {
     twiddles: Vec<Complex<T>>,
     execution_length: usize,

@@ -29,11 +29,9 @@
  */
 // #![feature(duration_millis_float)]
 extern crate core;
-mod plotter;
 mod raders_reshuffle;
 mod split_radix;
 
-use crate::plotter::benchmark_compare;
 use crate::raders_reshuffle::raders_reshuffle;
 use criterion::{BatchSize, Criterion};
 use num_traits::Zero;
@@ -326,7 +324,7 @@ fn check_power_groups_c2r(n: usize) {
 }
 
 fn main() {
-    benchmark_compare();
+    // benchmark_compare();
     //input [2, 8, 26, 18, 25, 15, 16, 19, 28, 24, 12, 7, 23, 9, 29, 27, 21, 3, 11, 4, 14, 13, 10, 1, 5, 17, 22, 6, 20, 0]
     // output [20, 6, 22, 17, 5, 1, 10, 13, 14, 4, 11, 3, 21, 27, 29, 9, 23, 7, 12, 24, 28, 19, 16, 15, 25, 18, 26, 8, 2, 0]
     let rs = raders_reshuffle(
@@ -342,7 +340,7 @@ fn main() {
     );
     println!("{}", rs.0);
     println!("{}", rs.1);
-    let mut data = vec![Complex::new(0.0019528865, 0.); 1200];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 1201];
     let mut c = Criterion::default().sample_size(10);
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);

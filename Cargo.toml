@@ -34,6 +34,8 @@ neon = []
 fcma = ["neon"]
 # x86_64 AVX intrinsics
 avx = []
+# Allows to use SVE, backups only few algorihms, NEON still is a baseline
+sve = ["neon"]
 
 [package.metadata.docs.rs]
 # To build locally:

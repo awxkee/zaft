@@ -26,6 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#![allow(unused)]
 use crate::butterflies::short_butterflies::{FastButterfly2, FastButterfly5};
 use crate::butterflies::util::boring_scalar_butterfly;
 use crate::store::BidirectionalStore;
@@ -34,7 +35,6 @@ use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float};
 
-#[allow(unused)]
 pub(crate) struct Butterfly10<T> {
     direction: FftDirection,
     bf5: FastButterfly5<T>,
