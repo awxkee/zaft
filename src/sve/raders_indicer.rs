@@ -290,7 +290,47 @@ impl SveRadersIndicer {
 
         let vl = svcntd() as usize;
 
-        for (src, idx) in scratch.chunks_exact(vl).zip(indices.chunks_exact(vl)) {
+        for (src, idx) in scratch
+            .chunks_exact(vl * 4)
+            .zip(indices.chunks_exact(vl * 4))
+        {
+            let pg = svptrue_b64();
+
+            let ri0 = unsafe { svld2_f64(pg, src.as_ptr().cast()) };
+            let ri1 = unsafe { svld2_f64(pg, src.get_unchecked(vl..).as_ptr().cast()) };
+            let ri2 = unsafe { svld2_f64(pg, src.get_unchecked(vl * 2..).as_ptr().cast()) };
+            let ri3 = unsafe { svld2_f64(pg, src.get_unchecked(vl * 3..).as_ptr().cast()) };
+
+            let re0 = svget2_f64::<0>(ri0);
+            let im0 = svneg_f64_m(svget2_f64::<1>(ri0), pg, svget2_f64::<1>(ri0));
+            let re1 = svget2_f64::<0>(ri1);
+            let im1 = svneg_f64_m(svget2_f64::<1>(ri1), pg, svget2_f64::<1>(ri1));
+            let re2 = svget2_f64::<0>(ri2);
+            let im2 = svneg_f64_m(svget2_f64::<1>(ri2), pg, svget2_f64::<1>(ri2));
+            let re3 = svget2_f64::<0>(ri3);
+            let im3 = svneg_f64_m(svget2_f64::<1>(ri3), pg, svget2_f64::<1>(ri3));
+
+            let [re_i0, im_i0] = make_re_im_idx(pg, unsafe { idx.get_unchecked(..vl) });
+            let [re_i1, im_i1] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl..vl * 2) });
+            let [re_i2, im_i2] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl * 2..vl * 3) });
+            let [re_i3, im_i3] = make_re_im_idx(pg, unsafe { idx.get_unchecked(vl * 3..vl * 4) });
+
+            unsafe {
+                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i0, re0);
+                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i0, im0);
+                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i1, re1);
+                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i1, im1);
+                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i2, re2);
+                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i2, im2);
+                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), re_i3, re3);
+                svst1_scatter_u64index_f64(pg, buffer.as_mut_ptr().cast(), im_i3, im3);
+            }
+        }
+
+        let src_tail = scratch.chunks_exact(vl * 4).remainder();
+        let idx_tail = indices.chunks_exact(vl * 4).remainder();
+
+        for (src, idx) in src_tail.chunks_exact(vl).zip(idx_tail.chunks_exact(vl)) {
             let pg = svptrue_b64();
             let ri = unsafe { svld2_f64(pg, src.as_ptr().cast()) };
             let re = svget2_f64::<0>(ri);
@@ -303,8 +343,8 @@ impl SveRadersIndicer {
             }
         }
 
-        let src_tail = scratch.chunks_exact(vl).remainder();
-        let idx_tail = indices.chunks_exact(vl).remainder();
+        let src_tail = src_tail.chunks_exact(vl).remainder();
+        let idx_tail = idx_tail.chunks_exact(vl).remainder();
 
         if !src_tail.is_empty() {
             let pg = svwhilelt_b64_u64(0u64, src_tail.len() as u64);
