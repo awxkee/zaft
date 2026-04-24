@@ -27,3 +27,5 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 mod raders_indicer;
+
+pub(crate) use raders_indicer::SveRadersIndicer;

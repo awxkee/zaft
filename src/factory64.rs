@@ -1099,6 +1099,20 @@ impl AlgorithmFactory<f64> for f64 {
                 }
             }
         }
+        #[cfg(all(target_arch = "aarch64", feature = "sve"))]
+        {
+            if n < (u32::MAX / 2 - 1000u32) as usize {
+                use crate::neon::NeonRadersFft;
+                use crate::sve::SveRadersIndicer;
+                return NeonRadersFft::new(
+                    n,
+                    convolve_fft,
+                    fft_direction,
+                    Arc::new(SveRadersIndicer),
+                )
+                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>);
+            }
+        }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
             if n < (u32::MAX - 100_000u32) as usize {
