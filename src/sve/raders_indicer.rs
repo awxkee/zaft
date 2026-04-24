@@ -82,8 +82,8 @@ impl SveRadersIndicer {
             }
         }
 
-        let out_rem = output.chunks_exact_mut(vl).into_remainder();
-        let idx_rem = indices.chunks_exact(vl).remainder();
+        let out_rem = output.chunks_exact_mut(vl * 4).into_remainder();
+        let idx_rem = indices.chunks_exact(vl * 4).remainder();
 
         for (out, idx) in out_rem.chunks_exact_mut(vl).zip(idx_rem.chunks_exact(vl)) {
             let pg_all = svptrue_b64();
