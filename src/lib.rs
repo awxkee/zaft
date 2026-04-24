@@ -744,12 +744,10 @@ impl Zaft {
             if product.is_multiple_of(3) {
                 get_mixed_butterflies!(3, product / 3)
             }
-            match Zaft::try_split_mixed_radix_butterflies(n_length, q_length, direction) {
-                Ok(value) => match value {
-                    None => {}
-                    Some(executor) => return Ok(executor),
-                },
-                Err(err) => return Err(err),
+            let value = Zaft::try_split_mixed_radix_butterflies(n_length, q_length, direction)?;
+            match value {
+                None => {}
+                Some(executor) => return Ok(executor),
             }
         }
 

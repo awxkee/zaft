@@ -45,6 +45,7 @@ pub(crate) fn c_mul_fast<
 
 // Multiplies a.conj() by b
 #[inline(always)]
+#[allow(unused)]
 pub(crate) fn c_conj_mul_fast<
     T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,
 >(

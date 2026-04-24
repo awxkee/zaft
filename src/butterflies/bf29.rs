@@ -36,16 +36,13 @@ use num_integer::Integer;
 use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
-#[allow(unused)]
 pub(crate) struct Butterfly29<T> {
     convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: [Complex<T>; 28],
-    execution_length: usize,
     direction: FftDirection,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
 }
 
-#[allow(unused)]
 impl<T: FftSample> Butterfly29<T>
 where
     f64: AsPrimitive<T>,
@@ -81,7 +78,6 @@ where
         convolve_fft.execute(&mut inner_fft_input).unwrap();
 
         Self {
-            execution_length: size,
             convolve_fft,
             convolve_fft_twiddles: inner_fft_input,
             direction: fft_direction,
