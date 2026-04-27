@@ -62,6 +62,13 @@ impl R2CTwiddlesFactory<f32> for f32 {
         Q.get_or_init(|| {
             #[cfg(all(target_arch = "aarch64", feature = "neon"))]
             {
+                #[cfg(feature = "fcma")]
+                {
+                    if std::arch::is_aarch64_feature_detected!("fcma") {
+                        use crate::neon::R2CNeonTwiddlesFcma;
+                        return Arc::new(R2CNeonTwiddlesFcma {});
+                    }
+                }
                 use crate::neon::R2CNeonTwiddles;
                 Arc::new(R2CNeonTwiddles {})
             }
@@ -90,6 +97,13 @@ impl R2CTwiddlesFactory<f64> for f64 {
         Q.get_or_init(|| {
             #[cfg(all(target_arch = "aarch64", feature = "neon"))]
             {
+                #[cfg(feature = "fcma")]
+                {
+                    if std::arch::is_aarch64_feature_detected!("fcma") {
+                        use crate::neon::R2CNeonTwiddlesFcma;
+                        return Arc::new(R2CNeonTwiddlesFcma {});
+                    }
+                }
                 use crate::neon::R2CNeonTwiddles;
                 Arc::new(R2CNeonTwiddles {})
             }

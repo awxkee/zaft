@@ -2,7 +2,7 @@ workspace = { members = ["app"], exclude = ["fuzz"] }
 
 [package]
 name = "zaft"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2024"
 description = "Fast fourier transform"
 readme = "README.md"
@@ -13,7 +13,7 @@ documentation = "https://github.com/awxkee/zaft"
 categories = ["algorithms", "science"]
 homepage = "https://github.com/awxkee/zaft"
 repository = "https://github.com/awxkee/zaft"
-exclude = ["*.jpg", "/assets", "*.png", "*.sh", "/assets/*"]
+exclude = ["*.jpg", "/assets", "*.png", "*.sh", "/assets/*", ".github"]
 rust-version = "1.87.0"
 
 [dependencies]
@@ -21,7 +21,7 @@ num-complex = "0.4"
 num-traits = "0.2.3"
 pxfm = "^0.1.25"
 num-integer = "0.1.46"
-novtb = "0.1.10"
+novtb = "0.1.12"
 
 [dev-dependencies]
 rand = "0.10.0"

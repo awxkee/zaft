@@ -102,7 +102,7 @@ where
             *twiddle = compute_twiddle(i + 1, length, FftDirection::Inverse);
         }
 
-        let intercept_scratch_length = intercept.scratch_length();
+        let intercept_scratch_length = intercept.destructive_scratch_length();
 
         Ok(Self {
             intercept,
@@ -139,6 +139,10 @@ where
                 self.complex_length,
             ));
         }
+
+        // we want to do unsafe cast here, we'll need to ensure everything is correct for this one
+        assert_eq!(align_of::<T>(), align_of::<Complex<T>>());
+        assert_eq!(size_of::<T>() * 2, size_of::<Complex<T>>());
 
         let scratch = validate_scratch!(scratch, self.complex_scratch_length());
         let (scratch, intercept_scratch) = scratch.split_at_mut(self.complex_length);
@@ -193,13 +197,15 @@ where
                 scratch[input.len() / 2] = doubled.conj();
             }
 
-            self.intercept
-                .execute_with_scratch(&mut scratch[..output.len() / 2], intercept_scratch)?;
+            let casted_output = unsafe {
+                std::slice::from_raw_parts_mut(output.as_mut_ptr().cast(), output.len() / 2)
+            };
 
-            for (dst, src) in output.chunks_exact_mut(2).zip(scratch.iter()) {
-                dst[0] = src.re;
-                dst[1] = src.im;
-            }
+            self.intercept.execute_destructive_with_scratch(
+                &mut scratch[..output.len() / 2],
+                casted_output,
+                intercept_scratch,
+            )?;
         }
 
         Ok(())

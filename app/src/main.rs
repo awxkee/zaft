@@ -327,26 +327,31 @@ fn main() {
     // benchmark_compare();
     //input [2, 8, 26, 18, 25, 15, 16, 19, 28, 24, 12, 7, 23, 9, 29, 27, 21, 3, 11, 4, 14, 13, 10, 1, 5, 17, 22, 6, 20, 0]
     // output [20, 6, 22, 17, 5, 1, 10, 13, 14, 4, 11, 3, 21, 27, 29, 9, 23, 7, 12, 24, 28, 19, 16, 15, 25, 18, 26, 8, 2, 0]
-    let rs = raders_reshuffle(
-        &[
-            5, 35, 10, 24, 26, 38, 28, 9, 18, 31, 27, 3, 23, 20, 2, 17, 25, 32, 33, 39, 34, 4, 29,
-            15, 13, 1, 11, 30, 21, 8, 12, 36, 16, 19, 37, 22, 14, 7, 6, 0,
-        ],
-        &[
-            6, 7, 14, 22, 37, 19, 16, 36, 12, 8, 21, 30, 11, 1, 13, 15, 29, 4, 34, 39, 33, 32, 25,
-            17, 2, 20, 23, 3, 27, 31, 18, 9, 28, 38, 26, 24, 10, 35, 5, 0,
-        ],
-        false,
-    );
-    println!("{}", rs.0);
-    println!("{}", rs.1);
-    let mut data = vec![Complex::new(0.0019528865, 0.); 1201];
+    // let rs = raders_reshuffle(
+    //     &[
+    //         5, 35, 10, 24, 26, 38, 28, 9, 18, 31, 27, 3, 23, 20, 2, 17, 25, 32, 33, 39, 34, 4, 29,
+    //         15, 13, 1, 11, 30, 21, 8, 12, 36, 16, 19, 37, 22, 14, 7, 6, 0,
+    //     ],
+    //     &[
+    //         6, 7, 14, 22, 37, 19, 16, 36, 12, 8, 21, 30, 11, 1, 13, 15, 29, 4, 34, 39, 33, 32, 25,
+    //         17, 2, 20, 23, 3, 27, 31, 18, 9, 28, 38, 26, 24, 10, 35, 5, 0,
+    //     ],
+    //     false,
+    // // );
+    // println!("{}", rs.0);
+    // println!("{}", rs.1);
+    let mut data = vec![Complex::new(0.0019528865, 0.); 20];
     let mut c = Criterion::default().sample_size(10);
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
     }
     let o_data = data.clone();
     let mut cvt = data.clone();
+
+    let forward_r2c = Zaft::make_r2c_fft_f32(cvt.len()).unwrap();
+    let real_input = data.iter().map(|x| x.re).collect::<Vec<_>>();
+    let mut output_r = vec![Complex::zero(); 20 / 2 + 1];
+    forward_r2c.execute(&real_input, &mut output_r).unwrap();
 
     let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
     let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();

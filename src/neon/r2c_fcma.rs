@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 10/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk 04/2026. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -32,10 +32,22 @@ use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::aarch64::*;
 
-pub(crate) struct R2CNeonTwiddles {}
+pub(crate) struct R2CNeonTwiddlesFcma {}
 
-impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
+impl R2CTwiddlesHandler<f64> for R2CNeonTwiddlesFcma {
     fn handle(
+        &self,
+        twiddles: &[Complex<f64>],
+        left: &mut [Complex<f64>],
+        right: &mut [Complex<f64>],
+    ) {
+        unsafe { self.handle_impl_f64(twiddles, left, right) }
+    }
+}
+
+impl R2CNeonTwiddlesFcma {
+    #[target_feature(enable = "fcma")]
+    fn handle_impl_f64(
         &self,
         twiddles: &[Complex<f64>],
         left: &mut [Complex<f64>],
@@ -50,15 +62,10 @@ impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
             .zip(left.chunks_exact_mut(4))
             .zip(right.rchunks_exact_mut(4))
         {
-            let [twiddle_re0, twiddle_im0] = NeonStoreD::from_complex(&twiddle[0]).dup_even_odds();
-            let [twiddle_re1, twiddle_im1] = NeonStoreD::from_complex(&twiddle[1]).dup_even_odds();
-            let [twiddle_re2, twiddle_im2] = NeonStoreD::from_complex(&twiddle[2]).dup_even_odds();
-            let [twiddle_re3, twiddle_im3] = NeonStoreD::from_complex(&twiddle[3]).dup_even_odds();
-
-            let twiddle_re0 = twiddle_re0.xor(conj);
-            let twiddle_re1 = twiddle_re1.xor(conj);
-            let twiddle_re2 = twiddle_re2.xor(conj);
-            let twiddle_re3 = twiddle_re3.xor(conj);
+            let twiddle0 = NeonStoreD::from_complex(&twiddle[0]);
+            let twiddle1 = NeonStoreD::from_complex(&twiddle[1]);
+            let twiddle2 = NeonStoreD::from_complex(&twiddle[2]);
+            let twiddle3 = NeonStoreD::from_complex(&twiddle[3]);
 
             let out0 = NeonStoreD::from_complex(&s_out[0]);
             let out1 = NeonStoreD::from_complex(&s_out[1]);
@@ -90,19 +97,15 @@ impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
             let diffsum_blended2 = diff2.select(sum2, blend_mask);
             let diffsum_blended3 = diff3.select(sum3, blend_mask);
 
-            let diffsum_swapped0 = diffsum_blended0.reverse_complex_elements();
-            let diffsum_swapped1 = diffsum_blended1.reverse_complex_elements();
-            let diffsum_swapped2 = diffsum_blended2.reverse_complex_elements();
-            let diffsum_swapped3 = diffsum_blended3.reverse_complex_elements();
+            let dt0 = NeonStoreD::fcmul_fcma(diffsum_blended0, twiddle0);
+            let dt1 = NeonStoreD::fcmul_fcma(diffsum_blended1, twiddle1);
+            let dt2 = NeonStoreD::fcmul_fcma(diffsum_blended2, twiddle2);
+            let dt3 = NeonStoreD::fcmul_fcma(diffsum_blended3, twiddle3);
 
-            let twiddled_output0 =
-                diffsum_blended0.mul_add(twiddle_im0, diffsum_swapped0 * twiddle_re0);
-            let twiddled_output1 =
-                diffsum_blended1.mul_add(twiddle_im1, diffsum_swapped1 * twiddle_re1);
-            let twiddled_output2 =
-                diffsum_blended2.mul_add(twiddle_im2, diffsum_swapped2 * twiddle_re2);
-            let twiddled_output3 =
-                diffsum_blended3.mul_add(twiddle_im3, diffsum_swapped3 * twiddle_re3);
+            let twiddled_output0 = dt0.reverse_complex_elements().xor(conj);
+            let twiddled_output1 = dt1.reverse_complex_elements().xor(conj);
+            let twiddled_output2 = dt2.reverse_complex_elements().xor(conj);
+            let twiddled_output3 = dt3.reverse_complex_elements().xor(conj);
 
             let half = NeonStoreD::dup(0.5);
 
@@ -137,8 +140,7 @@ impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
 
         for ((twiddle, s_out), s_out_rev) in tw0.iter().zip(l0.iter_mut()).zip(r0.iter_mut().rev())
         {
-            let [twiddle_re, twiddle_im] = NeonStoreD::from_complex(twiddle).dup_even_odds();
-            let twiddle_re = twiddle_re.xor(conj);
+            let twiddle = NeonStoreD::from_complex(twiddle);
             let out = NeonStoreD::from_complex(s_out);
             let out_rev = NeonStoreD::from_complex(s_out_rev);
 
@@ -147,9 +149,9 @@ impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
 
             let sumdiff_blended = sum.select(diff, blend_mask);
             let diffsum_blended = diff.select(sum, blend_mask);
-            let diffsum_swapped = diffsum_blended.reverse_complex_elements();
 
-            let twiddled_output = diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
+            let dt = NeonStoreD::fcmul_fcma(diffsum_blended, twiddle);
+            let twiddled_output = dt.reverse_complex_elements().xor(conj);
 
             let out_fwd = sumdiff_blended.mul_add(NeonStoreD::dup(0.5), twiddled_output);
             let out_rev = sumdiff_blended
@@ -162,8 +164,22 @@ impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
     }
 }
 
-impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
+impl R2CTwiddlesHandler<f32> for R2CNeonTwiddlesFcma {
     fn handle(
+        &self,
+        twiddles: &[Complex<f32>],
+        left: &mut [Complex<f32>],
+        right: &mut [Complex<f32>],
+    ) {
+        unsafe {
+            self.handle_impl(twiddles, left, right);
+        }
+    }
+}
+
+impl R2CNeonTwiddlesFcma {
+    #[target_feature(enable = "fcma")]
+    fn handle_impl(
         &self,
         twiddles: &[Complex<f32>],
         left: &mut [Complex<f32>],
@@ -184,19 +200,11 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
                 .zip(left.chunks_exact_mut(8))
                 .zip(rls2.rchunks_exact_mut(8))
             {
-                let [twiddle_re0, twiddle_im0] =
-                    NeonStoreF::from_complex_ref(twiddle).dup_even_odds();
-                let [twiddle_re1, twiddle_im1] =
-                    NeonStoreF::from_complex_ref(&twiddle[2..]).dup_even_odds();
-                let [twiddle_re2, twiddle_im2] =
-                    NeonStoreF::from_complex_ref(&twiddle[4..]).dup_even_odds();
-                let [twiddle_re3, twiddle_im3] =
-                    NeonStoreF::from_complex_ref(&twiddle[6..]).dup_even_odds();
-
-                let twiddle_re0 = twiddle_re0.xor(conj);
-                let twiddle_re1 = twiddle_re1.xor(conj);
-                let twiddle_re2 = twiddle_re2.xor(conj);
-                let twiddle_re3 = twiddle_re3.xor(conj);
+                let twiddle0 = NeonStoreF::from_complex_ref(twiddle);
+                NeonStoreF::from_complex_ref(twiddle);
+                let twiddle1 = NeonStoreF::from_complex_ref(&twiddle[2..]);
+                let twiddle2 = NeonStoreF::from_complex_ref(&twiddle[4..]);
+                let twiddle3 = NeonStoreF::from_complex_ref(&twiddle[6..]);
 
                 let out0 = NeonStoreF::from_complex_ref(s_out);
                 let out1 = NeonStoreF::from_complex_ref(&s_out[2..]);
@@ -228,19 +236,15 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
                 let diffsum_blended2 = diff2.select(sum2, blend_mask);
                 let diffsum_blended3 = diff3.select(sum3, blend_mask);
 
-                let diffsum_swapped0 = diffsum_blended0.reverse_complex_elements();
-                let diffsum_swapped1 = diffsum_blended1.reverse_complex_elements();
-                let diffsum_swapped2 = diffsum_blended2.reverse_complex_elements();
-                let diffsum_swapped3 = diffsum_blended3.reverse_complex_elements();
+                let dt0 = NeonStoreF::fcmul_fcma(diffsum_blended0, twiddle0);
+                let dt1 = NeonStoreF::fcmul_fcma(diffsum_blended1, twiddle1);
+                let dt2 = NeonStoreF::fcmul_fcma(diffsum_blended2, twiddle2);
+                let dt3 = NeonStoreF::fcmul_fcma(diffsum_blended3, twiddle3);
 
-                let twiddled_output0 =
-                    diffsum_blended0.mul_add(twiddle_im0, diffsum_swapped0 * twiddle_re0);
-                let twiddled_output1 =
-                    diffsum_blended1.mul_add(twiddle_im1, diffsum_swapped1 * twiddle_re1);
-                let twiddled_output2 =
-                    diffsum_blended2.mul_add(twiddle_im2, diffsum_swapped2 * twiddle_re2);
-                let twiddled_output3 =
-                    diffsum_blended3.mul_add(twiddle_im3, diffsum_swapped3 * twiddle_re3);
+                let twiddled_output0 = dt0.reverse_complex_elements().xor(conj);
+                let twiddled_output1 = dt1.reverse_complex_elements().xor(conj);
+                let twiddled_output2 = dt2.reverse_complex_elements().xor(conj);
+                let twiddled_output3 = dt3.reverse_complex_elements().xor(conj);
 
                 let half = NeonStoreF::dup(0.5);
 
@@ -295,9 +299,6 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
                 .zip(l0.chunks_exact_mut(2))
                 .zip(r0.rchunks_exact_mut(2))
             {
-                let [twiddle_re, twiddle_im] =
-                    NeonStoreF::from_complex_ref(twiddle).dup_even_odds();
-                let twiddle_re = twiddle_re.xor(conj);
                 let out = NeonStoreF::from_complex_ref(s_out);
                 let out_rev = NeonStoreF::from_complex_ref(s_out_rev).reverse_complex();
 
@@ -306,10 +307,11 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
 
                 let sumdiff_blended = sum.select(diff, blend_mask);
                 let diffsum_blended = diff.select(sum, blend_mask);
-                let diffsum_swapped = diffsum_blended.reverse_complex_elements();
 
-                let twiddled_output =
-                    diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
+                let twiddle = NeonStoreF::from_complex_ref(twiddle);
+
+                let dt = NeonStoreF::fcmul_fcma(diffsum_blended, twiddle);
+                let twiddled_output = dt.reverse_complex_elements().xor(conj);
 
                 let out_fwd = sumdiff_blended.mul_add(NeonStoreF::dup(0.5), twiddled_output);
                 let out_rev = sumdiff_blended
@@ -334,9 +336,6 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
                     .zip(rem_left.iter_mut())
                     .zip(rem_right.iter_mut().rev())
                 {
-                    let [twiddle_re, twiddle_im] =
-                        NeonStoreF::from_complex(twiddle).dup_even_odds();
-                    let twiddle_re = twiddle_re.xor(conj);
                     let out = NeonStoreF::from_complex(s_out);
                     let out_rev = NeonStoreF::from_complex(s_out_rev);
 
@@ -345,10 +344,10 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
 
                     let sumdiff_blended = sum.select(diff, blend_mask);
                     let diffsum_blended = diff.select(sum, blend_mask);
-                    let diffsum_swapped = diffsum_blended.reverse_complex_elements();
 
-                    let twiddled_output =
-                        diffsum_blended.mul_add(twiddle_im, diffsum_swapped * twiddle_re);
+                    let twiddle = NeonStoreF::from_complex(twiddle);
+                    let dt = NeonStoreF::fcmul_fcma(diffsum_blended, twiddle);
+                    let twiddled_output = dt.reverse_complex_elements().xor(conj);
 
                     let out_fwd = sumdiff_blended.mul_add(NeonStoreF::dup(0.5), twiddled_output);
                     let out_rev = sumdiff_blended

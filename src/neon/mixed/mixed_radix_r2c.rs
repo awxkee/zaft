@@ -391,14 +391,72 @@ macro_rules! define_mixed_radix_neon_f {
 
                 let len_per_row = self.real_length() / ROW_COUNT;
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
+                const UNROLL: usize = 2;
+                const UNROLLED_COMPLEX: usize = 4;
+
+                for (c, twiddle_chunk) in self
+                    .twiddles
+                    .chunks_exact(TWIDDLES_PER_COLUMN * UNROLL)
+                    .take(chunk_count / UNROLL)
+                    .enumerate()
+                {
+                    let index_base_0 = c * UNROLLED_COMPLEX;
+                    let index_base_1 = index_base_0 + COMPLEX_PER_VECTOR;
+
+                    let twiddle_chunk_0 = &twiddle_chunk[..TWIDDLES_PER_COLUMN];
+                    let twiddle_chunk_1 = &twiddle_chunk[TWIDDLES_PER_COLUMN..];
+
+                    let mut columns_0 = [NeonStoreF::default(); ROW_COUNT];
+                    let mut columns_1 = [NeonStoreF::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            let [q0, q1] = NeonStoreF::load(
+                                src.get_unchecked(index_base_0 + len_per_row * i..),
+                            )
+                            .to_complex();
+                            columns_0[i] = q0;
+                            columns_1[i] = q1;
+                        }
+                    }
+
+                    #[allow(unused_unsafe)]
+                    let output_0 = unsafe { self.inner_bf.exec(columns_0) };
+                    #[allow(unused_unsafe)]
+                    let output_1 = unsafe { self.inner_bf.exec(columns_1) };
+
+                    unsafe {
+                        output_0[0].write(complex.get_unchecked_mut(index_base_0..));
+                        output_1[0].write(complex.get_unchecked_mut(index_base_1..));
+                    }
+
+                    let mut twiddles_0 = [NeonStoreF::default(); COMPLEX_ROW_COUNT - 1];
+                    let mut twiddles_1 = [NeonStoreF::default(); COMPLEX_ROW_COUNT - 1];
+                    for i in 0..COMPLEX_ROW_COUNT - 1 {
+                        twiddles_0[i] = twiddle_chunk_0[i];
+                        twiddles_1[i] = twiddle_chunk_1[i];
+                    }
+
+                    for i in 1..COMPLEX_ROW_COUNT {
+                        let output_0 = NeonStoreF::$mul(output_0[i], twiddles_0[i - 1]);
+                        let output_1 = NeonStoreF::$mul(output_1[i], twiddles_1[i - 1]);
+                        unsafe {
+                            output_0
+                                .write(complex.get_unchecked_mut(index_base_0 + len_per_row * i..));
+                            output_1
+                                .write(complex.get_unchecked_mut(index_base_1 + len_per_row * i..));
+                        }
+                    }
+                }
 
                 for (c, twiddle_chunk) in self
                     .twiddles
                     .chunks_exact(TWIDDLES_PER_COLUMN)
                     .take(chunk_count)
+                    .skip((chunk_count / UNROLL) * UNROLL)
                     .enumerate()
                 {
-                    let index_base = c * COMPLEX_PER_VECTOR;
+                    let index_base =
+                        (chunk_count / UNROLL) * UNROLLED_COMPLEX + c * COMPLEX_PER_VECTOR;
 
                     // Load columns from the input into registers
                     let mut columns = [NeonStoreF::default(); ROW_COUNT];

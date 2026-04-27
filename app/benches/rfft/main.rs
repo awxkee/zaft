@@ -176,28 +176,34 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // check_power_groups_c2d(c, 2401, "2401".to_string());
     // check_power_groups_c2d(c, 14641, "14641".to_string());
 
-    check_power_groups_c2r(c, 9, "9".to_string());
-    check_power_groups_c2r(c, 51, "51".to_string());
-    check_power_groups_c2r(c, 729, "729".to_string());
-    check_power_groups_c2r(c, 625, "625".to_string());
-    check_power_groups_c2r(c, 2401, "2401".to_string());
-    check_power_groups_c2r(c, 1331, "1331".to_string());
-    check_power_groups_c2r(c, 14641, "14641".to_string());
+    // check_power_groups_c2r(c, 9, "9".to_string());
+    // check_power_groups_c2r(c, 51, "51".to_string());
+    // check_power_groups_c2r(c, 729, "729".to_string());
+    // check_power_groups_c2r(c, 625, "625".to_string());
+    // check_power_groups_c2r(c, 2401, "2401".to_string());
+    // check_power_groups_c2r(c, 1331, "1331".to_string());
+    // check_power_groups_c2r(c, 14641, "14641".to_string());
+    //
+    // check_power_groups_c2r(c, 3125, "3125".to_string());
+    // check_power_groups_c2r(c, 6561, "6561".to_string());
+    // check_power_groups_c2r(c, 2197, "2197".to_string());
+    //
+    // check_power_groups(c, 3125, "3125".to_string());
+    // check_power_groups(c, 6561, "6561".to_string());
+    // check_power_groups(c, 2197, "2197".to_string());
+    // check_power_groups(c, 14641, "14641".to_string());
 
-    check_power_groups_c2r(c, 3125, "3125".to_string());
-    check_power_groups_c2r(c, 6561, "6561".to_string());
-    check_power_groups_c2r(c, 2197, "2197".to_string());
-
-    check_power_groups(c, 3125, "3125".to_string());
-    check_power_groups(c, 6561, "6561".to_string());
-    check_power_groups(c, 2197, "2197".to_string());
-    check_power_groups(c, 14641, "14641".to_string());
-
-    // check_power_groups_c2r(c, 64, "64".to_string());
-    // check_power_groups_c2r(c, 128, "128".to_string());
-    // check_power_groups_c2r(c, 256, "256".to_string());
-    // check_power_groups_c2r(c, 512, "512".to_string());
-    // check_power_groups_c2r(c, 1024, "1024".to_string());
+    check_power_groups_c2r(c, 64, "64".to_string());
+    check_power_groups_c2r(c, 128, "128".to_string());
+    check_power_groups_c2r(c, 256, "256".to_string());
+    check_power_groups_c2r(c, 512, "512".to_string());
+    check_power_groups_c2r(c, 1024, "1024".to_string());
+    check_power_groups_c2r(c, 2048, "2048".to_string());
+    check_power_groups_c2r(c, 4096, "4096".to_string());
+    check_power_groups_c2r(c, 8192, "8192".to_string());
+    check_power_groups_c2r(c, 16384, "16384".to_string());
+    check_power_groups_c2r(c, 32768, "32768".to_string());
+    check_power_groups_c2r(c, 65536, "65536".to_string());
 
     // check_power_groups(c, 1803, "1803".to_string());
     // check_power_groupd(c, 1803, "1803".to_string());
@@ -210,12 +216,15 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     // check_power_groups(c, 14, "14".to_string());
     // check_power_groupd(c, 14, "14".to_string());
 
+    check_power_groups(c, 2401, "2401".to_string());
+    check_power_groups(c, 3125, "3125".to_string());
+
     check_power_groups(c, 8, "8".to_string());
-    check_power_groupd(c, 8, "8".to_string());
+    // check_power_groupd(c, 8, "8".to_string());
     check_power_groups(c, 16, "16".to_string());
-    check_power_groupd(c, 16, "16".to_string());
+    // check_power_groupd(c, 16, "16".to_string());
     check_power_groups(c, 32, "32".to_string());
-    check_power_groupd(c, 32, "32".to_string());
+    // check_power_groupd(c, 32, "32".to_string());
     check_power_groups(c, 64, "64".to_string());
     check_power_groups(c, 128, "128".to_string());
     check_power_groups(c, 256, "256".to_string());
