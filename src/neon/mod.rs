@@ -31,6 +31,8 @@ mod c2r;
 mod c2r_expand;
 mod mixed;
 mod r2c;
+#[cfg(feature = "fcma")]
+mod r2c_fcma;
 mod raders;
 mod radix10;
 #[cfg(feature = "fcma")]
@@ -155,6 +157,8 @@ pub(crate) use mixed::{
     NeonR2CMixedRadix11d, NeonR2CMixedRadix11f, NeonR2CMixedRadix13d, NeonR2CMixedRadix13f,
 };
 pub(crate) use r2c::R2CNeonTwiddles;
+#[cfg(feature = "fcma")]
+pub(crate) use r2c_fcma::R2CNeonTwiddlesFcma;
 #[allow(unused_imports)]
 pub(crate) use raders::{NeonRadersFft, NeonRadersIndicer, RadersIndicer};
 pub(crate) use radix3::NeonRadix3;
