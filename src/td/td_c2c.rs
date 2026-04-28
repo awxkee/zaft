@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
+use crate::td::td_r2c::T2ScratchContext;
 use crate::transpose::TransposeExecutor;
 use crate::util::validate_scratch;
 use crate::{FftExecutor, ZaftError};
@@ -111,9 +112,19 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalFftExecutor<T> for TwoDimens
                 scratch
                     .tb_par_chunks_exact_mut(self.width)
                     .zip(chunk.chunks_exact(self.width))
-                    .for_each(&pool, |(row, src_row)| {
-                        _ = self.width_c2c_executor.execute_out_of_place(src_row, row);
-                    });
+                    .for_each_with_context(
+                        &pool,
+                        || T2ScratchContext {
+                            scratch: vec![Complex::<T>::default(); self.oof_width_scratch_size],
+                        },
+                        |ctx, (row, src_row)| {
+                            _ = self.width_c2c_executor.execute_out_of_place_with_scratch(
+                                src_row,
+                                row,
+                                &mut ctx.scratch,
+                            );
+                        },
+                    );
             }
 
             self.transpose_width_to_height
@@ -127,9 +138,17 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalFftExecutor<T> for TwoDimens
             } else {
                 chunk
                     .tb_par_chunks_exact_mut(self.height)
-                    .for_each(&pool, |column| {
-                        _ = self.height_c2c_executor.execute(column);
-                    });
+                    .for_each_with_context(
+                        &pool,
+                        || T2ScratchContext {
+                            scratch: vec![Complex::<T>::default(); self.height_scratch_size],
+                        },
+                        |ctx, column| {
+                            _ = self
+                                .height_c2c_executor
+                                .execute_with_scratch(column, &mut ctx.scratch);
+                        },
+                    );
             }
         }
         Ok(())

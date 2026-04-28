@@ -21,7 +21,7 @@ num-complex = "0.4"
 num-traits = "0.2.3"
 pxfm = "^0.1.25"
 num-integer = "0.1.46"
-novtb = "0.1.12"
+novtb = "0.1.13"
 
 [dev-dependencies]
 rand = "0.10.0"
