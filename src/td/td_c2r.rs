@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
+use crate::td::td_r2c::T2ScratchContext;
 use crate::transpose::TransposeExecutor;
 use crate::util::validate_scratch;
 use crate::{C2RFftExecutor, FftExecutor, ZaftError};
@@ -136,9 +137,17 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorC2R<T> for TwoDimens
         {
             if self.thread_count > 1 {
                 src.tb_par_chunks_exact_mut(self.height)
-                    .for_each(&pool, |row| {
-                        _ = self.height_c2c_executor.execute(row);
-                    });
+                    .for_each_with_context(
+                        &pool,
+                        || T2ScratchContext {
+                            scratch: vec![Complex::<T>::default(); self.height_scratch_length],
+                        },
+                        |ctx, row| {
+                            _ = self
+                                .height_c2c_executor
+                                .execute_with_scratch(row, &mut ctx.scratch);
+                        },
+                    );
             } else {
                 let (sl, _) = rem_scratch.split_at_mut(self.height_scratch_length);
                 for row in src.chunks_exact_mut(self.height) {
@@ -152,9 +161,19 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorC2R<T> for TwoDimens
             if self.thread_count > 1 {
                 dst.tb_par_chunks_exact_mut(self.width)
                     .zip(scratch.chunks_exact(complex_row_size))
-                    .for_each(&pool, |(column, arena_src)| {
-                        _ = self.width_c2r_executor.execute(arena_src, column);
-                    });
+                    .for_each_with_context(
+                        &pool,
+                        || T2ScratchContext {
+                            scratch: vec![Complex::<T>::default(); self.width_scratch_length],
+                        },
+                        |ctx, (column, arena_src)| {
+                            _ = self.width_c2r_executor.execute_with_scratch(
+                                arena_src,
+                                column,
+                                &mut ctx.scratch,
+                            );
+                        },
+                    );
             } else {
                 let (sl, _) = rem_scratch.split_at_mut(self.width_scratch_length);
                 for (row, src) in dst

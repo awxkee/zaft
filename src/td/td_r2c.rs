@@ -95,6 +95,10 @@ pub(crate) struct TwoDimensionalR2C<T> {
     pub(crate) height_scratch_length: usize,
 }
 
+pub(crate) struct T2ScratchContext<T> {
+    pub(crate) scratch: Vec<Complex<T>>,
+}
+
 impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorR2C<T> for TwoDimensionalR2C<T> {
     fn execute(&self, source: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
         let mut scratch = try_vec![Complex::<T>::default(); self.scratch_length()];
@@ -137,9 +141,19 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorR2C<T> for TwoDimens
                 scratch
                     .tb_par_chunks_exact_mut(complex_row_size)
                     .zip(src.chunks_exact(self.width))
-                    .for_each(&pool, |(row, arena_src)| {
-                        _ = self.width_r2c_executor.execute(arena_src, row);
-                    });
+                    .for_each_with_context(
+                        &pool,
+                        || T2ScratchContext {
+                            scratch: vec![Complex::<T>::default(); self.width_scratch_length],
+                        },
+                        |ctx, (row, arena_src)| {
+                            _ = self.width_r2c_executor.execute_with_scratch(
+                                arena_src,
+                                row,
+                                &mut ctx.scratch,
+                            );
+                        },
+                    );
             } else {
                 let (sl, _) = rem_scratch.split_at_mut(self.width_scratch_length);
                 for (row, src) in scratch
@@ -155,9 +169,17 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorR2C<T> for TwoDimens
 
             if self.thread_count > 1 {
                 dst.tb_par_chunks_exact_mut(self.height)
-                    .for_each(&pool, |column| {
-                        _ = self.height_c2c_executor.execute(column);
-                    });
+                    .for_each_with_context(
+                        &pool,
+                        || T2ScratchContext {
+                            scratch: vec![Complex::<T>::default(); self.height_scratch_length],
+                        },
+                        |ctx, column| {
+                            _ = self
+                                .height_c2c_executor
+                                .execute_with_scratch(column, &mut ctx.scratch);
+                        },
+                    );
             } else {
                 let (sl, _) = rem_scratch.split_at_mut(self.height_scratch_length);
                 for row in dst.chunks_exact_mut(self.height) {
