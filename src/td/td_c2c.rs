@@ -92,12 +92,12 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalFftExecutor<T> for TwoDimens
 
         let block_size = self.width * self.height;
         let (scratch, r) = scratch.split_at_mut(block_size);
-        let (width_scratch, height_scratch) = r.split_at_mut(self.oof_width_scratch_size);
 
         let pool = novtb::ThreadPool::new(self.thread_count);
 
         for chunk in data.chunks_exact_mut(full_size) {
             if self.thread_count <= 1 {
+                let (width_scratch, _) = r.split_at_mut(self.oof_width_scratch_size);
                 for (row, src_row) in scratch
                     .chunks_exact_mut(self.width)
                     .zip(chunk.chunks_exact_mut(self.width))
@@ -131,6 +131,7 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalFftExecutor<T> for TwoDimens
                 .transpose(scratch, chunk, self.width, self.height);
 
             if self.thread_count <= 1 {
+                let (height_scratch, _) = r.split_at_mut(self.height_scratch_size);
                 for column in chunk.chunks_exact_mut(self.height) {
                     self.height_c2c_executor
                         .execute_with_scratch(column, height_scratch)?;
