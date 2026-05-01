@@ -26,7 +26,9 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::butterflies::shared::{boring_avx_butterfly, gen_butterfly_twiddles_f32};
+use crate::avx::butterflies::shared::{
+    boring_avx_butterfly, boring_avx512vl_butterfly, gen_butterfly_twiddles_f32,
+};
 use crate::avx::mixed::{AvxStoreF, ColumnButterfly16f};
 use crate::avx::transpose::avx_transpose_f32x2_4x4_impl;
 use crate::store::BidirectionalStore;
@@ -35,19 +37,22 @@ use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
-pub(crate) struct AvxButterfly512f {
+macro_rules! define_bf512f {
+    ($bf_name: ident, $features: literal) => {
+
+pub(crate) struct $bf_name {
     direction: FftDirection,
     bf16: ColumnButterfly16f,
     twiddles: [AvxStoreF; 240],
     twiddles32: [AvxStoreF; 6],
 }
 
-impl AvxButterfly512f {
+impl $bf_name {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         unsafe { Self::new_init(fft_direction) }
     }
 
-    #[target_feature(enable = "avx2")]
+    #[target_feature(enable = $features)]
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
@@ -65,11 +70,9 @@ impl AvxButterfly512f {
     }
 }
 
-boring_avx_butterfly!(AvxButterfly512f, f32, 512);
-
-impl AvxButterfly512f {
-    #[inline(always)]
-    fn exec_bf32(&self, src: &mut [MaybeUninit<Complex<f32>>], dst: &mut [Complex<f32>]) {
+impl $bf_name {
+    #[target_feature(enable = $features)]
+    fn exec_bf32(&self, src: &mut [MaybeUninit<Complex<f32>>; 512], dst: &mut [Complex<f32>]) {
         unsafe {
             for k in 0..4 {
                 macro_rules! load {
@@ -193,15 +196,14 @@ impl AvxButterfly512f {
         }
     }
 
-    #[inline(always)]
-    pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
+    #[target_feature(enable = $features)]
+    fn exec_bf16(&self, src: &[Complex<f32>], dst: &mut [MaybeUninit<Complex<f32>>; 512]) {
+        let mut rows: [AvxStoreF; 16] = [AvxStoreF::zero(); 16];
         unsafe {
-            let mut rows: [AvxStoreF; 16] = [AvxStoreF::zero(); 16];
-            let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 512];
             // columns
             for k in 0..8 {
                 for i in 0..16 {
-                    rows[i] = AvxStoreF::from_complex_ref(chunk.slice_from(i * 32 + k * 4..));
+                    rows[i] = AvxStoreF::from_complex_ref(src.get_unchecked(i * 32 + k * 4..));
                 }
 
                 rows = self.bf16.exec(rows);
@@ -210,10 +212,10 @@ impl AvxButterfly512f {
                 let q2 = AvxStoreF::mul_by_complex(rows[2], self.twiddles[15 * k + 1]);
                 let q3 = AvxStoreF::mul_by_complex(rows[3], self.twiddles[15 * k + 2]);
                 let t = avx_transpose_f32x2_4x4_impl(rows[0].v, q1.v, q2.v, q3.v);
-                AvxStoreF::raw(t.0).write_u(scratch.get_unchecked_mut(k * 4 * 16..));
-                AvxStoreF::raw(t.1).write_u(scratch.get_unchecked_mut((k * 4 + 1) * 16..));
-                AvxStoreF::raw(t.2).write_u(scratch.get_unchecked_mut((k * 4 + 2) * 16..));
-                AvxStoreF::raw(t.3).write_u(scratch.get_unchecked_mut((k * 4 + 3) * 16..));
+                AvxStoreF::raw(t.0).write_u(dst.get_unchecked_mut(k * 4 * 16..));
+                AvxStoreF::raw(t.1).write_u(dst.get_unchecked_mut((k * 4 + 1) * 16..));
+                AvxStoreF::raw(t.2).write_u(dst.get_unchecked_mut((k * 4 + 2) * 16..));
+                AvxStoreF::raw(t.3).write_u(dst.get_unchecked_mut((k * 4 + 3) * 16..));
 
                 for i in 1..4 {
                     let q0 = AvxStoreF::mul_by_complex(
@@ -233,22 +235,35 @@ impl AvxButterfly512f {
                         self.twiddles[(i - 1) * 4 + 6 + 15 * k],
                     );
                     let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, q3.v);
-                    AvxStoreF::raw(t.0).write_u(scratch.get_unchecked_mut(k * 4 * 16 + i * 4..));
+                    AvxStoreF::raw(t.0).write_u(dst.get_unchecked_mut(k * 4 * 16 + i * 4..));
                     AvxStoreF::raw(t.1)
-                        .write_u(scratch.get_unchecked_mut((k * 4 + 1) * 16 + i * 4..));
+                        .write_u(dst.get_unchecked_mut((k * 4 + 1) * 16 + i * 4..));
                     AvxStoreF::raw(t.2)
-                        .write_u(scratch.get_unchecked_mut((k * 4 + 2) * 16 + i * 4..));
+                        .write_u(dst.get_unchecked_mut((k * 4 + 2) * 16 + i * 4..));
                     AvxStoreF::raw(t.3)
-                        .write_u(scratch.get_unchecked_mut((k * 4 + 3) * 16 + i * 4..));
+                        .write_u(dst.get_unchecked_mut((k * 4 + 3) * 16 + i * 4..));
                 }
             }
-
-            // rows
-
-            self.exec_bf32(&mut scratch, chunk.slice_from_mut(0..));
         }
     }
+
+    #[target_feature(enable = $features)]
+    pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
+        let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 512];
+
+        self.exec_bf16(chunk.slice_from(0..), &mut scratch);
+        // rows
+        self.exec_bf32(&mut scratch, chunk.slice_from_mut(0..));
+    }
 }
+    };
+}
+
+define_bf512f!(AvxButterfly512f, "avx2,fma");
+define_bf512f!(Avx512vlButterfly512f, "avx2,fma,avx512f,avx512vl");
+
+boring_avx_butterfly!(AvxButterfly512f, f32, 512);
+boring_avx512vl_butterfly!(Avx512vlButterfly512f, f32, 512);
 
 #[cfg(test)]
 mod tests {

@@ -169,6 +169,21 @@ impl ColumnButterfly8f {
     }
 
     #[inline(always)]
+    pub(crate) fn rotate6(&self, v: NeonStoreF) -> NeonStoreF {
+        unsafe { NeonStoreF::raw(vnegq_f32(v_rotate90_f32(v.v, self.bf4.rotate))) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn rotate5(&self, v: NeonStoreF) -> NeonStoreF {
+        unsafe {
+            NeonStoreF::raw(vnegq_f32(vmulq_n_f32(
+                vaddq_f32(v_rotate90_f32(v.v, self.bf4.rotate), v.v),
+                self.root2,
+            )))
+        }
+    }
+
+    #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreF; 8]) -> [NeonStoreF; 8] {
         unsafe {
             let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
@@ -354,6 +369,21 @@ impl ColumnFcmaForwardButterfly8f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate6(&self, v: NeonStoreF) -> NeonStoreF {
+        NeonStoreF::raw(vnegq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), v.v)))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate5(&self, v: NeonStoreF) -> NeonStoreF {
+        NeonStoreF::raw(vnegq_f32(vmulq_n_f32(
+            vaddq_f32(self.rotate(v).v, v.v),
+            self.root2,
+        )))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreF; 8]) -> [NeonStoreF; 8] {
         let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
         let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
@@ -447,6 +477,21 @@ impl ColumnFcmaInverseButterfly8f {
     #[target_feature(enable = "fcma")]
     pub(crate) fn rotate(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vcaddq_rot90_f32(vdupq_n_f32(0.), v.v))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate6(&self, v: NeonStoreF) -> NeonStoreF {
+        NeonStoreF::raw(vnegq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), v.v)))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate5(&self, v: NeonStoreF) -> NeonStoreF {
+        NeonStoreF::raw(vnegq_f32(vmulq_n_f32(
+            vaddq_f32(self.rotate(v).v, v.v),
+            self.root2,
+        )))
     }
 
     #[inline]

@@ -46,14 +46,15 @@ pub(super) use butterflies::{
     ColumnButterfly18f,
 };
 pub(crate) use mixed_radix::{
+    Avx512vlMixedRadix8d, Avx512vlMixedRadix8f, Avx512vlMixedRadix12f, AvxMixedRadix2f,
+    AvxMixedRadix3f, AvxMixedRadix4f, AvxMixedRadix5f, AvxMixedRadix6f, AvxMixedRadix7f,
+    AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f, AvxMixedRadix12f,
+    AvxMixedRadix13f,
+};
+pub(crate) use mixed_radix::{
     AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d, AvxMixedRadix6d,
     AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d, AvxMixedRadix10d, AvxMixedRadix11d,
     AvxMixedRadix12d, AvxMixedRadix13d,
-};
-pub(crate) use mixed_radix::{
-    AvxMixedRadix2f, AvxMixedRadix3f, AvxMixedRadix4f, AvxMixedRadix5f, AvxMixedRadix6f,
-    AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
-    AvxMixedRadix12f, AvxMixedRadix13f,
 };
 pub(crate) use mixed_radix_c2r_d::{
     AvxC2RMixedRadix3d, AvxC2RMixedRadix5d, AvxC2RMixedRadix7d, AvxC2RMixedRadix9d,

@@ -170,14 +170,14 @@ macro_rules! test_butterfly {
                     .for_each(|(idx, (a, b))| {
                         assert!(
                             (a.re - b.re).abs() < $tol,
-                            "a_re {} != b_re {} for size {} at {idx}",
+                            "forward a_re {} != b_re {} for size {} at {idx}",
                             a.re,
                             b.re,
                             size
                         );
                         assert!(
                             (a.im - b.im).abs() < $tol,
-                            "a_im {} != b_im {} for size {} at {idx}",
+                            "forward a_im {} != b_im {} for size {} at {idx}",
                             a.im,
                             b.im,
                             size
@@ -192,14 +192,14 @@ macro_rules! test_butterfly {
                 input.iter().zip(src.iter()).for_each(|(a, b)| {
                     assert!(
                         (a.re - b.re).abs() < $tol,
-                        "a_re {} != b_re {} for size {}",
+                        "inverse a_re {} != b_re {} for size {}",
                         a.re,
                         b.re,
                         size
                     );
                     assert!(
                         (a.im - b.im).abs() < $tol,
-                        "a_im {} != b_im {} for size {}",
+                        "inverse a_im {} != b_im {} for size {}",
                         a.im,
                         b.im,
                         size

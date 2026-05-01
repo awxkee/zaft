@@ -75,6 +75,29 @@ impl ColumnButterfly8d {
     }
 
     #[inline(always)]
+    pub(crate) fn rotate5(&self, v: AvxStoreD) -> AvxStoreD {
+        unsafe {
+            AvxStoreD::raw(_mm256_xor_pd(
+                _mm256_mul_pd(
+                    _mm256_add_pd(self.bf4.rotate.rotate_m256d(v.v), v.v),
+                    self.root2,
+                ),
+                _mm256_set1_pd(-0.0),
+            ))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn rotate6(&self, v: AvxStoreD) -> AvxStoreD {
+        unsafe {
+            AvxStoreD::raw(_mm256_xor_pd(
+                self.bf4.rotate.rotate_m256d(v.v),
+                _mm256_set1_pd(-0.0),
+            ))
+        }
+    }
+
+    #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreD; 8]) -> [AvxStoreD; 8] {
         unsafe {
             let [u0, u2, u4, u6] = self.bf4.exec([v[0], v[2], v[4], v[6]]);
@@ -151,6 +174,28 @@ impl ColumnButterfly8f {
         }
     }
 
+    #[inline(always)]
+    pub(crate) fn rotate5(&self, v: AvxStoreF) -> AvxStoreF {
+        unsafe {
+            AvxStoreF::raw(_mm256_xor_ps(
+                _mm256_mul_ps(
+                    _mm256_add_ps(self.bf4.rotate.rotate_m256(v.v), v.v),
+                    self.root2,
+                ),
+                _mm256_set1_ps(-0.0),
+            ))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn rotate6(&self, v: AvxStoreF) -> AvxStoreF {
+        unsafe {
+            AvxStoreF::raw(_mm256_xor_ps(
+                self.bf4.rotate.rotate_m256(v.v),
+                _mm256_set1_ps(-0.0),
+            ))
+        }
+    }
     #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 8]) -> [AvxStoreF; 8] {
         unsafe {

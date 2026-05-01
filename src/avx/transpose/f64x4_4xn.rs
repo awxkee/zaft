@@ -53,7 +53,7 @@ pub(crate) fn transpose_4x4_f64(store: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
 #[inline]
 #[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f64x4_4x3(rows: [AvxStoreD; 3]) -> [AvxStoreD; 4] {
-    transpose_4x4_f64([rows[0], rows[1], rows[2], AvxStoreD::zero()])
+    transpose_4x4_f64([rows[0], rows[1], rows[2], AvxStoreD::undefined()])
 }
 
 #[inline]
@@ -62,9 +62,9 @@ pub(crate) fn transpose_f64x4_4x5(rows: [AvxStoreD; 5]) -> [AvxStoreD; 8] {
     let a0 = transpose_4x4_f64([rows[0], rows[1], rows[2], rows[3]]);
     let b0 = transpose_4x4_f64([
         rows[4],
-        AvxStoreD::zero(),
-        AvxStoreD::zero(),
-        AvxStoreD::zero(),
+        AvxStoreD::undefined(),
+        AvxStoreD::undefined(),
+        AvxStoreD::undefined(),
     ]);
     [a0[0], a0[1], a0[2], a0[3], b0[0], b0[1], b0[2], b0[3]]
 }
@@ -73,7 +73,7 @@ pub(crate) fn transpose_f64x4_4x5(rows: [AvxStoreD; 5]) -> [AvxStoreD; 8] {
 #[target_feature(enable = "avx2")]
 pub(crate) fn transpose_f64x4_4x7(rows: [AvxStoreD; 7]) -> [AvxStoreD; 8] {
     let a0 = transpose_4x4_f64([rows[0], rows[1], rows[2], rows[3]]);
-    let b0 = transpose_4x4_f64([rows[4], rows[5], rows[6], AvxStoreD::zero()]);
+    let b0 = transpose_4x4_f64([rows[4], rows[5], rows[6], AvxStoreD::undefined()]);
     [a0[0], a0[1], a0[2], a0[3], b0[0], b0[1], b0[2], b0[3]]
 }
 
@@ -84,9 +84,9 @@ pub(crate) fn transpose_f64x4_4x9(rows: [AvxStoreD; 9]) -> [AvxStoreD; 12] {
     let b0 = transpose_4x4_f64([rows[4], rows[5], rows[6], rows[7]]);
     let c0 = transpose_4x4_f64([
         rows[8],
-        AvxStoreD::zero(),
-        AvxStoreD::zero(),
-        AvxStoreD::zero(),
+        AvxStoreD::undefined(),
+        AvxStoreD::undefined(),
+        AvxStoreD::undefined(),
     ]);
     [
         a0[0], a0[1], a0[2], a0[3], b0[0], b0[1], b0[2], b0[3], c0[0], c0[1], c0[2], c0[3],
@@ -98,7 +98,7 @@ pub(crate) fn transpose_f64x4_4x9(rows: [AvxStoreD; 9]) -> [AvxStoreD; 12] {
 pub(crate) fn transpose_f64x4_4x11(rows: [AvxStoreD; 11]) -> [AvxStoreD; 12] {
     let a0 = transpose_4x4_f64([rows[0], rows[1], rows[2], rows[3]]);
     let b0 = transpose_4x4_f64([rows[4], rows[5], rows[6], rows[7]]);
-    let c0 = transpose_4x4_f64([rows[8], rows[9], rows[10], AvxStoreD::zero()]);
+    let c0 = transpose_4x4_f64([rows[8], rows[9], rows[10], AvxStoreD::undefined()]);
     [
         a0[0], a0[1], a0[2], a0[3], b0[0], b0[1], b0[2], b0[3], c0[0], c0[1], c0[2], c0[3],
     ]

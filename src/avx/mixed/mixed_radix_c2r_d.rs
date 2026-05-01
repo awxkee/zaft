@@ -30,7 +30,7 @@
 use crate::avx::mixed::AvxStoreD;
 use crate::transpose::TransposeExecutorRealInv;
 use crate::transpose::TransposeFactory;
-use crate::util::{ScratchBuffer, compute_twiddle};
+use crate::util::compute_twiddle;
 use crate::{C2RFftExecutor, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
@@ -153,8 +153,7 @@ macro_rules! define_mixed_radix_avx_d {
 
         impl C2RFftExecutor<f64> for $radix_name {
             fn execute(&self, input: &[Complex<f64>], output: &mut [f64]) -> Result<(), ZaftError> {
-                let mut scratch =
-                    ScratchBuffer::<Complex<f64>, 2048>::new(self.complex_scratch_length());
+                let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 

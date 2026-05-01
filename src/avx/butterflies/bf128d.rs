@@ -57,52 +57,65 @@ impl AvxButterfly128d {
     }
 }
 
-boring_avx_butterfly!(AvxButterfly128d, f64, 128);
-
 impl AvxButterfly128d {
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
-    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+    #[target_feature(enable = "avx2,fma")]
+    fn exec_bf8(&self, src: &[Complex<f64>], dst: &mut [MaybeUninit<Complex<f64>>; 128]) {
         let mut rows: [AvxStoreD; 8] = [AvxStoreD::zero(); 8];
-        let mut rows16: [AvxStoreD; 16] = [AvxStoreD::zero(); 16];
-        let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 128];
-        unsafe {
-            // columns
-            for k in 0..8 {
-                for i in 0..8 {
-                    rows[i] = AvxStoreD::from_complex_ref(chunk.slice_from(i * 16 + k * 2..));
-                }
-
-                rows = self.bf16.bf8.exec(rows);
-
-                for i in 1..8 {
-                    rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 7 * k]);
-                }
-
-                let transposed = transpose_f64x2_2x8(rows);
-
-                for i in 0..4 {
-                    transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 8 + i * 2..));
-                    transposed[i * 2 + 1]
-                        .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 8 + i * 2..));
+        // columns
+        for k in 0..8 {
+            for i in 0..8 {
+                unsafe {
+                    rows[i] = AvxStoreD::from_complex_ref(src.get_unchecked(i * 16 + k * 2..));
                 }
             }
 
-            // rows
+            rows = self.bf16.bf8.exec(rows);
 
-            for k in 0..4 {
-                for i in 0..16 {
-                    rows16[i] =
-                        AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 8 + k * 2..));
-                }
-                rows16 = self.bf16.exec(rows16);
-                for i in 0..16 {
-                    rows16[i].write(chunk.slice_from_mut(i * 8 + k * 2..));
+            for i in 1..8 {
+                rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 7 * k]);
+            }
+
+            let transposed = transpose_f64x2_2x8(rows);
+
+            for i in 0..4 {
+                unsafe {
+                    transposed[i * 2].write_u(dst.get_unchecked_mut(k * 2 * 8 + i * 2..));
+                    transposed[i * 2 + 1].write_u(dst.get_unchecked_mut((k * 2 + 1) * 8 + i * 2..));
                 }
             }
         }
     }
+
+    #[target_feature(enable = "avx2,fma")]
+    fn exec_bf16_2(&self, src: &[MaybeUninit<Complex<f64>>; 128], dst: &mut [Complex<f64>]) {
+        let mut rows16: [AvxStoreD; 16] = [AvxStoreD::zero(); 16];
+        for k in 0..4 {
+            for i in 0..16 {
+                unsafe {
+                    rows16[i] = AvxStoreD::from_complex_refu(src.get_unchecked(i * 8 + k * 2..));
+                }
+            }
+            rows16 = self.bf16.exec(rows16);
+            for i in 0..16 {
+                unsafe {
+                    rows16[i].write(dst.get_unchecked_mut(i * 8 + k * 2..));
+                }
+            }
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+        let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 128];
+
+        self.exec_bf8(chunk.slice_from(0..), &mut scratch);
+        // rows
+        self.exec_bf16_2(&scratch, chunk.slice_from_mut(0..));
+    }
 }
+
+boring_avx_butterfly!(AvxButterfly128d, f64, 128);
 
 #[cfg(test)]
 mod tests {

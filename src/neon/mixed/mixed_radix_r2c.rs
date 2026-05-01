@@ -27,9 +27,10 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::modulo_one)]
+use crate::err::try_vec;
 use crate::neon::mixed::neon_store::NeonStoreF;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
-use crate::util::{ScratchBuffer, compute_twiddle};
+use crate::util::compute_twiddle;
 use crate::{FftExecutor, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
@@ -119,8 +120,7 @@ macro_rules! define_mixed_radix_neon_d {
 
         impl R2CFftExecutor<f64> for $radix_name {
             fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                let mut scratch =
-                    ScratchBuffer::<Complex<f64>, 2048>::new(self.complex_scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 
@@ -354,8 +354,7 @@ macro_rules! define_mixed_radix_neon_f {
 
         impl R2CFftExecutor<f32> for $radix_name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                let mut scratch =
-                    ScratchBuffer::<Complex<f32>, 2048>::new(self.complex_scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 

@@ -131,16 +131,19 @@ fn check_power_group(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) 
     c.bench_function(format!("rustfft {group}").as_str(), |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power.len());
         let mut working = input_power.to_vec();
+        let mut scratch = vec![Complex::<f64>::default(); plan.get_inplace_scratch_len()];
         b.iter(|| {
-            plan.process(&mut working);
+            plan.process_with_scratch(&mut working, &mut scratch);
         })
     });
 
     c.bench_function(format!("zaft {group}").as_str(), |b| {
         let plan = Zaft::make_inverse_fft_f64(input_power.len()).unwrap();
         let mut working = input_power.to_vec();
+        let mut scratch = vec![Complex::default(); plan.scratch_length()];
         b.iter(|| {
-            plan.execute(&mut working).unwrap();
+            plan.execute_with_scratch(&mut working, &mut scratch)
+                .unwrap();
         })
     });
 
@@ -150,9 +153,10 @@ fn check_power_group(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) 
             .iter()
             .map(|&x| Complex::new(x.re as f32, x.im as f32))
             .collect::<Vec<_>>();
+        let mut scratch = vec![Complex::<f32>::default(); plan.get_inplace_scratch_len()];
         let mut working = s.to_vec();
         b.iter(|| {
-            plan.process(&mut working);
+            plan.process_with_scratch(&mut working, &mut scratch);
         })
     });
 
@@ -162,9 +166,11 @@ fn check_power_group(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) 
             .iter()
             .map(|&x| Complex::new(x.re as f32, x.im as f32))
             .collect::<Vec<_>>();
+        let mut scratch = vec![Complex::default(); plan.scratch_length()];
         let mut working = s.to_vec();
         b.iter(|| {
-            plan.execute(&mut working).unwrap();
+            plan.execute_with_scratch(&mut working, &mut scratch)
+                .unwrap();
         })
     });
 }
@@ -232,9 +238,17 @@ fn check_power_groupd(c: &mut Criterion, n: usize, group: String) {
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("fft");
     let c = group
-        .warm_up_time(Duration::from_millis(750))
-        .measurement_time(Duration::from_millis(1050));
+        .warm_up_time(Duration::from_millis(5000))
+        .measurement_time(Duration::from_millis(5000));
     //     .measurement_time(Duration::from_millis(135));
+    // check_power_group(c, 216, "216".to_string());
+    // check_power_group(c, 243, "243".to_string());
+    // check_power_group(c, 256, "256".to_string());
+    // check_power_group(c, 512, "512".to_string());
+    // check_power_group(c, 1024, "1024".to_string());
+    // check_power_group(c, 2048, "2048".to_string());
+    check_power_group(c, 4096, "4096".to_string());
+
     bench_rustfft_average(c);
     bench_zaft_average(c);
     bench_rustfft_averages(c);

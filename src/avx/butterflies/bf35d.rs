@@ -34,7 +34,7 @@ use crate::avx::transpose::transpose_f64x2_2x2;
 use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
-use std::arch::x86_64::_mm256_setzero_pd;
+use std::arch::x86_64::_mm256_undefined_pd;
 use std::mem::MaybeUninit;
 
 pub(crate) struct AvxButterfly35d {
@@ -71,15 +71,15 @@ pub(crate) fn transpose_6x5(
 ) -> [AvxStoreD; 18] {
     let a0 = transpose_f64x2_2x2(rows0[0].v, rows0[1].v);
     let d0 = transpose_f64x2_2x2(rows0[2].v, rows0[3].v);
-    let g0 = transpose_f64x2_2x2(rows0[4].v, _mm256_setzero_pd());
+    let g0 = transpose_f64x2_2x2(rows0[4].v, _mm256_undefined_pd());
 
     let b0 = transpose_f64x2_2x2(rows1[0].v, rows1[1].v);
     let e0 = transpose_f64x2_2x2(rows1[2].v, rows1[3].v);
-    let h0 = transpose_f64x2_2x2(rows1[4].v, _mm256_setzero_pd());
+    let h0 = transpose_f64x2_2x2(rows1[4].v, _mm256_undefined_pd());
 
     let c0 = transpose_f64x2_2x2(rows2[0].v, rows2[1].v);
     let f0 = transpose_f64x2_2x2(rows2[2].v, rows2[3].v);
-    let i0 = transpose_f64x2_2x2(rows2[4].v, _mm256_setzero_pd());
+    let i0 = transpose_f64x2_2x2(rows2[4].v, _mm256_undefined_pd());
     [
         // row 0
         AvxStoreD::raw(a0.0),
@@ -154,7 +154,7 @@ impl AvxButterfly35d {
 
                 let a0 = transpose_f64x2_2x2(rows0[0].v, rows0[1].v);
                 let d0 = transpose_f64x2_2x2(rows0[2].v, rows0[3].v);
-                let g0 = transpose_f64x2_2x2(rows0[4].v, _mm256_setzero_pd());
+                let g0 = transpose_f64x2_2x2(rows0[4].v, _mm256_undefined_pd());
 
                 AvxStoreD::raw(a0.0).write_u(scratch.get_unchecked_mut(6 * 5..));
                 AvxStoreD::raw(d0.0).write_u(scratch.get_unchecked_mut(6 * 5 + 2..));

@@ -969,6 +969,9 @@ impl Zaft {
             1024 => {
                 return T::butterfly1024(fft_direction).map(Ok);
             }
+            2048 => {
+                return T::butterfly2048(fft_direction).map(Ok);
+            }
             _ => {}
         }
         None
@@ -984,10 +987,10 @@ impl Zaft {
         if n == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
-        if n <= 512 || n == 1024 {
-            if let Some(bf) = Zaft::plan_butterfly(n, fft_direction) {
-                return bf;
-            }
+        if (n <= 512 || n == 1024 || n == 2048)
+            && let Some(bf) = Zaft::plan_butterfly(n, fft_direction)
+        {
+            return bf;
         }
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {
@@ -999,12 +1002,11 @@ impl Zaft {
         } else if prime_factors.is_power_of_two {
             // Use Radix-4 if a power of 2
             if Zaft::could_do_split_mixed_radix() {
-                if n == 2048 {
-                    if let Some(bf) =
+                if n == 2048
+                    && let Some(bf) =
                         T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
-                    {
-                        return Ok(bf);
-                    }
+                {
+                    return Ok(bf);
                 }
                 let rem3 = prime_factors.factor_of_2() % 3;
                 if rem3 == 2 {
@@ -1015,12 +1017,11 @@ impl Zaft {
                     }
                 } else if rem3 == 1 {
                     let has1024 = T::butterfly1024(fft_direction).is_some();
-                    if has1024 {
-                        if let Some(bf) =
+                    if has1024
+                        && let Some(bf) =
                             T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
-                        {
-                            return Ok(bf);
-                        }
+                    {
+                        return Ok(bf);
                     }
                     if let Some(bf) =
                         T::mixed_radix_butterfly2(Zaft::strategy(n / 2, fft_direction)?)?

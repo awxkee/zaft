@@ -26,7 +26,9 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::util::{_mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, shuffle};
+use crate::avx::util::{
+    _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_fcmul_ps_conj_b, shuffle,
+};
 use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::x86_64::*;
@@ -60,6 +62,15 @@ impl SseStoreF {
         unsafe {
             Self {
                 v: _mm_setzero_ps(),
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn undefined() -> Self {
+        unsafe {
+            Self {
+                v: _mm_undefined_ps(),
             }
         }
     }
@@ -482,6 +493,14 @@ impl AvxStoreF {
         }
     }
 
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn mul_by_complex_conj_b(self, other: AvxStoreF) -> Self {
+        AvxStoreF {
+            v: _mm256_fcmul_ps_conj_b(self.v, other.v),
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn dup_lo_complex(&self) -> Self {
         unsafe {
@@ -527,6 +546,15 @@ impl AvxStoreF {
         unsafe {
             Self {
                 v: _mm256_setzero_ps(),
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn undefined() -> Self {
+        unsafe {
+            Self {
+                v: _mm256_undefined_ps(),
             }
         }
     }

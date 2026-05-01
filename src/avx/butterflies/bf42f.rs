@@ -86,7 +86,7 @@ impl AvxButterfly42f {
                 rows1[3],
                 rows1[4],
                 rows1[5],
-                AvxStoreF::zero(),
+                AvxStoreF::undefined(),
             ],
             [
                 rows2[0],
@@ -95,7 +95,7 @@ impl AvxButterfly42f {
                 rows2[3],
                 rows2[4],
                 rows2[5],
-                AvxStoreF::zero(),
+                AvxStoreF::undefined(),
             ],
         );
 

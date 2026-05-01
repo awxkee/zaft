@@ -28,7 +28,9 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::avx::butterflies::shared::{boring_avx_butterfly, gen_butterfly_twiddles_f64};
+use crate::avx::butterflies::shared::{
+    boring_avx_butterfly, boring_avx512vl_butterfly, gen_butterfly_twiddles_f64,
+};
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly16d};
 use crate::avx::transpose::transpose_f64x2_2x16;
 use crate::store::BidirectionalStore;
@@ -36,71 +38,99 @@ use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
-pub(crate) struct AvxButterfly256d {
-    direction: FftDirection,
-    bf16: ColumnButterfly16d,
-    twiddles: [AvxStoreD; 120],
-}
-
-impl AvxButterfly256d {
-    pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        unsafe { Self::new_init(fft_direction) }
-    }
-
-    #[target_feature(enable = "avx2")]
-    fn new_init(fft_direction: FftDirection) -> Self {
-        Self {
-            direction: fft_direction,
-            twiddles: gen_butterfly_twiddles_f64(16, 16, fft_direction, 256),
-            bf16: ColumnButterfly16d::new(fft_direction),
+macro_rules! define_bf256 {
+    ($bf_name: ident, $features: literal) => {
+        pub(crate) struct $bf_name {
+            direction: FftDirection,
+            bf16: ColumnButterfly16d,
+            twiddles: [AvxStoreD; 120],
         }
-    }
+
+        impl $bf_name {
+            pub(crate) fn new(fft_direction: FftDirection) -> Self {
+                unsafe { Self::new_init(fft_direction) }
+            }
+
+            #[target_feature(enable = $features)]
+            fn new_init(fft_direction: FftDirection) -> Self {
+                Self {
+                    direction: fft_direction,
+                    twiddles: gen_butterfly_twiddles_f64(16, 16, fft_direction, 256),
+                    bf16: ColumnButterfly16d::new(fft_direction),
+                }
+            }
+        }
+
+        impl $bf_name {
+            #[target_feature(enable = $features)]
+            fn exec_bf16(&self, src: &[Complex<f64>], dst: &mut [MaybeUninit<Complex<f64>>; 256]) {
+                let mut rows: [AvxStoreD; 16] = [AvxStoreD::zero(); 16];
+                // columns
+                for k in 0..8 {
+                    for i in 0..16 {
+                        rows[i] = unsafe {
+                            AvxStoreD::from_complex_ref(src.get_unchecked(i * 16 + k * 2..))
+                        };
+                    }
+
+                    rows = self.bf16.exec(rows);
+
+                    for i in 1..16 {
+                        rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 15 * k]);
+                    }
+
+                    let transposed = transpose_f64x2_2x16(rows);
+
+                    for i in 0..8 {
+                        unsafe {
+                            transposed[i * 2].write_u(dst.get_unchecked_mut(k * 2 * 16 + i * 2..));
+                            transposed[i * 2 + 1]
+                                .write_u(dst.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..));
+                        }
+                    }
+                }
+            }
+
+            #[target_feature(enable = $features)]
+            fn exec_bf16_2(
+                &self,
+                src: &[MaybeUninit<Complex<f64>>; 256],
+                dst: &mut [Complex<f64>],
+            ) {
+                let mut rows: [AvxStoreD; 16] = [AvxStoreD::zero(); 16];
+                for k in 0..8 {
+                    for i in 0..16 {
+                        unsafe {
+                            rows[i] =
+                                AvxStoreD::from_complex_refu(src.get_unchecked(i * 16 + k * 2..));
+                        }
+                    }
+                    rows = self.bf16.exec(rows);
+                    for i in 0..16 {
+                        unsafe {
+                            rows[i].write(dst.get_unchecked_mut(i * 16 + k * 2..));
+                        }
+                    }
+                }
+            }
+
+            #[inline]
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 256];
+                self.exec_bf16(chunk.slice_from(0..), &mut scratch);
+                // rows
+                self.exec_bf16_2(&scratch, chunk.slice_from_mut(0..));
+            }
+        }
+    };
 }
+
+define_bf256!(AvxButterfly256d, "avx2,fma");
+define_bf256!(Avx512vlButterfly256d, "avx2,fma,avx512f,avx512vl");
 
 boring_avx_butterfly!(AvxButterfly256d, f64, 256);
-
-impl AvxButterfly256d {
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
-    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
-        let mut rows: [AvxStoreD; 16] = [AvxStoreD::zero(); 16];
-        let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 256];
-        unsafe {
-            // columns
-            for k in 0..8 {
-                for i in 0..16 {
-                    rows[i] = AvxStoreD::from_complex_ref(chunk.slice_from(i * 16 + k * 2..));
-                }
-
-                rows = self.bf16.exec(rows);
-
-                for i in 1..16 {
-                    rows[i] = AvxStoreD::mul_by_complex(rows[i], self.twiddles[i - 1 + 15 * k]);
-                }
-
-                let transposed = transpose_f64x2_2x16(rows);
-
-                for i in 0..8 {
-                    transposed[i * 2].write_u(scratch.get_unchecked_mut(k * 2 * 16 + i * 2..));
-                    transposed[i * 2 + 1]
-                        .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..));
-                }
-            }
-
-            // rows
-
-            for k in 0..8 {
-                for i in 0..16 {
-                    rows[i] = AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 16 + k * 2..));
-                }
-                rows = self.bf16.exec(rows);
-                for i in 0..16 {
-                    rows[i].write(chunk.slice_from_mut(i * 16 + k * 2..));
-                }
-            }
-        }
-    }
-}
+boring_avx512vl_butterfly!(Avx512vlButterfly256d, f64, 256);
 
 #[cfg(test)]
 mod tests {

@@ -31,17 +31,14 @@ use crate::avx::butterflies::AvxButterfly;
 use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::mixed::avx_storef::AvxStoreF;
 use crate::avx::mixed::{ColumnButterfly8d, ColumnButterfly8f};
-use crate::avx::util::{
-    _mm256_fcmul_pd, _mm256_fcmul_pd_conj_b, _mm256_fcmul_ps, _mm256_fcmul_ps_conj_b,
-};
 use crate::util::compute_twiddle;
 use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly16d {
     pub(crate) bf8: ColumnButterfly8d,
-    twiddle1: __m256d,
-    twiddle2: __m256d,
-    twiddle3: __m256d,
+    twiddle1: AvxStoreD,
+    twiddle2: AvxStoreD,
+    twiddle3: AvxStoreD,
 }
 
 impl ColumnButterfly16d {
@@ -50,13 +47,11 @@ impl ColumnButterfly16d {
         let tw1 = compute_twiddle(1, 16, direction);
         let tw2 = compute_twiddle(2, 16, direction);
         let tw3 = compute_twiddle(3, 16, direction);
-        unsafe {
-            Self {
-                bf8: ColumnButterfly8d::new(direction),
-                twiddle1: _mm256_loadu_pd([tw1.re, tw1.im, tw1.re, tw1.im].as_ptr()),
-                twiddle2: _mm256_loadu_pd([tw2.re, tw2.im, tw2.re, tw2.im].as_ptr()),
-                twiddle3: _mm256_loadu_pd([tw3.re, tw3.im, tw3.re, tw3.im].as_ptr()),
-            }
+        Self {
+            bf8: ColumnButterfly8d::new(direction),
+            twiddle1: AvxStoreD::set_values(tw1.re, tw1.im, tw1.re, tw1.im),
+            twiddle2: AvxStoreD::set_values(tw2.re, tw2.im, tw2.re, tw2.im),
+            twiddle3: AvxStoreD::set_values(tw3.re, tw3.im, tw3.re, tw3.im),
         }
     }
 }
@@ -72,14 +67,14 @@ impl ColumnButterfly16d {
         let mut odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
         let mut odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
 
-        odds_1[1] = AvxStoreD::raw(_mm256_fcmul_pd(odds_1[1].v, self.twiddle1));
-        odds_2[1] = AvxStoreD::raw(_mm256_fcmul_pd_conj_b(odds_2[1].v, self.twiddle1));
+        odds_1[1] = AvxStoreD::mul_by_complex(odds_1[1], self.twiddle1);
+        odds_2[1] = AvxStoreD::mul_by_complex_conj_b(odds_2[1], self.twiddle1);
 
-        odds_1[2] = AvxStoreD::raw(_mm256_fcmul_pd(odds_1[2].v, self.twiddle2));
-        odds_2[2] = AvxStoreD::raw(_mm256_fcmul_pd_conj_b(odds_2[2].v, self.twiddle2));
+        odds_1[2] = AvxStoreD::mul_by_complex(odds_1[2], self.twiddle2);
+        odds_2[2] = AvxStoreD::mul_by_complex_conj_b(odds_2[2], self.twiddle2);
 
-        odds_1[3] = AvxStoreD::raw(_mm256_fcmul_pd(odds_1[3].v, self.twiddle3));
-        odds_2[3] = AvxStoreD::raw(_mm256_fcmul_pd_conj_b(odds_2[3].v, self.twiddle3));
+        odds_1[3] = AvxStoreD::mul_by_complex(odds_1[3], self.twiddle3);
+        odds_2[3] = AvxStoreD::mul_by_complex_conj_b(odds_2[3], self.twiddle3);
 
         // step 4: cross FFTs
         let (o01, o02) = AvxButterfly::butterfly2_f64(odds_1[0].v, odds_2[0].v);
@@ -125,9 +120,9 @@ impl ColumnButterfly16d {
 
 pub(crate) struct ColumnButterfly16f {
     pub(crate) bf8: ColumnButterfly8f,
-    twiddle1: __m256,
-    twiddle2: __m256,
-    twiddle3: __m256,
+    twiddle1: AvxStoreF,
+    twiddle2: AvxStoreF,
+    twiddle3: AvxStoreF,
 }
 
 impl ColumnButterfly16f {
@@ -136,28 +131,17 @@ impl ColumnButterfly16f {
         let tw1 = compute_twiddle(1, 16, direction);
         let tw2 = compute_twiddle(2, 16, direction);
         let tw3 = compute_twiddle(3, 16, direction);
-        unsafe {
-            Self {
-                bf8: ColumnButterfly8f::new(direction),
-                twiddle1: _mm256_loadu_ps(
-                    [
-                        tw1.re, tw1.im, tw1.re, tw1.im, tw1.re, tw1.im, tw1.re, tw1.im,
-                    ]
-                    .as_ptr(),
-                ),
-                twiddle2: _mm256_loadu_ps(
-                    [
-                        tw2.re, tw2.im, tw2.re, tw2.im, tw2.re, tw2.im, tw2.re, tw2.im,
-                    ]
-                    .as_ptr(),
-                ),
-                twiddle3: _mm256_loadu_ps(
-                    [
-                        tw3.re, tw3.im, tw3.re, tw3.im, tw3.re, tw3.im, tw3.re, tw3.im,
-                    ]
-                    .as_ptr(),
-                ),
-            }
+        Self {
+            bf8: ColumnButterfly8f::new(direction),
+            twiddle1: AvxStoreF::set_values8(
+                tw1.re, tw1.im, tw1.re, tw1.im, tw1.re, tw1.im, tw1.re, tw1.im,
+            ),
+            twiddle2: AvxStoreF::set_values8(
+                tw2.re, tw2.im, tw2.re, tw2.im, tw2.re, tw2.im, tw2.re, tw2.im,
+            ),
+            twiddle3: AvxStoreF::set_values8(
+                tw3.re, tw3.im, tw3.re, tw3.im, tw3.re, tw3.im, tw3.re, tw3.im,
+            ),
         }
     }
 }
@@ -173,16 +157,15 @@ impl ColumnButterfly16f {
             let mut odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
             let mut odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
 
-            odds_1[1] = AvxStoreF::raw(_mm256_fcmul_ps(odds_1[1].v, self.twiddle1));
-            odds_2[1] = AvxStoreF::raw(_mm256_fcmul_ps_conj_b(odds_2[1].v, self.twiddle1));
+            odds_1[1] = AvxStoreF::mul_by_complex(odds_1[1], self.twiddle1);
+            odds_2[1] = AvxStoreF::mul_by_complex_conj_b(odds_2[1], self.twiddle1);
 
-            odds_1[2] = AvxStoreF::raw(_mm256_fcmul_ps(odds_1[2].v, self.twiddle2));
-            odds_2[2] = AvxStoreF::raw(_mm256_fcmul_ps_conj_b(odds_2[2].v, self.twiddle2));
+            odds_1[2] = AvxStoreF::mul_by_complex(odds_1[2], self.twiddle2);
+            odds_2[2] = AvxStoreF::mul_by_complex_conj_b(odds_2[2], self.twiddle2);
 
-            odds_1[3] = AvxStoreF::raw(_mm256_fcmul_ps(odds_1[3].v, self.twiddle3));
-            odds_2[3] = AvxStoreF::raw(_mm256_fcmul_ps_conj_b(odds_2[3].v, self.twiddle3));
+            odds_1[3] = AvxStoreF::mul_by_complex(odds_1[3], self.twiddle3);
+            odds_2[3] = AvxStoreF::mul_by_complex_conj_b(odds_2[3], self.twiddle3);
 
-            // step 4: cross FFTs
             let (o01, o02) = AvxButterfly::butterfly2_f32(odds_1[0].v, odds_2[0].v);
             odds_1[0] = AvxStoreF::raw(o01);
             odds_2[0] = AvxStoreF::raw(o02);

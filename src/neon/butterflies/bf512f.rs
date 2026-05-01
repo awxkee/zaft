@@ -195,7 +195,7 @@ impl $name {
 
         unsafe {
          // columns
-        for k in 0..16 {
+         for k in 0..16 {
             for i in 0..16 {
                 rows[i] =
                     NeonStoreF::from_complex_ref(chunk.slice_from(i * 32 + k * 2..));

@@ -27,12 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(clippy::modulo_one)]
+use crate::err::try_vec;
 use crate::neon::mixed::bf2::{ColumnButterfly2d, ColumnButterfly2f};
 use crate::neon::mixed::bf3::*;
 use crate::neon::mixed::bf4::{ColumnButterfly4d, ColumnButterfly4f};
 use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
 use crate::transpose::{TransposeExecutor, TransposeFactory};
-use crate::util::ScratchBuffer;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
@@ -113,7 +113,7 @@ macro_rules! define_mixed_radix_neon_d {
 
         impl FftExecutor<f64> for $radix_name {
             fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                let mut scratch = ScratchBuffer::<Complex<f64>, 2048>::new(self.scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
                 unsafe { self.execute_impl(in_place, scratch.as_mut_slice()) }
             }
 
@@ -130,8 +130,7 @@ macro_rules! define_mixed_radix_neon_d {
                 src: &[Complex<f64>],
                 dst: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                let mut scratch =
-                    ScratchBuffer::<Complex<f64>, 2048>::new(self.out_of_place_scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
                 self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
             }
 
@@ -450,7 +449,7 @@ macro_rules! define_mixed_radix_neon_f {
 
         impl FftExecutor<f32> for $radix_name {
             fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                let mut scratch = ScratchBuffer::<Complex<f32>, 2048>::new(self.scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
                 unsafe { self.execute_impl(in_place, scratch.as_mut_slice()) }
             }
 
@@ -467,8 +466,7 @@ macro_rules! define_mixed_radix_neon_f {
                 src: &[Complex<f32>],
                 dst: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-                let mut scratch =
-                    ScratchBuffer::<Complex<f32>, 2048>::new(self.out_of_place_scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
                 self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
             }
 

@@ -57,6 +57,8 @@ mod bf192d;
 mod bf192f;
 mod bf2;
 mod bf20;
+mod bf2048d;
+mod bf2048f;
 mod bf216d;
 mod bf216f;
 mod bf21d;
@@ -202,13 +204,15 @@ pub(crate) use bf192f::AvxButterfly192f;
 pub(crate) use bf216d::AvxButterfly216d;
 pub(crate) use bf216f::AvxButterfly216f;
 pub(crate) use bf243d::AvxButterfly243d;
-pub(crate) use bf243f::AvxButterfly243f;
-pub(crate) use bf256d::AvxButterfly256d;
-pub(crate) use bf256f::AvxButterfly256f;
-pub(crate) use bf512d::AvxButterfly512d;
-pub(crate) use bf512f::AvxButterfly512f;
-pub(crate) use bf1024d::AvxButterfly1024d;
-pub(crate) use bf1024f::AvxButterfly1024f;
+pub(crate) use bf243f::{Avx512vlButterfly243f, AvxButterfly243f};
+pub(crate) use bf256d::{Avx512vlButterfly256d, AvxButterfly256d};
+pub(crate) use bf256f::{Avx512vlButterfly256f, AvxButterfly256f};
+pub(crate) use bf512d::{Avx512vlButterfly512d, AvxButterfly512d};
+pub(crate) use bf512f::{Avx512vlButterfly512f, AvxButterfly512f};
+pub(crate) use bf1024d::{Avx512vlButterfly1024d, AvxButterfly1024d};
+pub(crate) use bf1024f::{Avx512vlButterfly1024f, AvxButterfly1024f};
+pub(crate) use bf2048d::Avx512vlButterfly2048d;
+pub(crate) use bf2048f::Avx512vlButterfly2048f;
 use num_complex::Complex;
 pub(crate) use shared::AvxButterfly;
 
@@ -524,6 +528,88 @@ macro_rules! test_avx_butterfly {
 
 #[cfg(test)]
 pub(crate) use test_avx_butterfly;
+
+#[cfg(test)]
+macro_rules! test_avx512_butterfly_small {
+    ($method_name: ident, $data_type: ident, $butterfly: ident, $scale: expr, $tol: expr) => {
+        #[test]
+        fn $method_name() {
+            use crate::util::has_valid_avx512vl;
+            if !has_valid_avx512vl() {
+                return;
+            }
+            let radix_forward = $butterfly::new(FftDirection::Forward);
+            let radix_inverse = $butterfly::new(FftDirection::Inverse);
+            assert_eq!(radix_forward.length(), $scale);
+            use rand::RngExt;
+            for i in 1..2 {
+                let val = $scale as usize;
+                let size = val * i;
+                let mut input = vec![Complex::<$data_type>::default(); size];
+                for z in input.iter_mut() {
+                    *z = Complex {
+                        re: rand::rng().random(),
+                        im: rand::rng().random(),
+                    };
+                }
+                let src = input.to_vec();
+                use crate::dft::Dft;
+                let reference_forward = Dft::new($scale, FftDirection::Forward).unwrap();
+
+                let mut ref_src = src.to_vec();
+                reference_forward.execute(&mut ref_src).unwrap();
+
+                FftExecutor::execute(&radix_forward, &mut input).unwrap();
+
+                input
+                    .iter()
+                    .zip(ref_src.iter())
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < $tol,
+                            "a_re {} != b_re {} for size {} at {idx}",
+                            a.re,
+                            b.re,
+                            size
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < $tol,
+                            "a_im {} != b_im {} for size {} at {idx}",
+                            a.im,
+                            b.im,
+                            size
+                        );
+                    });
+
+                FftExecutor::execute(&radix_inverse, &mut input).unwrap();
+
+                let val = $scale as $data_type;
+                input = input.iter().map(|&x| x * (1.0 / val)).collect();
+
+                input.iter().zip(src.iter()).for_each(|(a, b)| {
+                    assert!(
+                        (a.re - b.re).abs() < $tol,
+                        "a_re {} != b_re {} for size {}",
+                        a.re,
+                        b.re,
+                        size
+                    );
+                    assert!(
+                        (a.im - b.im).abs() < $tol,
+                        "a_im {} != b_im {} for size {}",
+                        a.im,
+                        b.im,
+                        size
+                    );
+                });
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+pub(crate) use test_avx512_butterfly_small;
 
 #[cfg(test)]
 macro_rules! test_oof_avx_butterfly {

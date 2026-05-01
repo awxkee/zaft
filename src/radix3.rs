@@ -28,14 +28,15 @@
  */
 #![allow(unused)]
 use crate::complex_fma::c_mul_fast;
+use crate::err::try_vec;
 use crate::mla::fmla;
 use crate::util::{
-    ScratchBuffer, bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_three,
+    bitreversed_transpose, compute_twiddle, int_logarithm, is_power_of_three,
     radixn_floating_twiddles_from_base, validate_oof_sizes, validate_scratch,
 };
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
 pub(crate) struct Radix3<T> {
@@ -184,7 +185,7 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = ScratchBuffer::<Complex<T>, 2048>::new(self.scratch_length());
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
         self.execute_with_scratch(in_place, scratch.as_mut_slice())
     }
 

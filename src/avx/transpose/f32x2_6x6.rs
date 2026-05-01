@@ -40,8 +40,8 @@ pub(crate) fn transpose_6x6_f32(
         let bl = avx_transpose_f32x2_4x4_impl(
             left[4],
             left[5],
-            _mm256_setzero_ps(),
-            _mm256_setzero_ps(),
+            _mm256_undefined_ps(),
+            _mm256_undefined_ps(),
         );
 
         // Top-right 4x2 complex block (pad 2 columns with zeros to form 4x4)
@@ -50,8 +50,8 @@ pub(crate) fn transpose_6x6_f32(
         let br = avx_transpose_f32x2_4x4_impl(
             right[4],
             right[5],
-            _mm256_setzero_ps(),
-            _mm256_setzero_ps(),
+            _mm256_undefined_ps(),
+            _mm256_undefined_ps(),
         );
 
         // Reassemble left 6 rows (first 4 columns)
