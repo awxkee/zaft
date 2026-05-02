@@ -54,8 +54,6 @@ impl AvxButterfly216d {
     }
 }
 
-boring_avx_butterfly!(AvxButterfly216d, f64, 216);
-
 impl AvxButterfly216d {
     #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
@@ -100,6 +98,8 @@ impl AvxButterfly216d {
         }
     }
 }
+
+boring_avx_butterfly!(AvxButterfly216d, f64, 216);
 
 #[cfg(test)]
 mod tests {

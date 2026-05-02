@@ -52,40 +52,35 @@ where
             .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<T> + Send + Sync>)
     } else {
         if Zaft::could_do_split_mixed_radix() {
-            if len.is_multiple_of(9) {
-                if let Some(mx9) =
+            if len.is_multiple_of(9)
+                && let Some(mx9) =
                     T::c2r_mixed_radix9(Zaft::strategy(len / 9, FftDirection::Inverse)?)?
-                {
-                    return Ok(mx9);
-                }
+            {
+                return Ok(mx9);
             }
-            if len.is_multiple_of(5) {
-                if let Some(mx5) =
+            if len.is_multiple_of(5)
+                && let Some(mx5) =
                     T::c2r_mixed_radix5(Zaft::strategy(len / 5, FftDirection::Inverse)?)?
-                {
-                    return Ok(mx5);
-                }
+            {
+                return Ok(mx5);
             }
-            if len.is_multiple_of(7) {
-                if let Some(mx7) =
+            if len.is_multiple_of(7)
+                && let Some(mx7) =
                     T::c2r_mixed_radix7(Zaft::strategy(len / 7, FftDirection::Inverse)?)?
-                {
-                    return Ok(mx7);
-                }
+            {
+                return Ok(mx7);
             }
-            if len.is_multiple_of(11) {
-                if let Some(mx11) =
+            if len.is_multiple_of(11)
+                && let Some(mx11) =
                     T::c2r_mixed_radix11(Zaft::strategy(len / 11, FftDirection::Inverse)?)?
-                {
-                    return Ok(mx11);
-                }
+            {
+                return Ok(mx11);
             }
-            if len.is_multiple_of(3) {
-                if let Some(mx3) =
+            if len.is_multiple_of(3)
+                && let Some(mx3) =
                     T::c2r_mixed_radix3(Zaft::strategy(len / 3, FftDirection::Inverse)?)?
-                {
-                    return Ok(mx3);
-                }
+            {
+                return Ok(mx3);
             }
         }
 

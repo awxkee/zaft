@@ -27,11 +27,12 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+use crate::err::try_vec;
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::mixed::neon_store::NeonStoreFh;
 use crate::transpose::TransposeExecutorRealInv;
 use crate::transpose::TransposeFactory;
-use crate::util::{ScratchBuffer, compute_twiddle};
+use crate::util::compute_twiddle;
 use crate::{C2RFftExecutor, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
@@ -147,8 +148,7 @@ macro_rules! define_mixed_radix_neon_f {
 
         impl C2RFftExecutor<f32> for $radix_name {
             fn execute(&self, input: &[Complex<f32>], output: &mut [f32]) -> Result<(), ZaftError> {
-                let mut scratch =
-                    ScratchBuffer::<Complex<f32>, 2048>::new(self.complex_scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 

@@ -30,11 +30,10 @@
 
 use crate::avx::butterflies::shared::{boring_avx_butterfly, gen_butterfly_twiddles_f64};
 use crate::avx::mixed::{AvxStoreD, ColumnButterfly13d};
-use crate::avx::transpose::transpose_f64x2_2x2;
+use crate::avx::transpose::transpose_f64x2_2x2d;
 use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
-use std::arch::x86_64::_mm256_setzero_pd;
 use std::mem::MaybeUninit;
 
 pub(crate) struct AvxButterfly169d {
@@ -76,9 +75,9 @@ impl AvxButterfly169d {
                 rows = self.bf13.exec(rows);
 
                 let q1 = AvxStoreD::mul_by_complex(rows[1], self.twiddles[12 * k]);
-                let t = transpose_f64x2_2x2(rows[0].v, q1.v);
-                AvxStoreD::raw(t.0).write_u(scratch.get_unchecked_mut(k * 2 * 13..));
-                AvxStoreD::raw(t.1).write_u(scratch.get_unchecked_mut((k * 2 + 1) * 13..));
+                let t = transpose_f64x2_2x2d([rows[0], q1]);
+                t[0].write_u(scratch.get_unchecked_mut(k * 2 * 13..));
+                t[1].write_u(scratch.get_unchecked_mut((k * 2 + 1) * 13..));
 
                 for i in 1..6 {
                     let q0 = AvxStoreD::mul_by_complex(
@@ -89,10 +88,9 @@ impl AvxButterfly169d {
                         rows[i * 2 + 1],
                         self.twiddles[(i - 1) * 2 + 2 + 12 * k],
                     );
-                    let t = transpose_f64x2_2x2(q0.v, q1.v);
-                    AvxStoreD::raw(t.0).write_u(scratch.get_unchecked_mut(k * 2 * 13 + i * 2..));
-                    AvxStoreD::raw(t.1)
-                        .write_u(scratch.get_unchecked_mut((k * 2 + 1) * 13 + i * 2..));
+                    let t = transpose_f64x2_2x2d([q0, q1]);
+                    t[0].write_u(scratch.get_unchecked_mut(k * 2 * 13 + i * 2..));
+                    t[1].write_u(scratch.get_unchecked_mut((k * 2 + 1) * 13 + i * 2..));
                 }
 
                 {
@@ -101,10 +99,9 @@ impl AvxButterfly169d {
                         rows[i * 2],
                         self.twiddles[(i - 1) * 2 + 1 + 12 * k],
                     );
-                    let t = transpose_f64x2_2x2(q0.v, _mm256_setzero_pd());
-                    AvxStoreD::raw(t.0).write_lou(scratch.get_unchecked_mut(k * 2 * 13 + i * 2..));
-                    AvxStoreD::raw(t.1)
-                        .write_lou(scratch.get_unchecked_mut((k * 2 + 1) * 13 + i * 2..));
+                    let t = transpose_f64x2_2x2d([q0, AvxStoreD::undefined()]);
+                    t[0].write_lou(scratch.get_unchecked_mut(k * 2 * 13 + i * 2..));
+                    t[1].write_lou(scratch.get_unchecked_mut((k * 2 + 1) * 13 + i * 2..));
                 }
             }
 
@@ -117,8 +114,8 @@ impl AvxButterfly169d {
                 rows = self.bf13.exec(rows);
 
                 let q1 = AvxStoreD::mul_by_complex(rows[1], self.twiddles[12 * k]);
-                let t = transpose_f64x2_2x2(rows[0].v, q1.v);
-                AvxStoreD::raw(t.0).write_u(scratch.get_unchecked_mut(k * 2 * 13..));
+                let t = transpose_f64x2_2x2d([rows[0], q1]);
+                t[0].write_u(scratch.get_unchecked_mut(k * 2 * 13..));
 
                 for i in 1..6 {
                     let q0 = AvxStoreD::mul_by_complex(
@@ -129,8 +126,8 @@ impl AvxButterfly169d {
                         rows[i * 2 + 1],
                         self.twiddles[(i - 1) * 2 + 2 + 12 * k],
                     );
-                    let t = transpose_f64x2_2x2(q0.v, q1.v);
-                    AvxStoreD::raw(t.0).write_u(scratch.get_unchecked_mut(k * 2 * 13 + i * 2..));
+                    let t = transpose_f64x2_2x2d([q0, q1]);
+                    t[0].write_u(scratch.get_unchecked_mut(k * 2 * 13 + i * 2..));
                 }
 
                 {
@@ -139,8 +136,8 @@ impl AvxButterfly169d {
                         rows[i * 2],
                         self.twiddles[(i - 1) * 2 + 1 + 12 * k],
                     );
-                    let t = transpose_f64x2_2x2(q0.v, _mm256_setzero_pd());
-                    AvxStoreD::raw(t.0).write_lou(scratch.get_unchecked_mut(k * 2 * 13 + i * 2..));
+                    let t = transpose_f64x2_2x2d([q0, AvxStoreD::undefined()]);
+                    t[0].write_lou(scratch.get_unchecked_mut(k * 2 * 13 + i * 2..));
                 }
             }
 

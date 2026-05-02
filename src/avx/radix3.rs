@@ -31,14 +31,14 @@ use crate::avx::util::{
     _m128s_load_f32x2, _m128s_store_f32x2, _mm_fcmul_pd, _mm_fcmul_ps, _mm_unpackhi_ps64,
     _mm_unpacklo_ps64, _mm256_fcmul_pd, _mm256_fcmul_ps, shuffle,
 };
+use crate::err::try_vec;
 use crate::radix3::Radix3Twiddles;
 use crate::util::{
-    ScratchBuffer, compute_twiddle, int_logarithm, reverse_bits, validate_oof_sizes,
-    validate_scratch,
+    compute_twiddle, int_logarithm, reverse_bits, validate_oof_sizes, validate_scratch,
 };
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
-use num_traits::AsPrimitive;
+use num_traits::{AsPrimitive, Zero};
 use std::any::TypeId;
 use std::arch::x86_64::*;
 use std::sync::Arc;
@@ -522,7 +522,7 @@ impl AvxFmaRadix3<f64> {
 
 impl FftExecutor<f64> for AvxFmaRadix3<f64> {
     fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-        let mut scratch = ScratchBuffer::<Complex<f64>, 2048>::new(self.scratch_length());
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
         unsafe { self.execute_f64(in_place, scratch.as_mut_slice()) }
     }
 
@@ -790,7 +790,7 @@ impl AvxFmaRadix3<f32> {
 
 impl FftExecutor<f32> for AvxFmaRadix3<f32> {
     fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-        let mut scratch = ScratchBuffer::<Complex<f32>, 2048>::new(self.scratch_length());
+        let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
         unsafe { self.execute_f32(in_place, scratch.as_mut_slice()) }
     }
 

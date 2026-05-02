@@ -27,329 +27,160 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::mixed::AvxStoreD;
-use crate::avx::transpose::transpose_f64x2_2x2;
-use std::arch::x86_64::{_mm256_permute2f128_pd, _mm256_setzero_pd};
+use std::arch::x86_64::_mm256_permute2f128_pd;
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x5(rows: [AvxStoreD; 5]) -> [AvxStoreD; 6] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, _mm256_setzero_pd());
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], AvxStoreD::undefined()]);
+    [a[0], a[1], b[0], b[1], c[0], c[1]]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_2x4d(rows: [AvxStoreD; 4]) -> [AvxStoreD; 4] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-        ]
-    }
+    let a0 = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b0 = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    [a0[0], a0[1], b0[0], b0[1]]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_2x3d(rows: [AvxStoreD; 3]) -> [AvxStoreD; 4] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, _mm256_setzero_pd());
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-        ]
-    }
+    let a0 = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b0 = transpose_f64x2_2x2d([rows[2], AvxStoreD::undefined()]);
+    [a0[0], a0[1], b0[0], b0[1]]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x6(rows: [AvxStoreD; 6]) -> [AvxStoreD; 6] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    [a[0], a[1], b[0], b[1], c[0], c[1]]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x7(rows: [AvxStoreD; 7]) -> [AvxStoreD; 8] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, _mm256_setzero_pd());
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], AvxStoreD::undefined()]);
+    [a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1]]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x8(rows: [AvxStoreD; 8]) -> [AvxStoreD; 8] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    [a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1]]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x9(rows: [AvxStoreD; 9]) -> [AvxStoreD; 10] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        let e0 = transpose_f64x2_2x2(rows[8].v, _mm256_setzero_pd());
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-            AvxStoreD::raw(e0.0),
-            AvxStoreD::raw(e0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    let e = transpose_f64x2_2x2d([rows[8], AvxStoreD::undefined()]);
+    [a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1]]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x10(rows: [AvxStoreD; 10]) -> [AvxStoreD; 10] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        let e0 = transpose_f64x2_2x2(rows[8].v, rows[9].v);
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-            AvxStoreD::raw(e0.0),
-            AvxStoreD::raw(e0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    let e = transpose_f64x2_2x2d([rows[8], rows[9]]);
+    [a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1]]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x11(rows: [AvxStoreD; 11]) -> [AvxStoreD; 12] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        let e0 = transpose_f64x2_2x2(rows[8].v, rows[9].v);
-        let f0 = transpose_f64x2_2x2(rows[10].v, _mm256_setzero_pd());
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-            AvxStoreD::raw(e0.0),
-            AvxStoreD::raw(e0.1),
-            AvxStoreD::raw(f0.0),
-            AvxStoreD::raw(f0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    let e = transpose_f64x2_2x2d([rows[8], rows[9]]);
+    let f = transpose_f64x2_2x2d([rows[10], AvxStoreD::undefined()]);
+    [
+        a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], f[0], f[1],
+    ]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x12(rows: [AvxStoreD; 12]) -> [AvxStoreD; 12] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        let e0 = transpose_f64x2_2x2(rows[8].v, rows[9].v);
-        let f0 = transpose_f64x2_2x2(rows[10].v, rows[11].v);
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-            AvxStoreD::raw(e0.0),
-            AvxStoreD::raw(e0.1),
-            AvxStoreD::raw(f0.0),
-            AvxStoreD::raw(f0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    let e = transpose_f64x2_2x2d([rows[8], rows[9]]);
+    let f = transpose_f64x2_2x2d([rows[10], rows[11]]);
+    [
+        a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], f[0], f[1],
+    ]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x13(rows: [AvxStoreD; 13]) -> [AvxStoreD; 14] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        let e0 = transpose_f64x2_2x2(rows[8].v, rows[9].v);
-        let f0 = transpose_f64x2_2x2(rows[10].v, rows[11].v);
-        let g0 = transpose_f64x2_2x2(rows[12].v, _mm256_setzero_pd());
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-            AvxStoreD::raw(e0.0),
-            AvxStoreD::raw(e0.1),
-            AvxStoreD::raw(f0.0),
-            AvxStoreD::raw(f0.1),
-            AvxStoreD::raw(g0.0),
-            AvxStoreD::raw(g0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    let e = transpose_f64x2_2x2d([rows[8], rows[9]]);
+    let f = transpose_f64x2_2x2d([rows[10], rows[11]]);
+    let g = transpose_f64x2_2x2d([rows[12], AvxStoreD::undefined()]);
+    [
+        a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], f[0], f[1], g[0], g[1],
+    ]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x14(rows: [AvxStoreD; 14]) -> [AvxStoreD; 14] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        let e0 = transpose_f64x2_2x2(rows[8].v, rows[9].v);
-        let f0 = transpose_f64x2_2x2(rows[10].v, rows[11].v);
-        let g0 = transpose_f64x2_2x2(rows[12].v, rows[13].v);
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-            AvxStoreD::raw(e0.0),
-            AvxStoreD::raw(e0.1),
-            AvxStoreD::raw(f0.0),
-            AvxStoreD::raw(f0.1),
-            AvxStoreD::raw(g0.0),
-            AvxStoreD::raw(g0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    let e = transpose_f64x2_2x2d([rows[8], rows[9]]);
+    let f = transpose_f64x2_2x2d([rows[10], rows[11]]);
+    let g = transpose_f64x2_2x2d([rows[12], rows[13]]);
+    [
+        a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], f[0], f[1], g[0], g[1],
+    ]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x15(rows: [AvxStoreD; 15]) -> [AvxStoreD; 16] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        let e0 = transpose_f64x2_2x2(rows[8].v, rows[9].v);
-        let f0 = transpose_f64x2_2x2(rows[10].v, rows[11].v);
-        let g0 = transpose_f64x2_2x2(rows[12].v, rows[13].v);
-        let h0 = transpose_f64x2_2x2(rows[14].v, _mm256_setzero_pd());
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-            AvxStoreD::raw(e0.0),
-            AvxStoreD::raw(e0.1),
-            AvxStoreD::raw(f0.0),
-            AvxStoreD::raw(f0.1),
-            AvxStoreD::raw(g0.0),
-            AvxStoreD::raw(g0.1),
-            AvxStoreD::raw(h0.0),
-            AvxStoreD::raw(h0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    let e = transpose_f64x2_2x2d([rows[8], rows[9]]);
+    let f = transpose_f64x2_2x2d([rows[10], rows[11]]);
+    let g = transpose_f64x2_2x2d([rows[12], rows[13]]);
+    let h = transpose_f64x2_2x2d([rows[14], AvxStoreD::undefined()]);
+    [
+        a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], f[0], f[1], g[0], g[1], h[0],
+        h[1],
+    ]
 }
 
 #[inline(always)]
 pub(crate) fn transpose_f64x2_2x16(rows: [AvxStoreD; 16]) -> [AvxStoreD; 16] {
-    unsafe {
-        let a0 = transpose_f64x2_2x2(rows[0].v, rows[1].v);
-        let b0 = transpose_f64x2_2x2(rows[2].v, rows[3].v);
-        let c0 = transpose_f64x2_2x2(rows[4].v, rows[5].v);
-        let d0 = transpose_f64x2_2x2(rows[6].v, rows[7].v);
-        let e0 = transpose_f64x2_2x2(rows[8].v, rows[9].v);
-        let f0 = transpose_f64x2_2x2(rows[10].v, rows[11].v);
-        let g0 = transpose_f64x2_2x2(rows[12].v, rows[13].v);
-        let h0 = transpose_f64x2_2x2(rows[14].v, rows[15].v);
-        [
-            AvxStoreD::raw(a0.0),
-            AvxStoreD::raw(a0.1),
-            AvxStoreD::raw(b0.0),
-            AvxStoreD::raw(b0.1),
-            AvxStoreD::raw(c0.0),
-            AvxStoreD::raw(c0.1),
-            AvxStoreD::raw(d0.0),
-            AvxStoreD::raw(d0.1),
-            AvxStoreD::raw(e0.0),
-            AvxStoreD::raw(e0.1),
-            AvxStoreD::raw(f0.0),
-            AvxStoreD::raw(f0.1),
-            AvxStoreD::raw(g0.0),
-            AvxStoreD::raw(g0.1),
-            AvxStoreD::raw(h0.0),
-            AvxStoreD::raw(h0.1),
-        ]
-    }
+    let a = transpose_f64x2_2x2d([rows[0], rows[1]]);
+    let b = transpose_f64x2_2x2d([rows[2], rows[3]]);
+    let c = transpose_f64x2_2x2d([rows[4], rows[5]]);
+    let d = transpose_f64x2_2x2d([rows[6], rows[7]]);
+    let e = transpose_f64x2_2x2d([rows[8], rows[9]]);
+    let f = transpose_f64x2_2x2d([rows[10], rows[11]]);
+    let g = transpose_f64x2_2x2d([rows[12], rows[13]]);
+    let h = transpose_f64x2_2x2d([rows[14], rows[15]]);
+    [
+        a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1], e[0], e[1], f[0], f[1], g[0], g[1], h[0],
+        h[1],
+    ]
 }
 
 #[inline(always)]

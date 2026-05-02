@@ -33,7 +33,7 @@ use crate::factory::AlgorithmFactory;
 use crate::good_thomas::GoodThomasFft;
 use crate::mixed_radix::MixedRadix;
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-use crate::util::has_valid_avx;
+use crate::util::{has_valid_avx, has_valid_avx512vl};
 use crate::{FftDirection, FftExecutor, ZaftError};
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -159,6 +159,46 @@ macro_rules! make_optional_butterfly {
     }};
 }
 
+macro_rules! make_optional_butterfly512 {
+    ($ftype: ident, $fft_direction: expr, $avx_name: ident, $avx512_name: ident, $neon_name: ident, $fcma_name: ident) => {{
+        static Q: OnceLock<Option<Arc<dyn $ftype<f64> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn $ftype<f64> + Send + Sync>>> = OnceLock::new();
+        let selector = match $fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::$avx512_name;
+                        return Some(Arc::new($avx512_name::new($fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::$avx_name;
+                        return Some(Arc::new($avx_name::new($fft_direction)));
+                    }
+                }
+                #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                {
+                    #[cfg(feature = "fcma")]
+                    if std::arch::is_aarch64_feature_detected!("fcma") {
+                        use crate::neon::$fcma_name;
+                        return Some(Arc::new($fcma_name::new($fft_direction)));
+                    }
+                    use crate::neon::$neon_name;
+                    Some(Arc::new($neon_name::new($fft_direction)))
+                }
+                #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+                {
+                    None
+                }
+            })
+            .clone()
+    }};
+}
+
 macro_rules! make_default_radix {
     ($n: expr, $fft_direction: expr, $scalar_name: ident, $avx_name: ident, $neon_name: ident, $fcma_name: ident) => {{
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -210,6 +250,42 @@ macro_rules! make_mixed_radix {
         {
             #[cfg(all(target_arch = "x86_64", feature = "avx"))]
             {
+                if has_valid_avx() {
+                    use crate::avx::$avx_name;
+                    return $avx_name::new($right_fft)
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>));
+                }
+            }
+            Ok(None)
+        }
+    }};
+}
+
+macro_rules! make_mixed_radix512 {
+    ($right_fft: expr, $avx_name: ident,  $avx512_name: ident, $neon_name: ident, $fcma_name: ident) => {{
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            #[cfg(feature = "fcma")]
+            {
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    use crate::neon::$fcma_name;
+                    return $fcma_name::new($right_fft)
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>));
+                }
+            }
+            use crate::neon::$neon_name;
+            $neon_name::new($right_fft)
+                .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>))
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            {
+                if has_valid_avx512vl() {
+                    use crate::avx::$avx512_name;
+                    return $avx512_name::new($right_fft)
+                        .map(|x| Some(Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>));
+                }
                 if has_valid_avx() {
                     use crate::avx::$avx_name;
                     return $avx_name::new($right_fft)
@@ -904,10 +980,11 @@ impl AlgorithmFactory<f64> for f64 {
     fn butterfly256(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
-        make_optional_butterfly!(
+        make_optional_butterfly512!(
             FftExecutor,
             _fft_direction,
             AvxButterfly256d,
+            Avx512vlButterfly256d,
             NeonButterfly256d,
             NeonFcmaButterfly256d
         )
@@ -925,9 +1002,15 @@ impl AlgorithmFactory<f64> for f64 {
         selector
             .get_or_init(|| {
                 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-                if has_valid_avx() {
-                    use crate::avx::AvxButterfly512d;
-                    return Some(Arc::new(AvxButterfly512d::new(_fft_direction)));
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::Avx512vlButterfly512d;
+                        return Some(Arc::new(Avx512vlButterfly512d::new(_fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::AvxButterfly512d;
+                        return Some(Arc::new(AvxButterfly512d::new(_fft_direction)));
+                    }
                 }
                 None
             })
@@ -946,9 +1029,36 @@ impl AlgorithmFactory<f64> for f64 {
         selector
             .get_or_init(|| {
                 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-                if has_valid_avx() {
-                    use crate::avx::AvxButterfly1024d;
-                    return Some(Arc::new(AvxButterfly1024d::new(_fft_direction)));
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::Avx512vlButterfly1024d;
+                        return Some(Arc::new(Avx512vlButterfly1024d::new(_fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::AvxButterfly1024d;
+                        return Some(Arc::new(AvxButterfly1024d::new(_fft_direction)));
+                    }
+                }
+                None
+            })
+            .clone()
+    }
+
+    fn butterfly2048(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if has_valid_avx512vl() {
+                    use crate::avx::Avx512vlButterfly2048d;
+                    return Some(Arc::new(Avx512vlButterfly2048d::new(_fft_direction)));
                 }
                 None
             })
@@ -1202,9 +1312,10 @@ impl AlgorithmFactory<f64> for f64 {
     fn mixed_radix_butterfly8(
         right_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>, ZaftError> {
-        make_mixed_radix!(
+        make_mixed_radix512!(
             right_fft,
             AvxMixedRadix8d,
+            Avx512vlMixedRadix8d,
             NeonMixedRadix8,
             NeonFcmaMixedRadix8
         )

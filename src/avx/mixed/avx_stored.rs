@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::util::{_mm256_fcmul_pd, shuffle};
+use crate::avx::util::{_mm256_fcmul_pd, _mm256_fcmul_pd_conj_b, shuffle};
 use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::x86_64::*;
@@ -293,6 +293,14 @@ impl AvxStoreD {
     }
 
     #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn mul_by_complex_conj_b(self, other: AvxStoreD) -> Self {
+        AvxStoreD {
+            v: _mm256_fcmul_pd_conj_b(self.v, other.v),
+        }
+    }
+
+    #[inline]
     #[target_feature(enable = "avx2")]
     pub(crate) fn unpack_evens(&self, other: Self) -> Self {
         let q = _mm256_unpacklo_pd(self.v, other.v);
@@ -306,6 +314,13 @@ impl AvxStoreD {
     pub(crate) fn zero() -> Self {
         Self {
             v: _mm256_setzero_pd(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn undefined() -> Self {
+        Self {
+            v: unsafe { _mm256_undefined_pd() },
         }
     }
 

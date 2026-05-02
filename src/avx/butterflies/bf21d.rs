@@ -34,7 +34,7 @@ use crate::avx::transpose::avx_transpose_f64x2_4x4_impl;
 use crate::store::BidirectionalStore;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
-use std::arch::x86_64::_mm256_setzero_pd;
+use std::arch::x86_64::_mm256_undefined_pd;
 
 pub(crate) struct AvxButterfly21d {
     direction: FftDirection,
@@ -73,13 +73,13 @@ pub(crate) fn transpose_7x3(
         (rows0[0].v, rows1[0].v),
         (rows0[1].v, rows1[1].v),
         (rows0[2].v, rows1[2].v),
-        (_mm256_setzero_pd(), _mm256_setzero_pd()),
+        (_mm256_undefined_pd(), _mm256_undefined_pd()),
     );
     let b0 = avx_transpose_f64x2_4x4_impl(
         (rows2[0].v, rows3[0].v),
         (rows2[1].v, rows3[1].v),
         (rows2[2].v, rows3[2].v),
-        (_mm256_setzero_pd(), _mm256_setzero_pd()),
+        (_mm256_undefined_pd(), _mm256_undefined_pd()),
     );
     (
         [

@@ -28,7 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::r2c::r2c_twiddles::R2CTwiddlesHandler;
-use crate::util::{ScratchBuffer, compute_twiddle, validate_scratch};
+use crate::util::{compute_twiddle, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
@@ -122,7 +122,7 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = ScratchBuffer::<Complex<T>, 2048>::new(self.complex_scratch_length());
+        let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
         self.execute_with_scratch(input, output, scratch.as_mut_slice())
     }
 
@@ -185,10 +185,10 @@ where
             self.twiddles_handler
                 .handle(&self.twiddles, output_left, output_right);
 
-            if output.len() % 2 == 1 {
-                if let Some(center_element) = output.get_mut(output.len() / 2) {
-                    center_element.im = -center_element.im;
-                }
+            if output.len() % 2 == 1
+                && let Some(center_element) = output.get_mut(output.len() / 2)
+            {
+                center_element.im = -center_element.im;
             }
         }
 

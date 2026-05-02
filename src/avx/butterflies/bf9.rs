@@ -42,10 +42,10 @@ pub(crate) fn transpose_f64x2_3x3(
     rows1: [AvxStoreD; 3],
 ) -> ([AvxStoreD; 3], [AvxStoreD; 3]) {
     let a0 = transpose_f64x2_2x2(rows0[0].v, rows0[1].v);
-    let d0 = transpose_f64x2_2x2(rows0[2].v, _mm256_setzero_pd());
+    let d0 = transpose_f64x2_2x2(rows0[2].v, _mm256_undefined_pd());
 
     let b0 = transpose_f64x2_2x2(rows1[0].v, rows1[1].v);
-    let e0 = transpose_f64x2_2x2(rows1[2].v, _mm256_setzero_pd());
+    let e0 = transpose_f64x2_2x2(rows1[2].v, _mm256_undefined_pd());
     (
         [
             AvxStoreD::raw(a0.0),
@@ -120,7 +120,7 @@ impl AvxButterfly9d {
 #[inline]
 #[target_feature(enable = "avx2")]
 fn transpose_f32x2_3x3(rows: [AvxStoreF; 3]) -> [AvxStoreF; 3] {
-    let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, _mm256_setzero_ps());
+    let a0 = avx_transpose_f32x2_4x4_impl(rows[0].v, rows[1].v, rows[2].v, _mm256_undefined_ps());
     [
         AvxStoreF::raw(a0.0),
         AvxStoreF::raw(a0.1),

@@ -281,10 +281,10 @@ impl AvxButterfly {
     }
 }
 
-macro_rules! boring_avx_butterfly {
-    ($bf_name: ident, $f_type: ident, $size: expr) => {
+macro_rules! boring_avx_butterfly_definition {
+    ($bf_name: ident, $f_type: ident, $size: expr, $features: literal) => {
         impl $bf_name {
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn execute_impl(&self, in_place: &mut [Complex<$f_type>]) -> Result<(), ZaftError> {
                 if !in_place.len().is_multiple_of($size) {
                     return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
@@ -298,7 +298,7 @@ macro_rules! boring_avx_butterfly {
                 Ok(())
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn execute_oof_impl(
                 &self,
                 src: &[Complex<$f_type>],
@@ -378,7 +378,30 @@ macro_rules! boring_avx_butterfly {
     };
 }
 
+pub(crate) use boring_avx_butterfly_definition;
+
+macro_rules! boring_avx_butterfly {
+    ($bf_name:ident, $f_type:ident, $size:expr) => {
+        crate::avx::butterflies::shared::boring_avx_butterfly_definition!(
+            $bf_name, $f_type, $size, "avx2,fma"
+        );
+    };
+}
+
 pub(crate) use boring_avx_butterfly;
+
+macro_rules! boring_avx512vl_butterfly {
+    ($bf_name:ident, $f_type:ident, $size:expr) => {
+        crate::avx::butterflies::shared::boring_avx_butterfly_definition!(
+            $bf_name,
+            $f_type,
+            $size,
+            "avx2,fma,avx512f,avx512vl"
+        );
+    };
+}
+
+pub(crate) use boring_avx512vl_butterfly;
 
 macro_rules! boring_avx_butterfly2 {
     ($bf_name: ident, $f_type: ident, $size: expr) => {

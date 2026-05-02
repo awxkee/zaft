@@ -38,15 +38,16 @@ use crate::avx::mixed::butterflies::{
     ColumnButterfly11f, ColumnButterfly12d, ColumnButterfly12f, ColumnButterfly13d,
     ColumnButterfly13f,
 };
+use crate::err::try_vec;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
-use crate::util::{ScratchBuffer, compute_twiddle};
+use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
 use std::sync::Arc;
 
 macro_rules! define_mixed_radixd {
-    ($mx_type: ident, $bf_type: ident, $row_count: expr) => {
+    ($mx_type: ident, $bf_type: ident, $features: literal, $row_count: expr) => {
         pub(crate) struct $mx_type {
             execution_length: usize,
             direction: FftDirection,
@@ -67,7 +68,7 @@ macro_rules! define_mixed_radixd {
                 unsafe { Self::new_init(width_executor) }
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn new_init(
                 width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
@@ -125,7 +126,7 @@ macro_rules! define_mixed_radixd {
         }
 
         impl $mx_type {
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn execute_f64(
                 &self,
                 in_place: &mut [Complex<f64>],
@@ -243,7 +244,7 @@ macro_rules! define_mixed_radixd {
                 }
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn execute_d_oof_impl(
                 &self,
                 src: &mut [Complex<f64>],
@@ -275,7 +276,7 @@ macro_rules! define_mixed_radixd {
                 Ok(())
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn process_columns_oof(&self, src: &[Complex<f64>], dst: &mut [Complex<f64>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -362,7 +363,7 @@ macro_rules! define_mixed_radixd {
                 }
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn execute_oof_f64(
                 &self,
                 src: &[Complex<f64>],
@@ -398,7 +399,7 @@ macro_rules! define_mixed_radixd {
 
         impl FftExecutor<f64> for $mx_type {
             fn execute(&self, in_place: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                let mut scratch = ScratchBuffer::<Complex<f64>, 2048>::new(self.scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
                 unsafe { self.execute_f64(in_place, scratch.as_mut_slice()) }
             }
 
@@ -415,8 +416,7 @@ macro_rules! define_mixed_radixd {
                 src: &[Complex<f64>],
                 dst: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
-                let mut scratch =
-                    ScratchBuffer::<Complex<f64>, 2048>::new(self.out_of_place_scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
                 self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
             }
 
@@ -466,7 +466,7 @@ macro_rules! define_mixed_radixd {
 }
 
 macro_rules! define_mixed_radixf {
-    ($mx_type: ident, $bf_type: ident, $row_count: expr) => {
+    ($mx_type: ident, $bf_type: ident, $features: literal, $row_count: expr) => {
         pub(crate) struct $mx_type {
             execution_length: usize,
             direction: FftDirection,
@@ -487,7 +487,7 @@ macro_rules! define_mixed_radixf {
                 unsafe { Self::new_init(width_executor) }
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn new_init(
                 width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             ) -> Result<Self, ZaftError> {
@@ -545,7 +545,7 @@ macro_rules! define_mixed_radixf {
         }
 
         impl $mx_type {
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn execute_f32(
                 &self,
                 in_place: &mut [Complex<f32>],
@@ -577,7 +577,7 @@ macro_rules! define_mixed_radixf {
                 Ok(())
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn process_columns_in_place(&self, chunk: &mut [Complex<f32>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -735,7 +735,7 @@ macro_rules! define_mixed_radixf {
                 }
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn execute_d_oof_impl(
                 &self,
                 src: &mut [Complex<f32>],
@@ -767,7 +767,7 @@ macro_rules! define_mixed_radixf {
                 Ok(())
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn process_columns_oof(&self, src: &[Complex<f32>], dst: &mut [Complex<f32>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -931,7 +931,7 @@ macro_rules! define_mixed_radixf {
                 }
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn execute_oof_f32(
                 &self,
                 src: &[Complex<f32>],
@@ -967,7 +967,7 @@ macro_rules! define_mixed_radixf {
 
         impl FftExecutor<f32> for $mx_type {
             fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                let mut scratch = ScratchBuffer::<Complex<f32>, 2048>::new(self.scratch_length());
+                let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
                 unsafe { self.execute_f32(in_place, scratch.as_mut_slice()) }
             }
 
@@ -984,8 +984,7 @@ macro_rules! define_mixed_radixf {
                 src: &[Complex<f32>],
                 dst: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-                let mut scratch =
-                    ScratchBuffer::<Complex<f32>, 2048>::new(self.out_of_place_scratch_length());
+                  let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
                 self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
             }
 
@@ -1034,30 +1033,48 @@ macro_rules! define_mixed_radixf {
     };
 }
 
-define_mixed_radixd!(AvxMixedRadix2d, ColumnButterfly2d, 2);
-define_mixed_radixf!(AvxMixedRadix2f, ColumnButterfly2f, 2);
-define_mixed_radixd!(AvxMixedRadix3d, ColumnButterfly3d, 3);
-define_mixed_radixf!(AvxMixedRadix3f, ColumnButterfly3f, 3);
-define_mixed_radixd!(AvxMixedRadix4d, ColumnButterfly4d, 4);
-define_mixed_radixf!(AvxMixedRadix4f, ColumnButterfly4f, 4);
-define_mixed_radixd!(AvxMixedRadix5d, ColumnButterfly5d, 5);
-define_mixed_radixf!(AvxMixedRadix5f, ColumnButterfly5f, 5);
-define_mixed_radixd!(AvxMixedRadix6d, ColumnButterfly6d, 6);
-define_mixed_radixf!(AvxMixedRadix6f, ColumnButterfly6f, 6);
-define_mixed_radixd!(AvxMixedRadix7d, ColumnButterfly7d, 7);
-define_mixed_radixf!(AvxMixedRadix7f, ColumnButterfly7f, 7);
-define_mixed_radixd!(AvxMixedRadix8d, ColumnButterfly8d, 8);
-define_mixed_radixf!(AvxMixedRadix8f, ColumnButterfly8f, 8);
-define_mixed_radixd!(AvxMixedRadix9d, ColumnButterfly9d, 9);
-define_mixed_radixf!(AvxMixedRadix9f, ColumnButterfly9f, 9);
-define_mixed_radixd!(AvxMixedRadix10d, ColumnButterfly10d, 10);
-define_mixed_radixf!(AvxMixedRadix10f, ColumnButterfly10f, 10);
-define_mixed_radixd!(AvxMixedRadix11d, ColumnButterfly11d, 11);
-define_mixed_radixf!(AvxMixedRadix11f, ColumnButterfly11f, 11);
-define_mixed_radixd!(AvxMixedRadix12d, ColumnButterfly12d, 12);
-define_mixed_radixf!(AvxMixedRadix12f, ColumnButterfly12f, 12);
-define_mixed_radixd!(AvxMixedRadix13d, ColumnButterfly13d, 13);
-define_mixed_radixf!(AvxMixedRadix13f, ColumnButterfly13f, 13);
+define_mixed_radixd!(AvxMixedRadix2d, ColumnButterfly2d, "avx2,fma", 2);
+define_mixed_radixf!(AvxMixedRadix2f, ColumnButterfly2f, "avx2,fma", 2);
+define_mixed_radixd!(AvxMixedRadix3d, ColumnButterfly3d, "avx2,fma", 3);
+define_mixed_radixf!(AvxMixedRadix3f, ColumnButterfly3f, "avx2,fma", 3);
+define_mixed_radixd!(AvxMixedRadix4d, ColumnButterfly4d, "avx2,fma", 4);
+define_mixed_radixf!(AvxMixedRadix4f, ColumnButterfly4f, "avx2,fma", 4);
+define_mixed_radixd!(AvxMixedRadix5d, ColumnButterfly5d, "avx2,fma", 5);
+define_mixed_radixf!(AvxMixedRadix5f, ColumnButterfly5f, "avx2,fma", 5);
+define_mixed_radixd!(AvxMixedRadix6d, ColumnButterfly6d, "avx2,fma", 6);
+define_mixed_radixf!(AvxMixedRadix6f, ColumnButterfly6f, "avx2,fma", 6);
+define_mixed_radixd!(AvxMixedRadix7d, ColumnButterfly7d, "avx2,fma", 7);
+define_mixed_radixf!(AvxMixedRadix7f, ColumnButterfly7f, "avx2,fma", 7);
+define_mixed_radixd!(AvxMixedRadix8d, ColumnButterfly8d, "avx2,fma", 8);
+define_mixed_radixd!(
+    Avx512vlMixedRadix8d,
+    ColumnButterfly8d,
+    "avx2,fma,avx512f,avx512vl",
+    8
+);
+define_mixed_radixf!(AvxMixedRadix8f, ColumnButterfly8f, "avx2,fma", 8);
+define_mixed_radixf!(
+    Avx512vlMixedRadix8f,
+    ColumnButterfly8f,
+    "avx2,fma,avx512f,avx512vl",
+    8
+);
+define_mixed_radixd!(AvxMixedRadix9d, ColumnButterfly9d, "avx2,fma", 9);
+define_mixed_radixf!(AvxMixedRadix9f, ColumnButterfly9f, "avx2,fma", 9);
+define_mixed_radixd!(AvxMixedRadix10d, ColumnButterfly10d, "avx2,fma", 10);
+define_mixed_radixf!(AvxMixedRadix10f, ColumnButterfly10f, "avx2,fma", 10);
+define_mixed_radixd!(AvxMixedRadix11d, ColumnButterfly11d, "avx2,fma", 11);
+define_mixed_radixf!(AvxMixedRadix11f, ColumnButterfly11f, "avx2,fma", 11);
+define_mixed_radixd!(AvxMixedRadix12d, ColumnButterfly12d, "avx2,fma", 12);
+define_mixed_radixf!(AvxMixedRadix12f, ColumnButterfly12f, "avx2,fma", 12);
+define_mixed_radixf!(
+    Avx512vlMixedRadix12f,
+    ColumnButterfly12f,
+    "avx2,fma,avx512f,avx512vl",
+    12
+);
+define_mixed_radixd!(AvxMixedRadix13d, ColumnButterfly13d, "avx2,fma", 13);
+define_mixed_radixf!(AvxMixedRadix13f, ColumnButterfly13f, "avx2,fma", 13);
 
 #[cfg(test)]
 mod tests {

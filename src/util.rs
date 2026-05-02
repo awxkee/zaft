@@ -430,6 +430,15 @@ pub(crate) fn has_valid_avx() -> bool {
     std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
 }
 
+#[inline]
+#[cfg(all(target_arch = "x86_64", feature = "avx"))]
+pub(crate) fn has_valid_avx512vl() -> bool {
+    std::arch::is_x86_feature_detected!("avx2")
+        && std::arch::is_x86_feature_detected!("fma")
+        && std::arch::is_x86_feature_detected!("avx512vl")
+        && std::arch::is_x86_feature_detected!("avx512f")
+}
+
 #[cfg(test)]
 macro_rules! test_radix {
     ($method_name: ident, $data_type: ident, $butterfly: ident, $iters: expr, $scale: expr, $tol: expr) => {
@@ -542,32 +551,3 @@ macro_rules! validate_oof_sizes {
 }
 
 pub(crate) use validate_oof_sizes;
-
-pub(crate) enum ScratchBuffer<T, const N: usize> {
-    Stack([T; N], usize),
-    Heap(Vec<T>),
-}
-
-impl<T: Default + Copy, const N: usize> ScratchBuffer<T, N> {
-    pub(crate) fn new(size: usize) -> Self {
-        if size <= N {
-            Self::Stack([T::default(); N], size)
-        } else {
-            Self::Heap(vec![T::default(); size])
-        }
-    }
-
-    pub(crate) fn as_mut_slice(&mut self) -> &mut [T] {
-        match self {
-            Self::Stack(buf, len) => &mut buf[..*len],
-            Self::Heap(buf) => buf.as_mut_slice(),
-        }
-    }
-
-    // pub(crate) fn as_slice(&self) -> &[T] {
-    //     match self {
-    //         Self::Stack(buf, len) => &buf[..*len],
-    //         Self::Heap(buf) => buf.as_slice(),
-    //     }
-    // }
-}

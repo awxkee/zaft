@@ -186,8 +186,8 @@ pub(crate) fn transpose_f32x2_4x2(rows0: [AvxStoreF; 2]) -> [AvxStoreF; 4] {
     let a0 = avx_transpose_f32x2_4x4_impl(
         rows0[0].v,
         rows0[1].v,
-        _mm256_setzero_ps(),
-        _mm256_setzero_ps(),
+        _mm256_undefined_ps(),
+        _mm256_undefined_ps(),
     );
 
     [

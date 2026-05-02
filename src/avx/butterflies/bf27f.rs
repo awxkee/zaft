@@ -41,9 +41,12 @@ fn transpose_f32x2_9x3(
     rows1: [AvxStoreF; 3],
     rows2: [AvxStoreF; 3],
 ) -> [AvxStoreF; 9] {
-    let a0 = avx_transpose_f32x2_4x4_impl(rows0[0].v, rows0[1].v, rows0[2].v, _mm256_setzero_ps());
-    let b0 = avx_transpose_f32x2_4x4_impl(rows1[0].v, rows1[1].v, rows1[2].v, _mm256_setzero_ps());
-    let c0 = avx_transpose_f32x2_4x4_impl(rows2[0].v, rows2[1].v, rows2[2].v, _mm256_setzero_ps());
+    let a0 =
+        avx_transpose_f32x2_4x4_impl(rows0[0].v, rows0[1].v, rows0[2].v, _mm256_undefined_ps());
+    let b0 =
+        avx_transpose_f32x2_4x4_impl(rows1[0].v, rows1[1].v, rows1[2].v, _mm256_undefined_ps());
+    let c0 =
+        avx_transpose_f32x2_4x4_impl(rows2[0].v, rows2[1].v, rows2[2].v, _mm256_undefined_ps());
     [
         // row 0
         AvxStoreF::raw(a0.0),

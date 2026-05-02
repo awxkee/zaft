@@ -48,24 +48,24 @@ pub(crate) fn transpose_5x5_f64(
         // Bottom-left 1x4 complex block (pad 3 rows with zeros)
         let bl = avx_transpose_f64x2_4x4_impl(
             (rows1[4].v, rows2[4].v),
-            (_mm256_setzero_pd(), _mm256_setzero_pd()),
-            (_mm256_setzero_pd(), _mm256_setzero_pd()),
-            (_mm256_setzero_pd(), _mm256_setzero_pd()),
+            (_mm256_undefined_pd(), _mm256_undefined_pd()),
+            (_mm256_undefined_pd(), _mm256_undefined_pd()),
+            (_mm256_undefined_pd(), _mm256_undefined_pd()),
         );
 
         // Top-right 4x2 complex block (pad 2 columns with zeros to form 4x4)
         let tr = avx_transpose_f64x2_4x4_impl(
-            (rows3[0].v, _mm256_setzero_pd()),
-            (rows3[1].v, _mm256_setzero_pd()),
-            (rows3[2].v, _mm256_setzero_pd()),
-            (rows3[3].v, _mm256_setzero_pd()),
+            (rows3[0].v, _mm256_undefined_pd()),
+            (rows3[1].v, _mm256_undefined_pd()),
+            (rows3[2].v, _mm256_undefined_pd()),
+            (rows3[3].v, _mm256_undefined_pd()),
         );
         // Bottom-right 2x2 complex block
         let br = avx_transpose_f64x2_4x4_impl(
-            (rows3[4].v, _mm256_setzero_pd()),
-            (_mm256_setzero_pd(), _mm256_setzero_pd()),
-            (_mm256_setzero_pd(), _mm256_setzero_pd()),
-            (_mm256_setzero_pd(), _mm256_setzero_pd()),
+            (rows3[4].v, _mm256_undefined_pd()),
+            (_mm256_undefined_pd(), _mm256_undefined_pd()),
+            (_mm256_undefined_pd(), _mm256_undefined_pd()),
+            (_mm256_undefined_pd(), _mm256_undefined_pd()),
         );
 
         // Reassemble left 6 rows (first 4 columns)
@@ -116,9 +116,9 @@ pub(crate) fn transpose_5x5_f32(
         // Bottom-left 1x4 complex block (pad 3 rows with zeros)
         let bl = avx_transpose_f32x2_4x4_impl(
             left[4].v,
-            _mm256_setzero_ps(),
-            _mm256_setzero_ps(),
-            _mm256_setzero_ps(),
+            _mm256_undefined_ps(),
+            _mm256_undefined_ps(),
+            _mm256_undefined_ps(),
         );
 
         // Top-right 4x2 complex block (pad 2 columns with zeros to form 4x4)
@@ -126,9 +126,9 @@ pub(crate) fn transpose_5x5_f32(
         // Bottom-right 2x2 complex block
         let br = avx_transpose_f32x2_4x4_impl(
             right[4].v,
-            _mm256_setzero_ps(),
-            _mm256_setzero_ps(),
-            _mm256_setzero_ps(),
+            _mm256_undefined_ps(),
+            _mm256_undefined_ps(),
+            _mm256_undefined_ps(),
         );
 
         // Reassemble left 6 rows (first 4 columns)

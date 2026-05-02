@@ -56,6 +56,7 @@ mod bf192d;
 mod bf192f;
 mod bf2;
 mod bf20;
+mod bf2048;
 mod bf21;
 mod bf216d;
 mod bf216f;
@@ -366,6 +367,9 @@ pub(crate) use bf512f::NeonFcmaButterfly512f;
 pub(crate) use bf1024::NeonButterfly1024f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf1024::{NeonFcmaForwardButterfly1024f, NeonFcmaInverseButterfly1024f};
+pub(crate) use bf2048::NeonButterfly2048f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf2048::{NeonFcmaForwardButterfly2048f, NeonFcmaInverseButterfly2048f};
 pub(crate) use fast_bf5::NeonFastButterfly5;
 use num_complex::Complex;
 #[cfg(feature = "fcma")]

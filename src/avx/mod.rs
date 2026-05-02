@@ -46,35 +46,42 @@ mod transpose;
 mod util;
 
 pub(crate) use butterflies::{
-    AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5, AvxButterfly6d, AvxButterfly6f,
-    AvxButterfly7d, AvxButterfly7f, AvxButterfly8d, AvxButterfly8f, AvxButterfly9d, AvxButterfly9f,
-    AvxButterfly10d, AvxButterfly10f, AvxButterfly11d, AvxButterfly11f, AvxButterfly12d,
-    AvxButterfly12f, AvxButterfly13d, AvxButterfly13f, AvxButterfly14d, AvxButterfly14f,
-    AvxButterfly15d, AvxButterfly15f, AvxButterfly16d, AvxButterfly16f, AvxButterfly17,
-    AvxButterfly18d, AvxButterfly18f, AvxButterfly19, AvxButterfly20d, AvxButterfly20f,
-    AvxButterfly21d, AvxButterfly21f, AvxButterfly23, AvxButterfly24d, AvxButterfly24f,
-    AvxButterfly25d, AvxButterfly25f, AvxButterfly27d, AvxButterfly27f, AvxButterfly28d,
-    AvxButterfly28f, AvxButterfly30d, AvxButterfly30f, AvxButterfly32d, AvxButterfly32f,
-    AvxButterfly35d, AvxButterfly35f, AvxButterfly36d, AvxButterfly36f, AvxButterfly40d,
-    AvxButterfly40f, AvxButterfly42d, AvxButterfly42f, AvxButterfly48d, AvxButterfly48f,
-    AvxButterfly49d, AvxButterfly49f, AvxButterfly54d, AvxButterfly54f, AvxButterfly63d,
-    AvxButterfly63f, AvxButterfly64d, AvxButterfly64f, AvxButterfly66d, AvxButterfly66f,
-    AvxButterfly70d, AvxButterfly70f, AvxButterfly72d, AvxButterfly72f, AvxButterfly78d,
-    AvxButterfly78f, AvxButterfly81d, AvxButterfly81f, AvxButterfly88d, AvxButterfly88f,
-    AvxButterfly96d, AvxButterfly96f, AvxButterfly100d, AvxButterfly100f, AvxButterfly108d,
-    AvxButterfly108f, AvxButterfly121d, AvxButterfly121f, AvxButterfly125d, AvxButterfly125f,
-    AvxButterfly128d, AvxButterfly128f, AvxButterfly144d, AvxButterfly144f, AvxButterfly169d,
-    AvxButterfly169f, AvxButterfly192d, AvxButterfly192f, AvxButterfly216d, AvxButterfly216f,
-    AvxButterfly243d, AvxButterfly243f, AvxButterfly256d, AvxButterfly256f, AvxButterfly512d,
-    AvxButterfly512f, AvxButterfly1024d, AvxButterfly1024f,
+    Avx512vlButterfly243f, Avx512vlButterfly256d, Avx512vlButterfly256f, Avx512vlButterfly512d,
+    Avx512vlButterfly512f, Avx512vlButterfly1024d, Avx512vlButterfly1024f, Avx512vlButterfly2048d,
+    Avx512vlButterfly2048f, AvxButterfly2, AvxButterfly3, AvxButterfly4, AvxButterfly5,
+    AvxButterfly6d, AvxButterfly6f, AvxButterfly7d, AvxButterfly7f, AvxButterfly8d, AvxButterfly8f,
+    AvxButterfly9d, AvxButterfly9f, AvxButterfly10d, AvxButterfly10f, AvxButterfly11d,
+    AvxButterfly11f, AvxButterfly12d, AvxButterfly12f, AvxButterfly13d, AvxButterfly13f,
+    AvxButterfly14d, AvxButterfly14f, AvxButterfly15d, AvxButterfly15f, AvxButterfly16d,
+    AvxButterfly16f, AvxButterfly17, AvxButterfly18d, AvxButterfly18f, AvxButterfly19,
+    AvxButterfly20d, AvxButterfly20f, AvxButterfly21d, AvxButterfly21f, AvxButterfly23,
+    AvxButterfly24d, AvxButterfly24f, AvxButterfly25d, AvxButterfly25f, AvxButterfly27d,
+    AvxButterfly27f, AvxButterfly28d, AvxButterfly28f, AvxButterfly30d, AvxButterfly30f,
+    AvxButterfly32d, AvxButterfly32f, AvxButterfly35d, AvxButterfly35f, AvxButterfly36d,
+    AvxButterfly36f, AvxButterfly40d, AvxButterfly40f, AvxButterfly42d, AvxButterfly42f,
+    AvxButterfly48d, AvxButterfly48f, AvxButterfly49d, AvxButterfly49f, AvxButterfly54d,
+    AvxButterfly54f, AvxButterfly63d, AvxButterfly63f, AvxButterfly64d, AvxButterfly64f,
+    AvxButterfly66d, AvxButterfly66f, AvxButterfly70d, AvxButterfly70f, AvxButterfly72d,
+    AvxButterfly72f, AvxButterfly78d, AvxButterfly78f, AvxButterfly81d, AvxButterfly81f,
+    AvxButterfly88d, AvxButterfly88f, AvxButterfly96d, AvxButterfly96f, AvxButterfly100d,
+    AvxButterfly100f, AvxButterfly108d, AvxButterfly108f, AvxButterfly121d, AvxButterfly121f,
+    AvxButterfly125d, AvxButterfly125f, AvxButterfly128d, AvxButterfly128f, AvxButterfly144d,
+    AvxButterfly144f, AvxButterfly169d, AvxButterfly169f, AvxButterfly192d, AvxButterfly192f,
+    AvxButterfly216d, AvxButterfly216f, AvxButterfly243d, AvxButterfly243f, AvxButterfly256d,
+    AvxButterfly256f, AvxButterfly512d, AvxButterfly512f, AvxButterfly1024d, AvxButterfly1024f,
 };
 pub(crate) use c2r::C2RAvxTwiddles;
 pub(crate) use c2r_expand::AvxC2RExpander;
 pub(crate) use mixed::{
-    AvxC2RMixedRadix3d, AvxC2RMixedRadix5d, AvxC2RMixedRadix7d, AvxC2RMixedRadix9d,
-    AvxC2RMixedRadix11d, AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d, AvxMixedRadix5d,
-    AvxMixedRadix6d, AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d, AvxMixedRadix10d,
-    AvxMixedRadix11d, AvxMixedRadix12d, AvxMixedRadix13d,
+    Avx512vlMixedRadix8d, AvxC2RMixedRadix3d, AvxC2RMixedRadix5d, AvxC2RMixedRadix7d,
+    AvxC2RMixedRadix9d, AvxC2RMixedRadix11d, AvxMixedRadix2d, AvxMixedRadix3d, AvxMixedRadix4d,
+    AvxMixedRadix5d, AvxMixedRadix6d, AvxMixedRadix7d, AvxMixedRadix8d, AvxMixedRadix9d,
+    AvxMixedRadix10d, AvxMixedRadix11d, AvxMixedRadix12d, AvxMixedRadix13d,
+};
+pub(crate) use mixed::{
+    Avx512vlMixedRadix8f, Avx512vlMixedRadix12f, AvxMixedRadix2f, AvxMixedRadix3f, AvxMixedRadix4f,
+    AvxMixedRadix5f, AvxMixedRadix6f, AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f,
+    AvxMixedRadix10f, AvxMixedRadix11f, AvxMixedRadix12f, AvxMixedRadix13f,
 };
 pub(crate) use mixed::{
     AvxC2RMixedRadix3f, AvxC2RMixedRadix5f, AvxC2RMixedRadix7f, AvxC2RMixedRadix9f,
@@ -82,11 +89,6 @@ pub(crate) use mixed::{
     AvxR2CMixedRadix5f, AvxR2CMixedRadix7d, AvxR2CMixedRadix7f, AvxR2CMixedRadix9d,
     AvxR2CMixedRadix9f, AvxR2CMixedRadix11d, AvxR2CMixedRadix11f, AvxR2CMixedRadix13d,
     AvxR2CMixedRadix13f,
-};
-pub(crate) use mixed::{
-    AvxMixedRadix2f, AvxMixedRadix3f, AvxMixedRadix4f, AvxMixedRadix5f, AvxMixedRadix6f,
-    AvxMixedRadix7f, AvxMixedRadix8f, AvxMixedRadix9f, AvxMixedRadix10f, AvxMixedRadix11f,
-    AvxMixedRadix12f, AvxMixedRadix13f,
 };
 pub(crate) use r2c::R2CAvxTwiddles;
 pub(crate) use raders::AvxRadersFft;

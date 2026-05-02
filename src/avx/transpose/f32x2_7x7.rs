@@ -42,12 +42,12 @@ pub(crate) fn transpose_7x7_f32(
         // --- Top-left 4x4 complex block ---
         let tl = avx_transpose_f32x2_4x4_impl(left[0], left[1], left[2], left[3]);
         // Bottom-left 2x4 complex block (pad 2 rows with zeros)
-        let bl = avx_transpose_f32x2_4x4_impl(left[4], left[5], left[6], _mm256_setzero_ps());
+        let bl = avx_transpose_f32x2_4x4_impl(left[4], left[5], left[6], _mm256_undefined_ps());
 
         // Top-right 4x2 complex block (pad 2 columns with zeros to form 4x4)
         let tr = avx_transpose_f32x2_4x4_impl(right[0], right[1], right[2], right[3]);
         // Bottom-right 2x2 complex block
-        let br = avx_transpose_f32x2_4x4_impl(right[4], right[5], right[6], _mm256_setzero_ps());
+        let br = avx_transpose_f32x2_4x4_impl(right[4], right[5], right[6], _mm256_undefined_ps());
 
         // --- Reassemble left output (first 4 columns) ---
         let output_left = [
@@ -89,7 +89,7 @@ pub(crate) fn transpose_7x7_f64(
             (rows1[4].v, rows2[4].v),
             (rows1[5].v, rows2[5].v),
             (rows1[6].v, rows2[6].v),
-            (_mm256_setzero_pd(), _mm256_setzero_pd()),
+            (_mm256_undefined_pd(), _mm256_undefined_pd()),
         );
 
         // Top-right 4x2 complex block (pad 2 columns with zeros to form 4x4)
@@ -104,7 +104,7 @@ pub(crate) fn transpose_7x7_f64(
             (rows3[4].v, rows4[4].v),
             (rows3[5].v, rows4[5].v),
             (rows3[6].v, rows4[6].v),
-            (_mm256_setzero_pd(), _mm256_setzero_pd()),
+            (_mm256_undefined_pd(), _mm256_undefined_pd()),
         );
 
         // Reassemble left 6 rows (first 4 columns)

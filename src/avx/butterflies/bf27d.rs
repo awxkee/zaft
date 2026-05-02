@@ -43,20 +43,20 @@ fn transpose_f64x2_9x3(
     rows4: [AvxStoreD; 3],
 ) -> ([AvxStoreD; 9], [AvxStoreD; 9]) {
     let a0 = transpose_4x4(
-        [rows0[0], rows0[1], rows0[2], AvxStoreD::zero()],
-        [rows1[0], rows1[1], rows1[2], AvxStoreD::zero()],
+        [rows0[0], rows0[1], rows0[2], AvxStoreD::undefined()],
+        [rows1[0], rows1[1], rows1[2], AvxStoreD::undefined()],
     );
     let b0 = transpose_4x4(
-        [rows2[0], rows2[1], rows2[2], AvxStoreD::zero()],
-        [rows3[0], rows3[1], rows3[2], AvxStoreD::zero()],
+        [rows2[0], rows2[1], rows2[2], AvxStoreD::undefined()],
+        [rows3[0], rows3[1], rows3[2], AvxStoreD::undefined()],
     );
     let c0 = transpose_4x4(
-        [rows4[0], rows4[1], rows4[2], AvxStoreD::zero()],
+        [rows4[0], rows4[1], rows4[2], AvxStoreD::undefined()],
         [
-            AvxStoreD::zero(),
-            AvxStoreD::zero(),
-            AvxStoreD::zero(),
-            AvxStoreD::zero(),
+            AvxStoreD::undefined(),
+            AvxStoreD::undefined(),
+            AvxStoreD::undefined(),
+            AvxStoreD::undefined(),
         ],
     );
     (

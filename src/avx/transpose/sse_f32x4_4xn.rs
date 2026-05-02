@@ -58,7 +58,7 @@ pub(crate) fn transpose_sse_f32x4_4x4(store: [SseStoreF; 4]) -> [SseStoreF; 4] {
 #[inline]
 #[target_feature(enable = "avx2")]
 pub(crate) fn transpose_sse_f32x4_4x3(rows: [SseStoreF; 3]) -> [SseStoreF; 4] {
-    transpose_sse_f32x4_4x4([rows[0], rows[1], rows[2], SseStoreF::zero()])
+    transpose_sse_f32x4_4x4([rows[0], rows[1], rows[2], SseStoreF::undefined()])
 }
 
 #[inline]
@@ -67,9 +67,9 @@ pub(crate) fn transpose_sse_f32x4_4x5(rows: [SseStoreF; 5]) -> [SseStoreF; 8] {
     let a0 = transpose_sse_f32x4_4x4([rows[0], rows[1], rows[2], rows[3]]);
     let b0 = transpose_sse_f32x4_4x4([
         rows[4],
-        SseStoreF::zero(),
-        SseStoreF::zero(),
-        SseStoreF::zero(),
+        SseStoreF::undefined(),
+        SseStoreF::undefined(),
+        SseStoreF::undefined(),
     ]);
     [a0[0], a0[1], a0[2], a0[3], b0[0], b0[1], b0[2], b0[3]]
 }
@@ -78,7 +78,7 @@ pub(crate) fn transpose_sse_f32x4_4x5(rows: [SseStoreF; 5]) -> [SseStoreF; 8] {
 #[target_feature(enable = "avx2")]
 pub(crate) fn transpose_sse_f32x4_4x7(rows: [SseStoreF; 7]) -> [SseStoreF; 8] {
     let a0 = transpose_sse_f32x4_4x4([rows[0], rows[1], rows[2], rows[3]]);
-    let b0 = transpose_sse_f32x4_4x4([rows[4], rows[5], rows[6], SseStoreF::zero()]);
+    let b0 = transpose_sse_f32x4_4x4([rows[4], rows[5], rows[6], SseStoreF::undefined()]);
     [a0[0], a0[1], a0[2], a0[3], b0[0], b0[1], b0[2], b0[3]]
 }
 
@@ -89,9 +89,9 @@ pub(crate) fn transpose_sse_f32x4_4x9(rows: [SseStoreF; 9]) -> [SseStoreF; 12] {
     let b0 = transpose_sse_f32x4_4x4([rows[4], rows[5], rows[6], rows[7]]);
     let c0 = transpose_sse_f32x4_4x4([
         rows[8],
-        SseStoreF::zero(),
-        SseStoreF::zero(),
-        SseStoreF::zero(),
+        SseStoreF::undefined(),
+        SseStoreF::undefined(),
+        SseStoreF::undefined(),
     ]);
     [
         a0[0], a0[1], a0[2], a0[3], b0[0], b0[1], b0[2], b0[3], c0[0], c0[1], c0[2], c0[3],
@@ -103,7 +103,7 @@ pub(crate) fn transpose_sse_f32x4_4x9(rows: [SseStoreF; 9]) -> [SseStoreF; 12] {
 pub(crate) fn transpose_sse_f32x4_4x11(rows: [SseStoreF; 11]) -> [SseStoreF; 12] {
     let a0 = transpose_sse_f32x4_4x4([rows[0], rows[1], rows[2], rows[3]]);
     let b0 = transpose_sse_f32x4_4x4([rows[4], rows[5], rows[6], rows[7]]);
-    let c0 = transpose_sse_f32x4_4x4([rows[8], rows[9], rows[10], SseStoreF::zero()]);
+    let c0 = transpose_sse_f32x4_4x4([rows[8], rows[9], rows[10], SseStoreF::undefined()]);
     [
         a0[0], a0[1], a0[2], a0[3], b0[0], b0[1], b0[2], b0[3], c0[0], c0[1], c0[2], c0[3],
     ]

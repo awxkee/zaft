@@ -53,13 +53,13 @@ pub(crate) fn transpose_f64x2_5x3(
     rows2: [AvxStoreD; 3],
 ) -> ([AvxStoreD; 5], [AvxStoreD; 5]) {
     let a0 = transpose_f64x2_2x2(rows0[0].v, rows0[1].v);
-    let d0 = transpose_f64x2_2x2(rows0[2].v, _mm256_setzero_pd());
+    let d0 = transpose_f64x2_2x2(rows0[2].v, _mm256_undefined_pd());
 
     let b0 = transpose_f64x2_2x2(rows1[0].v, rows1[1].v);
-    let e0 = transpose_f64x2_2x2(rows1[2].v, _mm256_setzero_pd());
+    let e0 = transpose_f64x2_2x2(rows1[2].v, _mm256_undefined_pd());
 
     let c0 = transpose_f64x2_2x2(rows2[0].v, rows2[1].v);
-    let f0 = transpose_f64x2_2x2(rows2[2].v, _mm256_setzero_pd());
+    let f0 = transpose_f64x2_2x2(rows2[2].v, _mm256_undefined_pd());
     (
         [
             AvxStoreD::raw(a0.0),
@@ -158,8 +158,10 @@ impl AvxButterfly15f {
 #[inline]
 #[target_feature(enable = "avx2", enable = "fma")]
 pub(crate) fn transpose_f32x2_5x3(rows0: [AvxStoreF; 3], rows1: [AvxStoreF; 3]) -> [AvxStoreF; 5] {
-    let a0 = avx_transpose_f32x2_4x4_impl(rows0[0].v, rows0[1].v, rows0[2].v, _mm256_setzero_ps());
-    let b0 = avx_transpose_f32x2_4x4_impl(rows1[0].v, rows1[1].v, rows1[2].v, _mm256_setzero_ps());
+    let a0 =
+        avx_transpose_f32x2_4x4_impl(rows0[0].v, rows0[1].v, rows0[2].v, _mm256_undefined_ps());
+    let b0 =
+        avx_transpose_f32x2_4x4_impl(rows1[0].v, rows1[1].v, rows1[2].v, _mm256_undefined_ps());
 
     [
         AvxStoreF::raw(a0.0),

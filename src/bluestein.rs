@@ -30,7 +30,7 @@ use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
 use crate::spectrum_arithmetic::ComplexArith;
 use crate::traits::FftTrigonometry;
-use crate::util::{ScratchBuffer, compute_twiddle, validate_oof_sizes, validate_scratch};
+use crate::util::{compute_twiddle, validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, Zero};
@@ -135,7 +135,7 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, in_place: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = ScratchBuffer::<Complex<T>, 4096>::new(self.scratch_length());
+        let mut scratch = vec![Complex::zero(); self.scratch_length()];
         self.execute_with_scratch(in_place, scratch.as_mut_slice())
     }
 
@@ -160,9 +160,7 @@ where
             self.spectrum_ops
                 .mul(chunk, &self.twiddles, &mut inner_input[..chunk.len()]);
 
-            for inner in inner_input[chunk.len()..].iter_mut() {
-                *inner = Complex::zero();
-            }
+            inner_input[chunk.len()..].fill(Complex::zero());
 
             // run our inner forward FFT
             self.convolve_fft
@@ -191,8 +189,7 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        let mut scratch =
-            ScratchBuffer::<Complex<T>, 4096>::new(self.out_of_place_scratch_length());
+        let mut scratch = vec![Complex::zero(); self.out_of_place_scratch_length()];
         self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
     }
 
@@ -216,9 +213,7 @@ where
             self.spectrum_ops
                 .mul(chunk, &self.twiddles, &mut inner_input[..chunk.len()]);
 
-            for inner in inner_input[chunk.len()..].iter_mut() {
-                *inner = Complex::zero();
-            }
+            inner_input[chunk.len()..].fill(Complex::zero());
 
             // run our inner forward FFT
             self.convolve_fft
