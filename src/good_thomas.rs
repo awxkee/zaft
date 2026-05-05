@@ -85,7 +85,7 @@ where
             std::mem::swap(&mut width_fft, &mut height_fft);
         }
 
-        let len = width * height;
+        let len = width.checked_mul(height).ok_or(ZaftError::Overflow)?;
 
         let width_scratch_length = width_fft.destructive_scratch_length();
         let height_scratch_length = height_fft.scratch_length();
