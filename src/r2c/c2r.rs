@@ -151,10 +151,14 @@ where
             .chunks_exact(self.complex_length)
             .zip(output.chunks_exact_mut(self.length))
         {
-            scratch[0].re = input[0].re;
-            scratch[0].im = 0.0f64.as_();
-            scratch.last_mut().unwrap().re = input.last().unwrap().re;
-            scratch.last_mut().unwrap().im = 0.0f64.as_();
+            if let Some(first_item) = scratch.get_mut(0) {
+                first_item.re = input[0].re;
+                first_item.im = 0.0f64.as_();
+            }
+            if let Some(last_item) = scratch.last_mut() {
+                last_item.re = input.last().unwrap().re;
+                last_item.im = 0.0f64.as_();
+            }
 
             let (mut input_left, mut input_right) = scratch.split_at_mut(input.len() / 2);
             let (mut input_left_source, mut input_right_source) = input.split_at(input.len() / 2);

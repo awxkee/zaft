@@ -72,7 +72,7 @@ where
         let width = width_executor.length();
         let height = height_executor.length();
 
-        let len = width * height;
+        let len = width.checked_mul(height).ok_or(ZaftError::Overflow)?;
 
         let twiddles_len = width * height - height;
 

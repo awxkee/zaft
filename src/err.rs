@@ -39,6 +39,8 @@ pub enum ZaftError {
     ScratchBufferIsTooSmall(usize, usize),
     InvalidSamplesCount(usize, usize),
     OutOfPlaceSizeDoesntMatch(usize, usize),
+    Overflow,
+    CantFindPrimitiveRootFor(u64),
 }
 
 impl Error for ZaftError {}
@@ -68,6 +70,8 @@ impl std::fmt::Display for ZaftError {
             ZaftError::OutOfPlaceSizeDoesntMatch(left, right) => f.write_fmt(format_args!(
                 "In and out sizes on out of place transforms must match but they were ({left}, {right})"
             )),
+            ZaftError::Overflow => f.write_fmt(format_args!("Cannot execute FFT on overflow buffers"),),
+            ZaftError::CantFindPrimitiveRootFor(u) => f.write_fmt(format_args!("Can't find the privimitive root for {u}"))
         }
     }
 }

@@ -346,7 +346,8 @@ where
         let reduced_len = DividerU64::new(size as u64);
 
         // compute the primitive root and its inverse for this size
-        let primitive_root = primitive_root(size as u64).unwrap();
+        let primitive_root =
+            primitive_root(size as u64).ok_or(ZaftError::CantFindPrimitiveRootFor(size as u64))?;
 
         // compute the multiplicative inverse of primative_root mod len and vice versa.
         // i64::extended_gcd will compute both the inverse of left mod right, and the inverse of right mod left, but we're only goingto use one of them

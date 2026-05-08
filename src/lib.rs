@@ -827,7 +827,9 @@ impl Zaft {
 
         // the most obvious choice is the next-highest power of two, but there's one trick we can pull to get a smaller fft that we can be 100% certain will be faster
         let min_inner_len = 2 * n - 1;
-        let inner_len_pow2 = min_inner_len.checked_next_power_of_two().unwrap();
+        let inner_len_pow2 = min_inner_len
+            .checked_next_power_of_two()
+            .ok_or(ZaftError::Overflow)?;
         let inner_len_factor3 = inner_len_pow2 / 4 * 3;
 
         let inner_len = if inner_len_factor3 >= min_inner_len {
