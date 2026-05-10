@@ -95,21 +95,22 @@ where
         convolve_fft.execute(&mut inner_fft_input)?;
 
         let mut input_index = 1;
-        let mut input_indices = try_vec![0usize; size - 1];
-        for indexer in input_indices.iter_mut() {
-            input_index = ((input_index as u64 * primitive_root) % dividing_len) as usize;
-
-            *indexer = input_index - 1;
-        }
+        let input_indices = (0..size - 1)
+            .map(|_| {
+                input_index = ((input_index as u64 * primitive_root) % dividing_len) as usize;
+                input_index - 1
+            })
+            .collect::<Vec<_>>();
 
         let complex_len = (size - 1) / 2 + 1;
 
         let mut output_index = 1u64;
-        let mut output_indices = try_vec![0u64; size - 1];
-        for indexer in output_indices.iter_mut() {
-            output_index = (output_index * primitive_root_inverse) % dividing_len;
-            *indexer = output_index - 1;
-        }
+        let output_indices = (0..size - 1)
+            .map(|_| {
+                output_index = (output_index * primitive_root_inverse) % dividing_len;
+                output_index - 1
+            })
+            .collect::<Vec<_>>();
         let mut z_output = try_vec![0usize; complex_len - 1];
         for (input_idx, &output_idx) in output_indices.iter().enumerate() {
             if (output_idx as usize) < complex_len - 1 {
