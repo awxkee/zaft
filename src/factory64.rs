@@ -1201,7 +1201,7 @@ impl AlgorithmFactory<f64> for f64 {
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
-            if has_valid_avx() && n < (u32::MAX - 100_000u32) as usize {
+            if has_valid_avx() && n < (i32::MAX - 1_000i32) as usize {
                 use crate::avx::AvxRadersFft;
                 unsafe {
                     return AvxRadersFft::new(n, convolve_fft, fft_direction)
@@ -1211,7 +1211,7 @@ impl AlgorithmFactory<f64> for f64 {
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
-            if n < (u32::MAX - 100_000u32) as usize {
+            if n < (i32::MAX - 1_000i32) as usize {
                 use crate::neon::{NeonRadersFft, NeonRadersIndicer};
                 return NeonRadersFft::new(
                     n,

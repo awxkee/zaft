@@ -40,6 +40,7 @@ mod radix4;
 mod radix5;
 mod radix6;
 mod radix7;
+mod rfft_raders;
 mod rotate;
 mod spectrum_arithmetic;
 mod transpose;
@@ -100,6 +101,7 @@ pub(crate) use radix7::AvxFmaRadix7;
 pub(crate) use radix10::{AvxFmaRadix10d, AvxFmaRadix10f};
 pub(crate) use radix11::AvxFmaRadix11;
 pub(crate) use radix13::AvxFmaRadix13;
+pub(crate) use rfft_raders::AvxRadersRFft;
 #[allow(unused)]
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;
 pub(crate) use transpose::{

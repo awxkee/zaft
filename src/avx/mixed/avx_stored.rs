@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::util::{_mm256_fcmul_pd, _mm256_fcmul_pd_conj_b, shuffle};
+use crate::avx::util::{_mm256_fcmul_pd, _mm256_fcmul_pd_conj_a, _mm256_fcmul_pd_conj_b, shuffle};
 use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::x86_64::*;
@@ -184,6 +184,15 @@ impl AvxStoreD {
 
     #[inline]
     #[target_feature(enable = "avx2")]
+    pub(crate) fn load1_ref(ptr: &f64) -> Self {
+        unsafe {
+            let q0 = _mm_shuffle_pd::<0b00>(_mm_load_sd(ptr), _mm_setzero_pd());
+            AvxStoreD::raw(_mm256_castpd128_pd256(q0))
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
     pub(crate) fn set_complex(complex: &Complex<f64>) -> Self {
         AvxStoreD {
             v: _mm256_setr_pd(complex.re, complex.im, complex.re, complex.im),
@@ -289,6 +298,14 @@ impl AvxStoreD {
     pub(crate) fn mul_by_complex(self, other: AvxStoreD) -> Self {
         AvxStoreD {
             v: _mm256_fcmul_pd(self.v, other.v),
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn mul_by_conj_a(self, other: AvxStoreD) -> Self {
+        AvxStoreD {
+            v: _mm256_fcmul_pd_conj_a(self.v, other.v),
         }
     }
 

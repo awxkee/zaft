@@ -186,12 +186,6 @@ pub(crate) fn conj_f64(v: float64x2_t, a: float64x2_t) -> float64x2_t {
     }
 }
 
-#[cfg(feature = "fcma")]
-#[inline(always)]
-pub(crate) fn conj_f32(v: float32x2_t, a: float32x2_t) -> float32x2_t {
-    unsafe { vreinterpret_f32_u32(veor_u32(vreinterpret_u32_f32(v), vreinterpret_u32_f32(a))) }
-}
-
 #[inline(always)]
 pub(crate) fn vfcmulq_conj_b_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
     unsafe {

@@ -1488,8 +1488,7 @@ impl AlgorithmFactory<f32> for f32 {
         }
         #[cfg(all(target_arch = "aarch64", feature = "sve"))]
         {
-            if std::arch::is_aarch64_feature_detected!("sve2")
-                && n < (u32::MAX / 2 - 1000u32) as usize
+            if std::arch::is_aarch64_feature_detected!("sve2") && n < (i32::MAX - 1_000i32) as usize
             {
                 use crate::neon::NeonRadersFft;
                 use crate::sve::SveLutGather;
@@ -1499,7 +1498,7 @@ impl AlgorithmFactory<f32> for f32 {
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
-            if n < (u32::MAX - 100_000u32) as usize {
+            if n < (i32::MAX - 1_000i32) as usize {
                 use crate::neon::{NeonRadersFft, NeonRadersIndicer};
                 return NeonRadersFft::new(
                     n,

@@ -211,7 +211,7 @@ mod tests {
         if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
             return;
         }
-        for i in 1..512 {
+        for i in 1..768 {
             let data = (0..i)
                 .map(|_| {
                     Complex::<f32>::new(
@@ -261,7 +261,7 @@ mod tests {
         if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
             return;
         }
-        for i in 1..512 {
+        for i in 1..768 {
             let data = (0..i)
                 .map(|_| {
                     Complex::<f64>::new(

@@ -49,6 +49,8 @@ pub(crate) trait ComplexArith<T> {
     fn mul_expand_to_complex(&self, a: &[T], b: &[Complex<T>], dst: &mut [Complex<T>]);
     // (a*b).conj()
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
+    // (a*b).conj()
+    fn mul_conjugate_expand_h2c(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
     // a.conj() * b
     fn conjugate_mul_by_b(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
 }
@@ -158,6 +160,33 @@ where
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]) {
         for (scratch_cell, &twiddle) in dst.iter_mut().zip(b.iter()) {
             *scratch_cell = c_mul_fast(*scratch_cell, twiddle).conj();
+        }
+    }
+
+    fn mul_conjugate_expand_h2c(&self, dst: &mut [Complex<T>], b: &[Complex<T>]) {
+        assert_eq!(dst.len(), b.len());
+        if dst.is_empty() {
+            return;
+        }
+        dst[0] = c_mul_fast(dst[0], b[0]).conj();
+
+        let (_, rem_dst) = dst.split_at_mut(1);
+        let (left, right) = rem_dst.split_at_mut(b.len() / 2);
+
+        for (((scratch_cell, scratch_cell_rev), &twiddle), &twiddle_rev) in left
+            .iter_mut()
+            .zip(right.iter_mut().rev())
+            .zip(b[1..b.len() / 2].iter())
+            .zip(b[b.len() / 2..].iter().rev())
+        {
+            let cell = *scratch_cell;
+            *scratch_cell = c_mul_fast(cell, twiddle).conj();
+            *scratch_cell_rev = c_mul_fast(cell.conj(), twiddle_rev).conj();
+        }
+
+        if b.len().is_multiple_of(2) {
+            let mid = b.len() / 2;
+            dst[mid] = c_mul_fast(dst[mid], b[mid].conj());
         }
     }
 

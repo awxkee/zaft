@@ -241,23 +241,24 @@ impl R2CAlgorithmFactory<f64> for f64 {
 
     fn r2c_raders(n: usize) -> Result<Arc<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
         let convolve_fft = Zaft::strategy(n - 1, FftDirection::Forward)?;
+        let convolve_r2c = Zaft::make_r2c_fft_f64(n - 1)?;
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
         {
             use crate::util::has_valid_avx;
-            if has_valid_avx() && n < (u32::MAX - 100_000u32) as usize {
-                use crate::avx::AvxRadersFft;
-                unsafe {
-                    return Ok(Arc::new(AvxRadersFft::new(
-                        n,
-                        convolve_fft,
-                        FftDirection::Forward,
-                    )?));
-                }
+            if has_valid_avx() && n < (i32::MAX - 1_000i32) as usize {
+                use crate::avx::AvxRadersRFft;
+                return Ok(Arc::new(AvxRadersRFft::new(
+                    n,
+                    convolve_fft,
+                    convolve_r2c,
+                    FftDirection::Forward,
+                )?));
             }
         }
         Ok(Arc::new(RadersRfft::new(
             n,
             convolve_fft,
+            convolve_r2c,
             FftDirection::Forward,
         )?))
     }

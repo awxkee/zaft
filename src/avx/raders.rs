@@ -26,14 +26,13 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
 use crate::good_thomas_small::LutGather;
 use crate::prime_factors::{PrimeFactors, primitive_root};
 use crate::spectrum_arithmetic::ComplexArith;
 use crate::util::{compute_twiddle, validate_oof_sizes, validate_scratch};
-use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_integer::Integer;
 use num_traits::{AsPrimitive, Zero};
@@ -59,7 +58,6 @@ pub(crate) trait RadersIndicer<T> {
         output: &mut [Complex<T>],
         indices: &[u32],
     );
-    unsafe fn index_inputs_real(&self, buffer: &[T], output: &mut [Complex<T>], indices: &[u32]);
     unsafe fn output_indices(
         &self,
         buffer: &mut [Complex<T>],
@@ -168,57 +166,6 @@ impl RadersIndicer<f32> for AvxRadersIndicer {
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *scratch_element = *buffer.get_unchecked(buffer_idx as usize);
-            }
-        }
-    }
-
-    #[target_feature(enable = "avx2")]
-    unsafe fn index_inputs_real(
-        &self,
-        buffer: &[f32],
-        output: &mut [Complex<f32>],
-        indices: &[u32],
-    ) {
-        unsafe {
-            for (scratch_element, buffer_idx) in output
-                .as_chunks_mut::<8>()
-                .0
-                .iter_mut()
-                .zip(indices.as_chunks::<8>().0.iter())
-            {
-                let idx = _mm256_loadu_si256(buffer_idx.as_ptr().cast());
-
-                let [v0, v1] =
-                    AvxStoreF::raw(_mm256_i32gather_ps::<4>(buffer.as_ptr().cast(), idx))
-                        .to_complex();
-
-                v0.write(scratch_element);
-                v1.write(&mut scratch_element[4..]);
-            }
-
-            let rem = output.as_chunks_mut::<8>().1;
-            let rem_indices = indices.as_chunks::<8>().1;
-
-            for (scratch_element, buffer_idx) in rem
-                .as_chunks_mut::<4>()
-                .0
-                .iter_mut()
-                .zip(rem_indices.as_chunks::<4>().0.iter())
-            {
-                let idx = _mm_loadu_si128(buffer_idx.as_ptr().cast());
-
-                let [v0, _] = AvxStoreF::raw128(_mm_i32gather_ps::<4>(buffer.as_ptr().cast(), idx))
-                    .to_complex();
-
-                v0.write(scratch_element);
-            }
-
-            let rem = rem.as_chunks_mut::<4>().1;
-            let rem_indices = rem_indices.as_chunks::<4>().1;
-
-            for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
-                *scratch_element =
-                    Complex::new(*buffer.get_unchecked(buffer_idx as usize), f32::zero());
             }
         }
     }
@@ -340,39 +287,6 @@ impl RadersIndicer<f64> for AvxRadersIndicer {
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *scratch_element = *buffer.get_unchecked(buffer_idx as usize);
-            }
-        }
-    }
-
-    #[target_feature(enable = "avx2")]
-    unsafe fn index_inputs_real(
-        &self,
-        buffer: &[f64],
-        output: &mut [Complex<f64>],
-        indices: &[u32],
-    ) {
-        unsafe {
-            for (scratch_element, buffer_idx) in output
-                .as_chunks_mut::<4>()
-                .0
-                .iter_mut()
-                .zip(indices.as_chunks::<4>().0.iter())
-            {
-                let idx = _mm_loadu_si128(buffer_idx.as_ptr().cast());
-
-                let v0 = AvxStoreD::raw(_mm256_i32gather_pd::<8>(buffer.as_ptr().cast(), idx))
-                    .to_complex();
-
-                v0[0].write(scratch_element);
-                v0[1].write(&mut scratch_element[2..]);
-            }
-
-            let rem = output.as_chunks_mut::<4>().1;
-            let rem_indices = indices.as_chunks::<4>().1;
-
-            for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
-                *scratch_element =
-                    Complex::new(*buffer.get_unchecked(buffer_idx as usize), f64::zero());
             }
         }
     }
@@ -589,8 +503,6 @@ where
                     .index_inputs(buffer, scratch, &self.input_indices);
             }
 
-            // perform the first of two inner FFTs
-
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
@@ -611,72 +523,6 @@ where
             unsafe {
                 self.indicer
                     .output_indices(buffer, scratch, &self.output_indices);
-            }
-        }
-        Ok(())
-    }
-
-    #[target_feature(enable = "avx2", enable = "fma")]
-    fn execute_r2c(
-        &self,
-        src: &[T],
-        dst: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) -> Result<(), ZaftError> {
-        if !src.len().is_multiple_of(self.execution_length) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                src.len(),
-                self.execution_length,
-            ));
-        }
-        if !dst.len().is_multiple_of(self.complex_length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                dst.len(),
-                self.complex_length(),
-            ));
-        }
-        if src.len() / self.execution_length != dst.len() / self.complex_length() {
-            return Err(ZaftError::InvalidSamplesCount(
-                src.len() / self.execution_length,
-                dst.len() / self.complex_length(),
-            ));
-        }
-
-        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
-        let (scratch, convolve_scratch) = scratch.split_at_mut(self.execution_length);
-
-        for (input, complex) in src
-            .chunks_exact(self.execution_length)
-            .zip(dst.chunks_exact_mut(self.complex_length()))
-        {
-            let (buffer_first, buffer) = input.split_first().unwrap();
-            let buffer_first_val = Complex::new(*buffer_first, T::zero());
-
-            let (scratch, _) = scratch.split_at_mut(self.real_length() - 1);
-
-            unsafe {
-                self.indicer
-                    .index_inputs_real(buffer, scratch, &self.input_indices);
-            }
-
-            self.convolve_fft
-                .execute_with_scratch(scratch, convolve_scratch)?;
-
-            complex[0] = buffer_first_val + scratch[0];
-
-            self.spectrum_ops
-                .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
-
-            scratch[0] = scratch[0] + buffer_first_val.conj();
-
-            self.convolve_fft
-                .execute_with_scratch(scratch, convolve_scratch)?;
-
-            let output = &mut complex[1..];
-            let out_len = output.len();
-            unsafe {
-                self.indicer
-                    .output_indices(output, scratch, &self.output_indices[..out_len]);
             }
         }
         Ok(())
@@ -747,39 +593,5 @@ where
 
     fn destructive_scratch_length(&self) -> usize {
         self.scratch_length()
-    }
-}
-
-impl<T: FftSample> R2CFftExecutor<T> for AvxRadersFft<T>
-where
-    f64: AsPrimitive<T>,
-{
-    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
-        unsafe { self.execute_r2c(input, output, scratch.as_mut_slice()) }
-    }
-
-    fn execute_with_scratch(
-        &self,
-        input: &[T],
-        output: &mut [Complex<T>],
-        scratch: &mut [Complex<T>],
-    ) -> Result<(), ZaftError> {
-        unsafe { self.execute_r2c(input, output, scratch) }
-    }
-
-    #[inline]
-    fn real_length(&self) -> usize {
-        self.execution_length
-    }
-
-    #[inline]
-    fn complex_length(&self) -> usize {
-        self.execution_length / 2 + 1
-    }
-
-    #[inline]
-    fn complex_scratch_length(&self) -> usize {
-        self.execution_length + self.convolve_fft_scratch_length
     }
 }
