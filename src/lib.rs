@@ -54,6 +54,7 @@ mod factory64;
 mod fast_divider;
 mod fast_divider_u128;
 mod good_thomas;
+mod good_thomas_small;
 mod mixed_radix;
 mod mla;
 #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -98,6 +99,7 @@ use radix13::Radix13;
 use std::collections::HashMap;
 
 use crate::factory::AlgorithmFactory;
+use crate::good_thomas_small::LutGatherFactory;
 use crate::prime_factors::{
     PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
 };
@@ -140,6 +142,7 @@ pub(crate) trait FftSample:
     + C2RAlgorithmFactory<Self>
     + R2CTwiddlesFactory<Self>
     + C2ROddExpanderFactory
+    + LutGatherFactory<Self>
 {
     const HALF: Self;
     const SQRT_3_OVER_2: Self;
@@ -167,6 +170,7 @@ impl FftSample for f64 {
     // print(double_to_hex(value))
     const SQRT_3_OVER_2: Self = f64::from_bits(0x3febb67ae8584caa);
 }
+
 impl FftSample for f32 {
     const HALF: Self = 0.5;
     // from sage.all import *
@@ -760,7 +764,7 @@ impl Zaft {
 
         let p_fft = Zaft::strategy(n_length as usize, direction)?;
         let q_fft = Zaft::strategy(q_length as usize, direction)?;
-        if num_integer::gcd(q_length, n_length) == 1 && q_length < 33 && n_length <= 33 {
+        if num_integer::gcd(q_length, n_length) == 1 {
             T::good_thomas(p_fft, q_fft)
         } else {
             T::mixed_radix(p_fft, q_fft)

@@ -29,6 +29,7 @@
 use crate::avx::mixed::{AvxStoreD, AvxStoreF};
 use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
+use crate::good_thomas_small::LutGather;
 use crate::prime_factors::{PrimeFactors, primitive_root};
 use crate::spectrum_arithmetic::ComplexArith;
 use crate::util::{compute_twiddle, validate_oof_sizes, validate_scratch};
@@ -48,26 +49,105 @@ pub(crate) struct AvxRadersFft<T> {
     output_indices: Vec<u32>,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
     convolve_fft_scratch_length: usize,
+    indicer: Arc<dyn RadersIndicer<T> + Send + Sync>,
 }
 
 pub(crate) trait RadersIndicer<T> {
-    unsafe fn index_inputs(buffer: &[Complex<T>], output: &mut [Complex<T>], indices: &[u32]);
-    unsafe fn index_inputs_real(buffer: &[T], output: &mut [Complex<T>], indices: &[u32]);
-    unsafe fn output_indices(buffer: &mut [Complex<T>], scratch: &[Complex<T>], indices: &[u32]);
+    unsafe fn index_inputs(
+        &self,
+        buffer: &[Complex<T>],
+        output: &mut [Complex<T>],
+        indices: &[u32],
+    );
+    unsafe fn index_inputs_real(&self, buffer: &[T], output: &mut [Complex<T>], indices: &[u32]);
+    unsafe fn output_indices(
+        &self,
+        buffer: &mut [Complex<T>],
+        scratch: &[Complex<T>],
+        indices: &[u32],
+    );
 }
 
-impl RadersIndicer<f32> for f32 {
-    #[target_feature(enable = "avx2")]
-    unsafe fn index_inputs(buffer: &[Complex<f32>], output: &mut [Complex<f32>], indices: &[u32]) {
-        unsafe {
-            let one = _mm_set1_epi32(1); // [1, 1, 1, 1]
+pub(crate) struct AvxRadersIndicer;
 
-            for (scratch_element, buffer_idx) in
-                output.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+pub(crate) trait AvxRadersFactory<T> {
+    fn make_raders_indicer() -> Arc<dyn RadersIndicer<T> + Send + Sync>;
+}
+
+impl AvxRadersFactory<f32> for f32 {
+    fn make_raders_indicer() -> Arc<dyn RadersIndicer<f32> + Send + Sync> {
+        Arc::new(AvxRadersIndicer)
+    }
+}
+
+impl AvxRadersFactory<f64> for f64 {
+    fn make_raders_indicer() -> Arc<dyn RadersIndicer<f64> + Send + Sync> {
+        Arc::new(AvxRadersIndicer)
+    }
+}
+
+impl LutGather<f32> for AvxRadersIndicer {
+    fn gather(&self, source: &[Complex<f32>], destination: &mut [Complex<f32>], lut: &[u32]) {
+        unsafe {
+            self.index_inputs(source, destination, lut);
+        }
+    }
+}
+
+impl LutGather<f64> for AvxRadersIndicer {
+    fn gather(&self, source: &[Complex<f64>], destination: &mut [Complex<f64>], lut: &[u32]) {
+        unsafe {
+            self.index_inputs(source, destination, lut);
+        }
+    }
+}
+
+impl RadersIndicer<f32> for AvxRadersIndicer {
+    #[target_feature(enable = "avx2")]
+    unsafe fn index_inputs(
+        &self,
+        buffer: &[Complex<f32>],
+        output: &mut [Complex<f32>],
+        indices: &[u32],
+    ) {
+        unsafe {
+            let one = _mm256_set1_epi32(1); // [1, 1, 1, 1]
+
+            for (scratch_element, buffer_idx) in output
+                .as_chunks_mut::<8>()
+                .0
+                .iter_mut()
+                .zip(indices.as_chunks::<8>().0.iter())
+            {
+                let all_indices =
+                    _mm256_slli_epi32::<1>(_mm256_loadu_si256(buffer_idx.as_ptr().cast()));
+
+                let idx_plus_one = _mm256_add_epi32(all_indices, one); // [idx0+1, idx1+1, idx2+1, idx3+1]
+
+                let r0 = _mm256_unpacklo_epi32(all_indices, idx_plus_one);
+                let r1 = _mm256_unpackhi_epi32(all_indices, idx_plus_one);
+                let xy0 = _mm256_permute2f128_si256::<32>(r0, r1);
+                let xy1 = _mm256_permute2f128_si256::<49>(r0, r1);
+
+                let v0 = _mm256_i32gather_ps::<4>(buffer.as_ptr().cast(), xy0);
+                let v1 = _mm256_i32gather_ps::<4>(buffer.as_ptr().cast(), xy1);
+
+                _mm256_storeu_ps(scratch_element.as_mut_ptr().cast(), v0);
+                _mm256_storeu_ps(scratch_element[4..].as_mut_ptr().cast(), v1);
+            }
+
+            let rem = output.as_chunks_mut::<8>().1;
+            let rem_indices = indices.as_chunks::<8>().1;
+
+            for (scratch_element, buffer_idx) in rem
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(rem_indices.as_chunks::<4>().0.iter())
             {
                 let idx = _mm_slli_epi32::<1>(_mm_loadu_si128(buffer_idx.as_ptr().cast()));
 
-                let idx_plus_one = _mm_add_epi32(idx, one); // [idx0+1, idx1+1, idx2+1, idx3+1]
+                let idx_plus_one = _mm_add_epi32(idx, _mm256_castsi256_si128(one)); // [idx0+1, idx1+1, idx2+1, idx3+1]
 
                 // Interleave: [idx0, idx0+1, idx1, idx1+1]
                 let idx0 = _mm_unpacklo_epi32(idx, idx_plus_one); // low 2 elements
@@ -83,8 +163,8 @@ impl RadersIndicer<f32> for f32 {
                 _mm256_storeu_ps(scratch_element.as_mut_ptr().cast(), v0);
             }
 
-            let rem = output.chunks_exact_mut(4).into_remainder();
-            let rem_indices = indices.chunks_exact(4).remainder();
+            let rem = rem.as_chunks_mut::<4>().1;
+            let rem_indices = rem_indices.as_chunks::<4>().1;
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *scratch_element = *buffer.get_unchecked(buffer_idx as usize);
@@ -93,10 +173,18 @@ impl RadersIndicer<f32> for f32 {
     }
 
     #[target_feature(enable = "avx2")]
-    unsafe fn index_inputs_real(buffer: &[f32], output: &mut [Complex<f32>], indices: &[u32]) {
+    unsafe fn index_inputs_real(
+        &self,
+        buffer: &[f32],
+        output: &mut [Complex<f32>],
+        indices: &[u32],
+    ) {
         unsafe {
-            for (scratch_element, buffer_idx) in
-                output.chunks_exact_mut(8).zip(indices.chunks_exact(8))
+            for (scratch_element, buffer_idx) in output
+                .as_chunks_mut::<8>()
+                .0
+                .iter_mut()
+                .zip(indices.as_chunks::<8>().0.iter())
             {
                 let idx = _mm256_loadu_si256(buffer_idx.as_ptr().cast());
 
@@ -105,14 +193,17 @@ impl RadersIndicer<f32> for f32 {
                         .to_complex();
 
                 v0.write(scratch_element);
-                v1.write(scratch_element.get_unchecked_mut(4..));
+                v1.write(&mut scratch_element[4..]);
             }
 
-            let rem = output.chunks_exact_mut(8).into_remainder();
-            let rem_indices = indices.chunks_exact(8).remainder();
+            let rem = output.as_chunks_mut::<8>().1;
+            let rem_indices = indices.as_chunks::<8>().1;
 
-            for (scratch_element, buffer_idx) in
-                rem.chunks_exact_mut(4).zip(rem_indices.chunks_exact(4))
+            for (scratch_element, buffer_idx) in rem
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(rem_indices.as_chunks::<4>().0.iter())
             {
                 let idx = _mm_loadu_si128(buffer_idx.as_ptr().cast());
 
@@ -122,8 +213,8 @@ impl RadersIndicer<f32> for f32 {
                 v0.write(scratch_element);
             }
 
-            let rem = rem.chunks_exact_mut(4).into_remainder();
-            let rem_indices = rem_indices.chunks_exact(4).remainder();
+            let rem = rem.as_chunks_mut::<4>().1;
+            let rem_indices = rem_indices.as_chunks::<4>().1;
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *scratch_element =
@@ -134,21 +225,54 @@ impl RadersIndicer<f32> for f32 {
 
     #[target_feature(enable = "avx2")]
     unsafe fn output_indices(
+        &self,
         buffer: &mut [Complex<f32>],
         scratch: &[Complex<f32>],
         indices: &[u32],
     ) {
         unsafe {
-            let one = _mm_set1_epi32(1); // [1, 1, 1, 1]
+            let one = _mm256_set1_epi32(1); // [1, 1, 1, 1]
             let conj_factors =
                 _mm256_loadu_ps([0.0, -0.0, 0.0, -0.0, 0.0, -0.0, 0.0, -0.0].as_ptr());
 
-            for (scratch_element, buffer_idx) in
-                buffer.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            for (scratch_element, buffer_idx) in buffer
+                .as_chunks_mut::<8>()
+                .0
+                .iter_mut()
+                .zip(indices.as_chunks::<8>().0.iter())
+            {
+                let all_indices =
+                    _mm256_slli_epi32::<1>(_mm256_loadu_si256(buffer_idx.as_ptr().cast()));
+
+                let idx_plus_one = _mm256_add_epi32(all_indices, one); // [idx0+1, idx1+1, idx2+1, idx3+1]
+
+                let r0 = _mm256_unpacklo_epi32(all_indices, idx_plus_one);
+                let r1 = _mm256_unpackhi_epi32(all_indices, idx_plus_one);
+                let xy0 = _mm256_permute2f128_si256::<32>(r0, r1);
+                let xy1 = _mm256_permute2f128_si256::<49>(r0, r1);
+
+                let u0 = _mm256_i32gather_ps::<4>(scratch.as_ptr().cast(), xy0);
+                let u1 = _mm256_i32gather_ps::<4>(scratch.as_ptr().cast(), xy1);
+
+                let v0 = _mm256_xor_ps(u0, conj_factors);
+                let v1 = _mm256_xor_ps(u1, conj_factors);
+
+                _mm256_storeu_ps(scratch_element.as_mut_ptr().cast(), v0);
+                _mm256_storeu_ps(scratch_element[4..].as_mut_ptr().cast(), v1);
+            }
+
+            let rem = buffer.as_chunks_mut::<8>().1;
+            let rem_indices = indices.as_chunks::<8>().1;
+
+            for (scratch_element, buffer_idx) in rem
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(rem_indices.as_chunks::<4>().0.iter())
             {
                 let idx = _mm_slli_epi32::<1>(_mm_loadu_si128(buffer_idx.as_ptr().cast()));
 
-                let idx_plus_one = _mm_add_epi32(idx, one); // [idx0+1, idx1+1, idx2+1, idx3+1]
+                let idx_plus_one = _mm_add_epi32(idx, _mm256_castsi256_si128(one)); // [idx0+1, idx1+1, idx2+1, idx3+1]
 
                 // Interleave: [idx0, idx0+1, idx1, idx1+1]
                 let idx0 = _mm_unpacklo_epi32(idx, idx_plus_one); // low 2 elements
@@ -167,8 +291,8 @@ impl RadersIndicer<f32> for f32 {
                 _mm256_storeu_ps(scratch_element.as_mut_ptr().cast(), v0);
             }
 
-            let rem = buffer.chunks_exact_mut(4).into_remainder();
-            let rem_indices = indices.chunks_exact(4).remainder();
+            let rem = rem.as_chunks_mut::<4>().1;
+            let rem_indices = rem_indices.as_chunks::<4>().1;
 
             for (dst, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *dst = scratch.get_unchecked(buffer_idx as usize).conj();
@@ -177,14 +301,22 @@ impl RadersIndicer<f32> for f32 {
     }
 }
 
-impl RadersIndicer<f64> for f64 {
+impl RadersIndicer<f64> for AvxRadersIndicer {
     #[target_feature(enable = "avx2")]
-    unsafe fn index_inputs(buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[u32]) {
+    unsafe fn index_inputs(
+        &self,
+        buffer: &[Complex<f64>],
+        output: &mut [Complex<f64>],
+        indices: &[u32],
+    ) {
         unsafe {
             let one = _mm_set1_epi32(1); // [1, 1, 1, 1]
 
-            for (scratch_element, buffer_idx) in
-                output.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            for (scratch_element, buffer_idx) in output
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(indices.as_chunks::<4>().0.iter())
             {
                 let idx = _mm_slli_epi32::<1>(_mm_loadu_si128(buffer_idx.as_ptr().cast()));
 
@@ -200,14 +332,11 @@ impl RadersIndicer<f64> for f64 {
                 let v1 = _mm256_i32gather_pd::<8>(buffer.as_ptr().cast(), idx1);
 
                 _mm256_storeu_pd(scratch_element.as_mut_ptr().cast(), v0);
-                _mm256_storeu_pd(
-                    scratch_element.get_unchecked_mut(2..).as_mut_ptr().cast(),
-                    v1,
-                );
+                _mm256_storeu_pd(scratch_element[2..].as_mut_ptr().cast(), v1);
             }
 
-            let rem = output.chunks_exact_mut(4).into_remainder();
-            let rem_indices = indices.chunks_exact(4).remainder();
+            let rem = output.as_chunks_mut::<4>().1;
+            let rem_indices = indices.as_chunks::<4>().1;
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *scratch_element = *buffer.get_unchecked(buffer_idx as usize);
@@ -216,10 +345,18 @@ impl RadersIndicer<f64> for f64 {
     }
 
     #[target_feature(enable = "avx2")]
-    unsafe fn index_inputs_real(buffer: &[f64], output: &mut [Complex<f64>], indices: &[u32]) {
+    unsafe fn index_inputs_real(
+        &self,
+        buffer: &[f64],
+        output: &mut [Complex<f64>],
+        indices: &[u32],
+    ) {
         unsafe {
-            for (scratch_element, buffer_idx) in
-                output.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            for (scratch_element, buffer_idx) in output
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(indices.as_chunks::<4>().0.iter())
             {
                 let idx = _mm_loadu_si128(buffer_idx.as_ptr().cast());
 
@@ -227,11 +364,11 @@ impl RadersIndicer<f64> for f64 {
                     .to_complex();
 
                 v0[0].write(scratch_element);
-                v0[1].write(scratch_element.get_unchecked_mut(2..));
+                v0[1].write(&mut scratch_element[2..]);
             }
 
-            let rem = output.chunks_exact_mut(4).into_remainder();
-            let rem_indices = indices.chunks_exact(4).remainder();
+            let rem = output.as_chunks_mut::<4>().1;
+            let rem_indices = indices.as_chunks::<4>().1;
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *scratch_element =
@@ -242,6 +379,7 @@ impl RadersIndicer<f64> for f64 {
 
     #[target_feature(enable = "avx2")]
     unsafe fn output_indices(
+        &self,
         buffer: &mut [Complex<f64>],
         scratch: &[Complex<f64>],
         indices: &[u32],
@@ -250,8 +388,11 @@ impl RadersIndicer<f64> for f64 {
             let one = _mm_set1_epi32(1); // [1, 1, 1, 1]
             let conj_factors = _mm256_loadu_pd([0.0, -0.0, 0.0, -0.0].as_ptr());
 
-            for (scratch_element, buffer_idx) in
-                buffer.chunks_exact_mut(4).zip(indices.chunks_exact(4))
+            for (scratch_element, buffer_idx) in buffer
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
+                .zip(indices.as_chunks::<4>().0.iter())
             {
                 let idx = _mm_slli_epi32::<1>(_mm_loadu_si128(buffer_idx.as_ptr().cast()));
 
@@ -279,8 +420,8 @@ impl RadersIndicer<f64> for f64 {
                 );
             }
 
-            let rem = buffer.chunks_exact_mut(4).into_remainder();
-            let rem_indices = indices.chunks_exact(4).remainder();
+            let rem = buffer.as_chunks_mut::<4>().1;
+            let rem_indices = indices.as_chunks::<4>().1;
 
             for (dst, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 *dst = scratch.get_unchecked(buffer_idx as usize).conj();
@@ -289,7 +430,7 @@ impl RadersIndicer<f64> for f64 {
     }
 }
 
-impl<T: FftSample> AvxRadersFft<T>
+impl<T: FftSample + AvxRadersFactory<T>> AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -362,11 +503,12 @@ where
             direction: fft_direction,
             spectrum_ops: T::make_complex_arith(),
             convolve_fft_scratch_length: convolve_fft_scratch,
+            indicer: T::make_raders_indicer(),
         })
     }
 }
 
-impl<T: FftSample + RadersIndicer<T>> AvxRadersFft<T>
+impl<T: FftSample> AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -393,7 +535,8 @@ where
             let (scratch, _) = scratch.split_at_mut(self.length() - 1);
 
             unsafe {
-                T::index_inputs(buffer, scratch, &self.input_indices);
+                self.indicer
+                    .index_inputs(buffer, scratch, &self.input_indices);
             }
 
             self.convolve_fft
@@ -410,7 +553,8 @@ where
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
             unsafe {
-                T::output_indices(buffer, scratch, &self.output_indices);
+                self.indicer
+                    .output_indices(buffer, scratch, &self.output_indices);
             }
         }
         Ok(())
@@ -438,7 +582,8 @@ where
             let (scratch, _) = scratch.split_at_mut(self.length() - 1);
 
             unsafe {
-                T::index_inputs(buffer, scratch, &self.input_indices);
+                self.indicer
+                    .index_inputs(buffer, scratch, &self.input_indices);
             }
 
             // perform the first of two inner FFTs
@@ -461,7 +606,8 @@ where
             let (_, buffer) = output_chunk.split_first_mut().unwrap();
 
             unsafe {
-                T::output_indices(buffer, scratch, &self.output_indices);
+                self.indicer
+                    .output_indices(buffer, scratch, &self.output_indices);
             }
         }
         Ok(())
@@ -506,7 +652,8 @@ where
             let (scratch, _) = scratch.split_at_mut(self.real_length() - 1);
 
             unsafe {
-                T::index_inputs_real(buffer, scratch, &self.input_indices);
+                self.indicer
+                    .index_inputs_real(buffer, scratch, &self.input_indices);
             }
 
             self.convolve_fft
@@ -525,14 +672,15 @@ where
             let output = &mut complex[1..];
             let out_len = output.len();
             unsafe {
-                T::output_indices(output, scratch, &self.output_indices[..out_len]);
+                self.indicer
+                    .output_indices(output, scratch, &self.output_indices[..out_len]);
             }
         }
         Ok(())
     }
 }
 
-impl<T: FftSample + RadersIndicer<T>> FftExecutor<T> for AvxRadersFft<T>
+impl<T: FftSample> FftExecutor<T> for AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -599,7 +747,7 @@ where
     }
 }
 
-impl<T: FftSample + RadersIndicer<T>> R2CFftExecutor<T> for AvxRadersFft<T>
+impl<T: FftSample> R2CFftExecutor<T> for AvxRadersFft<T>
 where
     f64: AsPrimitive<T>,
 {

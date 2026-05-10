@@ -1393,6 +1393,12 @@ impl AlgorithmFactory<f64> for f64 {
         left_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
         right_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        let product = left_fft.length() * right_fft.length();
+        if product < 10_000 {
+            use crate::good_thomas_small::GoodThomasSmallFft;
+            return GoodThomasSmallFft::new(left_fft, right_fft)
+                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>);
+        }
         GoodThomasFft::new(left_fft, right_fft)
             .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>)
     }

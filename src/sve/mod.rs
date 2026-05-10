@@ -28,4 +28,4 @@
  */
 mod raders_indicer;
 
-pub(crate) use raders_indicer::SveRadersIndicer;
+pub(crate) use raders_indicer::SveLutGather;

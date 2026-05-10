@@ -26,13 +26,14 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::good_thomas_small::LutGather;
 use crate::neon::RadersIndicer;
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
-pub(crate) struct SveRadersIndicer;
+pub(crate) struct SveLutGather;
 
-impl SveRadersIndicer {
+impl SveLutGather {
     #[target_feature(enable = "sve,sve2")]
     fn index_inputs_impl_f32(
         &self,
@@ -183,7 +184,7 @@ impl SveRadersIndicer {
     }
 }
 
-impl RadersIndicer<f32> for SveRadersIndicer {
+impl RadersIndicer<f32> for SveLutGather {
     fn index_inputs(&self, buffer: &[Complex<f32>], output: &mut [Complex<f32>], indices: &[u32]) {
         unsafe {
             self.index_inputs_impl_f32(buffer, output, indices);
@@ -198,6 +199,14 @@ impl RadersIndicer<f32> for SveRadersIndicer {
     ) {
         unsafe {
             self.output_indices_f32(buffer, scratch, indices);
+        }
+    }
+}
+
+impl LutGather<f32> for SveLutGather {
+    fn gather(&self, source: &[Complex<f32>], destination: &mut [Complex<f32>], lut: &[u32]) {
+        unsafe {
+            self.index_inputs_impl_f32(source, destination, lut);
         }
     }
 }
