@@ -750,7 +750,7 @@ pub(crate) trait TransposeBlock<V> {
 #[allow(dead_code)]
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
+pub(crate) fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usize>(
     input: &[Complex<V>],
     input_stride: usize,
     output: &mut [Complex<V>],
@@ -834,7 +834,7 @@ pub(crate) unsafe fn transpose_executor<V: Copy + Default, const BLOCK_SIZE: usi
 #[allow(dead_code)]
 #[cfg(all(target_arch = "x86_64", feature = "avx"))]
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn transpose_executor2d<
+pub(crate) fn transpose_executor2d<
     V: Copy + Default,
     const X_BLOCK_SIZE: usize,
     const Y_BLOCK_SIZE: usize,

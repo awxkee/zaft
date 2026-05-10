@@ -28,13 +28,13 @@
  */
 use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
+use crate::fast_divider_u128::DividerU128;
 use crate::spectrum_arithmetic::ComplexArith;
 use crate::traits::FftTrigonometry;
 use crate::util::{compute_twiddle, validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, Zero};
-use std::ops::Rem;
 use std::sync::Arc;
 
 pub(crate) struct BluesteinFft<T> {
@@ -53,22 +53,23 @@ pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
 ) where
     f64: AsPrimitive<T>,
 {
+    let is_overflowed = destination.len().overflowing_mul(2).1;
     let twice_len = destination.len() * 2;
 
-    if destination.len() < u32::MAX as usize {
-        let twice_len_reduced = DividerU64::new(twice_len as u64);
+    if !is_overflowed && destination.len() < u32::MAX as usize {
+        let twice_len_divider = DividerU64::new(twice_len as u64);
 
         for (i, e) in destination.iter_mut().enumerate() {
             let i_squared = i as u64 * i as u64;
-            let i_mod = i_squared % twice_len_reduced;
+            let i_mod = i_squared % twice_len_divider;
             *e = compute_twiddle(i_mod as usize, twice_len, direction);
         }
     } else {
-        let twice_len_reduced = twice_len as u128;
+        let twice_len_divider = DividerU128::new(twice_len as u128);
 
         for (i, e) in destination.iter_mut().enumerate() {
             let i_squared = i as u128 * i as u128;
-            let i_mod = i_squared.rem(twice_len_reduced);
+            let i_mod = i_squared % twice_len_divider;
             *e = compute_twiddle(i_mod as usize, twice_len, direction);
         }
     }
@@ -103,13 +104,15 @@ where
 
         // Scale the computed twiddles and copy them to the end of the array
         convolve_fft_twiddles[0] = convolve_fft_twiddles[0] * inner_fft_scale;
-        for i in 1..size {
-            let twiddle = convolve_fft_twiddles[i] * inner_fft_scale;
-            convolve_fft_twiddles[i] = twiddle;
-            convolve_fft_twiddles[convolve_fft_len - i] = twiddle;
-        }
+        let (lo, hi) = convolve_fft_twiddles.split_at_mut(convolve_fft_len - size + 1);
+        lo[1..size]
+            .iter_mut()
+            .zip(hi[..size - 1].iter_mut().rev())
+            .for_each(|(t, dst)| {
+                *t = *t * inner_fft_scale;
+                *dst = *t;
+            });
 
-        //Compute the inner fft
         convolve_fft.execute(&mut convolve_fft_twiddles)?;
 
         // also compute some more mundane twiddle factors to start and end with
@@ -156,25 +159,20 @@ where
             scratch.split_at_mut(self.convolve_fft_twiddles.len());
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
             self.spectrum_ops
                 .mul(chunk, &self.twiddles, &mut inner_input[..chunk.len()]);
 
             inner_input[chunk.len()..].fill(Complex::zero());
 
-            // run our inner forward FFT
             self.convolve_fft
                 .execute_with_scratch(inner_input, convolve_scratch)?;
 
-            // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
             self.spectrum_ops
                 .mul_conjugate_in_place(inner_input, &self.convolve_fft_twiddles);
 
-            // inverse FFT. we're computing a forward but we're converting it into an inverse by conjugating the inputs and outputs
             self.convolve_fft
                 .execute_with_scratch(inner_input, convolve_scratch)?;
 
-            // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
             self.spectrum_ops.conjugate_mul_by_b(
                 &inner_input[..chunk.len()],
                 &self.twiddles,
@@ -209,25 +207,20 @@ where
             .chunks_exact(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
             self.spectrum_ops
                 .mul(chunk, &self.twiddles, &mut inner_input[..chunk.len()]);
 
             inner_input[chunk.len()..].fill(Complex::zero());
 
-            // run our inner forward FFT
             self.convolve_fft
                 .execute_with_scratch(inner_input, convolve_scratch)?;
 
-            // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
             self.spectrum_ops
                 .mul_conjugate_in_place(inner_input, &self.convolve_fft_twiddles);
 
-            // inverse FFT. we're computing a forward but we're converting it into an inverse by conjugating the inputs and outputs
             self.convolve_fft
                 .execute_with_scratch(inner_input, convolve_scratch)?;
 
-            // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
             self.spectrum_ops.conjugate_mul_by_b(
                 &inner_input[..chunk.len()],
                 &self.twiddles,

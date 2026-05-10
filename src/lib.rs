@@ -52,6 +52,7 @@ mod err;
 mod factory;
 mod factory64;
 mod fast_divider;
+mod fast_divider_u128;
 mod good_thomas;
 mod mixed_radix;
 mod mla;
