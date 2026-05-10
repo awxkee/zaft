@@ -1227,6 +1227,9 @@ impl Zaft {
         height: usize,
         thread_count: usize,
     ) -> Result<Arc<dyn TwoDimensionalExecutorR2C<f32> + Send + Sync>, ZaftError> {
+        if width.checked_mul(height).is_none() {
+            return Err(ZaftError::Overflow);
+        }
         if width * height == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
@@ -1278,6 +1281,9 @@ impl Zaft {
         height: usize,
         thread_count: usize,
     ) -> Result<Arc<dyn TwoDimensionalExecutorR2C<f64> + Send + Sync>, ZaftError> {
+        if width.checked_mul(height).is_none() {
+            return Err(ZaftError::Overflow);
+        }
         if width * height == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
@@ -1326,6 +1332,9 @@ impl Zaft {
         fft_direction: FftDirection,
         thread_count: usize,
     ) -> Result<Arc<dyn TwoDimensionalFftExecutor<f32> + Send + Sync>, ZaftError> {
+        if width.checked_mul(height).is_none() {
+            return Err(ZaftError::Overflow);
+        }
         if width * height == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
@@ -1388,6 +1397,9 @@ impl Zaft {
         fft_direction: FftDirection,
         thread_count: usize,
     ) -> Result<Arc<dyn TwoDimensionalFftExecutor<f64> + Send + Sync>, ZaftError> {
+        if width.checked_mul(height).is_none() {
+            return Err(ZaftError::Overflow);
+        }
         if width * height == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
@@ -1444,6 +1456,9 @@ impl Zaft {
         height: usize,
         thread_count: usize,
     ) -> Result<Arc<dyn TwoDimensionalExecutorC2R<f32> + Send + Sync>, ZaftError> {
+        if width.checked_mul(height).is_none() {
+            return Err(ZaftError::Overflow);
+        }
         if width * height == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
@@ -1485,6 +1500,9 @@ impl Zaft {
         height: usize,
         thread_count: usize,
     ) -> Result<Arc<dyn TwoDimensionalExecutorC2R<f64> + Send + Sync>, ZaftError> {
+        if width.checked_mul(height).is_none() {
+            return Err(ZaftError::Overflow);
+        }
         if width * height == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
