@@ -362,7 +362,7 @@ where
         let direction = convolve_fft.direction();
         let convolve_fft_len = convolve_fft.length();
         assert_eq!(fft_direction, direction);
-        let reduced_len = DividerU64::new(size as u64);
+        let dividing_len = DividerU64::new(size as u64);
 
         // compute the primitive root and its inverse for this size
         let primitive_root =
@@ -387,25 +387,27 @@ where
             *dst = twiddle * inner_fft_scale;
 
             twiddle_input =
-                ((twiddle_input as u64 * primitive_root_inverse) % reduced_len) as usize;
+                ((twiddle_input as u64 * primitive_root_inverse) % dividing_len) as usize;
         }
 
         convolve_fft.execute(&mut inner_fft_input)?;
 
         let mut input_index = 1;
-        let mut input_indices = try_vec![0u32; size - 1];
-        for indexer in input_indices.iter_mut() {
-            input_index = ((input_index as u64 * primitive_root) % reduced_len) as u32;
-
-            *indexer = input_index - 1;
-        }
+        let input_indices = (0..size - 1)
+            .map(|_| {
+                input_index = ((input_index as u64 * primitive_root) % dividing_len) as usize;
+                (input_index - 1) as u32
+            })
+            .collect::<Vec<_>>();
 
         let mut output_index = 1;
-        let mut output_indices = try_vec![0u32; size - 1];
-        for indexer in output_indices.iter_mut() {
-            output_index = ((output_index as u64 * primitive_root_inverse) % reduced_len) as u32;
-            *indexer = output_index - 1;
-        }
+        let output_indices = (0..size - 1)
+            .map(|_| {
+                output_index =
+                    ((output_index as u64 * primitive_root_inverse) % dividing_len) as usize;
+                (output_index - 1) as u32
+            })
+            .collect::<Vec<_>>();
 
         let inner_scratch_length = convolve_fft.scratch_length();
 

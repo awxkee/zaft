@@ -96,19 +96,21 @@ where
         convolve_fft.execute(&mut inner_fft_input)?;
 
         let mut input_index = 1;
-        let mut input_indices = try_vec![0usize; size - 1];
-        for indexer in input_indices.iter_mut() {
-            input_index = ((input_index as u64 * primitive_root) % dividing_len) as usize;
-
-            *indexer = input_index - 1;
-        }
+        let input_indices = (0..size - 1)
+            .map(|_| {
+                input_index = ((input_index as u64 * primitive_root) % dividing_len) as usize;
+                input_index - 1
+            })
+            .collect::<Vec<_>>();
 
         let mut output_index = 1;
-        let mut output_indices = try_vec![0usize; size - 1];
-        for indexer in output_indices.iter_mut() {
-            output_index = ((output_index as u64 * primitive_root_inverse) % dividing_len) as usize;
-            *indexer = output_index - 1;
-        }
+        let output_indices = (0..size - 1)
+            .map(|_| {
+                output_index =
+                    ((output_index as u64 * primitive_root_inverse) % dividing_len) as usize;
+                output_index - 1
+            })
+            .collect::<Vec<_>>();
 
         let convolve_scratch_length = convolve_fft.scratch_length();
 
