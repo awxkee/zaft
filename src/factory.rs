@@ -1492,14 +1492,9 @@ impl AlgorithmFactory<f32> for f32 {
                 && n < (u32::MAX / 2 - 1000u32) as usize
             {
                 use crate::neon::NeonRadersFft;
-                use crate::sve::SveRadersIndicer;
-                return NeonRadersFft::new(
-                    n,
-                    convolve_fft,
-                    fft_direction,
-                    Arc::new(SveRadersIndicer),
-                )
-                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>);
+                use crate::sve::SveLutGather;
+                return NeonRadersFft::new(n, convolve_fft, fft_direction, Arc::new(SveLutGather))
+                    .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>);
             }
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
@@ -1743,6 +1738,12 @@ impl AlgorithmFactory<f32> for f32 {
         left_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
         right_fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
     ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        let product = left_fft.length() * right_fft.length();
+        if product < 10_000 {
+            use crate::good_thomas_small::GoodThomasSmallFft;
+            return GoodThomasSmallFft::new(left_fft, right_fft)
+                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>);
+        }
         GoodThomasFft::new(left_fft, right_fft)
             .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
     }

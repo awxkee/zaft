@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 10/2025. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk 05/2026. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -27,7 +27,6 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::err::try_vec;
-use crate::fast_divider::DividerUsize;
 use crate::transpose::TransposeExecutor;
 use crate::util::{validate_oof_sizes, validate_scratch};
 use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
@@ -35,31 +34,94 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
 
-pub(crate) struct GoodThomasFft<T> {
+pub(crate) trait LutGather<T> {
+    fn gather(&self, source: &[Complex<T>], destination: &mut [Complex<T>], lut: &[u32]);
+}
+
+pub(crate) trait LutGatherFactory<T> {
+    fn make_gatherer() -> Arc<dyn LutGather<T> + Send + Sync>;
+}
+
+#[allow(unused)]
+struct DefaultLutGather<T> {
+    _phantom: std::marker::PhantomData<T>,
+}
+
+#[allow(unused)]
+impl<T: Copy> LutGather<T> for DefaultLutGather<T> {
+    fn gather(&self, source: &[Complex<T>], destination: &mut [Complex<T>], lut: &[u32]) {
+        for (dst, &src_idx) in destination.iter_mut().zip(lut.iter()) {
+            // SAFETY: input_perm is built from indices 0..n and source.len() == n.
+            *dst = unsafe { *source.get_unchecked(src_idx as usize) };
+        }
+    }
+}
+
+impl LutGatherFactory<f32> for f32 {
+    fn make_gatherer() -> Arc<dyn LutGather<f32> + Send + Sync> {
+        #[cfg(all(target_arch = "aarch64", feature = "sve"))]
+        {
+            if std::arch::is_aarch64_feature_detected!("sve2") {
+                use crate::sve::SveLutGather;
+                return Arc::new(SveLutGather);
+            }
+        }
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonRadersIndicer;
+            Arc::new(NeonRadersIndicer)
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            Arc::new(DefaultLutGather {
+                _phantom: Default::default(),
+            })
+        }
+    }
+}
+
+impl LutGatherFactory<f64> for f64 {
+    fn make_gatherer() -> Arc<dyn LutGather<f64> + Send + Sync> {
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        {
+            use crate::neon::NeonRadersIndicer;
+            Arc::new(NeonRadersIndicer)
+        }
+        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        {
+            Arc::new(DefaultLutGather {
+                _phantom: Default::default(),
+            })
+        }
+    }
+}
+
+pub(crate) struct GoodThomasSmallFft<T> {
     width: usize,
     width_size_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
 
     height: usize,
     height_size_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
 
-    width_divisor: DividerUsize,
-    width_divisor_plus_one: DividerUsize,
     execution_length: usize,
     direction: FftDirection,
     transpose_ops: Box<dyn TransposeExecutor<T> + Send + Sync>,
     width_scratch_length: usize,
     height_scratch_length: usize,
     height_destructive_scratch: usize,
+    input_permutation: Vec<u32>,
+    output_permutation: Vec<u32>,
+    gather: Arc<dyn LutGather<T> + Send + Sync>,
 }
 
-impl<T: FftSample> GoodThomasFft<T>
+impl<T: FftSample> GoodThomasSmallFft<T>
 where
     f64: AsPrimitive<T>,
 {
     pub fn new(
         mut width_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         mut height_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<GoodThomasFft<T>, ZaftError> {
+    ) -> Result<GoodThomasSmallFft<T>, ZaftError> {
         assert_eq!(
             width_fft.direction(),
             height_fft.direction(),
@@ -98,85 +160,67 @@ where
             height,
             height_size_fft: height_fft,
 
-            width_divisor: DividerUsize::new(width),
-            width_divisor_plus_one: DividerUsize::new(width + 1),
-
             execution_length: len,
             direction,
             transpose_ops: T::transpose_strategy(width, height),
             width_scratch_length,
             height_scratch_length,
             height_destructive_scratch,
+            input_permutation: build_input_permutation(width, height)?,
+            output_permutation: build_output_permutation(width, height)?,
+            gather: T::make_gatherer(),
         })
     }
 }
 
-impl<T: Copy> GoodThomasFft<T> {
-    fn reindex_input(&self, source: &[Complex<T>], destination: &mut [Complex<T>]) {
-        let mut destination_index = 0;
-        for mut source_row in source.chunks_exact(self.width) {
-            let increments_until_cycle =
-                1 + (self.execution_length - destination_index) / self.width_divisor_plus_one;
-
-            if increments_until_cycle < self.width {
-                let (pre_cycle_row, post_cycle_row) = source_row.split_at(increments_until_cycle);
-
-                for input_element in pre_cycle_row {
-                    unsafe {
-                        *destination.get_unchecked_mut(destination_index) = *input_element;
-                    }
-                    destination_index += self.width_divisor_plus_one.divisor();
-                }
-
-                // Store the split slice back to input_row, os that outside the loop, we can finish the job of iterating the row
-                source_row = post_cycle_row;
-                destination_index -= self.execution_length;
+fn build_input_permutation(width: usize, height: usize) -> Result<Vec<u32>, ZaftError> {
+    let n = width * height;
+    let mut perm = try_vec![0u32; n];
+    let mut destination_index = 0usize;
+    for row in 0..height {
+        let row_start = row * width;
+        let increments_until_cycle = 1 + (n - destination_index) / (width + 1);
+        let mut src_col = 0usize;
+        if increments_until_cycle < width {
+            for c in 0..increments_until_cycle {
+                perm[destination_index] = (row_start + c) as u32;
+                destination_index += width + 1;
             }
-
-            // Loop over the entire row (if we did not roll over) or what's left of the row (if we did) and keep incrementing output_row
-            for input_element in source_row {
-                unsafe {
-                    *destination.get_unchecked_mut(destination_index) = *input_element;
-                }
-                destination_index += self.width_divisor_plus_one.divisor();
-            }
-
-            // The first index of the next will be the final index this row, plus one.
-            // But because of our incrementing (width+1) inside the loop above, we overshot, so subtract width, and we'll get (width + 1) - width = 1
-            destination_index -= self.width;
+            src_col = increments_until_cycle;
+            destination_index -= n;
         }
-    }
-
-    fn reindex_output(&self, source: &[Complex<T>], destination: &mut [Complex<T>]) {
-        for (y, source_chunk) in source.chunks_exact(self.height).enumerate() {
-            let (quotient, remainder) = DividerUsize::div_rem(y * self.height, self.width_divisor);
-
-            // Compute our base index and starting point in the row
-            let mut destination_index = remainder;
-            let start_x = self.height - quotient;
-
-            // Process the first part of the row
-            for x in start_x..self.height {
-                unsafe {
-                    *destination.get_unchecked_mut(destination_index) =
-                        *source_chunk.get_unchecked(x);
-                }
-                destination_index += self.width;
-            }
-
-            // Wrap back around to the beginning of the row and keep incrementing
-            for x in 0..start_x {
-                unsafe {
-                    *destination.get_unchecked_mut(destination_index) =
-                        *source_chunk.get_unchecked(x);
-                }
-                destination_index += self.width;
-            }
+        for c in src_col..width {
+            perm[destination_index] = (row_start + c) as u32;
+            destination_index += width + 1;
         }
+        destination_index -= width;
     }
+    Ok(perm)
 }
 
-impl<T: FftSample> FftExecutor<T> for GoodThomasFft<T>
+fn build_output_permutation(width: usize, height: usize) -> Result<Vec<u32>, ZaftError> {
+    let n = width * height;
+    let mut perm = try_vec![0u32; n];
+    for y in 0..width {
+        let src_base = y * height;
+        let yh = y * height;
+        let quotient = yh / width;
+        let remainder = yh % width;
+        let mut destination_index = remainder;
+        let start_x = height - quotient;
+        for x in start_x..height {
+            perm[destination_index] = (src_base + x) as u32;
+            destination_index += width;
+        }
+        for x in 0..start_x {
+            perm[destination_index] = (src_base + x) as u32;
+            destination_index += width;
+        }
+    }
+    Ok(perm)
+}
+
+impl<T: FftSample> FftExecutor<T> for GoodThomasSmallFft<T>
 where
     f64: AsPrimitive<T>,
 {
@@ -201,7 +245,8 @@ where
         let (scratch_left, sr) = scratch.split_at_mut(self.execution_length);
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            self.reindex_input(chunk, scratch_left);
+            self.gather
+                .gather(chunk, scratch_left, self.input_permutation.as_slice());
 
             let (width_scratch, _) = sr.split_at_mut(self.width_scratch_length);
 
@@ -218,7 +263,8 @@ where
             self.height_size_fft
                 .execute_with_scratch(scratch_left, height_scratch)?;
 
-            self.reindex_output(scratch_left, chunk);
+            self.gather
+                .gather(scratch_left, chunk, self.output_permutation.as_slice());
         }
         Ok(())
     }
@@ -247,7 +293,8 @@ where
             .chunks_exact(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            self.reindex_input(chunk, scratch_left);
+            self.gather
+                .gather(chunk, scratch_left, self.input_permutation.as_slice());
 
             let (width_scratch, _) = sr.split_at_mut(self.width_scratch_length);
 
@@ -264,7 +311,11 @@ where
             self.height_size_fft
                 .execute_with_scratch(scratch_left, height_scratch)?;
 
-            self.reindex_output(scratch_left, output_chunk);
+            self.gather.gather(
+                scratch_left,
+                output_chunk,
+                self.output_permutation.as_slice(),
+            );
         }
         Ok(())
     }
@@ -283,7 +334,8 @@ where
             .chunks_exact_mut(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            self.reindex_input(src_chunk, output_chunk);
+            self.gather
+                .gather(src_chunk, output_chunk, self.input_permutation.as_slice());
 
             let (width_scratch, _) = scratch.split_at_mut(self.width_scratch_length);
 
@@ -303,7 +355,8 @@ where
                 height_scratch,
             )?;
 
-            self.reindex_output(src_chunk, output_chunk);
+            self.gather
+                .gather(src_chunk, output_chunk, self.output_permutation.as_slice());
         }
         Ok(())
     }

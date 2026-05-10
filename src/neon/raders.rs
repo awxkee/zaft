@@ -28,6 +28,7 @@
  */
 use crate::err::try_vec;
 use crate::fast_divider::DividerU64;
+use crate::good_thomas_small::LutGather;
 use crate::neon::util::{conj_f64, conjq_f32};
 use crate::prime_factors::{PrimeFactors, primitive_root};
 use crate::spectrum_arithmetic::ComplexArith;
@@ -58,11 +59,26 @@ pub(crate) trait RadersIndicer<T> {
 
 pub(crate) struct NeonRadersIndicer;
 
+impl LutGather<f32> for NeonRadersIndicer {
+    fn gather(&self, source: &[Complex<f32>], destination: &mut [Complex<f32>], lut: &[u32]) {
+        self.index_inputs(source, destination, lut)
+    }
+}
+
+impl LutGather<f64> for NeonRadersIndicer {
+    fn gather(&self, source: &[Complex<f64>], destination: &mut [Complex<f64>], lut: &[u32]) {
+        self.index_inputs(source, destination, lut)
+    }
+}
+
 impl RadersIndicer<f32> for NeonRadersIndicer {
     fn index_inputs(&self, buffer: &[Complex<f32>], output: &mut [Complex<f32>], indices: &[u32]) {
         unsafe {
-            for (scratch_element, buffer_idx) in
-                output.chunks_exact_mut(6).zip(indices.chunks_exact(6))
+            for (scratch_element, buffer_idx) in output
+                .as_chunks_mut::<6>()
+                .0
+                .iter_mut()
+                .zip(indices.as_chunks::<6>().0.iter())
             {
                 let idx0 = buffer_idx[0] as usize;
                 let idx1 = buffer_idx[1] as usize;
@@ -105,8 +121,8 @@ impl RadersIndicer<f32> for NeonRadersIndicer {
                 );
             }
 
-            let rem = output.chunks_exact_mut(6).into_remainder();
-            let rem_indices = indices.chunks_exact(6).remainder();
+            let rem = output.as_chunks_mut::<6>().1;
+            let rem_indices = indices.as_chunks::<6>().1;
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 let v0 = vld1_f32(buffer.get_unchecked(buffer_idx as usize..).as_ptr().cast());
@@ -180,8 +196,11 @@ impl RadersIndicer<f32> for NeonRadersIndicer {
 impl RadersIndicer<f64> for NeonRadersIndicer {
     fn index_inputs(&self, buffer: &[Complex<f64>], output: &mut [Complex<f64>], indices: &[u32]) {
         unsafe {
-            for (scratch_element, buffer_idx) in
-                output.chunks_exact_mut(6).zip(indices.chunks_exact(6))
+            for (scratch_element, buffer_idx) in output
+                .as_chunks_mut::<6>()
+                .0
+                .iter_mut()
+                .zip(indices.as_chunks::<6>().0.iter())
             {
                 let idx0 = buffer_idx[0] as usize;
                 let idx1 = buffer_idx[1] as usize;
@@ -224,8 +243,8 @@ impl RadersIndicer<f64> for NeonRadersIndicer {
                 );
             }
 
-            let rem = output.chunks_exact_mut(6).into_remainder();
-            let rem_indices = indices.chunks_exact(6).remainder();
+            let rem = output.as_chunks_mut::<6>().1;
+            let rem_indices = indices.as_chunks::<6>().1;
 
             for (scratch_element, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
                 let v0 = vld1q_f64(buffer.get_unchecked(buffer_idx as usize..).as_ptr().cast());

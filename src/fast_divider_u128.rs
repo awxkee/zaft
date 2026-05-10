@@ -116,18 +116,6 @@ fn u256_div_rem(numerator: U256, denominator: u128) -> (u128, u128) {
 }
 
 /// Branchfree magic-number fast divider for `u128`.
-///
-/// Follows the same "libdivide" style used by `DividerU64` / `DividerU32` above,
-/// extended to 128 bits.  The division algorithm is:
-///
-/// ```text
-/// q  = mulhi_128(x, magic) >> 0  (i.e. the upper 128 bits of x * magic)
-/// t  = ((x - q) >> 1) + q
-/// result = t >> shift
-/// ```
-///
-/// `magic` and `shift` (`more`) are pre-computed in `new()` via a single
-/// 256-bit division.
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct DividerU128 {
     magic: u128,
