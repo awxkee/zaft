@@ -72,13 +72,15 @@ where
         make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse());
 
         convolve_fft_twiddles[0] = convolve_fft_twiddles[0] * inner_fft_scale;
-        for i in 1..size {
-            let twiddle = convolve_fft_twiddles[i] * inner_fft_scale;
-            convolve_fft_twiddles[i] = twiddle;
-            convolve_fft_twiddles[convolve_fft_len - i] = twiddle;
-        }
+        let (lo, hi) = convolve_fft_twiddles.split_at_mut(convolve_fft_len - size + 1);
+        lo[1..size]
+            .iter_mut()
+            .zip(hi[..size - 1].iter_mut().rev())
+            .for_each(|(t, dst)| {
+                *t = *t * inner_fft_scale;
+                *dst = *t;
+            });
 
-        //Compute the inner fft
         convolve_fft.execute(&mut convolve_fft_twiddles)?;
 
         let mut twiddles = try_vec![Complex::zero(); size];
@@ -136,7 +138,6 @@ where
             .chunks_exact(self.execution_length)
             .zip(output.chunks_exact_mut(complex_length))
         {
-            // Copy the buffer into our inner FFT input. the buffer will only fill part of the FFT input, so zero fill the rest
             self.spectrum_ops.mul_expand_to_complex(
                 src,
                 &self.twiddles,
@@ -145,19 +146,15 @@ where
 
             inner_input[in_length..].fill(Complex::zero());
 
-            // run our inner forward FFT
             self.convolve_fft
                 .execute_with_scratch(inner_input, convolve_scratch)?;
 
-            // Multiply our inner FFT output by our precomputed data. Then, conjugate the result to set up for an inverse FFT
             self.spectrum_ops
                 .mul_conjugate_in_place(inner_input, &self.convolve_fft_twiddles);
 
-            // inverse FFT. we're computing a forward but we're massaging it into an inverse by conjugating the inputs and outputs
             self.convolve_fft
                 .execute_with_scratch(inner_input, convolve_scratch)?;
 
-            // copy our data back to the buffer, applying twiddle factors again as we go. Also conjugate inner_input to complete the inverse FFT
             self.spectrum_ops.conjugate_mul_by_b(
                 &inner_input[..complex_length],
                 &self.twiddles[..complex_length],

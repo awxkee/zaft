@@ -187,38 +187,28 @@ where
             .chunks_exact(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            // STEP 1: transpose
             self.width_transpose
                 .transpose(chunk, scratch, self.width, self.height);
 
-            // STEP 2: perform FFTs of size `height`
             let (height_scratch, _) = scratch_rem.split_at_mut(self.height_scratch_length);
             self.height_executor
                 .execute_with_scratch(scratch, height_scratch)?;
 
-            // STEP 3: Apply twiddle factors
-            for (dst, &src) in output_chunk[..self.height]
-                .iter_mut()
-                .zip(scratch[..self.height].iter())
-            {
-                *dst = src;
-            }
+            output_chunk[..self.height].copy_from_slice(&scratch[..self.height]);
+
             self.complex_arithm.mul(
                 &scratch[self.height..],
                 &self.twiddles,
                 &mut output_chunk[self.height..],
             );
 
-            // STEP 4: transpose again
             self.height_transpose
                 .transpose(output_chunk, scratch, self.height, self.width);
 
-            // STEP 5: perform FFTs of size `width`
             let (width_scratch, _) = scratch_rem.split_at_mut(self.width_scratch_length);
             self.width_executor
                 .execute_with_scratch(scratch, width_scratch)?;
 
-            // STEP 6: transpose again
             self.width_transpose
                 .transpose(scratch, output_chunk, self.width, self.height);
         }
@@ -239,33 +229,24 @@ where
             .chunks_exact_mut(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            // STEP 1: transpose
             self.width_transpose
                 .transpose(src_chunk, output_chunk, self.width, self.height);
 
-            // STEP 2: perform FFTs of size `height`
             let (height_scratch, _) = scratch.split_at_mut(self.height_scratch_length);
             self.height_executor
                 .execute_with_scratch(output_chunk, height_scratch)?;
 
-            // STEP 3: Apply twiddle factors
-            for (dst, &src) in src_chunk[..self.height]
-                .iter_mut()
-                .zip(output_chunk[..self.height].iter())
-            {
-                *dst = src;
-            }
+            src_chunk[..self.height].copy_from_slice(&output_chunk[..self.height]);
+
             self.complex_arithm.mul(
                 &output_chunk[self.height..],
                 &self.twiddles,
                 &mut src_chunk[self.height..],
             );
 
-            // STEP 4: transpose again
             self.height_transpose
                 .transpose(src_chunk, output_chunk, self.height, self.width);
 
-            // STEP 5: perform FFTs of size `width`
             let (width_scratch, _) = scratch.split_at_mut(self.width_destructive_scratch_length);
             self.width_executor.execute_destructive_with_scratch(
                 output_chunk,
@@ -273,7 +254,6 @@ where
                 width_scratch,
             )?;
 
-            // STEP 6: transpose again
             self.width_transpose
                 .transpose(src_chunk, output_chunk, self.width, self.height);
         }

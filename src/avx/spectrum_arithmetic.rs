@@ -46,19 +46,21 @@ impl AvxSpectrumArithmetic<f32> {
     fn mul_f32_avx(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [Complex<f32>]) {
         unsafe {
             for ((dst, src), twiddle) in dst
-                .chunks_exact_mut(16)
-                .zip(a.chunks_exact(16))
-                .zip(b.chunks_exact(16))
+                .as_chunks_mut::<16>()
+                .0
+                .iter_mut()
+                .zip(a.as_chunks::<16>().0.iter())
+                .zip(b.as_chunks::<16>().0.iter())
             {
                 let s0 = AvxStoreF::from_complex_ref(src);
-                let s1 = AvxStoreF::from_complex_ref(src.get_unchecked(4..));
-                let s2 = AvxStoreF::from_complex_ref(src.get_unchecked(8..));
-                let s3 = AvxStoreF::from_complex_ref(src.get_unchecked(12..));
+                let s1 = AvxStoreF::from_complex_ref(&src[4..]);
+                let s2 = AvxStoreF::from_complex_ref(&src[8..]);
+                let s3 = AvxStoreF::from_complex_ref(&src[12..]);
 
                 let q0 = AvxStoreF::from_complex_ref(twiddle);
-                let q1 = AvxStoreF::from_complex_ref(twiddle.get_unchecked(4..));
-                let q2 = AvxStoreF::from_complex_ref(twiddle.get_unchecked(8..));
-                let q3 = AvxStoreF::from_complex_ref(twiddle.get_unchecked(12..));
+                let q1 = AvxStoreF::from_complex_ref(&twiddle[4..]);
+                let q2 = AvxStoreF::from_complex_ref(&twiddle[8..]);
+                let q3 = AvxStoreF::from_complex_ref(&twiddle[12..]);
 
                 let p0 = AvxStoreF::mul_by_complex(s0, q0);
                 let p1 = AvxStoreF::mul_by_complex(s1, q1);
@@ -66,14 +68,14 @@ impl AvxSpectrumArithmetic<f32> {
                 let p3 = AvxStoreF::mul_by_complex(s3, q3);
 
                 p0.write(dst);
-                p1.write(dst.get_unchecked_mut(4..));
-                p2.write(dst.get_unchecked_mut(8..));
-                p3.write(dst.get_unchecked_mut(12..));
+                p1.write(&mut dst[4..]);
+                p2.write(&mut dst[8..]);
+                p3.write(&mut dst[12..]);
             }
 
-            let dst = dst.chunks_exact_mut(16).into_remainder();
-            let a = a.chunks_exact(16).remainder();
-            let b = b.chunks_exact(16).remainder();
+            let dst = dst.as_chunks_mut::<16>().1;
+            let a = a.as_chunks::<16>().1;
+            let b = b.as_chunks::<16>().1;
 
             for ((dst, src), twiddle) in dst
                 .chunks_exact_mut(2)
@@ -107,20 +109,22 @@ impl AvxSpectrumArithmetic<f32> {
     fn mul_expand_f32_avx(&self, a: &[f32], b: &[Complex<f32>], dst: &mut [Complex<f32>]) {
         unsafe {
             for ((dst, src), twiddle) in dst
-                .chunks_exact_mut(16)
-                .zip(a.chunks_exact(16))
-                .zip(b.chunks_exact(16))
+                .as_chunks_mut::<16>()
+                .0
+                .iter_mut()
+                .zip(a.as_chunks::<16>().0.iter())
+                .zip(b.as_chunks::<16>().0.iter())
             {
                 let q0 = AvxStoreF::load(src);
-                let q1 = AvxStoreF::load(src.get_unchecked(8..));
+                let q1 = AvxStoreF::load(&src[8..]);
 
                 let [s0, s1] = q0.to_complex();
                 let [s2, s3] = q1.to_complex();
 
                 let q0 = AvxStoreF::from_complex_ref(twiddle);
-                let q1 = AvxStoreF::from_complex_ref(twiddle.get_unchecked(4..));
-                let q2 = AvxStoreF::from_complex_ref(twiddle.get_unchecked(8..));
-                let q3 = AvxStoreF::from_complex_ref(twiddle.get_unchecked(12..));
+                let q1 = AvxStoreF::from_complex_ref(&twiddle[4..]);
+                let q2 = AvxStoreF::from_complex_ref(&twiddle[8..]);
+                let q3 = AvxStoreF::from_complex_ref(&twiddle[12..]);
 
                 let p0 = AvxStoreF::mul_by_complex(s0, q0);
                 let p1 = AvxStoreF::mul_by_complex(s1, q1);
@@ -128,14 +132,14 @@ impl AvxSpectrumArithmetic<f32> {
                 let p3 = AvxStoreF::mul_by_complex(s3, q3);
 
                 p0.write(dst);
-                p1.write(dst.get_unchecked_mut(4..));
-                p2.write(dst.get_unchecked_mut(8..));
-                p3.write(dst.get_unchecked_mut(12..));
+                p1.write(&mut dst[4..]);
+                p2.write(&mut dst[8..]);
+                p3.write(&mut dst[12..]);
             }
 
-            let dst = dst.chunks_exact_mut(16).into_remainder();
-            let a = a.chunks_exact(16).remainder();
-            let b = b.chunks_exact(16).remainder();
+            let dst = dst.as_chunks_mut::<16>().1;
+            let a = a.as_chunks::<16>().1;
+            let b = b.as_chunks::<16>().1;
 
             for ((dst, src), twiddle) in dst
                 .chunks_exact_mut(2)

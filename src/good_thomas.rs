@@ -113,20 +113,6 @@ where
 
 impl<T: Copy> GoodThomasFft<T> {
     fn reindex_input(&self, source: &[Complex<T>], destination: &mut [Complex<T>]) {
-        // A critical part of the good-thomas algorithm is re-indexing the inputs and outputs.
-        // To remap the inputs, we will use the CRT mapping, paired with the normal transpose we'd do for mixed radix.
-        //
-        // The algorithm for the CRT mapping will work like this:
-        // 1: Keep an output index, initialized to 0
-        // 2: The output index will be incremented by width + 1
-        // 3: At the start of the row, compute if we will increment output_index past self.len()
-        //      3a: If we will, then compute exactly how many increments it will take,
-        //      3b: Increment however many times as we scan over the input row, copying each element to the output index
-        //      3c: Subtract self.len() from output_index
-        // 4: Scan over the rest of the row, incrementing output_index, and copying each element to output_index, then incrementing output_index
-        // 5: The first index of each row will be the final index of the previous row plus one, but because of our incrementing (width+1) inside the loop, we overshot, so at the end of the row, subtract width from output_index
-        //
-        // This ends up producing the same result as computing the multiplicative inverse of width mod height and etc by the CRT mapping, but with only one integer division per row, instead of one per element.
         let mut destination_index = 0;
         for mut source_row in source.chunks_exact(self.width) {
             let increments_until_cycle =
@@ -163,17 +149,6 @@ impl<T: Copy> GoodThomasFft<T> {
     }
 
     fn reindex_output(&self, source: &[Complex<T>], destination: &mut [Complex<T>]) {
-        // A critical part of the good-thomas algorithm is re-indexing the inputs and outputs.
-        // To remap the outputs, we will use the ruritanian mapping, paired with the normal transpose we'd do for mixed radix.
-        //
-        // The algorithm for the ruritanian mapping will work like this:
-        // 1: At the start of every row, compute the output index = (y * self.height) % self.width
-        // 2: We will increment this output index by self.width for every element
-        // 3: Compute where in the row the output index will wrap around
-        // 4: Instead of starting copying from the beginning of the row, start copying from after the rollover point
-        // 5: When we hit the end of the row, continue from the beginning of the row, continuing to increment the output index by self.width
-        //
-        // This achieves the same result as the modular arithmetic ofthe ruritanian mapping, but with only one integer divison per row, instead of one per element
         for (y, source_chunk) in source.chunks_exact(self.height).enumerate() {
             let (quotient, remainder) = DividerUsize::div_rem(y * self.height, self.width_divisor);
 
@@ -227,27 +202,23 @@ where
         let (scratch_left, sr) = scratch.split_at_mut(self.execution_length);
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // Re-index the input, copying from the buffer to the scratch in the process
             self.reindex_input(chunk, scratch_left);
 
             let (width_scratch, _) = sr.split_at_mut(self.width_scratch_length);
-            // run FFTs of size `width`
+
             self.width_size_fft.execute_destructive_with_scratch(
                 scratch_left,
                 chunk,
                 width_scratch,
             )?;
 
-            // transpose
             self.transpose_ops
                 .transpose(chunk, scratch_left, self.width, self.height);
 
-            // run FFTs of size 'height'
             let (height_scratch, _) = sr.split_at_mut(self.height_scratch_length);
             self.height_size_fft
                 .execute_with_scratch(scratch_left, height_scratch)?;
 
-            // Re-index the output, copying from the scratch to the buffer in the process
             self.reindex_output(scratch_left, chunk);
         }
         Ok(())
@@ -277,27 +248,23 @@ where
             .chunks_exact(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            // Re-index the input, copying from the buffer to the scratch in the process
             self.reindex_input(chunk, scratch_left);
 
             let (width_scratch, _) = sr.split_at_mut(self.width_scratch_length);
-            // run FFTs of size `width`
+
             self.width_size_fft.execute_destructive_with_scratch(
                 scratch_left,
                 output_chunk,
                 width_scratch,
             )?;
 
-            // transpose
             self.transpose_ops
                 .transpose(output_chunk, scratch_left, self.width, self.height);
 
-            // run FFTs of size 'height'
             let (height_scratch, _) = sr.split_at_mut(self.height_scratch_length);
             self.height_size_fft
                 .execute_with_scratch(scratch_left, height_scratch)?;
 
-            // Re-index the output, copying from the scratch to the buffer in the process
             self.reindex_output(scratch_left, output_chunk);
         }
         Ok(())
@@ -317,22 +284,19 @@ where
             .chunks_exact_mut(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            // Re-index the input, copying from the buffer to the scratch in the process
             self.reindex_input(src_chunk, output_chunk);
 
             let (width_scratch, _) = scratch.split_at_mut(self.width_scratch_length);
-            // run FFTs of size `width`
+
             self.width_size_fft.execute_destructive_with_scratch(
                 output_chunk,
                 src_chunk,
                 width_scratch,
             )?;
 
-            // transpose
             self.transpose_ops
                 .transpose(src_chunk, output_chunk, self.width, self.height);
 
-            // run FFTs of size 'height'
             let (height_scratch, _) = scratch.split_at_mut(self.height_destructive_scratch);
             self.height_size_fft.execute_destructive_with_scratch(
                 output_chunk,
@@ -340,7 +304,6 @@ where
                 height_scratch,
             )?;
 
-            // Re-index the output, copying from the scratch to the buffer in the process
             self.reindex_output(src_chunk, output_chunk);
         }
         Ok(())

@@ -309,13 +309,9 @@ where
         assert_eq!(fft_direction, direction);
         let reduced_len = DividerU64::new(size as u64);
 
-        // compute the primitive root and its inverse for this size
         let primitive_root =
             primitive_root(size as u64).ok_or(ZaftError::CantFindPrimitiveRootFor(size as u64))?;
 
-        // compute the multiplicative inverse of primative_root mod len and vice versa.
-        // i64::extended_gcd will compute both the inverse of left mod right, and the inverse of right mod left, but we're only goingto use one of them
-        // the primtive root inverse might be negative, if o make it positive by wrapping
         let gcd_data = i64::extended_gcd(&(primitive_root as i64), &(size as i64));
         let primitive_root_inverse = if gcd_data.x >= 0 {
             gcd_data.x
@@ -323,7 +319,6 @@ where
             gcd_data.x + size as i64
         } as u64;
 
-        // precompute the coefficients to use inside the process method
         let inner_fft_scale: T = (1f64 / convolve_fft_len as f64).as_();
         let mut inner_fft_input = try_vec![Complex::zero(); convolve_fft_len];
         let mut twiddle_input = 1;
@@ -392,40 +387,28 @@ where
         let (scratch, convolve_scratch) = scratch.split_at_mut(self.execution_length);
 
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
-            // The first output element is just the sum of all the input elements, and we need to store off the first input value
             let (buffer_first, buffer) = chunk.split_first_mut().unwrap();
             let buffer_first_val = *buffer_first;
 
             let (scratch, _) = scratch.split_at_mut(self.length() - 1);
 
-            // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
             unsafe {
                 T::index_inputs(buffer, scratch, &self.input_indices);
             }
 
-            // perform the first of two inner FFTs
-
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            // scratch[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
             *buffer_first = *buffer_first + scratch[0];
 
-            // multiply the inner result with our cached setup data
-            // also conjugate every entry. this sets us up to do an inverse FFT
-            // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
             self.spectrum_ops
                 .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
 
-            // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
-            // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
             scratch[0] = scratch[0] + buffer_first_val.conj();
 
-            // execute the second FFT
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            // copy the final values into the output, reordering as we go
             unsafe {
                 T::output_indices(buffer, scratch, &self.output_indices);
             }
@@ -449,13 +432,11 @@ where
             .chunks_exact(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            // The first output element is just the sum of all the input elements, and we need to store off the first input value
             let (buffer_first, buffer) = chunk.split_first().unwrap();
             let buffer_first_val = *buffer_first;
 
             let (scratch, _) = scratch.split_at_mut(self.length() - 1);
 
-            // copy the buffer into the scratch, reordering as we go. also compute a sum of all elements
             unsafe {
                 T::index_inputs(buffer, scratch, &self.input_indices);
             }
@@ -465,28 +446,20 @@ where
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            // scratch[0] now contains the sum of elements 1..len. We need the sum of all elements, so all we have to do is add the first input
             unsafe {
                 *output_chunk.get_unchecked_mut(0) = *buffer_first + scratch[0];
             }
 
-            // multiply the inner result with our cached setup data
-            // also conjugate every entry. this sets us up to do an inverse FFT
-            // (because an inverse FFT is equivalent to a normal FFT where you conjugate both the inputs and outputs)
             self.spectrum_ops
                 .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
 
-            // We need to add the first input value to all output values. We can accomplish this by adding it to the DC input of our inner ifft.
-            // Of course, we have to conjugate it, just like we conjugated the complex multiplied above
             scratch[0] = scratch[0] + buffer_first_val.conj();
 
-            // execute the second FFT
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
             let (_, buffer) = output_chunk.split_first_mut().unwrap();
 
-            // copy the final values into the output, reordering as we go
             unsafe {
                 T::output_indices(buffer, scratch, &self.output_indices);
             }
@@ -546,11 +519,9 @@ where
 
             scratch[0] = scratch[0] + buffer_first_val.conj();
 
-            // execute the second FFT
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            // copy the final values into the output, with reordering
             let output = &mut complex[1..];
             let out_len = output.len();
             unsafe {
