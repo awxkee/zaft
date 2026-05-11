@@ -158,13 +158,13 @@ impl ColumnButterfly16f {
             let mut odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
 
             odds_1[1] = AvxStoreF::mul_by_complex(odds_1[1], self.twiddle1);
-            odds_2[1] = AvxStoreF::mul_by_complex_conj_b(odds_2[1], self.twiddle1);
+            odds_2[1] = AvxStoreF::mul_by_conj_b(odds_2[1], self.twiddle1);
 
             odds_1[2] = AvxStoreF::mul_by_complex(odds_1[2], self.twiddle2);
-            odds_2[2] = AvxStoreF::mul_by_complex_conj_b(odds_2[2], self.twiddle2);
+            odds_2[2] = AvxStoreF::mul_by_conj_b(odds_2[2], self.twiddle2);
 
             odds_1[3] = AvxStoreF::mul_by_complex(odds_1[3], self.twiddle3);
-            odds_2[3] = AvxStoreF::mul_by_complex_conj_b(odds_2[3], self.twiddle3);
+            odds_2[3] = AvxStoreF::mul_by_conj_b(odds_2[3], self.twiddle3);
 
             let (o01, o02) = AvxButterfly::butterfly2_f32(odds_1[0].v, odds_2[0].v);
             odds_1[0] = AvxStoreF::raw(o01);

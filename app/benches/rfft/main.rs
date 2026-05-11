@@ -42,56 +42,6 @@ pub fn bench_zaft_average(c: &mut Criterion) {
     });
 }
 
-fn check_power_group(c: &mut Criterion, n: usize, group: String) {
-    let mut input_power = vec![Complex::<f64>::default(); n];
-    for z in input_power.iter_mut() {
-        *z = Complex {
-            re: rand::rng().random(),
-            im: rand::rng().random(),
-        };
-    }
-
-    c.bench_function(format!("rustfft {group}").as_str(), |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power.len());
-        let mut working = input_power.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function(format!("zaft {group}").as_str(), |b| {
-        let plan = Zaft::make_inverse_fft_f64(input_power.len()).unwrap();
-        let mut working = input_power.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-
-    c.bench_function(format!("rustfft {group}s").as_str(), |b| {
-        let plan = FftPlanner::new().plan_fft_forward(input_power.len());
-        let s = input_power
-            .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
-            .collect::<Vec<_>>();
-        let mut working = s.to_vec();
-        b.iter(|| {
-            plan.process(&mut working);
-        })
-    });
-
-    c.bench_function(format!("zaft {group}s").as_str(), |b| {
-        let plan = Zaft::make_inverse_fft_f32(input_power.len()).unwrap();
-        let s = input_power
-            .iter()
-            .map(|&x| Complex::new(x.re as f32, x.im as f32))
-            .collect::<Vec<_>>();
-        let mut working = s.to_vec();
-        b.iter(|| {
-            plan.execute(&mut working).unwrap();
-        })
-    });
-}
-
 fn check_power_groups(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) {
     let mut input_power = vec![f64::default(); n];
     for z in input_power.iter_mut() {
@@ -103,8 +53,10 @@ fn check_power_groups(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String)
         let s = input_power.iter().map(|&x| x as f32).collect::<Vec<_>>();
         let mut output = vec![Complex::new(0.0, 0.0); n / 2 + 1];
         let working = s.to_vec();
+        let mut scratch = vec![Complex::zero(); plan.complex_scratch_length()];
         b.iter(|| {
-            plan.execute(&working, &mut output).unwrap();
+            plan.execute_with_scratch(&working, &mut output, &mut scratch)
+                .unwrap();
         })
     });
 }
@@ -122,8 +74,10 @@ fn check_power_groups_c2r(c: &mut BenchmarkGroup<WallTime>, n: usize, group: Str
             .iter()
             .map(|&x| Complex::new(x.re as f32, x.im as f32))
             .collect::<Vec<_>>();
+        let mut scratch = vec![Complex::zero(); plan.complex_scratch_length()];
         b.iter(|| {
-            plan.execute(&working, &mut output).unwrap();
+            plan.execute_with_scratch(&working, &mut output, &mut scratch)
+                .unwrap();
         })
     });
 }
@@ -141,24 +95,10 @@ fn check_power_groups_c2d(c: &mut BenchmarkGroup<WallTime>, n: usize, group: Str
             .iter()
             .map(|&x| Complex::new(x.re, x.im))
             .collect::<Vec<_>>();
+        let mut scratch = vec![Complex::zero(); plan.complex_scratch_length()];
         b.iter(|| {
-            plan.execute(&working, &mut output).unwrap();
-        })
-    });
-}
-
-fn check_power_groupd(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) {
-    let mut input_power = vec![f64::default(); n];
-    for z in input_power.iter_mut() {
-        *z = rand::rng().random();
-    }
-
-    c.bench_function(format!("zaft {group}d").as_str(), |b| {
-        let plan = Zaft::make_r2c_fft_f64(input_power.len()).unwrap();
-        let mut output = vec![Complex::new(0.0, 0.0); n / 2 + 1];
-        let working = input_power.to_vec();
-        b.iter(|| {
-            plan.execute(&working, &mut output).unwrap();
+            plan.execute_with_scratch(&working, &mut output, &mut scratch)
+                .unwrap();
         })
     });
 }
@@ -168,6 +108,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let c = group
         .measurement_time(Duration::from_millis(2500))
         .warm_up_time(Duration::from_millis(2500));
+    check_power_groups(c, 1801, "1801".to_string());
 
     // check_power_groups_c2d(c, 9, "9".to_string());
     // check_power_groups_c2d(c, 51, "51".to_string());

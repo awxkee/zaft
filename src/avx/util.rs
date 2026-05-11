@@ -383,7 +383,7 @@ pub(crate) fn _mm256_fcmul_ps_conj_b(a: __m256, b: __m256) -> __m256 {
 // a.conj() * b
 #[inline]
 #[target_feature(enable = "avx2", enable = "fma")]
-pub(crate) unsafe fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
+pub(crate) fn _mm_fcmul_ps_conj_a(a: __m128, b: __m128) -> __m128 {
     let temp1 = _mm_shuffle_ps::<0xA0>(a, a);
     let temp2 = _mm_shuffle_ps::<0xF5>(a, a);
     let mul2 = _mm_mul_ps(b, temp2);

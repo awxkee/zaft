@@ -27,7 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_fcmul_ps_conj_b, shuffle,
+    _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_fcmul_ps_conj_a,
+    _mm256_fcmul_ps_conj_b, shuffle,
 };
 use num_complex::Complex;
 use num_traits::MulAdd;
@@ -123,14 +124,14 @@ impl AvxStoreF {
         AvxStoreF { v: r }
     }
 
-    #[inline(always)]
-    pub(crate) fn raw128(r: __m128) -> AvxStoreF {
-        unsafe {
-            AvxStoreF {
-                v: _mm256_castps128_ps256(r),
-            }
-        }
-    }
+    // #[inline(always)]
+    // pub(crate) fn raw128(r: __m128) -> AvxStoreF {
+    //     unsafe {
+    //         AvxStoreF {
+    //             v: _mm256_castps128_ps256(r),
+    //         }
+    //     }
+    // }
 
     #[inline(always)]
     pub(crate) fn from_complex_ref(complex: &[Complex<f32>]) -> Self {
@@ -362,6 +363,14 @@ impl AvxStoreF {
     }
 
     #[inline(always)]
+    pub(crate) fn load1_ref(ptr: &f32) -> Self {
+        unsafe {
+            let q0 = _mm_unpacklo_ps(_mm_load_ss(ptr), _mm_setzero_ps());
+            AvxStoreF::raw(_mm256_castps128_ps256(q0))
+        }
+    }
+
+    #[inline(always)]
     pub(crate) fn from_complex2(complex: &[Complex<f32>]) -> Self {
         unsafe {
             AvxStoreF {
@@ -495,9 +504,17 @@ impl AvxStoreF {
 
     #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
-    pub(crate) fn mul_by_complex_conj_b(self, other: AvxStoreF) -> Self {
+    pub(crate) fn mul_by_conj_b(self, other: AvxStoreF) -> Self {
         AvxStoreF {
             v: _mm256_fcmul_ps_conj_b(self.v, other.v),
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn mul_by_conj_a(self, other: AvxStoreF) -> Self {
+        AvxStoreF {
+            v: _mm256_fcmul_ps_conj_a(self.v, other.v),
         }
     }
 

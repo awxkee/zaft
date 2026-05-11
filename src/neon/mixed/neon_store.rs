@@ -206,6 +206,11 @@ impl NeonStoreD {
     }
 
     #[inline(always)]
+    pub(crate) fn write_ref(&self, to_ref: &mut Complex<f64>) {
+        unsafe { vst1q_f64(to_ref as *mut Complex<f64> as *mut f64, self.v) }
+    }
+
+    #[inline(always)]
     pub(crate) fn write_real(&self, to_ref: &mut [f64]) {
         unsafe { vst1q_f64(to_ref.as_mut_ptr().cast(), self.v) }
     }
@@ -238,6 +243,19 @@ impl NeonStoreD {
     pub(crate) fn fcmul_fcma(self, other: NeonStoreD) -> Self {
         NeonStoreD {
             v: vcmlaq_rot90_f64(
+                vcmlaq_f64(vdupq_n_f64(0.), self.v, other.v),
+                self.v,
+                other.v,
+            ),
+        }
+    }
+
+    #[inline]
+    #[cfg(feature = "fcma")]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn fcmul_conj_a(self, other: NeonStoreD) -> Self {
+        NeonStoreD {
+            v: vcmlaq_rot270_f64(
                 vcmlaq_f64(vdupq_n_f64(0.), self.v, other.v),
                 self.v,
                 other.v,
@@ -277,6 +295,16 @@ impl NeonStoreF {
         unsafe {
             NeonStoreF {
                 v: vld1q_lane_f32::<0>(ptr.as_ptr().cast(), vdupq_n_f32(0.)),
+            }
+        }
+    }
+
+    #[inline]
+    #[cfg(feature = "fcma")]
+    pub(crate) fn load1_ref(ptr: &f32) -> Self {
+        unsafe {
+            NeonStoreF {
+                v: vld1q_lane_f32::<0>(ptr, vdupq_n_f32(0.)),
             }
         }
     }
@@ -548,6 +576,32 @@ impl NeonStoreF {
             ),
         }
     }
+
+    #[inline]
+    #[cfg(feature = "fcma")]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn fcmul_conj_a(self, other: NeonStoreF) -> Self {
+        NeonStoreF {
+            v: vcmlaq_rot270_f32(
+                vcmlaq_f32(vdupq_n_f32(0.), self.v, other.v),
+                self.v,
+                other.v,
+            ),
+        }
+    }
+
+    // #[inline]
+    // #[cfg(feature = "fcma")]
+    // #[target_feature(enable = "fcma")]
+    // pub(crate) fn fcmul_conj_b(self, other: NeonStoreF) -> Self {
+    //     NeonStoreF {
+    //         v: vcmlaq_rot270_f32(
+    //             vcmlaq_f32(vdupq_n_f32(0.), other.v, self.v),
+    //             other.v,
+    //             self.v,
+    //         ),
+    //     }
+    // }
 }
 
 impl NeonStoreFh {
