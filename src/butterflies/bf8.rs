@@ -115,7 +115,13 @@ where
                 self.complex_length(),
             ));
         }
-        for (input, complex) in input.chunks_exact(8).zip(output.chunks_exact_mut(5)) {
+
+        for (input, complex) in input
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<5>().0.iter_mut())
+        {
             let u0 = input[0];
             let u1 = input[1];
             let u2 = input[2];
@@ -125,34 +131,49 @@ where
             let u6 = input[6];
             let u7 = input[7];
 
-            // Radix-8 butterfly
-            let (u0, u2, u4, u6) = self.bf4.butterfly4(
-                Complex::new(u0, T::zero()),
-                Complex::new(u2, T::zero()),
-                Complex::new(u4, T::zero()),
-                Complex::new(u6, T::zero()),
-            );
-            let (u1, mut u3, mut u5, mut u7) = self.bf4.butterfly4(
-                Complex::new(u1, T::zero()),
-                Complex::new(u3, T::zero()),
-                Complex::new(u5, T::zero()),
-                Complex::new(u7, T::zero()),
-            );
+            let e0 = u0 + u4;
+            let e1 = u0 - u4;
+            let e2 = u2 + u6;
+            let e3 = u2 - u6;
 
-            u3 = (rotate_90(u3, self.direction) + u3) * self.root2;
-            u5 = rotate_90(u5, self.direction);
-            u7 = (rotate_90(u7, self.direction) - u7) * self.root2;
+            let o0 = u1 + u5;
+            let o1 = u1 - u5;
+            let o2 = u3 + u7;
+            let o3 = u3 - u7;
 
-            let [u0, u1] = Butterfly2::exec(&[u0, u1]);
-            let [u2, _] = Butterfly2::exec(&[u2, u3]);
-            let [u4, _] = Butterfly2::exec(&[u4, u5]);
-            let [u6, _] = Butterfly2::exec(&[u6, u7]);
+            let re_x0 = e0 + e2;
+            let re_x4 = e0 - e2;
+            let re_x2r = e1;
+            let re_x2i = -e3;
 
-            complex[0] = u0;
-            complex[1] = u2;
-            complex[2] = u4;
-            complex[3] = u6;
-            complex[4] = u1;
+            let odd_f0r = o0 + o2;
+            let odd_f2r = o0 - o2;
+            let odd_f1r = o1;
+            let odd_f1i = -o3;
+
+            let x0 = re_x0 + odd_f0r;
+
+            let x4 = re_x0 - odd_f0r;
+
+            let tw2_f2i = -odd_f2r;
+
+            let tw1_f1r = T::FRAC_1_SQRT_2 * (odd_f1r + odd_f1i);
+            let tw1_f1i = T::FRAC_1_SQRT_2 * (odd_f1i - odd_f1r);
+
+            let x1r = re_x2r + tw1_f1r;
+            let x1i = re_x2i + tw1_f1i;
+
+            let x5r = re_x2r - tw1_f1r;
+            let x5i = re_x2i - tw1_f1i;
+
+            let x2r_fixed = re_x4;
+            let x2i_fixed = tw2_f2i;
+
+            complex[0] = Complex::new(x0, T::zero());
+            complex[1] = Complex::new(x1r, x1i);
+            complex[2] = Complex::new(x2r_fixed, x2i_fixed);
+            complex[3] = Complex::new(x5r, -x5i);
+            complex[4] = Complex::new(x4, T::zero());
         }
         Ok(())
     }

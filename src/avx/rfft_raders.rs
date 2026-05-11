@@ -180,7 +180,7 @@ where
         let (scratch, rm) = scratch.split_at_mut(self.execution_length);
         let (real_scratch_c, convolve_scratch) =
             rm.split_at_mut(self.convolve_fft_twiddles.len() / 2 + 1);
-        assert!(real_scratch_c.len() >= self.convolve_fft_twiddles.len() / 2 + 1);
+        assert!(real_scratch_c.len() > self.convolve_fft_twiddles.len() / 2);
         let real_scratch: &mut [T] = unsafe {
             std::slice::from_raw_parts_mut(
                 real_scratch_c.as_mut_ptr().cast(),

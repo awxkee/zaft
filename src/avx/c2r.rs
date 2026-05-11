@@ -61,11 +61,13 @@ impl C2RAvxTwiddles {
         let conj = AvxStoreD::conj_flag();
 
         for ((((twiddle, s_out), s_out_rev), left_input), right_input) in twiddles
-            .chunks_exact(8)
-            .zip(left.chunks_exact_mut(8))
-            .zip(right.rchunks_exact_mut(8))
-            .zip(left_input.chunks_exact(8))
-            .zip(right_input.rchunks_exact(8))
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .zip(left.as_chunks_mut::<8>().0.iter_mut())
+            .zip(right.as_rchunks_mut::<8>().1.iter_mut().rev())
+            .zip(left_input.as_chunks::<8>().0.iter())
+            .zip(right_input.as_rchunks::<8>().1.iter().rev())
         {
             let [twiddle_re0, twiddle_im0] = AvxStoreD::from_complex_ref(twiddle).dup_even_odds();
             let [twiddle_re1, twiddle_im1] =
@@ -153,18 +155,20 @@ impl C2RAvxTwiddles {
         let li_remainder_start = main_count * 8;
         let ri_remainder_end = right_input.len() - main_count * 8;
 
-        let tw0 = twiddles.chunks_exact(8).remainder();
+        let tw0 = twiddles.as_chunks::<8>().1;
         let l0 = &mut left[li_remainder_start..];
         let r0 = &mut right[..ri_remainder_end];
         let li0 = &left_input[li_remainder_start..];
         let ri0 = &right_input[..ri_remainder_end];
 
         for ((((twiddle, s_out), s_out_rev), left_input), right_input) in tw0
-            .chunks_exact(2)
-            .zip(l0.chunks_exact_mut(2))
-            .zip(r0.rchunks_exact_mut(2))
-            .zip(li0.chunks_exact(2))
-            .zip(ri0.rchunks_exact(2))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .zip(l0.as_chunks_mut::<2>().0.iter_mut())
+            .zip(r0.as_rchunks_mut::<2>().1.iter_mut().rev())
+            .zip(li0.as_chunks::<2>().0.iter())
+            .zip(ri0.as_rchunks::<2>().1.iter().rev())
         {
             let [twiddle_re, twiddle_im] = AvxStoreD::from_complex_ref(twiddle).dup_even_odds();
             let twiddle_re = twiddle_re.xor(conj);
@@ -190,10 +194,10 @@ impl C2RAvxTwiddles {
         }
 
         if !twiddles.len().is_multiple_of(2) {
-            let rem_twiddles = twiddles.chunks_exact(2).remainder();
+            let rem_twiddles = twiddles.as_chunks::<2>().1;
             let min_length = left.len().min(right.len());
-            let rem_left = left.chunks_exact_mut(2).into_remainder();
-            let rem_left_input = left_input.chunks_exact(2).remainder();
+            let rem_left = left.as_chunks_mut::<2>().1;
+            let rem_left_input = left_input.as_chunks::<2>().1;
             let full_right_chunks = right.len() - (min_length / 2) * 2;
             let rem_right = &mut right[..full_right_chunks];
             let rem_right_input = &right_input[..full_right_chunks];
@@ -258,11 +262,13 @@ impl C2RAvxTwiddles {
         let conj = AvxStoreF::conj_flag();
 
         for ((((twiddle, s_out), s_out_rev), left_input), right_input) in twiddles
-            .chunks_exact(16)
-            .zip(left.chunks_exact_mut(16))
-            .zip(right.rchunks_exact_mut(16))
-            .zip(left_input.chunks_exact(16))
-            .zip(right_input.rchunks_exact(16))
+            .as_chunks::<16>()
+            .0
+            .iter()
+            .zip(left.as_chunks_mut::<16>().0.iter_mut())
+            .zip(right.as_rchunks_mut::<16>().1.iter_mut().rev())
+            .zip(left_input.as_chunks::<16>().0.iter())
+            .zip(right_input.as_rchunks::<16>().1.iter().rev())
         {
             let [twiddle_re0, twiddle_im0] = AvxStoreF::from_complex_ref(twiddle).dup_even_odds();
             let [twiddle_re1, twiddle_im1] =
@@ -350,18 +356,20 @@ impl C2RAvxTwiddles {
         let li_remainder_start = main_count * 16;
         let ri_remainder_end = right_input.len() - main_count * 16;
 
-        let tw0 = twiddles.chunks_exact(16).remainder();
+        let tw0 = twiddles.as_chunks::<16>().1;
         let l0 = &mut left[li_remainder_start..];
         let r0 = &mut right[..ri_remainder_end];
         let li0 = &left_input[li_remainder_start..];
         let ri0 = &right_input[..ri_remainder_end];
 
         for ((((twiddle, s_out), s_out_rev), left_input), right_input) in tw0
-            .chunks_exact(4)
-            .zip(l0.chunks_exact_mut(4))
-            .zip(r0.rchunks_exact_mut(4))
-            .zip(li0.chunks_exact(4))
-            .zip(ri0.rchunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(l0.as_chunks_mut::<4>().0.iter_mut())
+            .zip(r0.as_rchunks_mut::<4>().1.iter_mut().rev())
+            .zip(li0.as_chunks::<4>().0.iter())
+            .zip(ri0.as_rchunks::<4>().1.iter().rev())
         {
             let [twiddle_re, twiddle_im] = AvxStoreF::from_complex_ref(twiddle).dup_even_odds();
             let twiddle_re = twiddle_re.xor(conj);
@@ -387,10 +395,10 @@ impl C2RAvxTwiddles {
         }
 
         if !twiddles.len().is_multiple_of(4) {
-            let rem_twiddles = twiddles.chunks_exact(4).remainder();
+            let rem_twiddles = twiddles.as_chunks::<4>().1;
             let min_length = left.len().min(right.len());
-            let rem_left = left.chunks_exact_mut(4).into_remainder();
-            let rem_left_input = left_input.chunks_exact(4).remainder();
+            let rem_left = left.as_chunks_mut::<4>().1;
+            let rem_left_input = left_input.as_chunks::<4>().1;
             let full_right_chunks = right.len() - (min_length / 4) * 4;
             let rem_right = &mut right[..full_right_chunks];
             let rem_right_input = &right_input[..full_right_chunks];

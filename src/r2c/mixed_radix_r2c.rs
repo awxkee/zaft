@@ -63,11 +63,6 @@ where
 
         let width = width_executor.length();
 
-        assert!(
-            !width.is_multiple_of(2),
-            "This is an UB to call Odd Mixed-Radix R2C with even `width`"
-        );
-
         let height = height_executor.length();
 
         let len = width.checked_mul(height).ok_or(ZaftError::Overflow)?;
@@ -86,6 +81,7 @@ where
             }
         }
 
+        // let to_remove_second_stage = (width - 1) / 2;
         let to_remove_second_stage = (width - 1) / 2;
 
         let second_stage_len = complex_height * width;
@@ -153,6 +149,11 @@ where
         let to_remove = (self.height - 1) / 2;
         let complex_height = self.height - to_remove;
         let to_remove_second_stage = (self.width - 1) / 2;
+        let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
+            ((self.width - 1) / 2) + 1
+        } else {
+            (self.width - 1) / 2
+        };
 
         for (input, complex) in input
             .chunks_exact(self.execution_length)
@@ -193,29 +194,51 @@ where
             self.width_executor
                 .execute_with_scratch(scratch_complex0, width_scratch)?;
 
-            // first stage with removed redundancy
+            // // first stage with removed redundancy
             // for x in 0..(self.width - to_remove_second_stage) {
-            //     for y in 0..complex_height {
+            //     let max_y = if x == nyquist_x { 1 } else { complex_height };
+            //     for y in 0..max_y {
             //         let input_index = x + y * self.width;
             //         let output_index = y + x * self.height;
             //
             //         unsafe {
-            //             *complex.get_unchecked_mut(output_index) =
-            //                 *scratch_complex0.get_unchecked(input_index);
+            //                *complex.get_unchecked_mut(output_index) =
+            //                    *scratch_complex0.get_unchecked(input_index);
             //         }
             //     }
             // }
+
+            // Split into three regions:
+            // 1. Regular columns x=0..nyquist_x
+            // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
+            // 3. Conjugate tail
+
+            let nyquist_x = if self.width.is_multiple_of(2) {
+                Some(self.width / 2)
+            } else {
+                None
+            };
+            let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
             self.width_transpose.transpose_strided(
                 scratch_complex0,
                 self.width,
                 complex,
                 self.height,
-                self.width - to_remove_second_stage,
+                regular_cols, // only regular columns, uniform complex_height rows each
                 complex_height,
             );
 
+            if let Some(nx) = nyquist_x {
+                let input_index = nx; // x=nyquist_x, y=0
+                let output_index = nx * self.height; // y=0 + nyquist_x * height
+                unsafe {
+                    *complex.get_unchecked_mut(output_index) =
+                        *scratch_complex0.get_unchecked(input_index);
+                }
+            }
+
             // conjugated tail
-            for x in (self.width - to_remove_second_stage)..self.width {
+            for x in (self.width - to_remove_second_stage_tail)..self.width {
                 for y in 1..complex_height {
                     let input_index = x + y * self.width;
                     let output_index = self.execution_length - (y + x * self.height);
@@ -248,7 +271,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::dft::Dft;
-    use crate::r2c::mixed_radix_r2c_odd::MixedRadixR2cOdd;
+    use crate::r2c::mixed_radix_r2c::MixedRadixR2cOdd;
     use crate::{FftDirection, FftExecutor, R2CFftExecutor, Zaft};
     use num_complex::Complex;
     use num_traits::Zero;
@@ -328,6 +351,146 @@ mod tests {
 
         let test_value = src.to_vec();
         let mut complex_output = vec![Complex::zero(); 40 / 2 + 1];
+        mx.execute(&test_value, &mut complex_output).unwrap();
+        reference_value
+            .iter()
+            .zip(complex_output.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-3,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-3,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
+    }
+
+    #[test]
+    fn test_mixed_radixf_8f() {
+        let src: [f32; 16] = [
+            7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4,
+        ];
+        let mx = MixedRadixR2cOdd::new(
+            Zaft::strategy(4, FftDirection::Forward).unwrap(),
+            Zaft::strategy(4, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        let mut reference_value = src
+            .iter()
+            .map(|x| Complex::new(*x, 0.0))
+            .collect::<Vec<_>>();
+        let dft = Dft::new(16, FftDirection::Forward).unwrap();
+        dft.execute(&mut reference_value).unwrap();
+
+        println!("DFT -----");
+
+        for chunk in (&reference_value[..8]).chunks_exact(4) {
+            println!("{:?}", chunk);
+        }
+
+        let test_value = src.to_vec();
+        let mut complex_output = vec![Complex::zero(); 16 / 2 + 1];
+        mx.execute(&test_value, &mut complex_output).unwrap();
+        reference_value
+            .iter()
+            .zip(complex_output.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-3,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-3,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
+    }
+
+    #[test]
+    fn test_mixed_radixf_22f() {
+        let src: [f32; 22] = [
+            7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 1.3,
+            5.6, 2.6, 6.4, 6.1, 5.1,
+        ];
+        let mx = MixedRadixR2cOdd::new(
+            Zaft::strategy(2, FftDirection::Forward).unwrap(),
+            Zaft::strategy(11, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        let mut reference_value = src
+            .iter()
+            .map(|x| Complex::new(*x, 0.0))
+            .collect::<Vec<_>>();
+        let dft = Dft::new(22, FftDirection::Forward).unwrap();
+        dft.execute(&mut reference_value).unwrap();
+
+        println!("DFT -----");
+
+        for chunk in (&reference_value[..11]).chunks_exact(2) {
+            println!("{:?}", chunk);
+        }
+
+        let test_value = src.to_vec();
+        let mut complex_output = vec![Complex::zero(); 22 / 2 + 1];
+        mx.execute(&test_value, &mut complex_output).unwrap();
+        reference_value
+            .iter()
+            .zip(complex_output.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-3,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-3,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
+    }
+
+    #[test]
+    fn test_mixed_radixf_24f() {
+        let src: [f32; 24] = [
+            7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 1.3,
+            5.6, 2.6, 6.4, 6.1, 5.1, 7.9, 1.3,
+        ];
+        let mx = MixedRadixR2cOdd::new(
+            Zaft::strategy(3, FftDirection::Forward).unwrap(),
+            Zaft::strategy(8, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        let mut reference_value = src
+            .iter()
+            .map(|x| Complex::new(*x, 0.0))
+            .collect::<Vec<_>>();
+        let dft = Dft::new(24, FftDirection::Forward).unwrap();
+        dft.execute(&mut reference_value).unwrap();
+
+        println!("DFT -----");
+
+        for chunk in (&reference_value[..8]).chunks_exact(3) {
+            println!("{:?}", chunk);
+        }
+
+        let test_value = src.to_vec();
+        let mut complex_output = vec![Complex::zero(); 24 / 2 + 1];
         mx.execute(&test_value, &mut complex_output).unwrap();
         reference_value
             .iter()

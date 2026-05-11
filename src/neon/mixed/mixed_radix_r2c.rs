@@ -36,9 +36,9 @@ use num_complex::Complex;
 use num_traits::Zero;
 use std::sync::Arc;
 
-macro_rules! define_mixed_radix_neon_d {
+macro_rules! define_mixed_radix_neon_d_rdft {
     ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
-        use crate::neon::mixed::$bf_name;
+
         pub(crate) struct $radix_name {
             execution_length: usize,
             twiddles: Vec<NeonStoreD>,
@@ -58,11 +58,6 @@ macro_rules! define_mixed_radix_neon_d {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
-
-                assert!(
-                    !width.is_multiple_of(2),
-                    "This is an UB to call Odd Mixed-Radix R2C with even `width`"
-                );
 
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
@@ -111,7 +106,7 @@ macro_rules! define_mixed_radix_neon_d {
                         width - to_remove_second_stage,
                         $complex_row_count,
                     ),
-                    inner_bf: $bf_name::new(direction),
+                    inner_bf: $bf_name::new(),
                     width_scratch_length,
                     second_stage_len,
                 })
@@ -157,13 +152,65 @@ macro_rules! define_mixed_radix_neon_d {
                 let len_per_row = self.real_length() / ROW_COUNT;
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
 
+                const UNROLL: usize = 2;
+                const UNROLLED_COMPLEX: usize = 2;
+
+                for (c, twiddle_chunk) in self
+                    .twiddles
+                    .chunks_exact(TWIDDLES_PER_COLUMN * UNROLL)
+                    .take(chunk_count / UNROLL)
+                    .enumerate()
+                {
+                    let index_base_0 = c * UNROLLED_COMPLEX;
+                    let index_base_1 = index_base_0 + COMPLEX_PER_VECTOR;
+
+                    let twiddle_chunk_0 = &twiddle_chunk[..TWIDDLES_PER_COLUMN];
+                    let twiddle_chunk_1 = &twiddle_chunk[TWIDDLES_PER_COLUMN..];
+
+                    let mut source_cols = [NeonStoreD::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            source_cols[i] = NeonStoreD::load(
+                                src.get_unchecked(index_base_0 + len_per_row * i..),
+                            );
+                        }
+                    }
+
+                    let [output_0, output_1] = self.inner_bf.exec(source_cols);
+
+                    unsafe {
+                        output_0[0].write(complex.get_unchecked_mut(index_base_0..));
+                        output_1[0].write(complex.get_unchecked_mut(index_base_1..));
+                    }
+
+                    let mut twiddles_0 = [NeonStoreD::default(); COMPLEX_ROW_COUNT - 1];
+                    let mut twiddles_1 = [NeonStoreD::default(); COMPLEX_ROW_COUNT - 1];
+                    for i in 0..COMPLEX_ROW_COUNT - 1 {
+                        twiddles_0[i] = twiddle_chunk_0[i];
+                        twiddles_1[i] = twiddle_chunk_1[i];
+                    }
+
+                    for i in 1..COMPLEX_ROW_COUNT {
+                        let output_0 = NeonStoreD::$mul(output_0[i], twiddles_0[i - 1]);
+                        let output_1 = NeonStoreD::$mul(output_1[i], twiddles_1[i - 1]);
+                        unsafe {
+                            output_0
+                                .write(complex.get_unchecked_mut(index_base_0 + len_per_row * i..));
+                            output_1
+                                .write(complex.get_unchecked_mut(index_base_1 + len_per_row * i..));
+                        }
+                    }
+                }
+
                 for (c, twiddle_chunk) in self
                     .twiddles
                     .chunks_exact(TWIDDLES_PER_COLUMN)
                     .take(chunk_count)
+                    .skip((chunk_count / UNROLL) * UNROLL)
                     .enumerate()
                 {
-                    let index_base = c * COMPLEX_PER_VECTOR;
+                    let index_base =
+                        (chunk_count / UNROLL) * UNROLLED_COMPLEX + c * COMPLEX_PER_VECTOR;
 
                     // Load columns from the input into registers
                     let mut columns = [NeonStoreD::default(); ROW_COUNT];
@@ -176,8 +223,7 @@ macro_rules! define_mixed_radix_neon_d {
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                    let [output, _] = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(complex.get_unchecked_mut(index_base..));
@@ -227,6 +273,13 @@ macro_rules! define_mixed_radix_neon_d {
                 }
 
                 let to_remove_second_stage = (self.width - 1) / 2;
+                let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
+                    ((self.width - 1) / 2) + 1
+                } else {
+                    (self.width - 1) / 2
+                };
+                let to_remove = (self.height - 1) / 2;
+                let complex_height = self.height - to_remove;
 
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
@@ -242,18 +295,38 @@ macro_rules! define_mixed_radix_neon_d {
                     self.width_executor
                         .execute_with_scratch(scratch_complex1, width_scratch)?;
 
+                    // Split into three regions:
+                    // 1. Regular columns x=0..nyquist_x
+                    // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
+                    // 3. Conjugate tail
+
+                    let nyquist_x = if self.width.is_multiple_of(2) {
+                        Some(self.width / 2)
+                    } else {
+                        None
+                    };
+                    let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
                     self.transpose_executor.transpose_strided(
                         scratch_complex1,
                         self.width,
                         dst_chunk,
                         self.height,
-                        self.width - to_remove_second_stage,
-                        $complex_row_count,
+                        regular_cols, // only regular columns, uniform complex_height rows each
+                        complex_height,
                     );
 
+                    if let Some(nx) = nyquist_x {
+                        let input_index = nx; // x=nyquist_x, y=0
+                        let output_index = nx * self.height; // y=0 + nyquist_x * height
+                        unsafe {
+                            *dst_chunk.get_unchecked_mut(output_index) =
+                                *scratch_complex1.get_unchecked(input_index);
+                        }
+                    }
+
                     // conjugated tail
-                    for x in (self.width - to_remove_second_stage)..self.width {
-                        for y in 1..$complex_row_count {
+                    for x in (self.width - to_remove_second_stage_tail)..self.width {
+                        for y in 1..complex_height {
                             let input_index = x + y * self.width;
                             let output_index = self.execution_length - (y + x * self.height);
 
@@ -270,9 +343,8 @@ macro_rules! define_mixed_radix_neon_d {
     };
 }
 
-macro_rules! define_mixed_radix_neon_f {
+macro_rules! define_mixed_radix_neon_f_rdft {
     ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
-        use crate::neon::mixed::$bf_name;
         pub(crate) struct $radix_name {
             execution_length: usize,
             twiddles: Vec<NeonStoreF>,
@@ -292,11 +364,6 @@ macro_rules! define_mixed_radix_neon_f {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
-
-                assert!(
-                    !width.is_multiple_of(2),
-                    "This is an UB to call Odd Mixed-Radix R2C with even `width`"
-                );
 
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
@@ -345,7 +412,7 @@ macro_rules! define_mixed_radix_neon_f {
                         width - to_remove_second_stage,
                         $complex_row_count,
                     ),
-                    inner_bf: $bf_name::new(direction),
+                    inner_bf: $bf_name::new(),
                     width_scratch_length,
                     second_stage_len,
                 })
@@ -405,23 +472,16 @@ macro_rules! define_mixed_radix_neon_f {
                     let twiddle_chunk_0 = &twiddle_chunk[..TWIDDLES_PER_COLUMN];
                     let twiddle_chunk_1 = &twiddle_chunk[TWIDDLES_PER_COLUMN..];
 
-                    let mut columns_0 = [NeonStoreF::default(); ROW_COUNT];
-                    let mut columns_1 = [NeonStoreF::default(); ROW_COUNT];
+                    let mut source_cols = [NeonStoreF::default(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            let [q0, q1] = NeonStoreF::load(
+                            source_cols[i] = NeonStoreF::load(
                                 src.get_unchecked(index_base_0 + len_per_row * i..),
-                            )
-                            .to_complex();
-                            columns_0[i] = q0;
-                            columns_1[i] = q1;
+                            );
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output_0 = unsafe { self.inner_bf.exec(columns_0) };
-                    #[allow(unused_unsafe)]
-                    let output_1 = unsafe { self.inner_bf.exec(columns_1) };
+                    let [output_0, output_1] = self.inner_bf.exec(source_cols);
 
                     unsafe {
                         output_0[0].write(complex.get_unchecked_mut(index_base_0..));
@@ -458,18 +518,16 @@ macro_rules! define_mixed_radix_neon_f {
                         (chunk_count / UNROLL) * UNROLLED_COMPLEX + c * COMPLEX_PER_VECTOR;
 
                     // Load columns from the input into registers
-                    let mut columns = [NeonStoreF::default(); ROW_COUNT];
+                    let mut source_cols = [NeonStoreF::default(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            let q = NeonStoreF::load2(
+                            source_cols[i] = NeonStoreF::load2(
                                 src.get_unchecked(index_base + len_per_row * i..),
                             );
-                            columns[i] = q.to_complex()[0];
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let [output, _] = self.inner_bf.exec(source_cols);
 
                     unsafe {
                         output[0].write(complex.get_unchecked_mut(index_base..));
@@ -497,18 +555,17 @@ macro_rules! define_mixed_radix_neon_f {
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
-                    let mut columns = [NeonStoreF::default(); ROW_COUNT];
+                    let mut source_cols = [NeonStoreF::default(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            columns[i] = NeonStoreF::load1(
+                            source_cols[i] = NeonStoreF::load1(
                                 src.get_unchecked(partial_remainder_base + len_per_row * i..),
                             );
                         }
                     }
 
                     // apply our butterfly function down the columns
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                    let [output, _] = self.inner_bf.exec(source_cols);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -563,6 +620,13 @@ macro_rules! define_mixed_radix_neon_f {
                 }
 
                 let to_remove_second_stage = (self.width - 1) / 2;
+                let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
+                    ((self.width - 1) / 2) + 1
+                } else {
+                    (self.width - 1) / 2
+                };
+                let to_remove = (self.height - 1) / 2;
+                let complex_height = self.height - to_remove;
 
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
@@ -578,18 +642,38 @@ macro_rules! define_mixed_radix_neon_f {
                     self.width_executor
                         .execute_with_scratch(scratch_complex1, width_scratch)?;
 
+                    // Split into three regions:
+                    // 1. Regular columns x=0..nyquist_x
+                    // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
+                    // 3. Conjugate tail
+
+                    let nyquist_x = if self.width.is_multiple_of(2) {
+                        Some(self.width / 2)
+                    } else {
+                        None
+                    };
+                    let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
                     self.transpose_executor.transpose_strided(
                         scratch_complex1,
                         self.width,
                         dst_chunk,
                         self.height,
-                        self.width - to_remove_second_stage,
-                        $complex_row_count,
+                        regular_cols, // only regular columns, uniform complex_height rows each
+                        complex_height,
                     );
 
+                    if let Some(nx) = nyquist_x {
+                        let input_index = nx; // x=nyquist_x, y=0
+                        let output_index = nx * self.height; // y=0 + nyquist_x * height
+                        unsafe {
+                            *dst_chunk.get_unchecked_mut(output_index) =
+                                *scratch_complex1.get_unchecked(input_index);
+                        }
+                    }
+
                     // conjugated tail
-                    for x in (self.width - to_remove_second_stage)..self.width {
-                        for y in 1..$complex_row_count {
+                    for x in (self.width - to_remove_second_stage_tail)..self.width {
+                        for y in 1..complex_height {
                             let input_index = x + y * self.width;
                             let output_index = self.execution_length - (y + x * self.height);
 
@@ -606,213 +690,218 @@ macro_rules! define_mixed_radix_neon_f {
     };
 }
 
-use crate::neon::mixed::NeonStoreD;
+use crate::neon::mixed::{
+    ColumnRdftButterfly3d, ColumnRdftButterfly3f, ColumnRdftButterfly5d, ColumnRdftButterfly5f,
+    ColumnRdftButterfly7d, ColumnRdftButterfly7f, ColumnRdftButterfly9d, ColumnRdftButterfly11d,
+    ColumnRdftButterfly11f, ColumnRdftButterfly13d, ColumnRdftButterfly13f,
+};
+use crate::neon::mixed::{ColumnRdftButterfly9f, NeonStoreD};
 
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonR2CMixedRadix3f,
     "neon",
-    ColumnButterfly3f,
+    ColumnRdftButterfly3f,
     3,
     2,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonFcmaR2CMixedRadix3f,
     "fcma",
-    ColumnFcmaButterfly3f,
+    ColumnRdftButterfly3f,
     3,
     2,
     fcmul_fcma
 );
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonR2CMixedRadix3d,
     "neon",
-    ColumnButterfly3d,
+    ColumnRdftButterfly3d,
     3,
     2,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonFcmaR2CMixedRadix3d,
     "fcma",
-    ColumnFcmaButterfly3d,
+    ColumnRdftButterfly3d,
     3,
     2,
     fcmul_fcma
 );
 
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonR2CMixedRadix5f,
     "neon",
-    ColumnButterfly5f,
+    ColumnRdftButterfly5f,
     5,
     3,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonFcmaR2CMixedRadix5f,
     "fcma",
-    ColumnFcmaButterfly5f,
+    ColumnRdftButterfly5f,
     5,
     3,
     fcmul_fcma
 );
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonR2CMixedRadix5d,
     "neon",
-    ColumnButterfly5d,
+    ColumnRdftButterfly5d,
     5,
     3,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonFcmaR2CMixedRadix5d,
     "fcma",
-    ColumnFcmaButterfly5d,
+    ColumnRdftButterfly5d,
     5,
     3,
     fcmul_fcma
 );
 
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonR2CMixedRadix7f,
     "neon",
-    ColumnButterfly7f,
+    ColumnRdftButterfly7f,
     7,
     4,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonFcmaR2CMixedRadix7f,
     "fcma",
-    ColumnFcmaButterfly7f,
+    ColumnRdftButterfly7f,
     7,
     4,
     fcmul_fcma
 );
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonR2CMixedRadix7d,
     "neon",
-    ColumnButterfly7d,
+    ColumnRdftButterfly7d,
     7,
     4,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonFcmaR2CMixedRadix7d,
     "fcma",
-    ColumnFcmaButterfly7d,
+    ColumnRdftButterfly7d,
     7,
     4,
     fcmul_fcma
 );
 
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonR2CMixedRadix9f,
     "neon",
-    ColumnButterfly9f,
+    ColumnRdftButterfly9f,
     9,
     5,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonFcmaR2CMixedRadix9f,
     "fcma",
-    ColumnFcmaButterfly9f,
+    ColumnRdftButterfly9f,
     9,
     5,
     fcmul_fcma
 );
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonR2CMixedRadix9d,
     "neon",
-    ColumnButterfly9d,
+    ColumnRdftButterfly9d,
     9,
     5,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonFcmaR2CMixedRadix9d,
     "fcma",
-    ColumnFcmaButterfly9d,
+    ColumnRdftButterfly9d,
     9,
     5,
     fcmul_fcma
 );
 
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonR2CMixedRadix11f,
     "neon",
-    ColumnButterfly11f,
+    ColumnRdftButterfly11f,
     11,
     6,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonFcmaR2CMixedRadix11f,
     "fcma",
-    ColumnFcmaButterfly11f,
+    ColumnRdftButterfly11f,
     11,
     6,
     fcmul_fcma
 );
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonR2CMixedRadix11d,
     "neon",
-    ColumnButterfly11d,
+    ColumnRdftButterfly11d,
     11,
     6,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonFcmaR2CMixedRadix11d,
     "fcma",
-    ColumnFcmaButterfly11d,
+    ColumnRdftButterfly11d,
     11,
     6,
     fcmul_fcma
 );
 
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonR2CMixedRadix13f,
     "neon",
-    ColumnButterfly13f,
+    ColumnRdftButterfly13f,
     13,
     7,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_f!(
+define_mixed_radix_neon_f_rdft!(
     NeonFcmaR2CMixedRadix13f,
     "fcma",
-    ColumnFcmaButterfly13f,
+    ColumnRdftButterfly13f,
     13,
     7,
     fcmul_fcma
 );
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonR2CMixedRadix13d,
     "neon",
-    ColumnButterfly13d,
+    ColumnRdftButterfly13d,
     13,
     7,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-define_mixed_radix_neon_d!(
+define_mixed_radix_neon_d_rdft!(
     NeonFcmaR2CMixedRadix13d,
     "fcma",
-    ColumnFcmaButterfly13d,
+    ColumnRdftButterfly13d,
     13,
     7,
     fcmul_fcma

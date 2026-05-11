@@ -28,7 +28,7 @@
  */
 use crate::prime_factors::PrimeFactors;
 use crate::r2c::R2CFftEvenInterceptor;
-use crate::r2c::mixed_radix_r2c_odd::MixedRadixR2cOdd;
+use crate::r2c::mixed_radix_r2c::MixedRadixR2cOdd;
 use crate::util::{
     ALWAYS_BLUESTEIN_1000, ALWAYS_BLUESTEIN_2000, ALWAYS_BLUESTEIN_3000, ALWAYS_BLUESTEIN_4000,
     ALWAYS_BLUESTEIN_5000, ALWAYS_BLUESTEIN_6000,
@@ -50,6 +50,7 @@ pub(crate) fn r2c_butterflies<T: FftSample>(
         7 => Some(T::r2c_butterfly7()),
         8 => Some(T::r2c_butterfly8()),
         9 => Some(T::r2c_butterfly9()),
+        10 => Some(T::r2c_butterfly10()),
         11 => Some(T::r2c_butterfly11()),
         12 => Some(T::r2c_butterfly12()),
         13 => Some(T::r2c_butterfly13()),
@@ -164,17 +165,17 @@ where
             {
                 return Ok(mx7);
             }
-            if len.is_multiple_of(3)
-                && let Some(mx3) =
-                    T::r2c_mixed_radix3(Zaft::strategy(len / 3, FftDirection::Forward)?)?
-            {
-                return Ok(mx3);
-            }
             if len.is_multiple_of(13)
                 && let Some(mx13) =
                     T::r2c_mixed_radix13(Zaft::strategy(len / 13, FftDirection::Forward)?)?
             {
                 return Ok(mx13);
+            }
+            if len.is_multiple_of(3)
+                && let Some(mx3) =
+                    T::r2c_mixed_radix3(Zaft::strategy(len / 3, FftDirection::Forward)?)?
+            {
+                return Ok(mx3);
             }
         }
 

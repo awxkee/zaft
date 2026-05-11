@@ -159,8 +159,13 @@ where
             ));
         }
 
-        for (real, complex) in input.chunks_exact(3).zip(output.chunks_exact_mut(2)) {
-            let [q0, q1] = self.r_exec((&real[..3]).try_into().unwrap());
+        for (real, complex) in input
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<2>().0.iter_mut())
+        {
+            let [q0, q1] = self.r_exec(real);
 
             complex[0] = q0;
             complex[1] = q1;

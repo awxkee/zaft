@@ -178,7 +178,11 @@ impl R2CAlgorithmFactory<f32> for f32 {
     }
 
     fn r2c_butterfly9() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_vec_default_butterfly!(Butterfly9, NeonButterfly9f, NeonFcmaButterfly9f)
+        make_vec_default_butterfly!(RfftButterfly9, NeonButterfly9f, NeonFcmaButterfly9f)
+    }
+
+    fn r2c_butterfly10() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
+        make_default_butterfly!(RdftButterfly10)
     }
 
     fn r2c_butterfly11() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {

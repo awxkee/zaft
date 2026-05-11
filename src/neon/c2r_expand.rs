@@ -50,18 +50,20 @@ impl C2ROddExpander<f32> for NeonC2RExpanderF {
         let conj = NeonStoreF::conj_flag();
 
         for ((buf_left, buf_right), val) in out_left
-            .chunks_exact_mut(2)
-            .zip(out_right.rchunks_exact_mut(2))
-            .zip(start.chunks_exact(2))
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(out_right.as_rchunks_mut::<2>().1.iter_mut().rev())
+            .zip(start.as_chunks::<2>().0.iter())
         {
             let val = NeonStoreF::from_complex_ref(val);
             val.write(buf_left);
             val.xor(conj).reverse_complex().write(buf_right);
         }
 
-        out_left = out_left.chunks_exact_mut(2).into_remainder();
-        out_right = out_right.rchunks_exact_mut(2).into_remainder();
-        start = start.chunks_exact(2).remainder();
+        out_left = out_left.as_chunks_mut::<2>().1;
+        out_right = out_right.as_rchunks_mut::<2>().0;
+        start = start.as_chunks::<2>().1;
 
         for ((buf_left, buf_right), val) in out_left
             .iter_mut()

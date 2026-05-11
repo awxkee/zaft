@@ -125,39 +125,77 @@ where
             ));
         }
 
-        for (chunk, complex) in input.chunks_exact(12).zip(output.chunks_exact_mut(7)) {
-            let u0 = Complex::new(chunk[0], T::zero());
-            let u1 = Complex::new(chunk[3], T::zero());
-            let u2 = Complex::new(chunk[6], T::zero());
-            let u3 = Complex::new(chunk[9], T::zero());
+        for (chunk, complex) in input
+            .as_chunks::<12>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<7>().0.iter_mut())
+        {
+            let s1 = chunk[1] + chunk[11];
+            let d1 = chunk[1] - chunk[11];
+            let s2 = chunk[2] + chunk[10];
+            let d2 = chunk[2] - chunk[10];
+            let s3 = chunk[3] + chunk[9];
+            let d3 = chunk[3] - chunk[9];
+            let s4 = chunk[4] + chunk[8];
+            let d4 = chunk[4] - chunk[8];
+            let s5 = chunk[5] + chunk[7];
+            let d5 = chunk[5] - chunk[7];
+            let s6 = chunk[6];
 
-            let u4 = Complex::new(chunk[4], T::zero());
-            let u5 = Complex::new(chunk[7], T::zero());
-            let u6 = Complex::new(chunk[10], T::zero());
-            let u7 = Complex::new(chunk[1], T::zero());
+            let sqrt_s1 = T::SQRT_3_OVER_2 * s1;
+            let sqrt_s5 = T::SQRT_3_OVER_2 * s5;
+            let hs1 = T::HALF * s1;
+            let hs2 = T::HALF * s2;
+            let hs4 = T::HALF * s4;
+            let hs5 = T::HALF * s5;
+            let p_hs2_hs4 = hs2 - hs4;
+            let n_hs2_hs4 = -hs2 - hs4;
+            let x0_ns6 = chunk[0] - s6;
+            let x0_ps6 = chunk[0] + s6;
 
-            let u8 = Complex::new(chunk[8], T::zero());
-            let u9 = Complex::new(chunk[11], T::zero());
-            let u10 = Complex::new(chunk[2], T::zero());
-            let u11 = Complex::new(chunk[5], T::zero());
+            let hd1 = T::HALF * d1;
+            let hd5 = T::HALF * d5;
+            let hd1_hd5 = hd1 + hd5;
+            let hd1_hd5_d3 = hd1_hd5 + d3;
+            let sqrt_d2pd4 = T::SQRT_3_OVER_2 * (d2 + d4);
+            let sqrt3_d1nd5 = T::SQRT_3_OVER_2 * (d1 - d5);
+            let sqrt3_d2nd4 = T::SQRT_3_OVER_2 * (d2 - d4);
 
-            let (u0, u1, u2, u3) = self.bf4.butterfly4(u0, u1, u2, u3);
-            let (u4, u5, u6, u7) = self.bf4.butterfly4(u4, u5, u6, u7);
-            let (u8, u9, u10, u11) = self.bf4.butterfly4(u8, u9, u10, u11);
+            // DC
+            let s2_s6 = s2 + s6;
+            let y0 = chunk[0] + s1 + s2_s6 + s3 + s4 + s5;
 
-            let (v0, v4, _) = self.bf3.butterfly3(u0, u4, u8); // (v0, v4, v8)
-            let (_, v1, v5) = self.bf3.butterfly3(u1, u5, u9); // (v9, v1, v5)
-            let (v6, _, v2) = self.bf3.butterfly3(u2, u6, u10); // (v6, v10, v2)
-            let (v3, _, _) = self.bf3.butterfly3(u3, u7, u11); // (v3, v7, v11)
+            let j0 = sqrt_s1 - sqrt_s5;
+            let j1 = s3 - hs5;
+            let j1_m_hs1 = j1 - hs1;
 
-            complex[0] = v0;
-            complex[1] = v1;
-            complex[2] = v2;
-            complex[3] = v3;
+            let p_hs2_x0_ns = p_hs2_hs4 + x0_ns6;
+            let x0_ps6_p_n_hs2_hs4 = x0_ps6 + n_hs2_hs4;
 
-            complex[4] = v4;
-            complex[5] = v5;
-            complex[6] = v6;
+            let y1r = j0 + p_hs2_x0_ns;
+            let y2r = x0_ps6_p_n_hs2_hs4 - j1_m_hs1;
+            let y3r = chunk[0] + s4 - s2_s6;
+            let y4r = x0_ps6_p_n_hs2_hs4 + j1_m_hs1;
+            let y5r = p_hs2_x0_ns - j0;
+            let y6r = chunk[0] - s1 + s2_s6 - s3 + s4 - s5;
+
+            let sqrt3_sum = sqrt3_d1nd5 + sqrt3_d2nd4;
+            let sqrt3_dif = sqrt3_d1nd5 - sqrt3_d2nd4;
+            let neg_hd1_hd5_d3 = -hd1_hd5_d3;
+            let y1i = neg_hd1_hd5_d3 - sqrt_d2pd4;
+            let y2i = -sqrt3_sum;
+            let y3i = -(d1 - d3 + d5);
+            let y4i = -sqrt3_dif;
+            let y5i = neg_hd1_hd5_d3 + sqrt_d2pd4;
+
+            complex[0] = Complex::new(y0, T::zero());
+            complex[1] = Complex::new(y1r, y1i);
+            complex[2] = Complex::new(y2r, y2i);
+            complex[3] = Complex::new(y3r, y3i);
+            complex[4] = Complex::new(y4r, y4i);
+            complex[5] = Complex::new(y5r, y5i);
+            complex[6] = Complex::new(y6r, T::zero());
         }
         Ok(())
     }
@@ -194,4 +232,5 @@ mod tests {
 
     test_butterfly!(test_butterfly12, f32, Butterfly12, 12, 1e-5);
     test_r2c_butterfly!(test_r2c_butterfly12, f32, Butterfly12, 12, 1e-5);
+    test_r2c_butterfly!(test_r2c_butterfly12_f64, f64, Butterfly12, 12, 1e-9);
 }

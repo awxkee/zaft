@@ -26,11 +26,12 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::FftDirection;
 use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::mixed::avx_storef::AvxStoreF;
 use crate::avx::util::shuffle;
 use crate::util::compute_twiddle;
+use crate::{FftDirection, FftSample};
+use num_traits::MulAdd;
 use std::arch::x86_64::*;
 
 pub(crate) struct ColumnButterfly3d {
@@ -68,22 +69,6 @@ impl ColumnButterfly3d {
             let y1 = _mm256_fmadd_pd(self.twiddle_im, xn_rot, w_1);
             let y2 = _mm256_fnmadd_pd(self.twiddle_im, xn_rot, w_1);
             [AvxStoreD::raw(y0), AvxStoreD::raw(y1), AvxStoreD::raw(y2)]
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn exec_r2c(&self, v: [AvxStoreD; 3]) -> [AvxStoreD; 2] {
-        unsafe {
-            let xp = _mm256_add_pd(v[1].v, v[2].v);
-            let xn = _mm256_sub_pd(v[1].v, v[2].v);
-            let sum = _mm256_add_pd(v[0].v, xp);
-
-            let w_1 = _mm256_fmadd_pd(self.twiddle_re, xp, v[0].v);
-            let xn_rot = _mm256_shuffle_pd::<0b0101>(xn, xn);
-
-            let y0 = sum;
-            let y1 = _mm256_fmadd_pd(self.twiddle_im, xn_rot, w_1);
-            [AvxStoreD::raw(y0), AvxStoreD::raw(y1)]
         }
     }
 }
@@ -136,21 +121,64 @@ impl ColumnButterfly3f {
             [AvxStoreF::raw(y0), AvxStoreF::raw(y1), AvxStoreF::raw(y2)]
         }
     }
+}
 
-    #[inline(always)]
-    pub(crate) fn exec_r2c(&self, v: [AvxStoreF; 3]) -> [AvxStoreF; 2] {
-        unsafe {
-            let xp = _mm256_add_ps(v[1].v, v[2].v);
-            let xn = _mm256_sub_ps(v[1].v, v[2].v);
-            let sum = _mm256_add_ps(v[0].v, xp);
+pub(crate) struct ColumnRdftButterfly3f {
+    m_half: AvxStoreF,
+    m_sqrt3_over2: AvxStoreF,
+}
 
-            const SH: i32 = shuffle(2, 3, 0, 1);
-            let w_1 = _mm256_fmadd_ps(self.twiddle_re, xp, v[0].v);
-            let xn_rot = _mm256_shuffle_ps::<SH>(xn, xn);
-
-            let y0 = sum;
-            let y1 = _mm256_fmadd_ps(self.twiddle_im, xn_rot, w_1);
-            [AvxStoreF::raw(y0), AvxStoreF::raw(y1)]
+impl ColumnRdftButterfly3f {
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn new() -> Self {
+        Self {
+            m_half: AvxStoreF::dup(-f32::HALF),
+            m_sqrt3_over2: AvxStoreF::dup(-f32::SQRT_3_OVER_2),
         }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec(&self, store: [AvxStoreF; 3]) -> [[AvxStoreF; 2]; 2] {
+        let w1 = store[1] + store[2];
+        let w2 = store[1] - store[2];
+        let x0 = w1 + store[0];
+        let x1 = w1.mul_add(self.m_half, store[0]);
+
+        let v0 = x0.zip(AvxStoreF::zero());
+        let im1 = w2 * self.m_sqrt3_over2;
+        let v1 = x1.zip(im1);
+
+        [[v0[0], v1[0]], [v0[1], v1[1]]]
+    }
+}
+
+pub(crate) struct ColumnRdftButterfly3d {
+    m_half: AvxStoreD,
+    m_sqrt3_over2: AvxStoreD,
+}
+
+impl ColumnRdftButterfly3d {
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn new() -> Self {
+        Self {
+            m_half: AvxStoreD::dup(-f64::HALF),
+            m_sqrt3_over2: AvxStoreD::dup(-f64::SQRT_3_OVER_2),
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec(&self, store: [AvxStoreD; 3]) -> [[AvxStoreD; 2]; 2] {
+        let w1 = store[1] + store[2];
+        let w2 = store[1] - store[2];
+        let x0 = w1 + store[0];
+        let x1 = w1.mul_add(self.m_half, store[0]);
+
+        let v0 = x0.zip(AvxStoreD::zero());
+        let im1 = w2 * self.m_sqrt3_over2;
+        let v1 = x1.zip(im1);
+
+        [[v0[0], v1[0]], [v0[1], v1[1]]]
     }
 }

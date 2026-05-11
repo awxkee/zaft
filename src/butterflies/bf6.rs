@@ -27,14 +27,17 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #![allow(unused)]
+
 use crate::butterflies::Butterfly3;
 use crate::butterflies::short_butterflies::FastButterfly2;
 use crate::butterflies::util::boring_scalar_butterfly;
+use crate::mla::fmla;
 use crate::store::BidirectionalStore;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, FftSample, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::AsPrimitive;
+use std::f64::consts::PI;
 
 pub(crate) struct Butterfly6<T> {
     direction: FftDirection,
@@ -106,28 +109,34 @@ where
             ));
         }
 
-        let fast_butterfly2 = FastButterfly2::new(self.direction);
+        for (dst, src) in output
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(input.as_chunks::<6>().0.iter())
+        {
+            let s03 = src[0] + src[3];
+            let s14 = src[1] + src[4];
+            let s25 = src[2] + src[5];
+            let d03 = src[0] - src[3];
+            let d14 = src[1] - src[4];
+            let d25 = src[2] - src[5];
+            let d15 = src[1] - src[5];
+            let d24 = src[2] - src[4];
 
-        for (dst, src) in output.chunks_exact_mut(4).zip(input.chunks_exact(6)) {
-            let u0 = Complex::new(src[0], T::zero());
-            let u1 = Complex::new(src[1], T::zero());
-            let u2 = Complex::new(src[2], T::zero());
-            let u3 = Complex::new(src[3], T::zero());
-            let u4 = Complex::new(src[4], T::zero());
-            let u5 = Complex::new(src[5], T::zero());
+            let q0 = d14 - d25;
+            let q1 = s14 + s25;
+            let y0 = s03 + q1;
+            let y3 = d03 - q0;
+            let y1 = fmla(q0, T::HALF, d03);
+            let y2 = fmla(q1, -T::HALF, s03);
+            let y4 = -T::SQRT_3_OVER_2 * (d14 + d25);
+            let y5 = T::SQRT_3_OVER_2 * (d24 - d15);
 
-            // Radix-6 butterfly
-
-            let [t0, t2, t4] = self.bf3.exec(&[u0, u2, u4]);
-            let [t1, t3, t5] = self.bf3.exec(&[u3, u5, u1]);
-            let (y0, y3) = fast_butterfly2.butterfly2(t0, t1);
-            let (_, y1) = fast_butterfly2.butterfly2(t2, t3);
-            let (y2, _) = fast_butterfly2.butterfly2(t4, t5);
-
-            dst[0] = y0;
-            dst[1] = y1;
-            dst[2] = y2;
-            dst[3] = y3;
+            dst[0] = Complex::new(y0, T::zero());
+            dst[1] = Complex::new(y1, y4);
+            dst[2] = Complex::new(y2, y5);
+            dst[3] = Complex::new(y3, T::zero());
         }
         Ok(())
     }
@@ -163,6 +172,7 @@ mod tests {
     use crate::r2c::test_r2c_butterfly;
 
     test_r2c_butterfly!(test_r2c_butterfly6, f32, Butterfly6, 6, 1e-5);
+    test_r2c_butterfly!(test_r2c_butterfly6_f64, f64, Butterfly6, 6, 1e-5);
     test_butterfly!(test_butterfly6, f32, Butterfly6, 6, 1e-5);
     test_oof_butterfly!(test_oof_butterfly6, f32, Butterfly6, 6, 1e-5);
 }

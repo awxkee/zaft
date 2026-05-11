@@ -42,16 +42,28 @@ mod bf8;
 mod bf9;
 
 pub(crate) use bf2::{ColumnButterfly2d, ColumnButterfly2f};
-pub(crate) use bf3::{ColumnButterfly3d, ColumnButterfly3f};
+pub(crate) use bf3::{
+    ColumnButterfly3d, ColumnButterfly3f, ColumnRdftButterfly3d, ColumnRdftButterfly3f,
+};
 pub(crate) use bf4::{ColumnButterfly4d, ColumnButterfly4f};
-pub(crate) use bf5::{ColumnButterfly5d, ColumnButterfly5f};
+pub(crate) use bf5::{
+    ColumnButterfly5d, ColumnButterfly5f, ColumnRdftButterfly5d, ColumnRdftButterfly5f,
+};
 pub(crate) use bf6::{ColumnButterfly6d, ColumnButterfly6f};
-pub(crate) use bf7::{ColumnButterfly7d, ColumnButterfly7f};
+pub(crate) use bf7::{
+    ColumnButterfly7d, ColumnButterfly7f, ColumnRdftButterfly7d, ColumnRdftButterfly7f,
+};
 pub(crate) use bf8::{ColumnButterfly8d, ColumnButterfly8f};
-pub(crate) use bf9::{ColumnButterfly9d, ColumnButterfly9f};
+pub(crate) use bf9::{
+    ColumnButterfly9d, ColumnButterfly9f, ColumnRdftButterfly9d, ColumnRdftButterfly9f,
+};
 pub(crate) use bf10::{ColumnButterfly10d, ColumnButterfly10f};
-pub(crate) use bf11::{ColumnButterfly11d, ColumnButterfly11f};
+pub(crate) use bf11::{
+    ColumnButterfly11d, ColumnButterfly11f, ColumnRdftButterfly11d, ColumnRdftButterfly11f,
+};
 pub(crate) use bf12::{ColumnButterfly12d, ColumnButterfly12f};
-pub(crate) use bf13::{ColumnButterfly13d, ColumnButterfly13f};
+pub(crate) use bf13::{
+    ColumnButterfly13d, ColumnButterfly13f, ColumnRdftButterfly13d, ColumnRdftButterfly13f,
+};
 pub(crate) use bf16::{ColumnButterfly16d, ColumnButterfly16f};
 pub(crate) use bf18::{ColumnButterfly18d, ColumnButterfly18f};

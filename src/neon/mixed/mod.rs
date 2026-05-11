@@ -47,19 +47,25 @@ mod mixed_radix_r2c;
 mod neon_store;
 
 pub(crate) use bf2::{ColumnButterfly2d, ColumnButterfly2f};
-pub(crate) use bf3::{ColumnButterfly3d, ColumnButterfly3f};
+pub(crate) use bf3::{
+    ColumnButterfly3d, ColumnButterfly3f, ColumnRdftButterfly3d, ColumnRdftButterfly3f,
+};
 #[cfg(feature = "fcma")]
 pub(crate) use bf3::{ColumnFcmaButterfly3d, ColumnFcmaButterfly3f};
 pub(crate) use bf4::{ColumnButterfly4d, ColumnButterfly4f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf4::{ColumnFcmaButterfly4d, ColumnFcmaButterfly4f};
-pub(crate) use bf5::{ColumnButterfly5d, ColumnButterfly5f};
+pub(crate) use bf5::{
+    ColumnButterfly5d, ColumnButterfly5f, ColumnRdftButterfly5d, ColumnRdftButterfly5f,
+};
 #[cfg(feature = "fcma")]
 pub(crate) use bf5::{ColumnFcmaButterfly5d, ColumnFcmaButterfly5f};
 pub(crate) use bf6::{ColumnButterfly6d, ColumnButterfly6f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf6::{ColumnFcmaButterfly6d, ColumnFcmaButterfly6f};
-pub(crate) use bf7::{ColumnButterfly7d, ColumnButterfly7f};
+pub(crate) use bf7::{
+    ColumnButterfly7d, ColumnButterfly7f, ColumnRdftButterfly7d, ColumnRdftButterfly7f,
+};
 #[cfg(feature = "fcma")]
 pub(crate) use bf7::{ColumnFcmaButterfly7d, ColumnFcmaButterfly7f};
 pub(crate) use bf8::{ColumnButterfly8d, ColumnButterfly8f};
@@ -68,19 +74,25 @@ pub(crate) use bf8::{
     ColumnFcmaButterfly8d, ColumnFcmaButterfly8f, ColumnFcmaForwardButterfly8f,
     ColumnFcmaInverseButterfly8f,
 };
-pub(crate) use bf9::{ColumnButterfly9d, ColumnButterfly9f};
+pub(crate) use bf9::{
+    ColumnButterfly9d, ColumnButterfly9f, ColumnRdftButterfly9d, ColumnRdftButterfly9f,
+};
 #[cfg(feature = "fcma")]
 pub(crate) use bf9::{ColumnFcmaButterfly9d, ColumnFcmaButterfly9f};
 pub(crate) use bf10::{ColumnButterfly10d, ColumnButterfly10f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf10::{ColumnFcmaButterfly10d, ColumnFcmaButterfly10f};
-pub(crate) use bf11::{ColumnButterfly11d, ColumnButterfly11f};
+pub(crate) use bf11::{
+    ColumnButterfly11d, ColumnButterfly11f, ColumnRdftButterfly11d, ColumnRdftButterfly11f,
+};
 #[cfg(feature = "fcma")]
 pub(crate) use bf11::{ColumnFcmaButterfly11d, ColumnFcmaButterfly11f};
 pub(crate) use bf12::{ColumnButterfly12d, ColumnButterfly12f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf12::{ColumnFcmaButterfly12d, ColumnFcmaButterfly12f};
-pub(crate) use bf13::{ColumnButterfly13d, ColumnButterfly13f};
+pub(crate) use bf13::{
+    ColumnButterfly13d, ColumnButterfly13f, ColumnRdftButterfly13d, ColumnRdftButterfly13f,
+};
 #[cfg(feature = "fcma")]
 pub(crate) use bf13::{ColumnFcmaButterfly13d, ColumnFcmaButterfly13f};
 pub(crate) use bf16::{ColumnButterfly16d, ColumnButterfly16f};

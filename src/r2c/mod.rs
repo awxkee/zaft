@@ -33,7 +33,7 @@ mod c2r_factory_d;
 mod c2r_factory_f;
 mod c2r_odd;
 mod c2r_twiddles;
-mod mixed_radix_r2c_odd;
+mod mixed_radix_r2c;
 mod r2c_factory;
 mod r2c_factory_d;
 mod r2c_factory_f;
@@ -213,12 +213,7 @@ mod tests {
         }
         for i in 1..768 {
             let data = (0..i)
-                .map(|_| {
-                    Complex::<f32>::new(
-                        rand::rng().random_range(-1.0..1.0),
-                        rand::rng().random_range(0.0..1.0),
-                    )
-                })
+                .map(|_| Complex::<f32>::new(rand::rng().random_range(-1.0..1.0), 0.))
                 .collect::<Vec<_>>();
 
             let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
@@ -231,6 +226,7 @@ mod tests {
             forward_r2c
                 .execute(&real_data, &mut complex_data)
                 .expect(&format!("R2C Failed for size {i}"));
+
             inverse_r2c
                 .execute(&complex_data, &mut real_data)
                 .expect(&format!("R2C Failed for size {i}"));
