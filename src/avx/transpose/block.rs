@@ -67,6 +67,16 @@ fn transpose_fixed_block_executor2d<
                 x += X_BLOCK_SIZE;
             }
 
+            while x < width {
+                let mut dy = y;
+                while dy < height {
+                    let val = *input.get_unchecked(x + input_stride * dy);
+                    *output.get_unchecked_mut(dy + output_stride * x) = val;
+                    dy += 1;
+                }
+                x += 1;
+            }
+
             y += Y_BLOCK_SIZE;
         }
     }

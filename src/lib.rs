@@ -146,6 +146,7 @@ pub(crate) trait FftSample:
 {
     const HALF: Self;
     const SQRT_3_OVER_2: Self;
+    const FRAC_1_SQRT_2: Self;
 }
 
 impl FftSample for f64 {
@@ -169,6 +170,7 @@ impl FftSample for f64 {
     //
     // print(double_to_hex(value))
     const SQRT_3_OVER_2: Self = f64::from_bits(0x3febb67ae8584caa);
+    const FRAC_1_SQRT_2: Self = std::f64::consts::FRAC_1_SQRT_2;
 }
 
 impl FftSample for f32 {
@@ -192,6 +194,7 @@ impl FftSample for f32 {
     //
     // print(double_to_hex(value))
     const SQRT_3_OVER_2: Self = f32::from_bits(0x3f5db3d7);
+    const FRAC_1_SQRT_2: Self = std::f32::consts::FRAC_1_SQRT_2;
 }
 
 pub trait FftExecutor<T> {
@@ -1002,6 +1005,58 @@ impl Zaft {
         let prime_factors = PrimeFactors::from_number(n as u64);
         if prime_factors.is_power_of_three {
             // Use Radix-3 if divisible by 3
+            if Zaft::could_do_split_mixed_radix() {
+                let has243 = T::butterfly243(fft_direction).is_some();
+                let has81 = T::butterfly81(fft_direction).is_some();
+
+                // Find largest available power-of-3 terminal that divides n
+                let terminal = if has243 && n.is_multiple_of(243) {
+                    243
+                } else if has81 && n.is_multiple_of(81) {
+                    81
+                } else if n.is_multiple_of(27) {
+                    27
+                } else {
+                    0
+                };
+
+                #[allow(clippy::manual_checked_ops)]
+                if terminal > 0 {
+                    let remaining = n / terminal;
+                    // Peel radix-9 stages down toward the terminal,
+                    if remaining == 1 {
+                        // n IS the terminal, handled by butterfly() directly
+                    } else if remaining.is_multiple_of(9) {
+                        // Clean radix-9 chain into terminal
+                        if let Some(bf) =
+                            T::mixed_radix_butterfly9(Zaft::strategy(n / 9, fft_direction)?)?
+                        {
+                            return Ok(bf);
+                        }
+                    } else if remaining.is_multiple_of(3) {
+                        // One radix-3 peel to align, then radix-9 chain into terminal
+                        if let Some(bf) =
+                            T::mixed_radix_butterfly3(Zaft::strategy(n / 3, fft_direction)?)?
+                        {
+                            return Ok(bf);
+                        }
+                    }
+                } else {
+                    // No large terminal: peel radix-9 if possible, else radix-3
+                    if n.is_multiple_of(9) {
+                        if let Some(bf) =
+                            T::mixed_radix_butterfly9(Zaft::strategy(n / 9, fft_direction)?)?
+                        {
+                            return Ok(bf);
+                        }
+                    } else if n.is_multiple_of(3)
+                        && let Some(bf) =
+                            T::mixed_radix_butterfly3(Zaft::strategy(n / 3, fft_direction)?)?
+                    {
+                        return Ok(bf);
+                    }
+                }
+            }
             T::radix3(n, fft_direction)
         } else if prime_factors.is_power_of_five {
             // Use Radix-5 if power of 5
@@ -1015,34 +1070,117 @@ impl Zaft {
                 {
                     return Ok(bf);
                 }
-                let rem3 = prime_factors.factor_of_2() % 3;
-                if rem3 == 2 {
-                    if let Some(bf) =
-                        T::mixed_radix_butterfly4(Zaft::strategy(n / 4, fft_direction)?)?
-                    {
-                        return Ok(bf);
-                    }
-                } else if rem3 == 1 {
-                    let has1024 = T::butterfly1024(fft_direction).is_some();
-                    if has1024
-                        && let Some(bf) =
+                let exp = prime_factors.factor_of_2() as usize;
+                let has2048 = T::butterfly2048(fft_direction).is_some();
+                let has1024 = T::butterfly1024(fft_direction).is_some();
+                let has512 = T::butterfly512(fft_direction).is_some();
+                let has256 = T::butterfly256(fft_direction).is_some();
+
+                // Find the largest available terminal butterfly that divides n
+                // and peel radix-8 stages down to it, handling the 2/4 remainder
+                // at the very end just before the terminal.
+                let terminal_exp = if has2048 && exp >= 11 {
+                    11 // 2^11
+                } else if has1024 && exp >= 10 {
+                    10 // 2^10
+                } else if has512 && exp >= 9 {
+                    9 // 2^9
+                } else if has256 && exp >= 8 {
+                    8 // 2^8
+                } else {
+                    0 // no large terminal available
+                };
+
+                if terminal_exp > 0 {
+                    let remaining_exp = exp - terminal_exp;
+                    let radix8_stages = remaining_exp / 3;
+                    let prefix_rem = remaining_exp % 3;
+
+                    if radix8_stages > 0 {
+                        if let Some(bf) =
                             T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
+                        {
+                            return Ok(bf);
+                        }
+                    } else {
+                        match prefix_rem {
+                            0 => {}
+                            1 => {
+                                // Need one radix-2 peel to land on terminal.
+                                if let Some(bf) = T::mixed_radix_butterfly2(Zaft::strategy(
+                                    n / 2,
+                                    fft_direction,
+                                )?)? {
+                                    return Ok(bf);
+                                }
+                            }
+                            2 => {
+                                // Need one radix-4 peel to land on terminal.
+                                if let Some(bf) = T::mixed_radix_butterfly4(Zaft::strategy(
+                                    n / 4,
+                                    fft_direction,
+                                )?)? {
+                                    return Ok(bf);
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                } else {
+                    let rem3 = exp % 3;
+                    if rem3 == 2 {
+                        if let Some(bf) =
+                            T::mixed_radix_butterfly4(Zaft::strategy(n / 4, fft_direction)?)?
+                        {
+                            return Ok(bf);
+                        }
+                    } else if rem3 == 1
+                        && let Some(bf) =
+                            T::mixed_radix_butterfly2(Zaft::strategy(n / 2, fft_direction)?)?
                     {
                         return Ok(bf);
                     }
                     if let Some(bf) =
-                        T::mixed_radix_butterfly2(Zaft::strategy(n / 2, fft_direction)?)?
+                        T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
                     {
                         return Ok(bf);
                     }
-                }
-                if let Some(bf) = T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
-                {
-                    return Ok(bf);
                 }
             }
             T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_six {
+            if Zaft::could_do_split_mixed_radix() {
+                let has216 = T::butterfly216(fft_direction).is_some();
+                let has36 = T::butterfly36(fft_direction).is_some();
+
+                let terminal = if has216 && n.is_multiple_of(216) {
+                    216
+                } else if has36 && n.is_multiple_of(36) {
+                    36
+                } else {
+                    0
+                };
+
+                #[allow(clippy::manual_checked_ops)]
+                if terminal > 0 {
+                    let remaining = n / terminal;
+                    if remaining == 1 {
+                        // n IS the terminal
+                    } else if remaining.is_multiple_of(6) {
+                        // Peel radix-6 toward terminal
+                        if let Some(bf) =
+                            T::mixed_radix_butterfly6(Zaft::strategy(n / 6, fft_direction)?)?
+                        {
+                            return Ok(bf);
+                        }
+                    }
+                } else if n.is_multiple_of(6)
+                    && let Some(bf) =
+                        T::mixed_radix_butterfly6(Zaft::strategy(n / 6, fft_direction)?)?
+                {
+                    return Ok(bf);
+                }
+            }
             T::radix6(n, fft_direction)
         } else if prime_factors.is_power_of_seven {
             T::radix7(n, fft_direction)

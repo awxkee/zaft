@@ -167,7 +167,12 @@ where
 
         let bf2 = FastButterfly2::new(self.direction);
 
-        for (dst, src) in output.chunks_exact_mut(9).zip(input.chunks_exact(16)) {
+        for (dst, src) in output
+            .as_chunks_mut::<9>()
+            .0
+            .iter_mut()
+            .zip(input.as_chunks::<16>().0.iter())
+        {
             let u0 = Complex::new(src[0], T::zero());
             let u1 = Complex::new(src[1], T::zero());
             let u2 = Complex::new(src[2], T::zero());

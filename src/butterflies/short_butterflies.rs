@@ -203,8 +203,8 @@ where
 #[allow(unused)]
 pub(crate) struct FastButterfly5<T> {
     direction: FftDirection,
-    twiddle1: Complex<T>,
-    twiddle2: Complex<T>,
+    pub(crate) twiddle1: Complex<T>,
+    pub(crate) twiddle2: Complex<T>,
 }
 
 #[allow(unused)]

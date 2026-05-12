@@ -26,9 +26,10 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::FftDirection;
 use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
 use crate::util::compute_twiddle;
+use crate::{FftDirection, FftSample};
+use num_traits::MulAdd;
 use std::arch::aarch64::*;
 
 pub(crate) struct ColumnButterfly3d {
@@ -85,23 +86,6 @@ impl ColumnButterfly3d {
             ]
         }
     }
-
-    #[inline(always)]
-    pub(crate) fn exec_r2c(&self, store: [NeonStoreD; 3]) -> [NeonStoreD; 2] {
-        unsafe {
-            let xp = vaddq_f64(store[1].v, store[2].v);
-            let xn = vsubq_f64(store[1].v, store[2].v);
-            let sum = vaddq_f64(store[0].v, xp);
-
-            let w_1 = vfmaq_f64(store[0].v, self.tw_re, xp);
-
-            let xn_rot = vextq_f64::<1>(xn, xn);
-
-            let y0 = sum;
-            let y1 = vfmaq_f64(w_1, self.tw_im, xn_rot);
-            [NeonStoreD::raw(y0), NeonStoreD::raw(y1)]
-        }
-    }
 }
 
 #[cfg(feature = "fcma")]
@@ -134,20 +118,6 @@ impl ColumnFcmaButterfly3d {
             NeonStoreD::raw(y1),
             NeonStoreD::raw(y2),
         ]
-    }
-
-    #[inline]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn exec_r2c(&self, store: [NeonStoreD; 3]) -> [NeonStoreD; 2] {
-        let xp = vaddq_f64(store[1].v, store[2].v);
-        let xn = vsubq_f64(store[1].v, store[2].v);
-        let sum = vaddq_f64(store[0].v, xp);
-
-        let w_1 = vfmaq_f64(store[0].v, self.tw_re, xp);
-
-        let y0 = sum;
-        let y1 = vcmlaq_rot90_f64(w_1, self.tw_im, xn);
-        [NeonStoreD::raw(y0), NeonStoreD::raw(y1)]
     }
 }
 
@@ -185,23 +155,6 @@ impl ColumnButterfly3f {
                 NeonStoreF::raw(y1),
                 NeonStoreF::raw(y2),
             ]
-        }
-    }
-
-    #[inline]
-    pub(crate) fn exec_r2c(&self, store: [NeonStoreF; 3]) -> [NeonStoreF; 2] {
-        unsafe {
-            let xp = vaddq_f32(store[1].v, store[2].v);
-            let xn = vsubq_f32(store[1].v, store[2].v);
-            let sum = vaddq_f32(store[0].v, xp);
-
-            let w_1 = vfmaq_f32(store[0].v, self.tw_re, xp);
-
-            let xn_rot = vrev64q_f32(xn);
-
-            let y0 = sum;
-            let y1 = vfmaq_f32(w_1, self.tw_im, xn_rot);
-            [NeonStoreF::raw(y0), NeonStoreF::raw(y1)]
         }
     }
 
@@ -266,20 +219,6 @@ impl ColumnFcmaButterfly3f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn exec_r2c(&self, store: [NeonStoreF; 3]) -> [NeonStoreF; 2] {
-        let xp = vaddq_f32(store[1].v, store[2].v);
-        let xn = vsubq_f32(store[1].v, store[2].v);
-        let sum = vaddq_f32(store[0].v, xp);
-
-        let w_1 = vfmaq_f32(store[0].v, self.tw_re, xp);
-
-        let y0 = sum;
-        let y1 = vcmlaq_rot90_f32(w_1, self.tw_im, xn);
-        [NeonStoreF::raw(y0), NeonStoreF::raw(y1)]
-    }
-
-    #[inline]
-    #[target_feature(enable = "fcma")]
     pub(crate) fn exech(&self, store: [NeonStoreFh; 3]) -> [NeonStoreFh; 3] {
         let xp = vadd_f32(store[1].v, store[2].v);
         let xn = vsub_f32(store[1].v, store[2].v);
@@ -295,5 +234,51 @@ impl ColumnFcmaButterfly3f {
             NeonStoreFh::raw(y1),
             NeonStoreFh::raw(y2),
         ]
+    }
+}
+
+pub(crate) struct ColumnRdftButterfly3d {}
+
+impl ColumnRdftButterfly3d {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
+    #[inline]
+    #[target_feature(enable = "neon")]
+    pub(crate) fn exec(&self, store: [NeonStoreD; 3]) -> [[NeonStoreD; 2]; 2] {
+        let w1 = store[1] + store[2];
+        let w2 = store[1] - store[2];
+        let x0 = w1 + store[0];
+        let x1 = w1.mul_add(NeonStoreD::dup(-f64::HALF), store[0]);
+
+        let v0 = x0.zip_complex(NeonStoreD::zero());
+        let im1 = w2 * -f64::SQRT_3_OVER_2;
+        let v1 = x1.zip_complex(im1);
+
+        [[v0[0], v1[0]], [v0[1], v1[1]]]
+    }
+}
+
+pub(crate) struct ColumnRdftButterfly3f {}
+
+impl ColumnRdftButterfly3f {
+    pub(crate) fn new() -> Self {
+        Self {}
+    }
+
+    #[inline]
+    #[target_feature(enable = "neon")]
+    pub(crate) fn exec(&self, store: [NeonStoreF; 3]) -> [[NeonStoreF; 2]; 2] {
+        let w1 = store[1] + store[2];
+        let w2 = store[1] - store[2];
+        let x0 = w1 + store[0];
+        let x1 = w1.mul_add(NeonStoreF::dup(-f32::HALF), store[0]);
+
+        let v0 = x0.zip_complex(NeonStoreF::zero());
+        let im1 = w2 * -f32::SQRT_3_OVER_2;
+        let v1 = x1.zip_complex(im1);
+
+        [[v0[0], v1[0]], [v0[1], v1[1]]]
     }
 }

@@ -256,8 +256,8 @@ macro_rules! gen_bf8f {
                         rows0 = self.bf2.exec(rows0);
                         rows1 = self.bf2.exec(rows1);
 
-                        rows0[1] = NeonStoreF::mul_by_complex(rows0[1], self.twiddles[0]);
-                        rows1[1] = NeonStoreF::mul_by_complex(rows1[1], self.twiddles[1]);
+                        rows0[1] = NeonStoreF::$mul(rows0[1], self.twiddles[0]);
+                        rows1[1] = NeonStoreF::$mul(rows1[1], self.twiddles[1]);
 
                         let transposed = transpose_f32x2_4x2(rows0, rows1);
 

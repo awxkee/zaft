@@ -39,6 +39,7 @@ pub(crate) trait R2CAlgorithmFactory<T> {
     fn r2c_butterfly7() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly8() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly9() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
+    fn r2c_butterfly10() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly11() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly12() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly13() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;

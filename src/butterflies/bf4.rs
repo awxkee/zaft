@@ -100,7 +100,12 @@ where
             ));
         }
 
-        for (real, complex) in input.chunks_exact(4).zip(output.chunks_exact_mut(3)) {
+        for (real, complex) in input
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<3>().0.iter_mut())
+        {
             let a = real[0];
             let b = real[1];
             let c = real[2];

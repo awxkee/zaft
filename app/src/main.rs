@@ -30,6 +30,12 @@
 // #![feature(duration_millis_float)]
 extern crate core;
 mod raders_reshuffle;
+mod rdft10;
+mod rdft12;
+mod rdft5;
+mod rdft6;
+mod rdft9;
+mod rfft;
 mod split_radix;
 
 use crate::raders_reshuffle::raders_reshuffle;

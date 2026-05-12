@@ -27,6 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::mixed::{AvxStoreD, AvxStoreF};
+use crate::err::try_vec;
 use crate::transpose::{TransposeExecutor, TransposeFactory};
 use crate::util::compute_twiddle;
 use crate::{FftExecutor, R2CFftExecutor, ZaftError};
@@ -34,7 +35,7 @@ use num_complex::Complex;
 use num_traits::Zero;
 use std::sync::Arc;
 
-macro_rules! define_mixed_radix_avx_d {
+macro_rules! define_mixed_radix_avx_d_rdft {
     ($radix_name: ident, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
         use crate::avx::mixed::butterflies::$bf_name;
         pub(crate) struct $radix_name {
@@ -63,10 +64,6 @@ macro_rules! define_mixed_radix_avx_d {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
-                assert!(
-                    !width.is_multiple_of(2),
-                    "This is an UB to call Odd Mixed-Radix R2C with even `width`"
-                );
 
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
@@ -115,7 +112,7 @@ macro_rules! define_mixed_radix_avx_d {
                         width - to_remove_second_stage,
                         $complex_row_count,
                     ),
-                    inner_bf: $bf_name::new(direction),
+                    inner_bf: $bf_name::new(),
                     width_scratch_length,
                     second_stage_len,
                 })
@@ -124,7 +121,7 @@ macro_rules! define_mixed_radix_avx_d {
 
         impl R2CFftExecutor<f64> for $radix_name {
             fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
-                let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
+                let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 
@@ -176,23 +173,16 @@ macro_rules! define_mixed_radix_avx_d {
                     let twiddle_chunk_0 = &twiddle_chunk[..TWIDDLES_PER_COLUMN];
                     let twiddle_chunk_1 = &twiddle_chunk[TWIDDLES_PER_COLUMN..];
 
-                    let mut columns_0 = [AvxStoreD::zero(); ROW_COUNT];
-                    let mut columns_1 = [AvxStoreD::zero(); ROW_COUNT];
+                    let mut source_cols = [AvxStoreD::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            let [q0, q1] = AvxStoreD::load(
+                            source_cols[i] = AvxStoreD::load(
                                 src.get_unchecked(index_base_0 + len_per_row * i..),
-                            )
-                            .to_complex();
-                            columns_0[i] = q0;
-                            columns_1[i] = q1;
+                            );
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output_0 = unsafe { self.inner_bf.exec(columns_0) };
-                    #[allow(unused_unsafe)]
-                    let output_1 = unsafe { self.inner_bf.exec(columns_1) };
+                    let [output_0, output_1] = self.inner_bf.exec(source_cols);
 
                     unsafe {
                         output_0[0].write(complex.get_unchecked_mut(index_base_0..));
@@ -232,14 +222,11 @@ macro_rules! define_mixed_radix_avx_d {
                     let mut columns = [AvxStoreD::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            let q =
-                                AvxStoreD::load2(src.get_unchecked(index_base + len_per_row * i..));
-                            columns[i] = q.to_complex()[0];
+                            columns[i] = AvxStoreD::load2(src.get_unchecked(index_base + len_per_row * i..));
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let [output, _] = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(complex.get_unchecked_mut(index_base..));
@@ -277,8 +264,7 @@ macro_rules! define_mixed_radix_avx_d {
                     }
 
                     // apply our butterfly function down the columns
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                    let [output, _] = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -333,6 +319,13 @@ macro_rules! define_mixed_radix_avx_d {
                 }
 
                 let to_remove_second_stage = (self.width - 1) / 2;
+                let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
+                    ((self.width - 1) / 2) + 1
+                } else {
+                    (self.width - 1) / 2
+                };
+                let to_remove = (self.height - 1) / 2;
+                let complex_height = self.height - to_remove;
 
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
@@ -348,18 +341,38 @@ macro_rules! define_mixed_radix_avx_d {
                     self.width_executor
                         .execute_with_scratch(scratch_complex1, width_scratch)?;
 
+                    // Split into three regions:
+                    // 1. Regular columns x=0..nyquist_x
+                    // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
+                    // 3. Conjugate tail
+
+                    let nyquist_x = if self.width % 2 == 0 {
+                        Some(self.width / 2)
+                    } else {
+                        None
+                    };
+                    let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
                     self.transpose_executor.transpose_strided(
                         scratch_complex1,
                         self.width,
                         dst_chunk,
                         self.height,
-                        self.width - to_remove_second_stage,
-                        $complex_row_count,
+                        regular_cols, // only regular columns, uniform complex_height rows each
+                        complex_height,
                     );
 
+                    if let Some(nx) = nyquist_x {
+                        let input_index = nx; // x=nyquist_x, y=0
+                        let output_index = nx * self.height; // y=0 + nyquist_x * height
+                        unsafe {
+                            *dst_chunk.get_unchecked_mut(output_index) =
+                                *scratch_complex1.get_unchecked(input_index);
+                        }
+                    }
+
                     // conjugated tail
-                    for x in (self.width - to_remove_second_stage)..self.width {
-                        for y in 1..$complex_row_count {
+                    for x in (self.width - to_remove_second_stage_tail)..self.width {
+                        for y in 1..complex_height {
                             let input_index = x + y * self.width;
                             let output_index = self.execution_length - (y + x * self.height);
 
@@ -376,7 +389,7 @@ macro_rules! define_mixed_radix_avx_d {
     };
 }
 
-macro_rules! define_mixed_radix_avx_f {
+macro_rules! define_mixed_radix_avx_f_rdft {
     ($radix_name: ident, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
         use crate::avx::mixed::butterflies::$bf_name;
         pub(crate) struct $radix_name {
@@ -405,10 +418,6 @@ macro_rules! define_mixed_radix_avx_f {
                 let direction = width_executor.direction();
 
                 let width = width_executor.length();
-                assert!(
-                    !width.is_multiple_of(2),
-                    "This is an UB to call Odd Mixed-Radix R2C with even `width`"
-                );
 
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = $complex_row_count - 1;
@@ -457,7 +466,7 @@ macro_rules! define_mixed_radix_avx_f {
                         width - to_remove_second_stage,
                         $complex_row_count,
                     ),
-                    inner_bf: $bf_name::new(direction),
+                    inner_bf: $bf_name::new(),
                     width_scratch_length,
                     second_stage_len,
                 })
@@ -466,7 +475,7 @@ macro_rules! define_mixed_radix_avx_f {
 
         impl R2CFftExecutor<f32> for $radix_name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
-                let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
+                let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 
@@ -518,23 +527,16 @@ macro_rules! define_mixed_radix_avx_f {
                     let twiddle_chunk_0 = &twiddle_chunk[..TWIDDLES_PER_COLUMN];
                     let twiddle_chunk_1 = &twiddle_chunk[TWIDDLES_PER_COLUMN..];
 
-                    let mut columns_0 = [AvxStoreF::zero(); ROW_COUNT];
-                    let mut columns_1 = [AvxStoreF::zero(); ROW_COUNT];
+                    let mut source_cols = [AvxStoreF::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            let [q0, q1] = AvxStoreF::load(
+                            source_cols[i] = AvxStoreF::load(
                                 src.get_unchecked(index_base_0 + len_per_row * i..),
-                            )
-                            .to_complex();
-                            columns_0[i] = q0;
-                            columns_1[i] = q1;
+                            );
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output_0 = unsafe { self.inner_bf.exec(columns_0) };
-                    #[allow(unused_unsafe)]
-                    let output_1 = unsafe { self.inner_bf.exec(columns_1) };
+                    let [output_0, output_1] = self.inner_bf.exec(source_cols);
 
                     unsafe {
                         output_0[0].write(complex.get_unchecked_mut(index_base_0..));
@@ -574,14 +576,12 @@ macro_rules! define_mixed_radix_avx_f {
                     let mut columns = [AvxStoreF::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            let q =
+                            columns[i] =
                                 AvxStoreF::load4(src.get_unchecked(index_base + len_per_row * i..));
-                            columns[i] = q.to_complex()[0];
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let [output, _] = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(complex.get_unchecked_mut(index_base..));
@@ -614,14 +614,12 @@ macro_rules! define_mixed_radix_avx_f {
                         unsafe {
                             columns[i] = AvxStoreF::load3(
                                 src.get_unchecked(partial_remainder_base + len_per_row * i..),
-                            )
-                            .to_complex()[0];
+                            );
                         }
                     }
 
                     // apply our butterfly function down the columns
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                    let [output, _] = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -656,14 +654,12 @@ macro_rules! define_mixed_radix_avx_f {
                         unsafe {
                             columns[i] = AvxStoreF::load2(
                                 src.get_unchecked(partial_remainder_base + len_per_row * i..),
-                            )
-                            .to_complex()[0];
+                            );
                         }
                     }
 
                     // apply our butterfly function down the columns
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                    let [output, _] = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -703,8 +699,7 @@ macro_rules! define_mixed_radix_avx_f {
                     }
 
                     // apply our butterfly function down the columns
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec_r2c(columns) };
+                    let [output, _] = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -759,6 +754,13 @@ macro_rules! define_mixed_radix_avx_f {
                 }
 
                 let to_remove_second_stage = (self.width - 1) / 2;
+                let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
+                    ((self.width - 1) / 2) + 1
+                } else {
+                    (self.width - 1) / 2
+                };
+                let to_remove = (self.height - 1) / 2;
+                let complex_height = self.height - to_remove;
 
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
@@ -774,18 +776,38 @@ macro_rules! define_mixed_radix_avx_f {
                     self.width_executor
                         .execute_with_scratch(scratch_complex1, width_scratch)?;
 
+                    // Split into three regions:
+                    // 1. Regular columns x=0..nyquist_x
+                    // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
+                    // 3. Conjugate tail
+
+                    let nyquist_x = if self.width % 2 == 0 {
+                        Some(self.width / 2)
+                    } else {
+                        None
+                    };
+                    let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
                     self.transpose_executor.transpose_strided(
                         scratch_complex1,
                         self.width,
                         dst_chunk,
                         self.height,
-                        self.width - to_remove_second_stage,
-                        $complex_row_count,
+                        regular_cols, // only regular columns, uniform complex_height rows each
+                        complex_height,
                     );
 
+                    if let Some(nx) = nyquist_x {
+                        let input_index = nx; // x=nyquist_x, y=0
+                        let output_index = nx * self.height; // y=0 + nyquist_x * height
+                        unsafe {
+                            *dst_chunk.get_unchecked_mut(output_index) =
+                                *scratch_complex1.get_unchecked(input_index);
+                        }
+                    }
+
                     // conjugated tail
-                    for x in (self.width - to_remove_second_stage)..self.width {
-                        for y in 1..$complex_row_count {
+                    for x in (self.width - to_remove_second_stage_tail)..self.width {
+                        for y in 1..complex_height {
                             let input_index = x + y * self.width;
                             let output_index = self.execution_length - (y + x * self.height);
 
@@ -802,38 +824,86 @@ macro_rules! define_mixed_radix_avx_f {
     };
 }
 
-define_mixed_radix_avx_d!(AvxR2CMixedRadix3d, ColumnButterfly3d, 3, 2, mul_by_complex);
-define_mixed_radix_avx_f!(AvxR2CMixedRadix3f, ColumnButterfly3f, 3, 2, mul_by_complex);
-define_mixed_radix_avx_d!(AvxR2CMixedRadix5d, ColumnButterfly5d, 5, 3, mul_by_complex);
-define_mixed_radix_avx_f!(AvxR2CMixedRadix5f, ColumnButterfly5f, 5, 3, mul_by_complex);
-define_mixed_radix_avx_d!(AvxR2CMixedRadix7d, ColumnButterfly7d, 7, 4, mul_by_complex);
-define_mixed_radix_avx_f!(AvxR2CMixedRadix7f, ColumnButterfly7f, 7, 4, mul_by_complex);
-define_mixed_radix_avx_d!(AvxR2CMixedRadix9d, ColumnButterfly9d, 9, 5, mul_by_complex);
-define_mixed_radix_avx_f!(AvxR2CMixedRadix9f, ColumnButterfly9f, 9, 5, mul_by_complex);
-define_mixed_radix_avx_d!(
+define_mixed_radix_avx_d_rdft!(
+    AvxR2CMixedRadix3d,
+    ColumnRdftButterfly3d,
+    3,
+    2,
+    mul_by_complex
+);
+define_mixed_radix_avx_f_rdft!(
+    AvxR2CMixedRadix3f,
+    ColumnRdftButterfly3f,
+    3,
+    2,
+    mul_by_complex
+);
+define_mixed_radix_avx_d_rdft!(
+    AvxR2CMixedRadix5d,
+    ColumnRdftButterfly5d,
+    5,
+    3,
+    mul_by_complex
+);
+define_mixed_radix_avx_f_rdft!(
+    AvxR2CMixedRadix5f,
+    ColumnRdftButterfly5f,
+    5,
+    3,
+    mul_by_complex
+);
+define_mixed_radix_avx_d_rdft!(
+    AvxR2CMixedRadix7d,
+    ColumnRdftButterfly7d,
+    7,
+    4,
+    mul_by_complex
+);
+define_mixed_radix_avx_f_rdft!(
+    AvxR2CMixedRadix7f,
+    ColumnRdftButterfly7f,
+    7,
+    4,
+    mul_by_complex
+);
+define_mixed_radix_avx_d_rdft!(
+    AvxR2CMixedRadix9d,
+    ColumnRdftButterfly9d,
+    9,
+    5,
+    mul_by_complex
+);
+define_mixed_radix_avx_f_rdft!(
+    AvxR2CMixedRadix9f,
+    ColumnRdftButterfly9f,
+    9,
+    5,
+    mul_by_complex
+);
+define_mixed_radix_avx_d_rdft!(
     AvxR2CMixedRadix11d,
-    ColumnButterfly11d,
+    ColumnRdftButterfly11d,
     11,
     6,
     mul_by_complex
 );
-define_mixed_radix_avx_f!(
+define_mixed_radix_avx_f_rdft!(
     AvxR2CMixedRadix11f,
-    ColumnButterfly11f,
+    ColumnRdftButterfly11f,
     11,
     6,
     mul_by_complex
 );
-define_mixed_radix_avx_d!(
+define_mixed_radix_avx_d_rdft!(
     AvxR2CMixedRadix13d,
-    ColumnButterfly13d,
+    ColumnRdftButterfly13d,
     13,
     7,
     mul_by_complex
 );
-define_mixed_radix_avx_f!(
+define_mixed_radix_avx_f_rdft!(
     AvxR2CMixedRadix13f,
-    ColumnButterfly13f,
+    ColumnRdftButterfly13f,
     13,
     7,
     mul_by_complex

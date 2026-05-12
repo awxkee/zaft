@@ -388,7 +388,12 @@ where
             return Err(ZaftError::InvalidSizeMultiplier(output.len(), 6));
         }
 
-        for (input, complex) in input.chunks_exact(11).zip(output.chunks_exact_mut(6)) {
+        for (input, complex) in input
+            .as_chunks::<11>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<6>().0.iter_mut())
+        {
             let u0 = input[0];
             let u1 = input[1];
             let u2 = input[2];

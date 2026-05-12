@@ -46,9 +46,11 @@ impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
         let blend_mask = NeonStoreD::set_values(f64::from_bits(0xFFFF_FFFF_FFFF_FFFFu64), 0.0);
 
         for ((twiddle, s_out), s_out_rev) in twiddles
-            .chunks_exact(4)
-            .zip(left.chunks_exact_mut(4))
-            .zip(right.rchunks_exact_mut(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(left.as_chunks_mut::<4>().0.iter_mut())
+            .zip(right.as_rchunks_mut::<4>().1.iter_mut().rev())
         {
             let [twiddle_re0, twiddle_im0] = NeonStoreD::from_complex(&twiddle[0]).dup_even_odds();
             let [twiddle_re1, twiddle_im1] = NeonStoreD::from_complex(&twiddle[1]).dup_even_odds();
@@ -131,7 +133,7 @@ impl R2CTwiddlesHandler<f64> for R2CNeonTwiddles {
         let l_remainder_start = main_count * 4;
         let r_remainder_end = right.len() - main_count * 4;
 
-        let tw0 = twiddles.chunks_exact(4).remainder();
+        let tw0 = twiddles.as_chunks::<4>().1;
         let l0 = &mut left[l_remainder_start..];
         let r0 = &mut right[..r_remainder_end];
 
@@ -180,9 +182,11 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
             let rls2 = &mut right[if !right_len.is_multiple_of(2) { 1 } else { 0 }..];
 
             for ((twiddle, s_out), s_out_rev) in twiddles
-                .chunks_exact(8)
-                .zip(left.chunks_exact_mut(8))
-                .zip(rls2.rchunks_exact_mut(8))
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .zip(left.as_chunks_mut::<8>().0.iter_mut())
+                .zip(rls2.as_rchunks_mut::<8>().1.iter_mut().rev())
             {
                 let [twiddle_re0, twiddle_im0] =
                     NeonStoreF::from_complex_ref(twiddle).dup_even_odds();
@@ -286,14 +290,16 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
             let l_remainder_start = main_count * 8;
             let r_remainder_end = rls2.len() - main_count * 8;
 
-            let tw0 = twiddles.chunks_exact(8).remainder();
+            let tw0 = twiddles.as_chunks::<8>().1;
             let l0 = &mut left[l_remainder_start..];
             let r0 = &mut rls2[..r_remainder_end];
 
             for ((twiddle, s_out), s_out_rev) in tw0
-                .chunks_exact(2)
-                .zip(l0.chunks_exact_mut(2))
-                .zip(r0.rchunks_exact_mut(2))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .zip(l0.as_chunks_mut::<2>().0.iter_mut())
+                .zip(r0.as_rchunks_mut::<2>().1.iter_mut().rev())
             {
                 let [twiddle_re, twiddle_im] =
                     NeonStoreF::from_complex_ref(twiddle).dup_even_odds();
@@ -323,9 +329,9 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
             }
 
             if !twiddles.len().is_multiple_of(2) {
-                let rem_twiddles = twiddles.chunks_exact(2).remainder();
+                let rem_twiddles = twiddles.as_chunks::<2>().1;
                 let min_length = left.len().min(right.len());
-                let rem_left = left.chunks_exact_mut(2).into_remainder();
+                let rem_left = left.as_chunks_mut::<2>().1;
                 let full_right_chunks = right.len() - (min_length / 2) * 2;
                 let rem_right = &mut right[..full_right_chunks];
 

@@ -121,6 +121,11 @@ impl NeonStoreD {
     }
 
     #[inline(always)]
+    pub(crate) fn mul_f64_add(&self, p0: f64, p1: Self) -> Self {
+        unsafe { NeonStoreD::raw(vfmaq_n_f64(p1.v, self.v, p0)) }
+    }
+
+    #[inline(always)]
     pub(crate) fn unpack_evens(&self, other: Self) -> Self {
         unsafe {
             NeonStoreD {
@@ -182,13 +187,27 @@ impl NeonStoreD {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub(crate) fn to_complex(self) -> [Self; 2] {
         unsafe {
             let ql = vzip1q_f64(self.v, vdupq_n_f64(0.));
             let qh = vzip2q_f64(self.v, vdupq_n_f64(0.));
             [NeonStoreD { v: ql }, NeonStoreD { v: qh }]
         }
+    }
+
+    #[inline(always)]
+    pub(crate) fn zip_complex(self, other: Self) -> [Self; 2] {
+        unsafe {
+            let ql = vzip1q_f64(self.v, other.v);
+            let qh = vzip2q_f64(self.v, other.v);
+            [NeonStoreD { v: ql }, NeonStoreD { v: qh }]
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn zero() -> Self {
+        unsafe { NeonStoreD { v: vdupq_n_f64(0.) } }
     }
 
     #[inline]
@@ -390,6 +409,15 @@ impl NeonStoreF {
         }
     }
 
+    #[inline(always)]
+    pub(crate) fn zip_complex(self, other: Self) -> [Self; 2] {
+        unsafe {
+            let ql = vzip1q_f32(self.v, other.v);
+            let qh = vzip2q_f32(self.v, other.v);
+            [NeonStoreF { v: ql }, NeonStoreF { v: qh }]
+        }
+    }
+
     #[inline]
     pub(crate) fn to_lo(self) -> NeonStoreFh {
         unsafe { NeonStoreFh::raw(vget_low_f32(self.v)) }
@@ -459,6 +487,16 @@ impl NeonStoreF {
                 v: vrev64q_f32(self.v),
             }
         }
+    }
+
+    #[inline(always)]
+    pub(crate) fn zero() -> Self {
+        unsafe { NeonStoreF { v: vdupq_n_f32(0.) } }
+    }
+
+    #[inline(always)]
+    pub(crate) fn mul_f32_add(self, a: f32, b: Self) -> NeonStoreF {
+        unsafe { NeonStoreF::raw(vfmaq_n_f32(b.v, self.v, a)) }
     }
 
     #[inline(always)]
@@ -663,7 +701,7 @@ impl NeonStoreFh {
 }
 
 impl Default for NeonStoreD {
-    #[inline]
+    #[inline(always)]
     fn default() -> Self {
         unsafe { NeonStoreD { v: vdupq_n_f64(0.) } }
     }

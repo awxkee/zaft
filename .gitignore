@@ -3,3 +3,4 @@
 app/target
 Cargo.lock
 docs
+.cargo/config.toml
