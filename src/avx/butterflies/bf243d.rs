@@ -96,15 +96,6 @@ impl ColumnButterfly27d {
             load!(src, 25),
         ]);
 
-        s1[1] = AvxStoreD::mul_by_complex(s1[1], self.twiddle1);
-        s1[2] = AvxStoreD::mul_by_complex(s1[2], self.twiddle2);
-        s1[3] = AvxStoreD::mul_by_complex(s1[3], self.twiddle3);
-        s1[4] = AvxStoreD::mul_by_complex(s1[4], self.twiddle4);
-        s1[5] = AvxStoreD::mul_by_complex(s1[5], self.twiddle5);
-        s1[6] = AvxStoreD::mul_by_complex(s1[6], self.twiddle6);
-        s1[7] = AvxStoreD::mul_by_complex(s1[7], self.twiddle7);
-        s1[8] = AvxStoreD::mul_by_complex(s1[8], self.twiddle8);
-
         let mut s2 = self.bf9.exec([
             load!(src, 2),
             load!(src, 5),
@@ -116,15 +107,6 @@ impl ColumnButterfly27d {
             load!(src, 23),
             load!(src, 26),
         ]);
-
-        s2[1] = AvxStoreD::mul_by_complex(s2[1], self.twiddle2);
-        s2[2] = AvxStoreD::mul_by_complex(s2[2], self.twiddle4);
-        s2[3] = AvxStoreD::mul_by_complex(s2[3], self.twiddle6);
-        s2[4] = AvxStoreD::mul_by_complex(s2[4], self.twiddle8);
-        s2[5] = AvxStoreD::mul_by_complex(s2[5], self.twiddle9);
-        s2[6] = AvxStoreD::mul_by_complex(s2[6], self.twiddle10);
-        s2[7] = AvxStoreD::mul_by_complex(s2[7], self.twiddle11);
-        s2[8] = AvxStoreD::mul_by_complex(s2[8], self.twiddle12);
 
         macro_rules! store {
             ($v: expr, $idx: expr, $dst: expr) => {{ unsafe { $v.write($dst.get_unchecked_mut($idx * 9..)) } }};
@@ -142,17 +124,66 @@ impl ColumnButterfly27d {
             load!(src, 24),
         ]);
 
-        let z = self.bf9.bf3.exec([s0[0], s1[0], s2[0]]);
-        store!(z[0], 0, dst);
-        store!(z[1], 9, dst);
-        store!(z[2], 18, dst);
+        let z0 = self.bf9.bf3.exec([s0[0], s1[0], s2[0]]);
+        store!(z0[0], 0, dst);
+        store!(z0[1], 9, dst);
+        store!(z0[2], 18, dst);
 
-        for i in 1..9 {
-            let z = self.bf9.bf3.exec([s0[i], s1[i], s2[i]]);
-            store!(z[0], i, dst);
-            store!(z[1], i + 9, dst);
-            store!(z[2], i + 18, dst);
-        }
+        s1[1] = AvxStoreD::mul_by_complex(s1[1], self.twiddle1);
+        s2[1] = AvxStoreD::mul_by_complex(s2[1], self.twiddle2);
+        let z1 = self.bf9.bf3.exec([s0[1], s1[1], s2[1]]);
+        store!(z1[0], 1, dst);
+        store!(z1[1], 10, dst);
+        store!(z1[2], 19, dst);
+
+        s1[2] = AvxStoreD::mul_by_complex(s1[2], self.twiddle2);
+        s2[2] = AvxStoreD::mul_by_complex(s2[2], self.twiddle4);
+        let z2 = self.bf9.bf3.exec([s0[2], s1[2], s2[2]]);
+        store!(z2[0], 2, dst);
+        store!(z2[1], 11, dst);
+        store!(z2[2], 20, dst);
+
+        s1[3] = AvxStoreD::mul_by_complex(s1[3], self.twiddle3);
+        s2[3] = AvxStoreD::mul_by_complex(s2[3], self.twiddle6);
+        let z3 = self.bf9.bf3.exec([s0[3], s1[3], s2[3]]);
+        store!(z3[0], 3, dst);
+        store!(z3[1], 12, dst);
+        store!(z3[2], 21, dst);
+
+        s1[4] = AvxStoreD::mul_by_complex(s1[4], self.twiddle4);
+        s2[4] = AvxStoreD::mul_by_complex(s2[4], self.twiddle8);
+        let z4 = self.bf9.bf3.exec([s0[4], s1[4], s2[4]]);
+        store!(z4[0], 4, dst);
+        store!(z4[1], 13, dst);
+        store!(z4[2], 22, dst);
+
+        s1[5] = AvxStoreD::mul_by_complex(s1[5], self.twiddle5);
+        s2[5] = AvxStoreD::mul_by_complex(s2[5], self.twiddle9);
+        let z5 = self.bf9.bf3.exec([s0[5], s1[5], s2[5]]);
+        store!(z5[0], 5, dst);
+        store!(z5[1], 14, dst);
+        store!(z5[2], 23, dst);
+
+        s1[6] = AvxStoreD::mul_by_complex(s1[6], self.twiddle6);
+        s2[6] = AvxStoreD::mul_by_complex(s2[6], self.twiddle10);
+        let z6 = self.bf9.bf3.exec([s0[6], s1[6], s2[6]]);
+        store!(z6[0], 6, dst);
+        store!(z6[1], 15, dst);
+        store!(z6[2], 24, dst);
+
+        s1[7] = AvxStoreD::mul_by_complex(s1[7], self.twiddle7);
+        s2[7] = AvxStoreD::mul_by_complex(s2[7], self.twiddle11);
+        let z7 = self.bf9.bf3.exec([s0[7], s1[7], s2[7]]);
+        store!(z7[0], 7, dst);
+        store!(z7[1], 16, dst);
+        store!(z7[2], 25, dst);
+
+        s1[8] = AvxStoreD::mul_by_complex(s1[8], self.twiddle8);
+        s2[8] = AvxStoreD::mul_by_complex(s2[8], self.twiddle12);
+        let z8 = self.bf9.bf3.exec([s0[8], s1[8], s2[8]]);
+        store!(z8[0], 8, dst);
+        store!(z8[1], 17, dst);
+        store!(z8[2], 26, dst);
     }
 
     #[inline]
@@ -174,15 +205,6 @@ impl ColumnButterfly27d {
             load!(src, 25),
         ]);
 
-        s1[1] = AvxStoreD::mul_by_complex(s1[1], self.twiddle1);
-        s1[2] = AvxStoreD::mul_by_complex(s1[2], self.twiddle2);
-        s1[3] = AvxStoreD::mul_by_complex(s1[3], self.twiddle3);
-        s1[4] = AvxStoreD::mul_by_complex(s1[4], self.twiddle4);
-        s1[5] = AvxStoreD::mul_by_complex(s1[5], self.twiddle5);
-        s1[6] = AvxStoreD::mul_by_complex(s1[6], self.twiddle6);
-        s1[7] = AvxStoreD::mul_by_complex(s1[7], self.twiddle7);
-        s1[8] = AvxStoreD::mul_by_complex(s1[8], self.twiddle8);
-
         let mut s2 = self.bf9.exec([
             load!(src, 2),
             load!(src, 5),
@@ -194,15 +216,6 @@ impl ColumnButterfly27d {
             load!(src, 23),
             load!(src, 26),
         ]);
-
-        s2[1] = AvxStoreD::mul_by_complex(s2[1], self.twiddle2);
-        s2[2] = AvxStoreD::mul_by_complex(s2[2], self.twiddle4);
-        s2[3] = AvxStoreD::mul_by_complex(s2[3], self.twiddle6);
-        s2[4] = AvxStoreD::mul_by_complex(s2[4], self.twiddle8);
-        s2[5] = AvxStoreD::mul_by_complex(s2[5], self.twiddle9);
-        s2[6] = AvxStoreD::mul_by_complex(s2[6], self.twiddle10);
-        s2[7] = AvxStoreD::mul_by_complex(s2[7], self.twiddle11);
-        s2[8] = AvxStoreD::mul_by_complex(s2[8], self.twiddle12);
 
         macro_rules! store {
             ($v: expr, $idx: expr, $dst: expr) => {{ unsafe { $v.write_lo($dst.get_unchecked_mut($idx * 9..)) } }};
@@ -220,17 +233,66 @@ impl ColumnButterfly27d {
             load!(src, 24),
         ]);
 
-        let z = self.bf9.bf3.exec([s0[0], s1[0], s2[0]]);
-        store!(z[0], 0, dst);
-        store!(z[1], 9, dst);
-        store!(z[2], 18, dst);
+        let z0 = self.bf9.bf3.exec([s0[0], s1[0], s2[0]]);
+        store!(z0[0], 0, dst);
+        store!(z0[1], 9, dst);
+        store!(z0[2], 18, dst);
 
-        for i in 1..9 {
-            let z = self.bf9.bf3.exec([s0[i], s1[i], s2[i]]);
-            store!(z[0], i, dst);
-            store!(z[1], i + 9, dst);
-            store!(z[2], i + 18, dst);
-        }
+        s1[1] = AvxStoreD::mul_by_complex(s1[1], self.twiddle1);
+        s2[1] = AvxStoreD::mul_by_complex(s2[1], self.twiddle2);
+        let z1 = self.bf9.bf3.exec([s0[1], s1[1], s2[1]]);
+        store!(z1[0], 1, dst);
+        store!(z1[1], 10, dst);
+        store!(z1[2], 19, dst);
+
+        s1[2] = AvxStoreD::mul_by_complex(s1[2], self.twiddle2);
+        s2[2] = AvxStoreD::mul_by_complex(s2[2], self.twiddle4);
+        let z2 = self.bf9.bf3.exec([s0[2], s1[2], s2[2]]);
+        store!(z2[0], 2, dst);
+        store!(z2[1], 11, dst);
+        store!(z2[2], 20, dst);
+
+        s1[3] = AvxStoreD::mul_by_complex(s1[3], self.twiddle3);
+        s2[3] = AvxStoreD::mul_by_complex(s2[3], self.twiddle6);
+        let z3 = self.bf9.bf3.exec([s0[3], s1[3], s2[3]]);
+        store!(z3[0], 3, dst);
+        store!(z3[1], 12, dst);
+        store!(z3[2], 21, dst);
+
+        s1[4] = AvxStoreD::mul_by_complex(s1[4], self.twiddle4);
+        s2[4] = AvxStoreD::mul_by_complex(s2[4], self.twiddle8);
+        let z4 = self.bf9.bf3.exec([s0[4], s1[4], s2[4]]);
+        store!(z4[0], 4, dst);
+        store!(z4[1], 13, dst);
+        store!(z4[2], 22, dst);
+
+        s1[5] = AvxStoreD::mul_by_complex(s1[5], self.twiddle5);
+        s2[5] = AvxStoreD::mul_by_complex(s2[5], self.twiddle9);
+        let z5 = self.bf9.bf3.exec([s0[5], s1[5], s2[5]]);
+        store!(z5[0], 5, dst);
+        store!(z5[1], 14, dst);
+        store!(z5[2], 23, dst);
+
+        s1[6] = AvxStoreD::mul_by_complex(s1[6], self.twiddle6);
+        s2[6] = AvxStoreD::mul_by_complex(s2[6], self.twiddle10);
+        let z6 = self.bf9.bf3.exec([s0[6], s1[6], s2[6]]);
+        store!(z6[0], 6, dst);
+        store!(z6[1], 15, dst);
+        store!(z6[2], 24, dst);
+
+        s1[7] = AvxStoreD::mul_by_complex(s1[7], self.twiddle7);
+        s2[7] = AvxStoreD::mul_by_complex(s2[7], self.twiddle11);
+        let z7 = self.bf9.bf3.exec([s0[7], s1[7], s2[7]]);
+        store!(z7[0], 7, dst);
+        store!(z7[1], 16, dst);
+        store!(z7[2], 25, dst);
+
+        s1[8] = AvxStoreD::mul_by_complex(s1[8], self.twiddle8);
+        s2[8] = AvxStoreD::mul_by_complex(s2[8], self.twiddle12);
+        let z8 = self.bf9.bf3.exec([s0[8], s1[8], s2[8]]);
+        store!(z8[0], 8, dst);
+        store!(z8[1], 17, dst);
+        store!(z8[2], 26, dst);
     }
 }
 

@@ -96,14 +96,18 @@ macro_rules! define_mixed_radix_avx_d_rdft {
                     }
                 }
 
-                let width_scratch_length = width_executor.scratch_length();
-
                 let to_remove_second_stage = (width - 1) / 2;
 
                 let second_stage_len = $complex_row_count * width;
+                let execution_length = width * ROW_COUNT;
+                let width_scratch_length = if execution_length / 2 + 1 >= width_executor.scratch_length() {
+                    0
+                } else {
+                    width_executor.scratch_length()
+                };
 
                 Ok($radix_name {
-                    execution_length: width * ROW_COUNT,
+                    execution_length,
                     width_executor,
                     width,
                     height: ROW_COUNT,
@@ -330,6 +334,7 @@ macro_rules! define_mixed_radix_avx_d_rdft {
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
                 let (scratch_complex1, rem_scratch) = scratch.split_at_mut(self.second_stage_len);
+                let use_dst_as_scratch = self.complex_length() >= self.width_scratch_length;
 
                 for (dst_chunk, chunk) in dst
                     .chunks_exact_mut(self.complex_length())
@@ -339,7 +344,11 @@ macro_rules! define_mixed_radix_avx_d_rdft {
 
                     let (width_scratch, _) = rem_scratch.split_at_mut(self.width_scratch_length);
                     self.width_executor
-                        .execute_with_scratch(scratch_complex1, width_scratch)?;
+                        .execute_with_scratch(scratch_complex1, if use_dst_as_scratch {
+                        dst_chunk
+                    } else {
+                        width_scratch
+                    })?;
 
                     // Split into three regions:
                     // 1. Regular columns x=0..nyquist_x
@@ -450,14 +459,18 @@ macro_rules! define_mixed_radix_avx_f_rdft {
                     }
                 }
 
-                let width_scratch_length = width_executor.scratch_length();
-
                 let to_remove_second_stage = (width - 1) / 2;
 
                 let second_stage_len = $complex_row_count * width;
+                let execution_length = width * ROW_COUNT;
+                let width_scratch_length = if execution_length / 2 + 1 >= width_executor.scratch_length() {
+                    0
+                } else {
+                    width_executor.scratch_length()
+                };
 
                 Ok($radix_name {
-                    execution_length: width * ROW_COUNT,
+                    execution_length,
                     width_executor,
                     width,
                     height: ROW_COUNT,
@@ -765,6 +778,7 @@ macro_rules! define_mixed_radix_avx_f_rdft {
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
                 let (scratch_complex1, rem_scratch) = scratch.split_at_mut(self.second_stage_len);
+                let use_dst_as_scratch = self.complex_length() >= self.width_scratch_length;
 
                 for (dst_chunk, chunk) in dst
                     .chunks_exact_mut(self.complex_length())
@@ -774,7 +788,11 @@ macro_rules! define_mixed_radix_avx_f_rdft {
 
                     let (width_scratch, _) = rem_scratch.split_at_mut(self.width_scratch_length);
                     self.width_executor
-                        .execute_with_scratch(scratch_complex1, width_scratch)?;
+                        .execute_with_scratch(scratch_complex1, if use_dst_as_scratch {
+                        dst_chunk
+                    } else {
+                        width_scratch
+                    })?;
 
                     // Split into three regions:
                     // 1. Regular columns x=0..nyquist_x

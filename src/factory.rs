@@ -414,6 +414,7 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly256(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly512(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly1024(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly1536(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly2048(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn radix3(
         n: usize,
@@ -1287,6 +1288,58 @@ impl AlgorithmFactory<f32> for f32 {
                     }
                     use crate::neon::NeonButterfly1024f;
                     Some(Arc::new(NeonButterfly1024f::new(_fft_direction)))
+                }
+                #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+                {
+                    None
+                }
+            })
+            .clone()
+    }
+
+    fn butterfly1536(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>> = OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::Avx512vlButterfly1536f;
+                        return Some(Arc::new(Avx512vlButterfly1536f::new(_fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::AvxButterfly1536f;
+                        return Some(Arc::new(AvxButterfly1536f::new(_fft_direction)));
+                    }
+                }
+                #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                {
+                    #[cfg(feature = "fcma")]
+                    if std::arch::is_aarch64_feature_detected!("fcma") {
+                        match _fft_direction {
+                            FftDirection::Forward => {
+                                use crate::neon::NeonFcmaForwardButterfly1536f;
+                                return Some(Arc::new(NeonFcmaForwardButterfly1536f::new(
+                                    _fft_direction,
+                                )));
+                            }
+                            FftDirection::Inverse => {
+                                use crate::neon::NeonFcmaInverseButterfly1536f;
+                                return Some(Arc::new(NeonFcmaInverseButterfly1536f::new(
+                                    _fft_direction,
+                                )));
+                            }
+                        }
+                    }
+                    use crate::neon::NeonButterfly1536f;
+                    Some(Arc::new(NeonButterfly1536f::new(_fft_direction)))
                 }
                 #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
                 {

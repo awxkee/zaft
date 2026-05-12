@@ -45,6 +45,7 @@ use rand::RngExt;
 use rustfft::num_complex::Complex;
 use std::hint::black_box;
 use std::time::{Duration, Instant};
+use rustfft::FftPlanner;
 use zaft::Zaft;
 
 fn check_power_group(c: &mut Criterion, n: usize, group: String) {
@@ -346,16 +347,13 @@ fn main() {
     // // );
     // println!("{}", rs.0);
     // println!("{}", rs.1);
-    let mut data = vec![Complex::new(0.0019528865, 0.); 1801];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 8192];
     let mut c = Criterion::default().sample_size(10);
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
     }
     let o_data = data.clone();
     let mut cvt = data.clone();
-
-    let r2c_plan = Zaft::make_r2c_fft_f32(data.len()).unwrap();
-    r2c_plan.execute(&[], &mut cvt).unwrap();
 
     let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
     let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();

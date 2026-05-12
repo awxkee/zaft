@@ -238,8 +238,8 @@ fn check_power_groupd(c: &mut Criterion, n: usize, group: String) {
 pub fn criterion_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("fft");
     let c = group
-        .warm_up_time(Duration::from_millis(4000))
-        .measurement_time(Duration::from_millis(4000));
+        .warm_up_time(Duration::from_millis(4550))
+        .measurement_time(Duration::from_millis(4550));
     //     .measurement_time(Duration::from_millis(135));
     // check_power_group(c, 216, "216".to_string());
     // check_power_group(c, 243, "243".to_string());
@@ -349,17 +349,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    // check_power_group(c, 1801, "1801".to_string());
+    // check_power_groups(c, 243, "243".to_string());
+    // check_power_groups(c, 729, "729".to_string());
+    // check_power_groups(c, 2187, "2187".to_string());
+    // check_power_group(c, 1536, "1536".to_string());
 
-    let mut n = 216usize;
-    while n <= 100000 {
-        check_power_groups(c, n, n.to_string());
-        n *= 6;
-    }
-
-    check_power_groups(c, 512, "512".to_string());
-    check_power_groups(c, 1024, "1024".to_string());
-    check_power_groups(c, 2048, "2048".to_string());
+    // check_power_groups(c, 512, "512".to_string());
+    // check_power_groups(c, 1024, "1024".to_string());
+    // check_power_groups(c, 2048, "2048".to_string());
     check_power_groups(c, 4096, "4096".to_string());
     check_power_groups(c, 8192, "8192".to_string());
     check_power_groups(c, 16384, "16384".to_string());

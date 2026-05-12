@@ -107,11 +107,16 @@ macro_rules! define_mixed_radixd {
                 }
 
                 let width_scratch_length = width_executor.destructive_scratch_length();
-                let oof_width_scratch_length = width_executor.scratch_length();
+                let execution_length = width * ROW_COUNT;
+                let oof_width_scratch_length = if execution_length >= width_executor.scratch_length() {
+                    0
+                } else {
+                    width_executor.scratch_length()
+                };
 
                 #[allow(unused_unsafe)]
                 Ok($mx_type {
-                    execution_length: width * ROW_COUNT,
+                    execution_length,
                     width_executor,
                     width,
                     height: ROW_COUNT,
@@ -158,7 +163,7 @@ macro_rules! define_mixed_radixd {
                 Ok(())
             }
 
-            #[target_feature(enable = "avx2", enable = "fma")]
+            #[target_feature(enable = $features)]
             fn process_columns_in_place(&self, chunk: &mut [Complex<f64>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
@@ -256,6 +261,7 @@ macro_rules! define_mixed_radixd {
 
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.destructive_scratch_length());
+                let use_dst_as_scratch = self.execution_length >= self.oof_width_scratch_length;
 
                 for (dst_chunk, src_chunk) in dst
                     .chunks_exact_mut(self.execution_length)
@@ -264,7 +270,7 @@ macro_rules! define_mixed_radixd {
                     self.process_columns_in_place(src_chunk);
 
                     self.width_executor
-                        .execute_with_scratch(src_chunk, scratch)?;
+                        .execute_with_scratch(src_chunk, if use_dst_as_scratch { dst_chunk } else { scratch })?;
 
                     self.transpose_executor.transpose(
                         src_chunk,
@@ -376,19 +382,20 @@ macro_rules! define_mixed_radixd {
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
                 let (scratch, width_scratch) = scratch.split_at_mut(self.execution_length);
+                let use_dst_as_scratch = self.execution_length >= self.oof_width_scratch_length;
 
-                for (chunk, output_chunk) in src
+                for (chunk, dst_chunk) in src
                     .chunks_exact(self.execution_length)
                     .zip(dst.chunks_exact_mut(self.execution_length))
                 {
                     self.process_columns_oof(chunk, scratch);
 
                     self.width_executor
-                        .execute_with_scratch(scratch, width_scratch)?;
+                        .execute_with_scratch(scratch, if use_dst_as_scratch { dst_chunk } else { width_scratch })?;
 
                     self.transpose_executor.transpose(
                         &scratch,
-                        output_chunk,
+                        dst_chunk,
                         self.width,
                         self.height,
                     );
@@ -526,11 +533,16 @@ macro_rules! define_mixed_radixf {
                 }
 
                 let width_scratch_length = width_executor.destructive_scratch_length();
-                let oof_width_scratch_length = width_executor.scratch_length();
+                let execution_length = width * ROW_COUNT;
+                let oof_width_scratch_length = if execution_length >= width_executor.scratch_length() {
+                    0
+                } else {
+                    width_executor.scratch_length()
+                };
 
                 #[allow(unused_unsafe)]
                 Ok($mx_type {
-                    execution_length: width * ROW_COUNT,
+                    execution_length,
                     width_executor,
                     width,
                     height: ROW_COUNT,
@@ -747,6 +759,7 @@ macro_rules! define_mixed_radixf {
 
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.destructive_scratch_length());
+                let use_dst_as_scratch = self.execution_length >= self.oof_width_scratch_length;
 
                 for (dst_chunk, src_chunk) in dst
                     .chunks_exact_mut(self.execution_length)
@@ -755,7 +768,7 @@ macro_rules! define_mixed_radixf {
                     self.process_columns_in_place(src_chunk);
 
                     self.width_executor
-                        .execute_with_scratch(src_chunk, scratch)?;
+                        .execute_with_scratch(src_chunk, if use_dst_as_scratch { dst_chunk } else { scratch })?;
 
                     self.transpose_executor.transpose(
                         src_chunk,
@@ -944,19 +957,20 @@ macro_rules! define_mixed_radixf {
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
                 let (scratch, width_scratch) = scratch.split_at_mut(self.execution_length);
+                let use_dst_as_scratch = self.execution_length >= self.oof_width_scratch_length;
 
-                for (chunk, output_chunk) in src
+                for (chunk, dst_chunk) in src
                     .chunks_exact(self.execution_length)
                     .zip(dst.chunks_exact_mut(self.execution_length))
                 {
                     self.process_columns_oof(chunk, scratch);
 
                     self.width_executor
-                        .execute_with_scratch(scratch, width_scratch)?;
+                        .execute_with_scratch(scratch, if use_dst_as_scratch { dst_chunk } else { width_scratch })?;
 
                     self.transpose_executor.transpose(
                         &scratch,
-                        output_chunk,
+                        dst_chunk,
                         self.width,
                         self.height,
                     );

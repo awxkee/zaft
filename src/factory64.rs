@@ -1044,6 +1044,33 @@ impl AlgorithmFactory<f64> for f64 {
             .clone()
     }
 
+    fn butterfly1536(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::Avx512vlButterfly1536d;
+                        return Some(Arc::new(Avx512vlButterfly1536d::new(_fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::AvxButterfly1536d;
+                        return Some(Arc::new(AvxButterfly1536d::new(_fft_direction)));
+                    }
+                }
+                None
+            })
+            .clone()
+    }
+
     fn butterfly2048(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
