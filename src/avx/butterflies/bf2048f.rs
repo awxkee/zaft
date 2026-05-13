@@ -98,8 +98,8 @@ impl Avx512vlButterfly2048f {
                     mid1[i + 1] = AvxStoreF::mul_by_complex(mid1[i + 1], self.twiddles64[i]);
                 }
 
-                let rot1_3 = self.bf8.rotate1(self.twiddles64[3]);
-                let rot1_2 = self.bf8.rotate1(self.twiddles64[1]);
+                let rot1_3 = self.bf8.rotate45(self.twiddles64[3]);
+                let rot1_2 = self.bf8.rotate45(self.twiddles64[1]);
 
                 let input2 = std::array::from_fn(|x| load!(src, k, x * 8 + 2));
                 let mut mid2 = self.bf8.exec(input2);
@@ -107,19 +107,19 @@ impl Avx512vlButterfly2048f {
                 mid2[1] = AvxStoreF::mul_by_complex(mid2[1], self.twiddles64[1]);
                 mid2[2] = AvxStoreF::mul_by_complex(mid2[2], self.twiddles64[3]);
                 mid2[3] = AvxStoreF::mul_by_complex(mid2[3], self.twiddles64[5]);
-                mid2[4] = self.bf8.rotate1(mid2[4]);
+                mid2[4] = self.bf8.rotate45(mid2[4]);
                 mid2[5] = AvxStoreF::mul_by_complex(mid2[5], rot1_2);
                 mid2[6] = AvxStoreF::mul_by_complex(mid2[6], rot1_3);
-                mid2[7] = AvxStoreF::mul_by_complex(mid2[7], self.bf8.rotate1(self.twiddles64[5]));
+                mid2[7] = AvxStoreF::mul_by_complex(mid2[7], self.bf8.rotate45(self.twiddles64[5]));
 
                 let input3 = std::array::from_fn(|x| load!(src, k, x * 8 + 3));
                 let mut mid3 = self.bf8.exec(input3);
 
                 mid3[1] = AvxStoreF::mul_by_complex(mid3[1], self.twiddles64[2]); // W₆₄^3  = t3
                 mid3[2] = AvxStoreF::mul_by_complex(mid3[2], self.twiddles64[5]); // W₆₄^6  = t6
-                mid3[3] = AvxStoreF::mul_by_complex(mid3[3], self.bf8.rotate1(self.twiddles64[0])); // W₆₄^9  = W₈¹·t1
+                mid3[3] = AvxStoreF::mul_by_complex(mid3[3], self.bf8.rotate45(self.twiddles64[0])); // W₆₄^9  = W₈¹·t1
                 mid3[4] = AvxStoreF::mul_by_complex(mid3[4], rot1_3); // W₆₄^12 = W₈¹·t4
-                mid3[5] = AvxStoreF::mul_by_complex(mid3[5], self.bf8.rotate1(self.twiddles64[6])); // W₆₄^15 = W₈¹·t7
+                mid3[5] = AvxStoreF::mul_by_complex(mid3[5], self.bf8.rotate45(self.twiddles64[6])); // W₆₄^15 = W₈¹·t7
                 mid3[6] = AvxStoreF::mul_by_complex(mid3[6], self.bf8.rotate(self.twiddles64[1])); // W₆₄^18 = W₈²·t2
                 mid3[7] = AvxStoreF::mul_by_complex(mid3[7], self.bf8.rotate(self.twiddles64[4])); // W₆₄^21 = W₈²·t5
 
@@ -127,22 +127,25 @@ impl Avx512vlButterfly2048f {
                 let mut mid4 = self.bf8.exec(input4);
 
                 mid4[1] = AvxStoreF::mul_by_complex(mid4[1], self.twiddles64[3]); // W₆₄^4  = t4
-                mid4[2] = self.bf8.rotate1(mid4[2]); // W₆₄^8  = W₈¹
+                mid4[2] = self.bf8.rotate45(mid4[2]); // W₆₄^8  = W₈¹
                 mid4[3] = AvxStoreF::mul_by_complex(mid4[3], rot1_3); // W₆₄^12 = W₈¹·t4
                 mid4[4] = self.bf8.rotate(mid4[4]); // W₆₄^16 = W₈²
                 mid4[5] = AvxStoreF::mul_by_complex(mid4[5], self.bf8.rotate(self.twiddles64[3])); // W₆₄^20 = W₈²·t4
-                mid4[6] = self.bf8.rotate3(mid4[6]); // W₆₄^24 = W₈³
-                mid4[7] = AvxStoreF::mul_by_complex(mid4[7], self.bf8.rotate3(self.twiddles64[3])); // W₆₄^28 = W₈³·t4
+                mid4[6] = self.bf8.rotate135(mid4[6]); // W₆₄^24 = W₈³
+                mid4[7] =
+                    AvxStoreF::mul_by_complex(mid4[7], self.bf8.rotate135(self.twiddles64[3])); // W₆₄^28 = W₈³·t4
 
                 let input5 = std::array::from_fn(|x| load!(src, k, x * 8 + 5));
                 let mut mid5 = self.bf8.exec(input5);
 
                 mid5[1] = AvxStoreF::mul_by_complex(mid5[1], self.twiddles64[4]); // W₆₄^5  = t5
                 mid5[2] = AvxStoreF::mul_by_complex(mid5[2], rot1_2); // W₆₄^10 = W₈¹·t2
-                mid5[3] = AvxStoreF::mul_by_complex(mid5[3], self.bf8.rotate1(self.twiddles64[6])); // W₆₄^15 = W₈¹·t7
+                mid5[3] = AvxStoreF::mul_by_complex(mid5[3], self.bf8.rotate45(self.twiddles64[6])); // W₆₄^15 = W₈¹·t7
                 mid5[4] = AvxStoreF::mul_by_complex(mid5[4], self.bf8.rotate(self.twiddles64[3])); // W₆₄^20 = W₈²·t4
-                mid5[5] = AvxStoreF::mul_by_complex(mid5[5], self.bf8.rotate3(self.twiddles64[0])); // W₆₄^25 = W₈³·t1
-                mid5[6] = AvxStoreF::mul_by_complex(mid5[6], self.bf8.rotate3(self.twiddles64[5])); // W₆₄^30 = W₈³·t6
+                mid5[5] =
+                    AvxStoreF::mul_by_complex(mid5[5], self.bf8.rotate135(self.twiddles64[0])); // W₆₄^25 = W₈³·t1
+                mid5[6] =
+                    AvxStoreF::mul_by_complex(mid5[6], self.bf8.rotate135(self.twiddles64[5])); // W₆₄^30 = W₈³·t6
                 mid5[7] = AvxStoreF::mul_by_complex(mid5[7], self.twiddles64[2].neg()); // W₆₄^35 = −t3
 
                 let input6 = std::array::from_fn(|x| load!(src, k, x * 8 + 6));
@@ -151,21 +154,26 @@ impl Avx512vlButterfly2048f {
                 mid6[1] = AvxStoreF::mul_by_complex(mid6[1], self.twiddles64[5]); // W₆₄^6  = t6
                 mid6[2] = AvxStoreF::mul_by_complex(mid6[2], rot1_3); // W₆₄^12 = W₈¹·t4
                 mid6[3] = AvxStoreF::mul_by_complex(mid6[3], self.bf8.rotate(self.twiddles64[1])); // W₆₄^18 = W₈²·t2
-                mid6[4] = self.bf8.rotate3(mid6[4]); // W₆₄^24 = W₈³
-                mid6[5] = AvxStoreF::mul_by_complex(mid6[5], self.bf8.rotate3(self.twiddles64[5])); // W₆₄^30 = W₈³·t6
+                mid6[4] = self.bf8.rotate135(mid6[4]); // W₆₄^24 = W₈³
+                mid6[5] =
+                    AvxStoreF::mul_by_complex(mid6[5], self.bf8.rotate135(self.twiddles64[5])); // W₆₄^30 = W₈³·t6
                 mid6[6] = AvxStoreF::mul_by_complex(mid6[6], self.twiddles64[3].neg()); // W₆₄^36 = −t4
-                mid6[7] = AvxStoreF::mul_by_complex(mid6[7], self.bf8.rotate5(self.twiddles64[1])); // W₆₄^42 = W₈⁵·t2
+                mid6[7] =
+                    AvxStoreF::mul_by_complex(mid6[7], self.bf8.rotate225(self.twiddles64[1])); // W₆₄^42 = W₈⁵·t2
 
                 let input7 = std::array::from_fn(|x| load!(src, k, x * 8 + 7));
                 let mut mid7 = self.bf8.exec(input7);
 
                 mid7[1] = AvxStoreF::mul_by_complex(mid7[1], self.twiddles64[6]); // W₆₄^7  = t7
-                mid7[2] = AvxStoreF::mul_by_complex(mid7[2], self.bf8.rotate1(self.twiddles64[5])); // W₆₄^14 = W₈¹·t6
+                mid7[2] = AvxStoreF::mul_by_complex(mid7[2], self.bf8.rotate45(self.twiddles64[5])); // W₆₄^14 = W₈¹·t6
                 mid7[3] = AvxStoreF::mul_by_complex(mid7[3], self.bf8.rotate(self.twiddles64[4])); // W₆₄^21 = W₈²·t5
-                mid7[4] = AvxStoreF::mul_by_complex(mid7[4], self.bf8.rotate3(self.twiddles64[3])); // W₆₄^28 = W₈³·t4
+                mid7[4] =
+                    AvxStoreF::mul_by_complex(mid7[4], self.bf8.rotate135(self.twiddles64[3])); // W₆₄^28 = W₈³·t4
                 mid7[5] = AvxStoreF::mul_by_complex(mid7[5], self.twiddles64[2].neg()); // W₆₄^35 = −t3
-                mid7[6] = AvxStoreF::mul_by_complex(mid7[6], self.bf8.rotate5(self.twiddles64[1])); // W₆₄^42 = W₈⁵·t2
-                mid7[7] = AvxStoreF::mul_by_complex(mid7[7], self.bf8.rotate6(self.twiddles64[0])); // W₆₄^49 = W₈⁶·t1
+                mid7[6] =
+                    AvxStoreF::mul_by_complex(mid7[6], self.bf8.rotate225(self.twiddles64[1])); // W₆₄^42 = W₈⁵·t2
+                mid7[7] =
+                    AvxStoreF::mul_by_complex(mid7[7], self.bf8.rotate270(self.twiddles64[0])); // W₆₄^49 = W₈⁶·t1
 
                 for i in 0..8 {
                     let output = self.bf8.exec([
@@ -237,7 +245,7 @@ impl Avx512vlButterfly2048f {
                 let mut mid2 = self.bf8.bf4.exec(input2);
 
                 mid2[1] = AvxStoreF::mul_by_complex(mid2[1], self.twiddles32[1]);
-                mid2[2] = self.bf8.rotate1(mid2[2]);
+                mid2[2] = self.bf8.rotate45(mid2[2]);
                 mid2[3] = AvxStoreF::mul_by_complex(mid2[3], self.twiddles32[4]);
 
                 let input3 = [
@@ -260,9 +268,9 @@ impl Avx512vlButterfly2048f {
                 ];
                 let mut mid4 = self.bf8.bf4.exec(input4);
 
-                mid4[1] = self.bf8.rotate1(mid4[1]);
+                mid4[1] = self.bf8.rotate45(mid4[1]);
                 mid4[2] = self.bf8.rotate(mid4[2]);
-                mid4[3] = self.bf8.rotate3(mid4[3]);
+                mid4[3] = self.bf8.rotate135(mid4[3]);
 
                 let input5 = [
                     load!(src, k, 5),
@@ -285,7 +293,7 @@ impl Avx512vlButterfly2048f {
                 let mut mid6 = self.bf8.bf4.exec(input6);
 
                 mid6[1] = AvxStoreF::mul_by_complex(mid6[1], self.twiddles32[4]);
-                mid6[2] = self.bf8.rotate3(mid6[2]);
+                mid6[2] = self.bf8.rotate135(mid6[2]);
                 mid6[3] = AvxStoreF::mul_by_complex(mid6[3], self.twiddles32[1].neg());
 
                 let input7 = [
@@ -310,43 +318,38 @@ impl Avx512vlButterfly2048f {
 
                 let tw = k * 31;
 
-                {
-                    let output0 = self.bf8.exec([
-                        mid0[0], mid1[0], mid2[0], mid3[0], mid4[0], mid5[0], mid6[0], mid7[0],
-                    ]);
-                    let output1 = self.bf8.exec([
-                        mid0[1], mid1[1], mid2[1], mid3[1], mid4[1], mid5[1], mid6[1], mid7[1],
-                    ]);
-                    let output2 = self.bf8.exec([
-                        mid0[2], mid1[2], mid2[2], mid3[2], mid4[2], mid5[2], mid6[2], mid7[2],
-                    ]);
-                    let output3 = self.bf8.exec([
-                        mid0[3], mid1[3], mid2[3], mid3[3], mid4[3], mid5[3], mid6[3], mid7[3],
-                    ]);
+                let output0 = self.bf8.exec([
+                    mid0[0], mid1[0], mid2[0], mid3[0], mid4[0], mid5[0], mid6[0], mid7[0],
+                ]);
+                let output1 = self.bf8.exec([
+                    mid0[1], mid1[1], mid2[1], mid3[1], mid4[1], mid5[1], mid6[1], mid7[1],
+                ]);
+                let output2 = self.bf8.exec([
+                    mid0[2], mid1[2], mid2[2], mid3[2], mid4[2], mid5[2], mid6[2], mid7[2],
+                ]);
+                let output3 = self.bf8.exec([
+                    mid0[3], mid1[3], mid2[3], mid3[3], mid4[3], mid5[3], mid6[3], mid7[3],
+                ]);
 
-                    let q1 = AvxStoreF::mul_by_complex(output1[0], self.twiddles[tw]);
-                    let q2 = AvxStoreF::mul_by_complex(output2[0], self.twiddles[1 + tw]);
-                    let q3 = AvxStoreF::mul_by_complex(output3[0], self.twiddles[2 + tw]);
-                    let t = transpose_f32x2_4x4_aos([output0[0], q1, q2, q3]);
-                    store0!(t[0], 0, dst, k);
-                    store1!(t[1], 0, dst, k);
-                    store2!(t[2], 0, dst, k);
-                    store3!(t[3], 0, dst, k);
+                let q1 = AvxStoreF::mul_by_complex(output1[0], self.twiddles[tw]);
+                let q2 = AvxStoreF::mul_by_complex(output2[0], self.twiddles[1 + tw]);
+                let q3 = AvxStoreF::mul_by_complex(output3[0], self.twiddles[2 + tw]);
+                let t = transpose_f32x2_4x4_aos([output0[0], q1, q2, q3]);
+                store0!(t[0], 0, dst, k);
+                store1!(t[1], 0, dst, k);
+                store2!(t[2], 0, dst, k);
+                store3!(t[3], 0, dst, k);
 
-                    for q in 1..8 {
-                        let q0 =
-                            AvxStoreF::mul_by_complex(output0[q], self.twiddles[q * 4 - 1 + tw]);
-                        let q1 = AvxStoreF::mul_by_complex(output1[q], self.twiddles[q * 4 + tw]);
-                        let q2 =
-                            AvxStoreF::mul_by_complex(output2[q], self.twiddles[q * 4 + 1 + tw]);
-                        let q3 =
-                            AvxStoreF::mul_by_complex(output3[q], self.twiddles[q * 4 + 2 + tw]);
-                        let t = transpose_f32x2_4x4_aos([q0, q1, q2, q3]);
-                        store0!(t[0], q * 4, dst, k);
-                        store1!(t[1], q * 4, dst, k);
-                        store2!(t[2], q * 4, dst, k);
-                        store3!(t[3], q * 4, dst, k);
-                    }
+                for q in 1..8 {
+                    let q0 = AvxStoreF::mul_by_complex(output0[q], self.twiddles[q * 4 - 1 + tw]);
+                    let q1 = AvxStoreF::mul_by_complex(output1[q], self.twiddles[q * 4 + tw]);
+                    let q2 = AvxStoreF::mul_by_complex(output2[q], self.twiddles[q * 4 + 1 + tw]);
+                    let q3 = AvxStoreF::mul_by_complex(output3[q], self.twiddles[q * 4 + 2 + tw]);
+                    let t = transpose_f32x2_4x4_aos([q0, q1, q2, q3]);
+                    store0!(t[0], q * 4, dst, k);
+                    store1!(t[1], q * 4, dst, k);
+                    store2!(t[2], q * 4, dst, k);
+                    store3!(t[3], q * 4, dst, k);
                 }
             }
         }

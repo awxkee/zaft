@@ -209,7 +209,7 @@ fn check_power_groups(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String)
     });
 }
 
-fn check_power_groupd(c: &mut Criterion, n: usize, group: String) {
+fn check_power_groupd(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String) {
     let mut input_power = vec![Complex::<f64>::default(); n];
     for z in input_power.iter_mut() {
         *z = Complex {
@@ -349,14 +349,17 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         };
     }
 
-    // check_power_groups(c, 243, "243".to_string());
+    // check_power_groupd(c, 144, "144".to_string());
+    // check_power_groups(c, 144, "144".to_string());
     // check_power_groups(c, 729, "729".to_string());
     // check_power_groups(c, 2187, "2187".to_string());
     // check_power_group(c, 1536, "1536".to_string());
 
     // check_power_groups(c, 512, "512".to_string());
     // check_power_groups(c, 1024, "1024".to_string());
-    // check_power_groups(c, 2048, "2048".to_string());
+    // check_power_groupd(c, 256, "256".to_string());
+    check_power_groups(c, 256, "256".to_string());
+    check_power_groups(c, 2048, "2048".to_string());
     check_power_groups(c, 4096, "4096".to_string());
     check_power_groups(c, 8192, "8192".to_string());
     check_power_groups(c, 16384, "16384".to_string());

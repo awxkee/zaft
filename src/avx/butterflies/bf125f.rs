@@ -40,7 +40,7 @@ use std::mem::MaybeUninit;
 
 pub(crate) struct ColumnButterfly25f {
     bf5: ColumnButterfly5f,
-    twiddles: [AvxStoreF; 20],
+    twiddles: [AvxStoreF; 9],
 }
 
 impl ColumnButterfly25f {
@@ -50,8 +50,16 @@ impl ColumnButterfly25f {
 
     #[target_feature(enable = "avx2", enable = "fma")]
     fn new_init(fft_direction: FftDirection) -> Self {
+        let old: [AvxStoreF; 20] =
+            gen_butterfly_separate_cols_twiddles_f32(5, 5, fft_direction, 25);
+        let twiddles = [
+            old[4], old[5], old[6], old[7], // s1 twiddles / s2[1] / s3[1] / s4[1]
+            old[10], old[11], // s2[3], s2[4] / s3[2] / s4[2]
+            old[14], old[15], // s3[3], s3[4] / s4[3]
+            old[19], // s4[4]
+        ];
         Self {
-            twiddles: gen_butterfly_separate_cols_twiddles_f32(5, 5, fft_direction, 25),
+            twiddles,
             bf5: ColumnButterfly5f::new(fft_direction),
         }
     }
@@ -66,16 +74,6 @@ impl ColumnButterfly25f {
             ($v: expr, $idx: expr, $dst: expr) => {{ unsafe { $v.write($dst.get_unchecked_mut($idx * 5..)) } }};
         }
 
-        let mut s0 = self.bf5.exec([
-            load!(src, 0),
-            load!(src, 5),
-            load!(src, 10),
-            load!(src, 15),
-            load!(src, 20),
-        ]);
-        for i in 1..5 {
-            s0[i] = AvxStoreF::mul_by_complex(s0[i], self.twiddles[i - 1]);
-        }
         let mut s1 = self.bf5.exec([
             load!(src, 1),
             load!(src, 6),
@@ -84,7 +82,7 @@ impl ColumnButterfly25f {
             load!(src, 21),
         ]);
         for i in 1..5 {
-            s1[i] = AvxStoreF::mul_by_complex(s1[i], self.twiddles[i - 1 + 4]);
+            s1[i] = AvxStoreF::mul_by_complex(s1[i], self.twiddles[i - 1]);
         }
         let mut s2 = self.bf5.exec([
             load!(src, 2),
@@ -93,10 +91,10 @@ impl ColumnButterfly25f {
             load!(src, 17),
             load!(src, 22),
         ]);
-        s2[1] = AvxStoreF::mul_by_complex(s2[1], self.twiddles[5]);
-        s2[2] = AvxStoreF::mul_by_complex(s2[2], self.twiddles[7]);
-        s2[3] = AvxStoreF::mul_by_complex(s2[3], self.twiddles[10]);
-        s2[4] = AvxStoreF::mul_by_complex(s2[4], self.twiddles[11]);
+        s2[1] = AvxStoreF::mul_by_complex(s2[1], self.twiddles[1]);
+        s2[2] = AvxStoreF::mul_by_complex(s2[2], self.twiddles[3]);
+        s2[3] = AvxStoreF::mul_by_complex(s2[3], self.twiddles[4]);
+        s2[4] = AvxStoreF::mul_by_complex(s2[4], self.twiddles[5]);
         let mut s3 = self.bf5.exec([
             load!(src, 3),
             load!(src, 8),
@@ -104,10 +102,10 @@ impl ColumnButterfly25f {
             load!(src, 18),
             load!(src, 23),
         ]);
-        s3[1] = AvxStoreF::mul_by_complex(s3[1], self.twiddles[6]);
-        s3[2] = AvxStoreF::mul_by_complex(s3[2], self.twiddles[10]);
-        s3[3] = AvxStoreF::mul_by_complex(s3[3], self.twiddles[14]);
-        s3[4] = AvxStoreF::mul_by_complex(s3[4], self.twiddles[15]);
+        s3[1] = AvxStoreF::mul_by_complex(s3[1], self.twiddles[2]);
+        s3[2] = AvxStoreF::mul_by_complex(s3[2], self.twiddles[4]);
+        s3[3] = AvxStoreF::mul_by_complex(s3[3], self.twiddles[6]);
+        s3[4] = AvxStoreF::mul_by_complex(s3[4], self.twiddles[7]);
         let mut s4 = self.bf5.exec([
             load!(src, 4),
             load!(src, 9),
@@ -115,10 +113,18 @@ impl ColumnButterfly25f {
             load!(src, 19),
             load!(src, 24),
         ]);
-        s4[1] = AvxStoreF::mul_by_complex(s4[1], self.twiddles[7]);
-        s4[2] = AvxStoreF::mul_by_complex(s4[2], self.twiddles[11]);
-        s4[3] = AvxStoreF::mul_by_complex(s4[3], self.twiddles[15]);
-        s4[4] = AvxStoreF::mul_by_complex(s4[4], self.twiddles[19]);
+        s4[1] = AvxStoreF::mul_by_complex(s4[1], self.twiddles[3]);
+        s4[2] = AvxStoreF::mul_by_complex(s4[2], self.twiddles[5]);
+        s4[3] = AvxStoreF::mul_by_complex(s4[3], self.twiddles[7]);
+        s4[4] = AvxStoreF::mul_by_complex(s4[4], self.twiddles[8]);
+
+        let s0 = self.bf5.exec([
+            load!(src, 0),
+            load!(src, 5),
+            load!(src, 10),
+            load!(src, 15),
+            load!(src, 20),
+        ]);
 
         let z0 = self.bf5.exec([s0[0], s1[0], s2[0], s3[0], s4[0]]);
         for i in 0..5 {
@@ -152,16 +158,6 @@ impl ColumnButterfly25f {
             ($v: expr, $idx: expr, $dst: expr) => {{ unsafe { $v.write_lo1($dst.get_unchecked_mut($idx * 5..)) } }};
         }
 
-        let mut s0 = self.bf5.exec([
-            load!(src, 0),
-            load!(src, 5),
-            load!(src, 10),
-            load!(src, 15),
-            load!(src, 20),
-        ]);
-        for i in 1..5 {
-            s0[i] = AvxStoreF::mul_by_complex(s0[i], self.twiddles[i - 1]);
-        }
         let mut s1 = self.bf5.exec([
             load!(src, 1),
             load!(src, 6),
@@ -170,7 +166,7 @@ impl ColumnButterfly25f {
             load!(src, 21),
         ]);
         for i in 1..5 {
-            s1[i] = AvxStoreF::mul_by_complex(s1[i], self.twiddles[i - 1 + 4]);
+            s1[i] = AvxStoreF::mul_by_complex(s1[i], self.twiddles[i - 1]);
         }
         let mut s2 = self.bf5.exec([
             load!(src, 2),
@@ -179,9 +175,10 @@ impl ColumnButterfly25f {
             load!(src, 17),
             load!(src, 22),
         ]);
-        for i in 1..5 {
-            s2[i] = AvxStoreF::mul_by_complex(s2[i], self.twiddles[i - 1 + 8]);
-        }
+        s2[1] = AvxStoreF::mul_by_complex(s2[1], self.twiddles[1]);
+        s2[2] = AvxStoreF::mul_by_complex(s2[2], self.twiddles[3]);
+        s2[3] = AvxStoreF::mul_by_complex(s2[3], self.twiddles[4]);
+        s2[4] = AvxStoreF::mul_by_complex(s2[4], self.twiddles[5]);
         let mut s3 = self.bf5.exec([
             load!(src, 3),
             load!(src, 8),
@@ -189,9 +186,10 @@ impl ColumnButterfly25f {
             load!(src, 18),
             load!(src, 23),
         ]);
-        for i in 1..5 {
-            s3[i] = AvxStoreF::mul_by_complex(s3[i], self.twiddles[i - 1 + 12]);
-        }
+        s3[1] = AvxStoreF::mul_by_complex(s3[1], self.twiddles[2]);
+        s3[2] = AvxStoreF::mul_by_complex(s3[2], self.twiddles[4]);
+        s3[3] = AvxStoreF::mul_by_complex(s3[3], self.twiddles[6]);
+        s3[4] = AvxStoreF::mul_by_complex(s3[4], self.twiddles[7]);
         let mut s4 = self.bf5.exec([
             load!(src, 4),
             load!(src, 9),
@@ -199,9 +197,18 @@ impl ColumnButterfly25f {
             load!(src, 19),
             load!(src, 24),
         ]);
-        for i in 1..5 {
-            s4[i] = AvxStoreF::mul_by_complex(s4[i], self.twiddles[i - 1 + 16]);
-        }
+        s4[1] = AvxStoreF::mul_by_complex(s4[1], self.twiddles[3]);
+        s4[2] = AvxStoreF::mul_by_complex(s4[2], self.twiddles[5]);
+        s4[3] = AvxStoreF::mul_by_complex(s4[3], self.twiddles[7]);
+        s4[4] = AvxStoreF::mul_by_complex(s4[4], self.twiddles[8]);
+
+        let s0 = self.bf5.exec([
+            load!(src, 0),
+            load!(src, 5),
+            load!(src, 10),
+            load!(src, 15),
+            load!(src, 20),
+        ]);
 
         let z0 = self.bf5.exec([s0[0], s1[0], s2[0], s3[0], s4[0]]);
         for i in 0..5 {

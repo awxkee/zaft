@@ -310,7 +310,7 @@ macro_rules! define_mixed_radix_neon_d {
                 // process the column FFTs
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count)
                     .enumerate()
                 {
@@ -569,7 +569,7 @@ macro_rules! define_mixed_radix_neon_f {
 
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count)
                     .enumerate()
                 {

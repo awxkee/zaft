@@ -71,77 +71,53 @@ where
     #[inline(always)]
     pub(crate) fn run<S: BidirectionalStore<Complex<T>>>(&self, chunk: &mut S) {
         let bf2 = FastButterfly2::new(self.direction);
-        let u0 = chunk[0];
-        let u1 = chunk[1];
-        let u2 = chunk[2];
-        let u3 = chunk[3];
 
-        let u4 = chunk[4];
-        let u5 = chunk[5];
-        let u6 = chunk[6];
-        let u7 = chunk[7];
+        let evens = self.bf8.exec(
+            chunk[0], chunk[2], chunk[4], chunk[6], chunk[8], chunk[10], chunk[12], chunk[14],
+        );
 
-        let u8 = chunk[8];
-        let u9 = chunk[9];
-        let u10 = chunk[10];
-        let u11 = chunk[11];
-        let u12 = chunk[12];
+        let odds_1 = self.bf4.butterfly4(chunk[1], chunk[5], chunk[9], chunk[13]);
+        let odds_2 = self
+            .bf4
+            .butterfly4(chunk[15], chunk[3], chunk[7], chunk[11]);
 
-        let u13 = chunk[13];
-        let u14 = chunk[14];
-        let u15 = chunk[15];
+        // lane 0 — no twiddle
+        let (o0a, o0b) = bf2.butterfly2(odds_1.0, odds_2.0);
+        let o0b = rotate_90(o0b, self.direction);
+        chunk[0] = evens.0 + o0a;
+        chunk[8] = evens.0 - o0a;
+        chunk[4] = evens.4 + o0b;
+        chunk[12] = evens.4 - o0b;
 
-        let evens = self.bf8.exec(u0, u2, u4, u6, u8, u10, u12, u14);
+        // lane 1
+        let t1a = c_mul_fast(odds_1.1, self.twiddle1);
+        let t1b = c_mul_fast_conj(odds_2.1, self.twiddle1);
+        let (o1a, o1b) = bf2.butterfly2(t1a, t1b);
+        let o1b = rotate_90(o1b, self.direction);
+        chunk[1] = evens.1 + o1a;
+        chunk[9] = evens.1 - o1a;
+        chunk[5] = evens.5 + o1b;
+        chunk[13] = evens.5 - o1b;
 
-        let mut odds_1 = self.bf4.butterfly4(u1, u5, u9, u13);
-        let mut odds_2 = self.bf4.butterfly4(u15, u3, u7, u11);
+        // lane 2
+        let t2a = c_mul_fast(odds_1.2, self.twiddle2);
+        let t2b = c_mul_fast_conj(odds_2.2, self.twiddle2);
+        let (o2a, o2b) = bf2.butterfly2(t2a, t2b);
+        let o2b = rotate_90(o2b, self.direction);
+        chunk[2] = evens.2 + o2a;
+        chunk[10] = evens.2 - o2a;
+        chunk[6] = evens.6 + o2b;
+        chunk[14] = evens.6 - o2b;
 
-        odds_1.1 = c_mul_fast(odds_1.1, self.twiddle1);
-        odds_2.1 = c_mul_fast_conj(odds_2.1, self.twiddle1);
-
-        odds_1.2 = c_mul_fast(odds_1.2, self.twiddle2);
-        odds_2.2 = c_mul_fast_conj(odds_2.2, self.twiddle2);
-
-        odds_1.3 = c_mul_fast(odds_1.3, self.twiddle3);
-        odds_2.3 = c_mul_fast_conj(odds_2.3, self.twiddle3);
-
-        // step 4: cross FFTs
-        let (o01, o02) = bf2.butterfly2(odds_1.0, odds_2.0);
-        odds_1.0 = o01;
-        odds_2.0 = o02;
-
-        let (o03, o04) = bf2.butterfly2(odds_1.1, odds_2.1);
-        odds_1.1 = o03;
-        odds_2.1 = o04;
-        let (o05, o06) = bf2.butterfly2(odds_1.2, odds_2.2);
-        odds_1.2 = o05;
-        odds_2.2 = o06;
-        let (o07, o08) = bf2.butterfly2(odds_1.3, odds_2.3);
-        odds_1.3 = o07;
-        odds_2.3 = o08;
-
-        // apply the butterfly 4 twiddle factor, which is just a rotation
-        odds_2.0 = rotate_90(odds_2.0, self.direction);
-        odds_2.1 = rotate_90(odds_2.1, self.direction);
-        odds_2.2 = rotate_90(odds_2.2, self.direction);
-        odds_2.3 = rotate_90(odds_2.3, self.direction);
-
-        chunk[0] = evens.0 + odds_1.0;
-        chunk[1] = evens.1 + odds_1.1;
-        chunk[2] = evens.2 + odds_1.2;
-        chunk[3] = evens.3 + odds_1.3;
-        chunk[4] = evens.4 + odds_2.0;
-        chunk[5] = evens.5 + odds_2.1;
-        chunk[6] = evens.6 + odds_2.2;
-        chunk[7] = evens.7 + odds_2.3;
-        chunk[8] = evens.0 - odds_1.0;
-        chunk[9] = evens.1 - odds_1.1;
-        chunk[10] = evens.2 - odds_1.2;
-        chunk[11] = evens.3 - odds_1.3;
-        chunk[12] = evens.4 - odds_2.0;
-        chunk[13] = evens.5 - odds_2.1;
-        chunk[14] = evens.6 - odds_2.2;
-        chunk[15] = evens.7 - odds_2.3;
+        // lane 3
+        let t3a = c_mul_fast(odds_1.3, self.twiddle3);
+        let t3b = c_mul_fast_conj(odds_2.3, self.twiddle3);
+        let (o3a, o3b) = bf2.butterfly2(t3a, t3b);
+        let o3b = rotate_90(o3b, self.direction);
+        chunk[3] = evens.3 + o3a;
+        chunk[11] = evens.3 - o3a;
+        chunk[7] = evens.7 + o3b;
+        chunk[15] = evens.7 - o3b;
     }
 }
 

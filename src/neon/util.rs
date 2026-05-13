@@ -58,22 +58,6 @@ pub(crate) fn vfcmulq_conj_b_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x
     }
 }
 
-#[inline]
-#[cfg(feature = "fcma")]
-#[target_feature(enable = "fcma")]
-pub(crate) fn vfcmulq_conj_b_fcma_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_t {
-    // Multiply lhs * conj(rhs)
-    vcmlaq_rot270_f64(vcmlaq_f64(vdupq_n_f64(0.), rhs, lhs), rhs, lhs)
-}
-
-#[inline]
-#[cfg(feature = "fcma")]
-#[target_feature(enable = "fcma")]
-pub(crate) fn vfcmulq_b_conj_fcma_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
-    // Multiply lhs * conj(rhs)
-    vcmlaq_rot270_f32(vcmlaq_f32(vdupq_n_f32(0.), rhs, lhs), rhs, lhs)
-}
-
 #[inline(always)]
 pub(crate) fn vfcmul_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
     unsafe {

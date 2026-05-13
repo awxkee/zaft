@@ -720,7 +720,12 @@ where
             ));
         }
 
-        for (input, complex) in input.chunks_exact(23).zip(output.chunks_exact_mut(12)) {
+        for (input, complex) in input
+            .as_chunks::<23>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<12>().0.iter_mut())
+        {
             let u0 = input[0];
             let u1 = input[1];
             let u2 = input[2];

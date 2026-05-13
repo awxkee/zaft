@@ -100,9 +100,9 @@ impl $name {
 
                 mid2[1] = NeonStoreF::$mul(mid2[1], self.twiddles48[1]);          // W_48^ 2 = T[1]
                 mid2[2] = NeonStoreF::$mul(mid2[2], self.twiddles48[3]);          // W_48^ 4 = T[3]
-                mid2[3] = self.bf8.rotate1(mid2[3]);                              // W_48^ 6 = rot1
-                mid2[4] = NeonStoreF::$mul(mid2[4], self.bf8.rotate1(self.twiddles48[1]));
-                mid2[5] = NeonStoreF::$mul(mid2[5], self.bf8.rotate1(self.twiddles48[3]));
+                mid2[3] = self.bf8.rotate45(mid2[3]);                              // W_48^ 6 = rot1
+                mid2[4] = NeonStoreF::$mul(mid2[4], self.bf8.rotate45(self.twiddles48[1]));
+                mid2[5] = NeonStoreF::$mul(mid2[5], self.bf8.rotate45(self.twiddles48[3]));
 
                 let input3 = std::array::from_fn(|x| load!(src, k, x * 8 + 3));
                 let mut mid3 = self.bf6.exec(input3);
@@ -110,18 +110,18 @@ impl $name {
                 let tw_mid3_5 = self.bf8.rotate(self.twiddles48[2]);
 
                 mid3[1] = NeonStoreF::$mul(mid3[1], self.twiddles48[2]);          // W_48^ 3 = T[2]
-                mid3[2] = self.bf8.rotate1(mid3[2]);                              // W_48^ 6 = rot1
-                mid3[3] = NeonStoreF::$mul(mid3[3], self.bf8.rotate1(self.twiddles48[2]));
+                mid3[2] = self.bf8.rotate45(mid3[2]);                              // W_48^ 6 = rot1
+                mid3[3] = NeonStoreF::$mul(mid3[3], self.bf8.rotate45(self.twiddles48[2]));
                 mid3[4] = self.bf8.rotate(mid3[4]);                               // W_48^12 = rot
                 mid3[5] = NeonStoreF::$mul(mid3[5], tw_mid3_5);
 
                 let input4 = std::array::from_fn(|x| load!(src, k, x * 8 + 4));
                 let mut mid4 = self.bf6.exec(input4);
 
-                let tw_mid_4_5 = self.bf8.rotate3(self.twiddles48[1]);
+                let tw_mid_4_5 = self.bf8.rotate135(self.twiddles48[1]);
 
                 mid4[1] = NeonStoreF::$mul(mid4[1], self.twiddles48[3]);          // W_48^ 4 = T[3]
-                mid4[2] = NeonStoreF::$mul(mid4[2], self.bf8.rotate1(self.twiddles48[1]));
+                mid4[2] = NeonStoreF::$mul(mid4[2], self.bf8.rotate45(self.twiddles48[1]));
                 mid4[3] = self.bf8.rotate(mid4[3]);                               // W_48^12 = rot
                 mid4[4] = NeonStoreF::$mul(mid4[4], self.bf8.rotate(self.twiddles48[3]));
                 mid4[5] = NeonStoreF::$mul(mid4[5], tw_mid_4_5);
@@ -130,7 +130,7 @@ impl $name {
                 let mut mid5 = self.bf6.exec(input5);
 
                 mid5[1] = NeonStoreF::$mul(mid5[1], self.twiddles48[4]);          // W_48^ 5 = T[4]
-                mid5[2] = NeonStoreF::$mul(mid5[2], self.bf8.rotate1(self.twiddles48[3]));
+                mid5[2] = NeonStoreF::$mul(mid5[2], self.bf8.rotate45(self.twiddles48[3]));
                 mid5[3] = NeonStoreF::$mul(mid5[3], tw_mid3_5);
                 mid5[4] = NeonStoreF::$mul(mid5[4], tw_mid_4_5);
                 mid5[5] = NeonStoreF::$mul(mid5[5], self.twiddles48[0].neg());
@@ -138,20 +138,20 @@ impl $name {
                 let input6 = std::array::from_fn(|x| load!(src, k, x * 8 + 6));
                 let mut mid6 = self.bf6.exec(input6);
 
-                mid6[1] = self.bf8.rotate1(mid6[1]);
+                mid6[1] = self.bf8.rotate45(mid6[1]);
                 mid6[2] = self.bf8.rotate(mid6[2]);
-                mid6[3] = self.bf8.rotate3(mid6[3]);
+                mid6[3] = self.bf8.rotate135(mid6[3]);
                 mid6[4] = mid6[4].neg();
-                mid6[5] = self.bf8.rotate1(mid6[5]).neg();
+                mid6[5] = self.bf8.rotate45(mid6[5]).neg();
 
                 let input7 = std::array::from_fn(|x| load!(src, k, x * 8 + 7));
                 let mut mid7 = self.bf6.exec(input7);
 
-                mid7[1] = NeonStoreF::$mul(mid7[1], self.bf8.rotate1(self.twiddles48[0]));
+                mid7[1] = NeonStoreF::$mul(mid7[1], self.bf8.rotate45(self.twiddles48[0]));
                 mid7[2] = NeonStoreF::$mul(mid7[2], self.bf8.rotate(self.twiddles48[1]));
-                mid7[3] = NeonStoreF::$mul(mid7[3], self.bf8.rotate3(self.twiddles48[2]));
+                mid7[3] = NeonStoreF::$mul(mid7[3], self.bf8.rotate135(self.twiddles48[2]));
                 mid7[4] = NeonStoreF::$mul(mid7[4], self.twiddles48[3].neg());
-                mid7[5] = NeonStoreF::$mul(mid7[5], self.bf8.rotate1(self.twiddles48[4])).neg();
+                mid7[5] = NeonStoreF::$mul(mid7[5], self.bf8.rotate45(self.twiddles48[4])).neg();
 
                 let input0 = std::array::from_fn(|x| load!(src, k, x * 8));
                 let mid0 = self.bf6.exec(input0);
@@ -214,7 +214,7 @@ impl $name {
                 let mut mid2 = self.bf8.bf4.exec(input2);
 
                 mid2[1] = NeonStoreF::$mul(mid2[1], self.twiddles32[1]);
-                mid2[2] = self.bf8.rotate1(mid2[2]);
+                mid2[2] = self.bf8.rotate45(mid2[2]);
                 mid2[3] = NeonStoreF::$mul(mid2[3], self.twiddles32[4]);
 
                 let input3 = [
@@ -237,9 +237,9 @@ impl $name {
                 ];
                 let mut mid4 = self.bf8.bf4.exec(input4);
 
-                mid4[1] = self.bf8.rotate1(mid4[1]);
+                mid4[1] = self.bf8.rotate45(mid4[1]);
                 mid4[2] = self.bf8.rotate(mid4[2]);
-                mid4[3] = self.bf8.rotate3(mid4[3]);
+                mid4[3] = self.bf8.rotate135(mid4[3]);
 
                 let input5 = [
                     load!(src, k, 5),
@@ -262,7 +262,7 @@ impl $name {
                 let mut mid6 = self.bf8.bf4.exec(input6);
 
                 mid6[1] = NeonStoreF::$mul(mid6[1], self.twiddles32[4]);
-                mid6[2] = self.bf8.rotate3(mid6[2]);
+                mid6[2] = self.bf8.rotate135(mid6[2]);
                 mid6[3] = NeonStoreF::$mul(mid6[3], self.twiddles32[1].neg());
 
                 let input7 = [

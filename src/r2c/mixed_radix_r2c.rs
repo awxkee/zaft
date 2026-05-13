@@ -81,7 +81,6 @@ where
             }
         }
 
-        // let to_remove_second_stage = (width - 1) / 2;
         let to_remove_second_stage = (width - 1) / 2;
 
         let second_stage_len = complex_height * width;
@@ -166,12 +165,7 @@ where
             self.height_executor
                 .execute_with_scratch(scratch_initial, height_scratch)?;
 
-            for (dst, &src) in scratch_complex1[..complex_height]
-                .iter_mut()
-                .zip(scratch_initial[..complex_height].iter())
-            {
-                *dst = src;
-            }
+            scratch_complex1[..complex_height].copy_from_slice(&scratch_initial[..complex_height]);
 
             self.spectrum_ops.mul_and_cut(
                 &scratch_initial[self.height..],

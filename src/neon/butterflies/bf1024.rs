@@ -97,7 +97,7 @@ impl $name {
                 let mut mid2 = self.bf8.bf4.exec(input2);
 
                 mid2[1] = NeonStoreF::$mul(mid2[1], self.twiddles32[1]);
-                mid2[2] = self.bf8.rotate1(mid2[2]);
+                mid2[2] = self.bf8.rotate45(mid2[2]);
                 mid2[3] = NeonStoreF::$mul(mid2[3], self.twiddles32[4]);
 
                 let input3 = [
@@ -120,9 +120,9 @@ impl $name {
                 ];
                 let mut mid4 = self.bf8.bf4.exec(input4);
 
-                mid4[1] = self.bf8.rotate1(mid4[1]);
+                mid4[1] = self.bf8.rotate45(mid4[1]);
                 mid4[2] = self.bf8.rotate(mid4[2]);
-                mid4[3] = self.bf8.rotate3(mid4[3]);
+                mid4[3] = self.bf8.rotate135(mid4[3]);
 
                 let input5 = [
                     load!(src, k, 5),
@@ -145,7 +145,7 @@ impl $name {
                 let mut mid6 = self.bf8.bf4.exec(input6);
 
                 mid6[1] = NeonStoreF::$mul(mid6[1], self.twiddles32[4]);
-                mid6[2] = self.bf8.rotate3(mid6[2]);
+                mid6[2] = self.bf8.rotate135(mid6[2]);
                 mid6[3] = NeonStoreF::$mul(mid6[3], self.twiddles32[1].neg());
 
                 let input7 = [
@@ -226,7 +226,7 @@ impl $name {
                 let mut mid2 = self.bf8.bf4.exec(input2);
 
                 mid2[1] = NeonStoreF::$mul(mid2[1], self.twiddles32[1]);
-                mid2[2] = self.bf8.rotate1(mid2[2]);
+                mid2[2] = self.bf8.rotate45(mid2[2]);
                 mid2[3] = NeonStoreF::$mul(mid2[3], self.twiddles32[4]);
 
                 let input3 = [
@@ -249,9 +249,9 @@ impl $name {
                 ];
                 let mut mid4 = self.bf8.bf4.exec(input4);
 
-                mid4[1] = self.bf8.rotate1(mid4[1]);
+                mid4[1] = self.bf8.rotate45(mid4[1]);
                 mid4[2] = self.bf8.rotate(mid4[2]);
-                mid4[3] = self.bf8.rotate3(mid4[3]);
+                mid4[3] = self.bf8.rotate135(mid4[3]);
 
                 let input5 = [
                     load!(src, k, 5),
@@ -274,7 +274,7 @@ impl $name {
                 let mut mid6 = self.bf8.bf4.exec(input6);
 
                 mid6[1] = NeonStoreF::$mul(mid6[1], self.twiddles32[4]);
-                mid6[2] = self.bf8.rotate3(mid6[2]);
+                mid6[2] = self.bf8.rotate135(mid6[2]);
                 mid6[3] = NeonStoreF::$mul(mid6[3], self.twiddles32[1].neg());
 
                 let input7 = [

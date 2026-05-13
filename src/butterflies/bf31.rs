@@ -103,7 +103,7 @@ where
 
         let mut scratch = [Complex::zero(); 30];
 
-        for chunk in in_place.chunks_exact_mut(31) {
+        for chunk in in_place.as_chunks_mut::<31>().0.iter_mut() {
             let (buffer_first, buffer) = chunk.split_first_mut().unwrap();
             let buffer_first_val = *buffer_first;
 
@@ -217,7 +217,12 @@ where
 
         let mut scratch = [Complex::zero(); 30];
 
-        for (dst, src) in dst.chunks_exact_mut(31).zip(src.chunks_exact(31)) {
+        for (dst, src) in dst
+            .as_chunks_mut::<31>()
+            .0
+            .iter_mut()
+            .zip(src.as_chunks::<31>().0.iter())
+        {
             let (buffer_first, buffer) = src.split_first().unwrap();
             let buffer_first_val = *buffer_first;
 
@@ -350,7 +355,12 @@ impl<T: FftSample> R2CFftExecutor<T> for Butterfly31<T> {
 
         let mut scratch = [Complex::zero(); 30];
 
-        for (chunk, complex) in input.chunks_exact(31).zip(output.chunks_exact_mut(16)) {
+        for (chunk, complex) in input
+            .as_chunks::<31>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<16>().0.iter_mut())
+        {
             let (buffer_first, buffer) = chunk.split_first().unwrap();
             let buffer_first_val = Complex::new(*buffer_first, T::zero());
 

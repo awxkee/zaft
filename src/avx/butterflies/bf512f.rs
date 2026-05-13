@@ -30,7 +30,6 @@ use crate::avx::butterflies::shared::{
     boring_avx_butterfly, boring_avx512vl_butterfly, gen_butterfly_twiddles_f32,
 };
 use crate::avx::mixed::{AvxStoreF, ColumnButterfly16f};
-use crate::avx::transpose::avx_transpose_f32x2_4x4_impl;
 use crate::store::BidirectionalStore;
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -104,7 +103,7 @@ impl $bf_name {
                 let mut mid2 = self.bf16.bf8.bf4.exec(input2);
 
                 mid2[1] = AvxStoreF::mul_by_complex(mid2[1], self.twiddles32[1]);
-                mid2[2] = self.bf16.bf8.rotate1(mid2[2]);
+                mid2[2] = self.bf16.bf8.rotate45(mid2[2]);
                 mid2[3] = AvxStoreF::mul_by_complex(mid2[3], self.twiddles32[4]);
 
                 let input3 = [
@@ -128,9 +127,9 @@ impl $bf_name {
                 ];
                 let mut mid4 = self.bf16.bf8.bf4.exec(input4);
 
-                mid4[1] = self.bf16.bf8.rotate1(mid4[1]);
+                mid4[1] = self.bf16.bf8.rotate45(mid4[1]);
                 mid4[2] = self.bf16.bf8.rotate(mid4[2]);
-                mid4[3] = self.bf16.bf8.rotate3(mid4[3]);
+                mid4[3] = self.bf16.bf8.rotate135(mid4[3]);
 
                 let input5 = [
                     load!(src, k, 5),
@@ -155,7 +154,7 @@ impl $bf_name {
                 let mut mid6 = self.bf16.bf8.bf4.exec(input6);
 
                 mid6[1] = AvxStoreF::mul_by_complex(mid6[1], self.twiddles32[4]);
-                mid6[2] = self.bf16.bf8.rotate3(mid6[2]);
+                mid6[2] = self.bf16.bf8.rotate135(mid6[2]);
                 mid6[3] = AvxStoreF::mul_by_complex(mid6[3], self.twiddles32[1].neg());
 
                 let input7 = [
@@ -211,11 +210,12 @@ impl $bf_name {
                 let q1 = AvxStoreF::mul_by_complex(rows[1], self.twiddles[15 * k]);
                 let q2 = AvxStoreF::mul_by_complex(rows[2], self.twiddles[15 * k + 1]);
                 let q3 = AvxStoreF::mul_by_complex(rows[3], self.twiddles[15 * k + 2]);
-                let t = avx_transpose_f32x2_4x4_impl(rows[0].v, q1.v, q2.v, q3.v);
-                AvxStoreF::raw(t.0).write_u(dst.get_unchecked_mut(k * 4 * 16..));
-                AvxStoreF::raw(t.1).write_u(dst.get_unchecked_mut((k * 4 + 1) * 16..));
-                AvxStoreF::raw(t.2).write_u(dst.get_unchecked_mut((k * 4 + 2) * 16..));
-                AvxStoreF::raw(t.3).write_u(dst.get_unchecked_mut((k * 4 + 3) * 16..));
+                use crate::avx::transpose::transpose_f32x2_4x4_aos;
+                let t = transpose_f32x2_4x4_aos([rows[0], q1, q2, q3]);
+                t[0].write_u(dst.get_unchecked_mut(k * 4 * 16..));
+                t[1].write_u(dst.get_unchecked_mut((k * 4 + 1) * 16..));
+                t[2].write_u(dst.get_unchecked_mut((k * 4 + 2) * 16..));
+                t[3].write_u(dst.get_unchecked_mut((k * 4 + 3) * 16..));
 
                 for i in 1..4 {
                     let q0 = AvxStoreF::mul_by_complex(
@@ -234,14 +234,11 @@ impl $bf_name {
                         rows[i * 4 + 3],
                         self.twiddles[(i - 1) * 4 + 6 + 15 * k],
                     );
-                    let t = avx_transpose_f32x2_4x4_impl(q0.v, q1.v, q2.v, q3.v);
-                    AvxStoreF::raw(t.0).write_u(dst.get_unchecked_mut(k * 4 * 16 + i * 4..));
-                    AvxStoreF::raw(t.1)
-                        .write_u(dst.get_unchecked_mut((k * 4 + 1) * 16 + i * 4..));
-                    AvxStoreF::raw(t.2)
-                        .write_u(dst.get_unchecked_mut((k * 4 + 2) * 16 + i * 4..));
-                    AvxStoreF::raw(t.3)
-                        .write_u(dst.get_unchecked_mut((k * 4 + 3) * 16 + i * 4..));
+                    let t = transpose_f32x2_4x4_aos([q0, q1, q2, q3]);
+                    t[0].write_u(dst.get_unchecked_mut(k * 4 * 16 + i * 4..));
+                    t[1].write_u(dst.get_unchecked_mut((k * 4 + 1) * 16 + i * 4..));
+                    t[2].write_u(dst.get_unchecked_mut((k * 4 + 2) * 16 + i * 4..));
+                    t[3].write_u(dst.get_unchecked_mut((k * 4 + 3) * 16 + i * 4..));
                 }
             }
         }

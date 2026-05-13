@@ -31,9 +31,9 @@
 use crate::avx::butterflies::shared::{
     boring_avx_butterfly, boring_avx512vl_butterfly, gen_butterfly_twiddles_f32,
 };
-use crate::avx::mixed::{AvxStoreF, ColumnButterfly16f};
-use crate::avx::transpose::transpose_4x16;
+use crate::avx::mixed::{AvxStoreF, ColumnButterfly8f};
 use crate::store::BidirectionalStore;
+use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
@@ -42,8 +42,9 @@ macro_rules! define_bf256 {
     ($bf_name: ident, $features: literal) => {
         pub(crate) struct $bf_name {
             direction: FftDirection,
-            bf16: ColumnButterfly16f,
-            twiddles: [AvxStoreF; 60],
+            bf8: ColumnButterfly8f,
+            twiddles: [AvxStoreF; 56],
+            twiddles32: [AvxStoreF; 6],
         }
 
         impl $bf_name {
@@ -55,72 +56,204 @@ macro_rules! define_bf256 {
             pub(crate) fn new_init(fft_direction: FftDirection) -> Self {
                 Self {
                     direction: fft_direction,
-                    twiddles: gen_butterfly_twiddles_f32(16, 16, fft_direction, 256),
-                    bf16: ColumnButterfly16f::new(fft_direction),
+                    twiddles: gen_butterfly_twiddles_f32(32, 8, fft_direction, 256),
+                    bf8: ColumnButterfly8f::new(fft_direction),
+                    twiddles32: [
+                        AvxStoreF::set_complex(compute_twiddle(1, 32, fft_direction)),
+                        AvxStoreF::set_complex(compute_twiddle(2, 32, fft_direction)),
+                        AvxStoreF::set_complex(compute_twiddle(3, 32, fft_direction)),
+                        AvxStoreF::set_complex(compute_twiddle(5, 32, fft_direction)),
+                        AvxStoreF::set_complex(compute_twiddle(6, 32, fft_direction)),
+                        AvxStoreF::set_complex(compute_twiddle(7, 32, fft_direction)),
+                    ],
                 }
             }
         }
 
         impl $bf_name {
             #[target_feature(enable = $features)]
-            fn exec_bf16(&self, src: &[Complex<f32>], dst: &mut [MaybeUninit<Complex<f32>>; 256]) {
-                let mut rows: [AvxStoreF; 16] = [AvxStoreF::zero(); 16];
+            fn exec_bf32(&self, src: &[MaybeUninit<Complex<f32>>; 256], dst: &mut [Complex<f32>]) {
                 unsafe {
-                    // columns
-                    for k in 0..4 {
-                        for i in 0..16 {
-                            rows[i] =
-                                AvxStoreF::from_complex_ref(src.get_unchecked(i * 16 + k * 4..));
+                    for k in 0..2 {
+                        macro_rules! load {
+                            ($src: expr, $k: expr, $idx: expr) => {{ AvxStoreF::from_complex_refu($src.get_unchecked($k * 4 + $idx * 8..)) }};
                         }
 
-                        rows = self.bf16.exec(rows);
-
-                        for i in 1..16 {
-                            rows[i] =
-                                AvxStoreF::mul_by_complex(rows[i], self.twiddles[i - 1 + 15 * k]);
+                        macro_rules! store {
+                            ($v: expr, $idx: expr, $dst: expr, $k: expr) => {{ $v.write($dst.get_unchecked_mut($k * 4 + $idx * 8..)) }};
                         }
 
-                        let transposed = transpose_4x16(rows);
+                        let input1 = [
+                            load!(src, k, 1),
+                            load!(src, k, 9),
+                            load!(src, k, 17),
+                            load!(src, k, 25),
+                        ];
+                        let mut mid1 = self.bf8.bf4.exec(input1);
+
+                        mid1[1] = AvxStoreF::mul_by_complex(mid1[1], self.twiddles32[0]);
+                        mid1[2] = AvxStoreF::mul_by_complex(mid1[2], self.twiddles32[1]);
+                        mid1[3] = AvxStoreF::mul_by_complex(mid1[3], self.twiddles32[2]);
+
+                        let input2 = [
+                            load!(src, k, 2),
+                            load!(src, k, 10),
+                            load!(src, k, 18),
+                            load!(src, k, 26),
+                        ];
+                        let mut mid2 = self.bf8.bf4.exec(input2);
+
+                        mid2[1] = AvxStoreF::mul_by_complex(mid2[1], self.twiddles32[1]);
+                        mid2[2] = self.bf8.rotate45(mid2[2]);
+                        mid2[3] = AvxStoreF::mul_by_complex(mid2[3], self.twiddles32[4]);
+
+                        let input3 = [
+                            load!(src, k, 3),
+                            load!(src, k, 11),
+                            load!(src, k, 19),
+                            load!(src, k, 27),
+                        ];
+                        let mut mid3 = self.bf8.bf4.exec(input3);
+
+                        mid3[1] = AvxStoreF::mul_by_complex(mid3[1], self.twiddles32[2]);
+                        mid3[2] = AvxStoreF::mul_by_complex(mid3[2], self.twiddles32[4]);
+                        mid3[3] =
+                            AvxStoreF::mul_by_complex(mid3[3], self.bf8.rotate(self.twiddles32[0]));
+
+                        let input4 = [
+                            load!(src, k, 4),
+                            load!(src, k, 12),
+                            load!(src, k, 20),
+                            load!(src, k, 28),
+                        ];
+                        let mut mid4 = self.bf8.bf4.exec(input4);
+
+                        mid4[1] = self.bf8.rotate45(mid4[1]);
+                        mid4[2] = self.bf8.rotate(mid4[2]);
+                        mid4[3] = self.bf8.rotate135(mid4[3]);
+
+                        let input5 = [
+                            load!(src, k, 5),
+                            load!(src, k, 13),
+                            load!(src, k, 21),
+                            load!(src, k, 29),
+                        ];
+                        let mut mid5 = self.bf8.bf4.exec(input5);
+
+                        mid5[1] = AvxStoreF::mul_by_complex(mid5[1], self.twiddles32[3]);
+                        mid5[2] =
+                            AvxStoreF::mul_by_complex(mid5[2], self.bf8.rotate(self.twiddles32[1]));
+                        mid5[3] =
+                            AvxStoreF::mul_by_complex(mid5[3], self.bf8.rotate(self.twiddles32[5]));
+
+                        let input6 = [
+                            load!(src, k, 6),
+                            load!(src, k, 14),
+                            load!(src, k, 22),
+                            load!(src, k, 30),
+                        ];
+                        let mut mid6 = self.bf8.bf4.exec(input6);
+
+                        mid6[1] = AvxStoreF::mul_by_complex(mid6[1], self.twiddles32[4]);
+                        mid6[2] = self.bf8.rotate135(mid6[2]);
+                        mid6[3] = AvxStoreF::mul_by_complex(mid6[3], self.twiddles32[1].neg());
+
+                        let input7 = [
+                            load!(src, k, 7),
+                            load!(src, k, 15),
+                            load!(src, k, 23),
+                            load!(src, k, 31),
+                        ];
+                        let mut mid7 = self.bf8.bf4.exec(input7);
+
+                        mid7[1] = AvxStoreF::mul_by_complex(mid7[1], self.twiddles32[5]);
+                        mid7[2] =
+                            AvxStoreF::mul_by_complex(mid7[2], self.bf8.rotate(self.twiddles32[4]));
+                        mid7[3] = AvxStoreF::mul_by_complex(mid7[3], self.twiddles32[3].neg());
+
+                        let input0 = [
+                            load!(src, k, 0),
+                            load!(src, k, 8),
+                            load!(src, k, 16),
+                            load!(src, k, 24),
+                        ];
+                        let mid0 = self.bf8.bf4.exec(input0);
 
                         for i in 0..4 {
-                            transposed[i * 4].write_u(dst.get_unchecked_mut(k * 4 * 16 + i * 4..));
-                            transposed[i * 4 + 1]
-                                .write_u(dst.get_unchecked_mut((k * 4 + 1) * 16 + i * 4..));
-                            transposed[i * 4 + 2]
-                                .write_u(dst.get_unchecked_mut((k * 4 + 2) * 16 + i * 4..));
-                            transposed[i * 4 + 3]
-                                .write_u(dst.get_unchecked_mut((k * 4 + 3) * 16 + i * 4..));
+                            let output = self.bf8.exec([
+                                mid0[i], mid1[i], mid2[i], mid3[i], mid4[i], mid5[i], mid6[i], mid7[i],
+                            ]);
+                            store!(output[0], i, dst, k);
+                            store!(output[1], i + 4, dst, k);
+                            store!(output[2], i + 8, dst, k);
+                            store!(output[3], i + 12, dst, k);
+                            store!(output[4], i + 16, dst, k);
+                            store!(output[5], i + 20, dst, k);
+                            store!(output[6], i + 24, dst, k);
+                            store!(output[7], i + 28, dst, k);
                         }
                     }
                 }
             }
 
+            #[inline]
             #[target_feature(enable = $features)]
-            fn exec_bf16_2(
-                &self,
-                src: &[MaybeUninit<Complex<f32>>; 256],
-                dst: &mut [Complex<f32>],
-            ) {
-                let mut rows: [AvxStoreF; 16] = [AvxStoreF::zero(); 16];
+            fn exec_bf16(&self, src: &[Complex<f32>], dst: &mut [MaybeUninit<Complex<f32>>; 256]) {
+                let mut rows: [AvxStoreF; 8] = [AvxStoreF::zero(); 8];
                 unsafe {
-                    for k in 0..4 {
-                        for i in 0..16 {
+                    // columns
+                    for k in 0..8 {
+                        for i in 0..8 {
                             rows[i] =
-                                AvxStoreF::from_complex_refu(src.get_unchecked(i * 16 + k * 4..));
+                                AvxStoreF::from_complex_ref(src.get_unchecked(i * 32 + k * 4..));
                         }
-                        rows = self.bf16.exec(rows);
-                        for i in 0..16 {
-                            rows[i].write(dst.get_unchecked_mut(i * 16 + k * 4..));
+
+                        rows = self.bf8.exec(rows);
+
+                        let q1 = AvxStoreF::mul_by_complex(rows[1], self.twiddles[7 * k]);
+                        let q2 = AvxStoreF::mul_by_complex(rows[2], self.twiddles[7 * k + 1]);
+                        let q3 = AvxStoreF::mul_by_complex(rows[3], self.twiddles[7 * k + 2]);
+                        use crate::avx::transpose::transpose_f32x2_4x4_aos;
+                        let t = transpose_f32x2_4x4_aos([rows[0], q1, q2, q3]);
+                        t[0].write_u(dst.get_unchecked_mut(k * 4 * 8..));
+                        t[1].write_u(dst.get_unchecked_mut((k * 4 + 1) * 8..));
+                        t[2].write_u(dst.get_unchecked_mut((k * 4 + 2) * 8..));
+                        t[3].write_u(dst.get_unchecked_mut((k * 4 + 3) * 8..));
+
+                        {
+                            let i = 1;
+                            let q0 = AvxStoreF::mul_by_complex(
+                                rows[i * 4],
+                                self.twiddles[(i - 1) * 4 + 3 + 7 * k],
+                            );
+                            let q1 = AvxStoreF::mul_by_complex(
+                                rows[i * 4 + 1],
+                                self.twiddles[(i - 1) * 4 + 4 + 7 * k],
+                            );
+                            let q2 = AvxStoreF::mul_by_complex(
+                                rows[i * 4 + 2],
+                                self.twiddles[(i - 1) * 4 + 5 + 7 * k],
+                            );
+                            let q3 = AvxStoreF::mul_by_complex(
+                                rows[i * 4 + 3],
+                                self.twiddles[(i - 1) * 4 + 6 + 7 * k],
+                            );
+                            let t = transpose_f32x2_4x4_aos([q0, q1, q2, q3]);
+                            t[0].write_u(dst.get_unchecked_mut(k * 4 * 8 + i * 4..));
+                            t[1].write_u(dst.get_unchecked_mut((k * 4 + 1) * 8 + i * 4..));
+                            t[2].write_u(dst.get_unchecked_mut((k * 4 + 2) * 8 + i * 4..));
+                            t[3].write_u(dst.get_unchecked_mut((k * 4 + 3) * 8 + i * 4..));
                         }
                     }
                 }
             }
 
+            #[inline]
             #[target_feature(enable = $features)]
             pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
                 let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 256];
                 self.exec_bf16(chunk.slice_from(0..), &mut scratch);
-                self.exec_bf16_2(&scratch, chunk.slice_from_mut(0..));
+                self.exec_bf32(&scratch, chunk.slice_from_mut(0..));
             }
         }
     };
