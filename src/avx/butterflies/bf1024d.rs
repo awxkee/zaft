@@ -72,7 +72,7 @@ impl $bf_name {
 
 impl $bf_name {
     #[target_feature(enable = $features)]
-    fn exec_bf64_2(&self, src: &mut [MaybeUninit<Complex<f64>>; 1024], dst: &mut [Complex<f64>]) {
+    fn exec_bf64_2(&self, src: &[MaybeUninit<Complex<f64>>; 1024], dst: &mut [Complex<f64>]) {
         unsafe {
             for k in 0..16 {
                 macro_rules! load {
@@ -358,7 +358,7 @@ impl $bf_name {
         // columns
         self.exec_bf64_1(chunk.slice_from(0..), &mut scratch);
         // rows
-        self.exec_bf64_2(&mut scratch, chunk.slice_from_mut(0..));
+        self.exec_bf64_2(&scratch, chunk.slice_from_mut(0..));
     }
 }
     };

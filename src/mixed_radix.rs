@@ -84,12 +84,13 @@ where
             }
         }
 
+        let execution_length = width * height;
         let width_scratch_length = width_executor.scratch_length();
         let width_destructive_scratch_length = width_executor.scratch_length();
         let height_scratch_length = height_executor.scratch_length();
 
         Ok(MixedRadix {
-            execution_length: width * height,
+            execution_length,
             width_executor,
             width,
             height_executor,
@@ -138,12 +139,7 @@ where
             self.height_executor
                 .execute_with_scratch(scratch, height_scratch)?;
 
-            for (dst, &src) in chunk[..self.height]
-                .iter_mut()
-                .zip(scratch[..self.height].iter())
-            {
-                *dst = src;
-            }
+            chunk[..self.height].copy_from_slice(&scratch[..self.height]);
             self.complex_arithm.mul(
                 &scratch[self.height..],
                 &self.twiddles,

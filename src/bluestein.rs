@@ -45,6 +45,7 @@ pub(crate) struct BluesteinFft<T> {
     direction: FftDirection,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
     convolve_scratch_length: usize,
+    destructive_inner_scratch_len: usize,
 }
 
 pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
@@ -120,6 +121,11 @@ where
         make_bluesteins_twiddles(&mut twiddles, direction);
 
         let convolve_scratch_length = convolve_fft.scratch_length();
+        let destructive_inner_scratch_len = if size >= convolve_scratch_length {
+            0
+        } else {
+            convolve_scratch_length
+        };
 
         Ok(BluesteinFft {
             convolve_fft,
@@ -129,6 +135,7 @@ where
             direction,
             spectrum_ops: T::make_complex_arith(),
             convolve_scratch_length,
+            destructive_inner_scratch_len,
         })
     }
 }
@@ -203,14 +210,17 @@ where
         let (inner_input, convolve_scratch) =
             scratch.split_at_mut(self.convolve_fft_twiddles.len());
 
-        for (chunk, output_chunk) in src
+        for (src_chunk, dst_chunk) in src
             .chunks_exact(self.execution_length)
             .zip(dst.chunks_exact_mut(self.execution_length))
         {
-            self.spectrum_ops
-                .mul(chunk, &self.twiddles, &mut inner_input[..chunk.len()]);
+            self.spectrum_ops.mul(
+                src_chunk,
+                &self.twiddles,
+                &mut inner_input[..src_chunk.len()],
+            );
 
-            inner_input[chunk.len()..].fill(Complex::zero());
+            inner_input[src_chunk.len()..].fill(Complex::zero());
 
             self.convolve_fft
                 .execute_with_scratch(inner_input, convolve_scratch)?;
@@ -222,9 +232,9 @@ where
                 .execute_with_scratch(inner_input, convolve_scratch)?;
 
             self.spectrum_ops.conjugate_mul_by_b(
-                &inner_input[..chunk.len()],
+                &inner_input[..src_chunk.len()],
                 &self.twiddles,
-                output_chunk,
+                dst_chunk,
             );
         }
         Ok(())
@@ -236,7 +246,53 @@ where
         dst: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        self.execute_out_of_place_with_scratch(src, dst, scratch)
+        validate_oof_sizes!(src, dst, self.execution_length);
+
+        let scratch = validate_scratch!(scratch, self.destructive_scratch_length());
+        let (inner_input, convolve_scratch) =
+            scratch.split_at_mut(self.convolve_fft_twiddles.len());
+        let use_dst_as_scratch = self.execution_length >= self.convolve_scratch_length;
+
+        for (src_chunk, dst_chunk) in src
+            .chunks_exact_mut(self.execution_length)
+            .zip(dst.chunks_exact_mut(self.execution_length))
+        {
+            self.spectrum_ops.mul(
+                src_chunk,
+                &self.twiddles,
+                &mut inner_input[..src_chunk.len()],
+            );
+
+            inner_input[src_chunk.len()..].fill(Complex::zero());
+
+            self.convolve_fft.execute_with_scratch(
+                inner_input,
+                if use_dst_as_scratch {
+                    src_chunk
+                } else {
+                    convolve_scratch
+                },
+            )?;
+
+            self.spectrum_ops
+                .mul_conjugate_in_place(inner_input, &self.convolve_fft_twiddles);
+
+            self.convolve_fft.execute_with_scratch(
+                inner_input,
+                if use_dst_as_scratch {
+                    src_chunk
+                } else {
+                    convolve_scratch
+                },
+            )?;
+
+            self.spectrum_ops.conjugate_mul_by_b(
+                &inner_input[..src_chunk.len()],
+                &self.twiddles,
+                dst_chunk,
+            );
+        }
+        Ok(())
     }
 
     fn direction(&self) -> FftDirection {
@@ -257,7 +313,8 @@ where
         self.convolve_scratch_length + self.convolve_fft_twiddles.len()
     }
 
+    #[inline]
     fn destructive_scratch_length(&self) -> usize {
-        self.out_of_place_scratch_length()
+        self.destructive_inner_scratch_len + self.convolve_fft_twiddles.len()
     }
 }
