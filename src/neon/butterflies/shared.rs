@@ -270,32 +270,6 @@ impl NeonButterfly {
     }
 
     #[inline]
-    pub(crate) fn butterfly4_f32(
-        a: float32x4_t,
-        b: float32x4_t,
-        c: float32x4_t,
-        d: float32x4_t,
-        rotate: float32x4_t,
-    ) -> (float32x4_t, float32x4_t, float32x4_t, float32x4_t) {
-        unsafe {
-            let t0 = vaddq_f32(a, c);
-            let t1 = vsubq_f32(a, c);
-            let t2 = vaddq_f32(b, d);
-            let mut t3 = vsubq_f32(b, d);
-            t3 = vreinterpretq_f32_u32(veorq_u32(
-                vreinterpretq_u32_f32(vrev64q_f32(t3)),
-                vreinterpretq_u32_f32(rotate),
-            ));
-            (
-                vaddq_f32(t0, t2),
-                vaddq_f32(t1, t3),
-                vsubq_f32(t0, t2),
-                vsubq_f32(t1, t3),
-            )
-        }
-    }
-
-    #[inline]
     pub(crate) fn butterfly2_f64(u0: float64x2_t, u1: float64x2_t) -> (float64x2_t, float64x2_t) {
         unsafe {
             let t = vaddq_f64(u0, u1);

@@ -60,7 +60,7 @@ where
             ));
         }
 
-        for chunk in in_place.chunks_exact_mut(2) {
+        for chunk in in_place.as_chunks_mut::<2>().0.iter_mut() {
             let u0 = chunk[0];
             let u1 = chunk[1];
 
@@ -97,7 +97,12 @@ where
     ) -> Result<(), ZaftError> {
         validate_oof_sizes!(src, dst, 2);
 
-        for (dst, src) in dst.chunks_exact_mut(2).zip(src.chunks_exact(2)) {
+        for (dst, src) in dst
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(src.as_chunks::<2>().0.iter())
+        {
             let u0 = src[0];
             let u1 = src[1];
 
@@ -118,7 +123,12 @@ where
     ) -> Result<(), ZaftError> {
         validate_oof_sizes!(src, dst, 2);
 
-        for (dst, src) in dst.chunks_exact_mut(2).zip(src.chunks_exact(2)) {
+        for (dst, src) in dst
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(src.as_chunks::<2>().0.iter())
+        {
             let u0 = src[0];
             let u1 = src[1];
 
@@ -181,7 +191,12 @@ where
             return Err(ZaftError::InvalidSizeMultiplier(output.len(), 2));
         }
 
-        for (input, complex) in input.chunks_exact(2).zip(output.chunks_exact_mut(2)) {
+        for (input, complex) in input
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<2>().0.iter_mut())
+        {
             let u0 = input[0];
             let u1 = input[1];
 

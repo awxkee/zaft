@@ -178,7 +178,7 @@ macro_rules! define_mixed_radix_neon_d {
                 // Both forward and mirror rows load from src without boundary special-casing.
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(complex_chunks_count)
                     .enumerate()
                 {

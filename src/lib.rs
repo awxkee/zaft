@@ -1020,21 +1020,11 @@ impl Zaft {
         } else if prime_factors.is_power_of_two {
             // Use Radix-4 if a power of 2
             if Zaft::could_do_split_mixed_radix() {
-                let has512 = T::butterfly512(fft_direction).is_some();
-                if n == 2048 {
-                    if has512 {
-                        if let Some(bf) =
-                            T::mixed_radix_butterfly4(Zaft::strategy(n / 4, fft_direction)?)?
-                        {
-                            return Ok(bf);
-                        }
-                    } else {
-                        if let Some(bf) =
-                            T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
-                        {
-                            return Ok(bf);
-                        }
-                    }
+                if n == 2048
+                    && let Some(bf) =
+                        T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
+                {
+                    return Ok(bf);
                 }
                 if n == 4096
                     && let Some(bf) =

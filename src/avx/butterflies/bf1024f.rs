@@ -104,7 +104,7 @@ impl $bf_name {
                 let mut mid2 = self.bf8.bf4.exec(input2);
 
                 mid2[1] = AvxStoreF::mul_by_complex(mid2[1], self.twiddles32[1]);
-                mid2[2] = self.bf8.rotate1(mid2[2]);
+                mid2[2] = self.bf8.rotate45(mid2[2]);
                 mid2[3] = AvxStoreF::mul_by_complex(mid2[3], self.twiddles32[4]);
 
                 let input3 = [
@@ -127,9 +127,9 @@ impl $bf_name {
                 ];
                 let mut mid4 = self.bf8.bf4.exec(input4);
 
-                mid4[1] = self.bf8.rotate1(mid4[1]);
+                mid4[1] = self.bf8.rotate45(mid4[1]);
                 mid4[2] = self.bf8.rotate(mid4[2]);
-                mid4[3] = self.bf8.rotate3(mid4[3]);
+                mid4[3] = self.bf8.rotate135(mid4[3]);
 
                 let input5 = [
                     load!(src, k, 5),
@@ -152,7 +152,7 @@ impl $bf_name {
                 let mut mid6 = self.bf8.bf4.exec(input6);
 
                 mid6[1] = AvxStoreF::mul_by_complex(mid6[1], self.twiddles32[4]);
-                mid6[2] = self.bf8.rotate3(mid6[2]);
+                mid6[2] = self.bf8.rotate135(mid6[2]);
                 mid6[3] = AvxStoreF::mul_by_complex(mid6[3], self.twiddles32[1].neg());
 
                 let input7 = [
@@ -245,7 +245,7 @@ impl $bf_name {
                 let mut mid2 = self.bf8.bf4.exec(input2);
 
                 mid2[1] = AvxStoreF::mul_by_complex(mid2[1], self.twiddles32[1]);
-                mid2[2] = self.bf8.rotate1(mid2[2]);
+                mid2[2] = self.bf8.rotate45(mid2[2]);
                 mid2[3] = AvxStoreF::mul_by_complex(mid2[3], self.twiddles32[4]);
 
                 let input3 = [
@@ -268,9 +268,9 @@ impl $bf_name {
                 ];
                 let mut mid4 = self.bf8.bf4.exec(input4);
 
-                mid4[1] = self.bf8.rotate1(mid4[1]);
+                mid4[1] = self.bf8.rotate45(mid4[1]);
                 mid4[2] = self.bf8.rotate(mid4[2]);
-                mid4[3] = self.bf8.rotate3(mid4[3]);
+                mid4[3] = self.bf8.rotate135(mid4[3]);
 
                 let input5 = [
                     load!(src, k, 5),
@@ -293,7 +293,7 @@ impl $bf_name {
                 let mut mid6 = self.bf8.bf4.exec(input6);
 
                 mid6[1] = AvxStoreF::mul_by_complex(mid6[1], self.twiddles32[4]);
-                mid6[2] = self.bf8.rotate3(mid6[2]);
+                mid6[2] = self.bf8.rotate135(mid6[2]);
                 mid6[3] = AvxStoreF::mul_by_complex(mid6[3], self.twiddles32[1].neg());
 
                 let input7 = [
@@ -318,43 +318,41 @@ impl $bf_name {
 
                 let tw = k * 31;
 
-                {
-                    let output0 = self.bf8.exec([
-                        mid0[0], mid1[0], mid2[0], mid3[0], mid4[0], mid5[0], mid6[0], mid7[0],
-                    ]);
-                    let output1 = self.bf8.exec([
-                        mid0[1], mid1[1], mid2[1], mid3[1], mid4[1], mid5[1], mid6[1], mid7[1],
-                    ]);
-                    let output2 = self.bf8.exec([
-                        mid0[2], mid1[2], mid2[2], mid3[2], mid4[2], mid5[2], mid6[2], mid7[2],
-                    ]);
-                    let output3 = self.bf8.exec([
-                        mid0[3], mid1[3], mid2[3], mid3[3], mid4[3], mid5[3], mid6[3], mid7[3],
-                    ]);
+                let output0 = self.bf8.exec([
+                    mid0[0], mid1[0], mid2[0], mid3[0], mid4[0], mid5[0], mid6[0], mid7[0],
+                ]);
+                let output1 = self.bf8.exec([
+                    mid0[1], mid1[1], mid2[1], mid3[1], mid4[1], mid5[1], mid6[1], mid7[1],
+                ]);
+                let output2 = self.bf8.exec([
+                    mid0[2], mid1[2], mid2[2], mid3[2], mid4[2], mid5[2], mid6[2], mid7[2],
+                ]);
+                let output3 = self.bf8.exec([
+                    mid0[3], mid1[3], mid2[3], mid3[3], mid4[3], mid5[3], mid6[3], mid7[3],
+                ]);
 
-                    let q1 = AvxStoreF::mul_by_complex(output1[0], self.twiddles[tw]);
-                    let q2 = AvxStoreF::mul_by_complex(output2[0], self.twiddles[1 + tw]);
-                    let q3 = AvxStoreF::mul_by_complex(output3[0], self.twiddles[2 + tw]);
-                    let t = transpose_f32x2_4x4_aos([output0[0], q1, q2, q3]);
-                    store0!(t[0], 0, dst, k);
-                    store1!(t[1], 0, dst, k);
-                    store2!(t[2], 0, dst, k);
-                    store3!(t[3], 0, dst, k);
+                let q1 = AvxStoreF::mul_by_complex(output1[0], self.twiddles[tw]);
+                let q2 = AvxStoreF::mul_by_complex(output2[0], self.twiddles[1 + tw]);
+                let q3 = AvxStoreF::mul_by_complex(output3[0], self.twiddles[2 + tw]);
+                let t = transpose_f32x2_4x4_aos([output0[0], q1, q2, q3]);
+                store0!(t[0], 0, dst, k);
+                store1!(t[1], 0, dst, k);
+                store2!(t[2], 0, dst, k);
+                store3!(t[3], 0, dst, k);
 
-                    for q in 1..8 {
-                        let q0 =
-                            AvxStoreF::mul_by_complex(output0[q], self.twiddles[q * 4 - 1 + tw]);
-                        let q1 = AvxStoreF::mul_by_complex(output1[q], self.twiddles[q * 4 + tw]);
-                        let q2 =
-                            AvxStoreF::mul_by_complex(output2[q], self.twiddles[q * 4 + 1 + tw]);
-                        let q3 =
-                            AvxStoreF::mul_by_complex(output3[q], self.twiddles[q * 4 + 2 + tw]);
-                        let t = transpose_f32x2_4x4_aos([q0, q1, q2, q3]);
-                        store0!(t[0], q * 4, dst, k);
-                        store1!(t[1], q * 4, dst, k);
-                        store2!(t[2], q * 4, dst, k);
-                        store3!(t[3], q * 4, dst, k);
-                    }
+                for q in 1..8 {
+                    let q0 =
+                        AvxStoreF::mul_by_complex(output0[q], self.twiddles[q * 4 - 1 + tw]);
+                    let q1 = AvxStoreF::mul_by_complex(output1[q], self.twiddles[q * 4 + tw]);
+                    let q2 =
+                        AvxStoreF::mul_by_complex(output2[q], self.twiddles[q * 4 + 1 + tw]);
+                    let q3 =
+                        AvxStoreF::mul_by_complex(output3[q], self.twiddles[q * 4 + 2 + tw]);
+                    let t = transpose_f32x2_4x4_aos([q0, q1, q2, q3]);
+                    store0!(t[0], q * 4, dst, k);
+                    store1!(t[1], q * 4, dst, k);
+                    store2!(t[2], q * 4, dst, k);
+                    store3!(t[3], q * 4, dst, k);
                 }
             }
         }

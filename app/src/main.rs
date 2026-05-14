@@ -42,10 +42,10 @@ use crate::raders_reshuffle::raders_reshuffle;
 use criterion::{BatchSize, Criterion};
 use num_traits::Zero;
 use rand::RngExt;
+use rustfft::FftPlanner;
 use rustfft::num_complex::Complex;
 use std::hint::black_box;
 use std::time::{Duration, Instant};
-use rustfft::FftPlanner;
 use zaft::Zaft;
 
 fn check_power_group(c: &mut Criterion, n: usize, group: String) {
@@ -347,7 +347,7 @@ fn main() {
     // // );
     // println!("{}", rs.0);
     // println!("{}", rs.1);
-    let mut data = vec![Complex::new(0.0019528865, 0.); 8192];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 2048];
     let mut c = Criterion::default().sample_size(10);
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);

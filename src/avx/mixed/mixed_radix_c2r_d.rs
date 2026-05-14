@@ -200,7 +200,9 @@ macro_rules! define_mixed_radix_avx_d {
                 // Both forward and mirror rows load from src without boundary special-casing.
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>()
+                    .0
+                    .iter()
                     .take(complex_chunks_count)
                     .enumerate()
                 {
@@ -273,7 +275,9 @@ macro_rules! define_mixed_radix_avx_d {
                 // Pass 2: chunks that cross or lie beyond the Middle boundary.
                 // The middle row must be assembled from the end of src based on middle_lane.
                 for (c, twiddle_chunk) in twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>()
+                    .0
+                    .iter()
                     .take(chunk_count - complex_chunks_count)
                     .enumerate()
                 {

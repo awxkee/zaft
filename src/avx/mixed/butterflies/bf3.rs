@@ -43,13 +43,9 @@ impl ColumnButterfly3d {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly3d {
         let twiddle = compute_twiddle::<f64>(1, 3, direction);
-        unsafe {
-            Self {
-                twiddle_re: _mm256_set1_pd(twiddle.re),
-                twiddle_im: _mm256_loadu_pd(
-                    [-twiddle.im, twiddle.im, -twiddle.im, twiddle.im].as_ptr(),
-                ),
-            }
+        Self {
+            twiddle_re: _mm256_set1_pd(twiddle.re),
+            twiddle_im: _mm256_setr_pd(-twiddle.im, twiddle.im, -twiddle.im, twiddle.im),
         }
     }
 }
@@ -82,23 +78,18 @@ impl ColumnButterfly3f {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly3f {
         let twiddle = compute_twiddle::<f32>(1, 3, direction);
-        unsafe {
-            Self {
-                twiddle_re: _mm256_set1_ps(twiddle.re),
-                twiddle_im: _mm256_loadu_ps(
-                    [
-                        -twiddle.im,
-                        twiddle.im,
-                        -twiddle.im,
-                        twiddle.im,
-                        -twiddle.im,
-                        twiddle.im,
-                        -twiddle.im,
-                        twiddle.im,
-                    ]
-                    .as_ptr(),
-                ),
-            }
+        Self {
+            twiddle_re: _mm256_set1_ps(twiddle.re),
+            twiddle_im: _mm256_setr_ps(
+                -twiddle.im,
+                twiddle.im,
+                -twiddle.im,
+                twiddle.im,
+                -twiddle.im,
+                twiddle.im,
+                -twiddle.im,
+                twiddle.im,
+            ),
         }
     }
 }

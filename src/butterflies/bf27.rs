@@ -83,102 +83,104 @@ where
 {
     #[inline(always)]
     pub(crate) fn run<S: BidirectionalStore<Complex<T>>>(&self, chunk: &mut S) {
-        let u0 = chunk[0];
-        let u1 = chunk[1];
-        let u2 = chunk[2];
-        let u3 = chunk[3];
+        let s0 = self.bf9.exec(
+            chunk[0], chunk[3], chunk[6], chunk[9], chunk[12], chunk[15], chunk[18], chunk[21],
+            chunk[24],
+        );
+        let s1 = self.bf9.exec(
+            chunk[1], chunk[4], chunk[7], chunk[10], chunk[13], chunk[16], chunk[19], chunk[22],
+            chunk[25],
+        );
+        let s2 = self.bf9.exec(
+            chunk[2], chunk[5], chunk[8], chunk[11], chunk[14], chunk[17], chunk[20], chunk[23],
+            chunk[26],
+        );
 
-        let u4 = chunk[4];
-        let u5 = chunk[5];
-        let u6 = chunk[6];
-        let u7 = chunk[7];
+        // lane 0 — no twiddles
+        let z = self.bf9.bf3.butterfly3(s0.0, s1.0, s2.0);
+        chunk[0] = z.0;
+        chunk[9] = z.1;
+        chunk[18] = z.2;
 
-        let u8 = chunk[8];
-        let u9 = chunk[9];
-        let u10 = chunk[10];
-        let u11 = chunk[11];
-        let u12 = chunk[12];
+        // lane 1
+        let z = self.bf9.bf3.butterfly3(
+            s0.1,
+            c_mul_fast(s1.1, self.twiddle1),
+            c_mul_fast(s2.1, self.twiddle2),
+        );
+        chunk[1] = z.0;
+        chunk[10] = z.1;
+        chunk[19] = z.2;
 
-        let u13 = chunk[13];
-        let u14 = chunk[14];
-        let u15 = chunk[15];
-        let u16 = chunk[16];
+        // lane 2
+        let z = self.bf9.bf3.butterfly3(
+            s0.2,
+            c_mul_fast(s1.2, self.twiddle2),
+            c_mul_fast(s2.2, self.twiddle4),
+        );
+        chunk[2] = z.0;
+        chunk[11] = z.1;
+        chunk[20] = z.2;
 
-        let u17 = chunk[17];
-        let u18 = chunk[18];
+        // lane 3
+        let z = self.bf9.bf3.butterfly3(
+            s0.3,
+            c_mul_fast(s1.3, self.twiddle3),
+            c_mul_fast(s2.3, self.twiddle6),
+        );
+        chunk[3] = z.0;
+        chunk[12] = z.1;
+        chunk[21] = z.2;
 
-        let u19 = chunk[19];
-        let u20 = chunk[20];
+        // lane 4
+        let z = self.bf9.bf3.butterfly3(
+            s0.4,
+            c_mul_fast(s1.4, self.twiddle4),
+            c_mul_fast(s2.4, self.twiddle8),
+        );
+        chunk[4] = z.0;
+        chunk[13] = z.1;
+        chunk[22] = z.2;
 
-        let u21 = chunk[21];
-        let u22 = chunk[22];
+        // lane 5
+        let z = self.bf9.bf3.butterfly3(
+            s0.5,
+            c_mul_fast(s1.5, self.twiddle5),
+            c_mul_fast(s2.5, self.twiddle9),
+        );
+        chunk[5] = z.0;
+        chunk[14] = z.1;
+        chunk[23] = z.2;
 
-        let u23 = chunk[23];
-        let u24 = chunk[24];
+        // lane 6
+        let z = self.bf9.bf3.butterfly3(
+            s0.6,
+            c_mul_fast(s1.6, self.twiddle6),
+            c_mul_fast(s2.6, self.twiddle10),
+        );
+        chunk[6] = z.0;
+        chunk[15] = z.1;
+        chunk[24] = z.2;
 
-        let u25 = chunk[25];
-        let u26 = chunk[26];
+        // lane 7
+        let z = self.bf9.bf3.butterfly3(
+            s0.7,
+            c_mul_fast(s1.7, self.twiddle7),
+            c_mul_fast(s2.7, self.twiddle11),
+        );
+        chunk[7] = z.0;
+        chunk[16] = z.1;
+        chunk[25] = z.2;
 
-        let s0 = self.bf9.exec(u0, u3, u6, u9, u12, u15, u18, u21, u24);
-        let mut s1 = self.bf9.exec(u1, u4, u7, u10, u13, u16, u19, u22, u25);
-        let mut s2 = self.bf9.exec(u2, u5, u8, u11, u14, u17, u20, u23, u26);
-
-        s1.1 = c_mul_fast(s1.1, self.twiddle1);
-        s1.2 = c_mul_fast(s1.2, self.twiddle2);
-        s1.3 = c_mul_fast(s1.3, self.twiddle3);
-        s1.4 = c_mul_fast(s1.4, self.twiddle4);
-        s1.5 = c_mul_fast(s1.5, self.twiddle5);
-        s1.6 = c_mul_fast(s1.6, self.twiddle6);
-        s1.7 = c_mul_fast(s1.7, self.twiddle7);
-        s1.8 = c_mul_fast(s1.8, self.twiddle8);
-        s2.1 = c_mul_fast(s2.1, self.twiddle2);
-        s2.2 = c_mul_fast(s2.2, self.twiddle4);
-        s2.3 = c_mul_fast(s2.3, self.twiddle6);
-        s2.4 = c_mul_fast(s2.4, self.twiddle8);
-        s2.5 = c_mul_fast(s2.5, self.twiddle9);
-        s2.6 = c_mul_fast(s2.6, self.twiddle10);
-        s2.7 = c_mul_fast(s2.7, self.twiddle11);
-        s2.8 = c_mul_fast(s2.8, self.twiddle12);
-
-        let z0 = self.bf9.bf3.butterfly3(s0.0, s1.0, s2.0);
-        let z1 = self.bf9.bf3.butterfly3(s0.1, s1.1, s2.1);
-        let z2 = self.bf9.bf3.butterfly3(s0.2, s1.2, s2.2);
-        let z3 = self.bf9.bf3.butterfly3(s0.3, s1.3, s2.3);
-        let z4 = self.bf9.bf3.butterfly3(s0.4, s1.4, s2.4);
-        let z5 = self.bf9.bf3.butterfly3(s0.5, s1.5, s2.5);
-        let z6 = self.bf9.bf3.butterfly3(s0.6, s1.6, s2.6);
-        let z7 = self.bf9.bf3.butterfly3(s0.7, s1.7, s2.7);
-        let z8 = self.bf9.bf3.butterfly3(s0.8, s1.8, s2.8);
-
-        chunk[0] = z0.0;
-        chunk[1] = z1.0;
-        chunk[2] = z2.0;
-        chunk[3] = z3.0;
-        chunk[4] = z4.0;
-        chunk[5] = z5.0;
-        chunk[6] = z6.0;
-        chunk[7] = z7.0;
-        chunk[8] = z8.0;
-
-        chunk[9] = z0.1;
-        chunk[10] = z1.1;
-        chunk[11] = z2.1;
-        chunk[12] = z3.1;
-        chunk[13] = z4.1;
-        chunk[14] = z5.1;
-        chunk[15] = z6.1;
-        chunk[16] = z7.1;
-        chunk[17] = z8.1;
-
-        chunk[18] = z0.2;
-        chunk[19] = z1.2;
-        chunk[20] = z2.2;
-        chunk[21] = z3.2;
-        chunk[22] = z4.2;
-        chunk[23] = z5.2;
-        chunk[24] = z6.2;
-        chunk[25] = z7.2;
-        chunk[26] = z8.2;
+        // lane 8
+        let z = self.bf9.bf3.butterfly3(
+            s0.8,
+            c_mul_fast(s1.8, self.twiddle8),
+            c_mul_fast(s2.8, self.twiddle12),
+        );
+        chunk[8] = z.0;
+        chunk[17] = z.1;
+        chunk[26] = z.2;
     }
 }
 

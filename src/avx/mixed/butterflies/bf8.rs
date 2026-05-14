@@ -50,7 +50,7 @@ impl ColumnButterfly8d {
 
 impl ColumnButterfly8d {
     #[inline(always)]
-    pub(crate) fn rotate1(&self, p0: AvxStoreD) -> AvxStoreD {
+    pub(crate) fn rotate45(&self, p0: AvxStoreD) -> AvxStoreD {
         unsafe {
             AvxStoreD::raw(_mm256_mul_pd(
                 _mm256_add_pd(self.bf4.rotate.rotate_m256d(p0.v), p0.v),
@@ -60,7 +60,7 @@ impl ColumnButterfly8d {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate3(&self, p0: AvxStoreD) -> AvxStoreD {
+    pub(crate) fn rotate135(&self, p0: AvxStoreD) -> AvxStoreD {
         unsafe {
             AvxStoreD::raw(_mm256_mul_pd(
                 _mm256_sub_pd(self.bf4.rotate.rotate_m256d(p0.v), p0.v),
@@ -75,7 +75,7 @@ impl ColumnButterfly8d {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate5(&self, v: AvxStoreD) -> AvxStoreD {
+    pub(crate) fn rotate225(&self, v: AvxStoreD) -> AvxStoreD {
         unsafe {
             AvxStoreD::raw(_mm256_xor_pd(
                 _mm256_mul_pd(
@@ -88,7 +88,7 @@ impl ColumnButterfly8d {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate6(&self, v: AvxStoreD) -> AvxStoreD {
+    pub(crate) fn rotate270(&self, v: AvxStoreD) -> AvxStoreD {
         unsafe {
             AvxStoreD::raw(_mm256_xor_pd(
                 self.bf4.rotate.rotate_m256d(v.v),
@@ -150,7 +150,7 @@ impl ColumnButterfly8f {
 
 impl ColumnButterfly8f {
     #[inline(always)]
-    pub(crate) fn rotate1(&self, p0: AvxStoreF) -> AvxStoreF {
+    pub(crate) fn rotate45(&self, p0: AvxStoreF) -> AvxStoreF {
         unsafe {
             AvxStoreF::raw(_mm256_mul_ps(
                 _mm256_add_ps(self.bf4.rotate.rotate_m256(p0.v), p0.v),
@@ -165,7 +165,7 @@ impl ColumnButterfly8f {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate3(&self, p0: AvxStoreF) -> AvxStoreF {
+    pub(crate) fn rotate135(&self, p0: AvxStoreF) -> AvxStoreF {
         unsafe {
             AvxStoreF::raw(_mm256_mul_ps(
                 _mm256_sub_ps(self.bf4.rotate.rotate_m256(p0.v), p0.v),
@@ -175,7 +175,7 @@ impl ColumnButterfly8f {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate5(&self, v: AvxStoreF) -> AvxStoreF {
+    pub(crate) fn rotate225(&self, v: AvxStoreF) -> AvxStoreF {
         unsafe {
             AvxStoreF::raw(_mm256_xor_ps(
                 _mm256_mul_ps(
@@ -188,7 +188,7 @@ impl ColumnButterfly8f {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate6(&self, v: AvxStoreF) -> AvxStoreF {
+    pub(crate) fn rotate270(&self, v: AvxStoreF) -> AvxStoreF {
         unsafe {
             AvxStoreF::raw(_mm256_xor_ps(
                 self.bf4.rotate.rotate_m256(v.v),
@@ -201,9 +201,9 @@ impl ColumnButterfly8f {
         let [u0, u2, u4, u6] = self.bf4.exec([v[0], v[2], v[4], v[6]]);
         let [u1, u3, u5, u7] = self.bf4.exec([v[1], v[3], v[5], v[7]]);
 
-        let u3 = self.rotate1(u3);
+        let u3 = self.rotate45(u3);
         let u5 = self.rotate(u5);
-        let u7 = self.rotate3(u7);
+        let u7 = self.rotate135(u7);
 
         let [y0, y1] = self.bf2.exec([u0, u1]);
         let [y2, y3] = self.bf2.exec([u2, u3]);

@@ -36,22 +36,20 @@ use num_complex::Complex;
 use std::mem::MaybeUninit;
 
 macro_rules! gen_bf128d {
-    ($name: ident, $features: literal, $internal_bf16: ident, $internal_bf9: ident, $mul: ident) => {
-        use crate::neon::mixed::{$internal_bf9, $internal_bf16};
+    ($name: ident, $features: literal, $internal_bf12: ident, $mul: ident) => {
+        use crate::neon::mixed::$internal_bf12;
         pub(crate) struct $name {
             direction: FftDirection,
-            bf16: $internal_bf16,
-            bf9: $internal_bf9,
-            twiddles: [NeonStoreD; 128],
+            bf12: $internal_bf12,
+            twiddles: [NeonStoreD; 132],
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
                 Self {
                     direction: fft_direction,
-                    twiddles: gen_butterfly_twiddles_f64(16, 9, fft_direction, 144),
-                    bf16: $internal_bf16::new(fft_direction),
-                    bf9: $internal_bf9::new(fft_direction),
+                    twiddles: gen_butterfly_twiddles_f64(12, 12, fft_direction, 144),
+                    bf12: $internal_bf12::new(fft_direction),
                 }
             }
         }
@@ -62,38 +60,37 @@ macro_rules! gen_bf128d {
             #[inline]
             #[target_feature(enable = $features)]
             pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
-                let mut rows: [NeonStoreD; 9] = [NeonStoreD::default(); 9];
-                let mut rows16: [NeonStoreD; 16] = [NeonStoreD::default(); 16];
+                let mut rows: [NeonStoreD; 12] = [NeonStoreD::default(); 12];
 
                 let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 144];
                 unsafe {
                     // columns
-                    for k in 0..16 {
-                        for i in 0..9 {
-                            rows[i] = NeonStoreD::from_complex_ref(chunk.slice_from(i * 16 + k..));
+                    for k in 0..12 {
+                        for i in 0..12 {
+                            rows[i] = NeonStoreD::from_complex_ref(chunk.slice_from(i * 12 + k..));
                         }
 
-                        rows = self.bf9.exec(rows);
+                        rows = self.bf12.exec(rows);
 
-                        for i in 1..9 {
-                            rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 8 * k]);
+                        for i in 1..12 {
+                            rows[i] = NeonStoreD::$mul(rows[i], self.twiddles[i - 1 + 11 * k]);
                         }
 
-                        for i in 0..9 {
-                            rows[i].write_uninit(scratch.get_unchecked_mut(k * 9 + i..));
+                        for i in 0..12 {
+                            rows[i].write_uninit(scratch.get_unchecked_mut(k * 12 + i..));
                         }
                     }
 
                     // rows
 
-                    for k in 0..9 {
-                        for i in 0..16 {
-                            rows16[i] =
-                                NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 9 + k..));
+                    for k in 0..12 {
+                        for i in 0..12 {
+                            rows[i] =
+                                NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 12 + k..));
                         }
-                        rows16 = self.bf16.exec(rows16);
-                        for i in 0..16 {
-                            rows16[i].write(chunk.slice_from_mut(i * 9 + k..));
+                        rows = self.bf12.exec(rows);
+                        for i in 0..12 {
+                            rows[i].write(chunk.slice_from_mut(i * 12 + k..));
                         }
                     }
                 }
@@ -105,16 +102,14 @@ macro_rules! gen_bf128d {
 gen_bf128d!(
     NeonButterfly144d,
     "neon",
-    ColumnButterfly16d,
-    ColumnButterfly9d,
+    ColumnButterfly12d,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
 gen_bf128d!(
     NeonFcmaButterfly144d,
     "fcma",
-    ColumnFcmaButterfly16d,
-    ColumnFcmaButterfly9d,
+    ColumnFcmaButterfly12d,
     fcmul_fcma
 );
 

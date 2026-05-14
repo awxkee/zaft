@@ -599,7 +599,7 @@ macro_rules! define_mixed_radixf {
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count)
                     .enumerate()
                 {
@@ -790,7 +790,7 @@ macro_rules! define_mixed_radixf {
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count)
                     .enumerate()
                 {

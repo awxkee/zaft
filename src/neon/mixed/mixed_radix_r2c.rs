@@ -161,7 +161,7 @@ macro_rules! define_mixed_radix_neon_d_rdft {
 
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN * UNROLL)
+                    .as_chunks::<{($complex_row_count - 1) * 2}>().0.iter()
                     .take(chunk_count / UNROLL)
                     .enumerate()
                 {
@@ -208,7 +208,7 @@ macro_rules! define_mixed_radix_neon_d_rdft {
 
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count)
                     .skip((chunk_count / UNROLL) * UNROLL)
                     .enumerate()
@@ -475,7 +475,7 @@ macro_rules! define_mixed_radix_neon_f_rdft {
 
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN * UNROLL)
+                    .as_chunks::<{($complex_row_count - 1) * 2}>().0.iter()
                     .take(chunk_count / UNROLL)
                     .enumerate()
                 {
@@ -522,7 +522,7 @@ macro_rules! define_mixed_radix_neon_f_rdft {
 
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count)
                     .skip((chunk_count / UNROLL) * UNROLL)
                     .enumerate()

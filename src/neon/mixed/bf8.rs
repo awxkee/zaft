@@ -49,36 +49,53 @@ impl ColumnButterfly8d {
     }
 
     #[inline(always)]
-    pub(crate) fn exec(&self, store: [NeonStoreD; 8]) -> [NeonStoreD; 8] {
+    pub(crate) fn rotate(&self, v: NeonStoreD) -> NeonStoreD {
+        NeonStoreD::raw(v_rotate90_f64(v.v, self.bf4.rotate))
+    }
+
+    #[inline(always)]
+    pub(crate) fn rotate45(&self, v: NeonStoreD) -> NeonStoreD {
         unsafe {
-            let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
-            let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
-
-            let u3 = vmulq_n_f64(
-                vaddq_f64(v_rotate90_f64(u3.v, self.bf4.rotate), u3.v),
+            NeonStoreD::raw(vmulq_n_f64(
+                vaddq_f64(v_rotate90_f64(v.v, self.bf4.rotate), v.v),
                 self.root2,
-            );
-            let u5 = v_rotate90_f64(u5.v, self.bf4.rotate);
-            let u7 = vmulq_n_f64(
-                vsubq_f64(v_rotate90_f64(u7.v, self.bf4.rotate), u7.v),
-                self.root2,
-            );
-
-            let (y0, y1) = NeonButterfly::butterfly2_f64(u0.v, u1.v);
-            let (y2, y3) = NeonButterfly::butterfly2_f64(u2.v, u3);
-            let (y4, y5) = NeonButterfly::butterfly2_f64(u4.v, u5);
-            let (y6, y7) = NeonButterfly::butterfly2_f64(u6.v, u7);
-            [
-                NeonStoreD::raw(y0),
-                NeonStoreD::raw(y2),
-                NeonStoreD::raw(y4),
-                NeonStoreD::raw(y6),
-                NeonStoreD::raw(y1),
-                NeonStoreD::raw(y3),
-                NeonStoreD::raw(y5),
-                NeonStoreD::raw(y7),
-            ]
+            ))
         }
+    }
+
+    #[inline(always)]
+    pub(crate) fn rotate135(&self, v: NeonStoreD) -> NeonStoreD {
+        unsafe {
+            NeonStoreD::raw(vmulq_n_f64(
+                vsubq_f64(v_rotate90_f64(v.v, self.bf4.rotate), v.v),
+                self.root2,
+            ))
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn exec(&self, store: [NeonStoreD; 8]) -> [NeonStoreD; 8] {
+        let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
+        let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
+
+        let u3 = self.rotate45(u3);
+        let u5 = self.rotate(u5);
+        let u7 = self.rotate135(u7);
+
+        let (y0, y1) = NeonButterfly::butterfly2_f64(u0.v, u1.v);
+        let (y2, y3) = NeonButterfly::butterfly2_f64(u2.v, u3.v);
+        let (y4, y5) = NeonButterfly::butterfly2_f64(u4.v, u5.v);
+        let (y6, y7) = NeonButterfly::butterfly2_f64(u6.v, u7.v);
+        [
+            NeonStoreD::raw(y0),
+            NeonStoreD::raw(y2),
+            NeonStoreD::raw(y4),
+            NeonStoreD::raw(y6),
+            NeonStoreD::raw(y1),
+            NeonStoreD::raw(y3),
+            NeonStoreD::raw(y5),
+            NeonStoreD::raw(y7),
+        ]
     }
 }
 
@@ -99,24 +116,45 @@ impl ColumnFcmaButterfly8d {
 
     #[inline]
     #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate(&self, v: NeonStoreD) -> NeonStoreD {
+        NeonStoreD::raw(vcmlaq_rot90_f64(vdupq_n_f64(0.), self.bf4.rot_sign, v.v))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate45(&self, v: NeonStoreD) -> NeonStoreD {
+        NeonStoreD::raw(vmulq_n_f64(
+            vcmlaq_rot90_f64(v.v, self.bf4.rot_sign, v.v),
+            self.root2,
+        ))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
+    pub(crate) fn rotate135(&self, v: NeonStoreD) -> NeonStoreD {
+        NeonStoreD::raw(vmulq_n_f64(
+            vsubq_f64(
+                vcmlaq_rot90_f64(vdupq_n_f64(0.), self.bf4.rot_sign, v.v),
+                v.v,
+            ),
+            self.root2,
+        ))
+    }
+
+    #[inline]
+    #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, store: [NeonStoreD; 8]) -> [NeonStoreD; 8] {
         let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
         let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
 
-        let u3 = vmulq_n_f64(vcmlaq_rot90_f64(u3.v, self.bf4.rot_sign, u3.v), self.root2);
-        let u5 = vcmlaq_rot90_f64(vdupq_n_f64(0.), self.bf4.rot_sign, u5.v);
-        let u7 = vmulq_n_f64(
-            vsubq_f64(
-                vcmlaq_rot90_f64(vdupq_n_f64(0.), self.bf4.rot_sign, u7.v),
-                u7.v,
-            ),
-            self.root2,
-        );
+        let u3 = self.rotate45(u3);
+        let u5 = self.rotate(u5);
+        let u7 = self.rotate135(u7);
 
         let (y0, y1) = NeonButterfly::butterfly2_f64(u0.v, u1.v);
-        let (y2, y3) = NeonButterfly::butterfly2_f64(u2.v, u3);
-        let (y4, y5) = NeonButterfly::butterfly2_f64(u4.v, u5);
-        let (y6, y7) = NeonButterfly::butterfly2_f64(u6.v, u7);
+        let (y2, y3) = NeonButterfly::butterfly2_f64(u2.v, u3.v);
+        let (y4, y5) = NeonButterfly::butterfly2_f64(u4.v, u5.v);
+        let (y6, y7) = NeonButterfly::butterfly2_f64(u6.v, u7.v);
         [
             NeonStoreD::raw(y0),
             NeonStoreD::raw(y2),
@@ -144,7 +182,7 @@ impl ColumnButterfly8f {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate1(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate45(&self, v: NeonStoreF) -> NeonStoreF {
         unsafe {
             NeonStoreF::raw(vmulq_n_f32(
                 vaddq_f32(v_rotate90_f32(v.v, self.bf4.rotate), v.v),
@@ -154,7 +192,7 @@ impl ColumnButterfly8f {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate3(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate135(&self, v: NeonStoreF) -> NeonStoreF {
         unsafe {
             NeonStoreF::raw(vmulq_n_f32(
                 vsubq_f32(v_rotate90_f32(v.v, self.bf4.rotate), v.v),
@@ -169,12 +207,12 @@ impl ColumnButterfly8f {
     }
 
     #[inline(always)]
-    pub(crate) fn rotate6(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate270(&self, v: NeonStoreF) -> NeonStoreF {
         unsafe { NeonStoreF::raw(vnegq_f32(v_rotate90_f32(v.v, self.bf4.rotate))) }
     }
 
     #[inline(always)]
-    pub(crate) fn rotate5(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate225(&self, v: NeonStoreF) -> NeonStoreF {
         unsafe {
             NeonStoreF::raw(vnegq_f32(vmulq_n_f32(
                 vaddq_f32(v_rotate90_f32(v.v, self.bf4.rotate), v.v),
@@ -185,36 +223,28 @@ impl ColumnButterfly8f {
 
     #[inline(always)]
     pub(crate) fn exec(&self, store: [NeonStoreF; 8]) -> [NeonStoreF; 8] {
-        unsafe {
-            let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
-            let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
+        let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
+        let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
 
-            let u3 = vmulq_n_f32(
-                vaddq_f32(v_rotate90_f32(u3.v, self.bf4.rotate), u3.v),
-                self.root2,
-            );
-            let u5 = v_rotate90_f32(u5.v, self.bf4.rotate);
-            let u7 = vmulq_n_f32(
-                vsubq_f32(v_rotate90_f32(u7.v, self.bf4.rotate), u7.v),
-                self.root2,
-            );
+        let u3 = self.rotate45(u3);
+        let u5 = self.rotate(u5);
+        let u7 = self.rotate135(u7);
 
-            let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0.v, u1.v);
-            let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2.v, u3);
-            let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4.v, u5);
-            let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6.v, u7);
+        let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0.v, u1.v);
+        let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2.v, u3.v);
+        let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4.v, u5.v);
+        let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6.v, u7.v);
 
-            [
-                NeonStoreF::raw(zy0),
-                NeonStoreF::raw(zy2),
-                NeonStoreF::raw(zy4),
-                NeonStoreF::raw(zy6),
-                NeonStoreF::raw(zy1),
-                NeonStoreF::raw(zy3),
-                NeonStoreF::raw(zy5),
-                NeonStoreF::raw(zy7),
-            ]
-        }
+        [
+            NeonStoreF::raw(zy0),
+            NeonStoreF::raw(zy2),
+            NeonStoreF::raw(zy4),
+            NeonStoreF::raw(zy6),
+            NeonStoreF::raw(zy1),
+            NeonStoreF::raw(zy3),
+            NeonStoreF::raw(zy5),
+            NeonStoreF::raw(zy7),
+        ]
     }
 
     #[inline(always)]
@@ -269,7 +299,7 @@ impl ColumnFcmaButterfly8f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate1(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate45(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vmulq_n_f32(
             vcmlaq_rot90_f32(v.v, self.bf4.rot_sign, v.v),
             self.root2,
@@ -278,7 +308,7 @@ impl ColumnFcmaButterfly8f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate3(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate135(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vmulq_n_f32(
             vsubq_f32(
                 vcmlaq_rot90_f32(vdupq_n_f32(0.), self.bf4.rot_sign, v.v),
@@ -300,20 +330,14 @@ impl ColumnFcmaButterfly8f {
         let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
         let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
 
-        let u3 = vmulq_n_f32(vcmlaq_rot90_f32(u3.v, self.bf4.rot_sign, u3.v), self.root2);
-        let u5 = vcmlaq_rot90_f32(vdupq_n_f32(0.), self.bf4.rot_sign, u5.v);
-        let u7 = vmulq_n_f32(
-            vsubq_f32(
-                vcmlaq_rot90_f32(vdupq_n_f32(0.), self.bf4.rot_sign, u7.v),
-                u7.v,
-            ),
-            self.root2,
-        );
+        let u3 = self.rotate45(u3);
+        let u5 = self.rotate(u5);
+        let u7 = self.rotate135(u7);
 
         let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0.v, u1.v);
-        let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2.v, u3);
-        let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4.v, u5);
-        let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6.v, u7);
+        let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2.v, u3.v);
+        let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4.v, u5.v);
+        let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6.v, u7.v);
 
         [
             NeonStoreF::raw(zy0),
@@ -348,13 +372,13 @@ impl ColumnFcmaForwardButterfly8f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate1(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate45(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vmulq_n_f32(vcaddq_rot270_f32(v.v, v.v), self.root2))
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate3(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate135(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vmulq_n_f32(
             vsubq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), v.v), v.v),
             self.root2,
@@ -369,13 +393,13 @@ impl ColumnFcmaForwardButterfly8f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate6(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate270(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vnegq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), v.v)))
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate5(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate225(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vnegq_f32(vmulq_n_f32(
             vaddq_f32(self.rotate(v).v, v.v),
             self.root2,
@@ -388,17 +412,14 @@ impl ColumnFcmaForwardButterfly8f {
         let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
         let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
 
-        let u3 = vmulq_n_f32(vcaddq_rot270_f32(u3.v, u3.v), self.root2);
-        let u5 = vcaddq_rot270_f32(vdupq_n_f32(0.), u5.v);
-        let u7 = vmulq_n_f32(
-            vsubq_f32(vcaddq_rot270_f32(vdupq_n_f32(0.), u7.v), u7.v),
-            self.root2,
-        );
+        let u3 = self.rotate45(u3);
+        let u5 = self.rotate(u5);
+        let u7 = self.rotate135(u7);
 
         let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0.v, u1.v);
-        let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2.v, u3);
-        let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4.v, u5);
-        let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6.v, u7);
+        let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2.v, u3.v);
+        let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4.v, u5.v);
+        let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6.v, u7.v);
 
         [
             NeonStoreF::raw(zy0),
@@ -460,13 +481,13 @@ impl ColumnFcmaInverseButterfly8f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate1(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate45(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vmulq_n_f32(vcaddq_rot90_f32(v.v, v.v), self.root2))
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate3(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate135(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vmulq_n_f32(
             vsubq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), v.v), v.v),
             self.root2,
@@ -481,13 +502,13 @@ impl ColumnFcmaInverseButterfly8f {
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate6(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate270(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vnegq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), v.v)))
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
-    pub(crate) fn rotate5(&self, v: NeonStoreF) -> NeonStoreF {
+    pub(crate) fn rotate225(&self, v: NeonStoreF) -> NeonStoreF {
         NeonStoreF::raw(vnegq_f32(vmulq_n_f32(
             vaddq_f32(self.rotate(v).v, v.v),
             self.root2,
@@ -500,17 +521,14 @@ impl ColumnFcmaInverseButterfly8f {
         let [u0, u2, u4, u6] = self.bf4.exec([store[0], store[2], store[4], store[6]]);
         let [u1, u3, u5, u7] = self.bf4.exec([store[1], store[3], store[5], store[7]]);
 
-        let u3 = vmulq_n_f32(vcaddq_rot90_f32(u3.v, u3.v), self.root2);
-        let u5 = vcaddq_rot90_f32(vdupq_n_f32(0.), u5.v);
-        let u7 = vmulq_n_f32(
-            vsubq_f32(vcaddq_rot90_f32(vdupq_n_f32(0.), u7.v), u7.v),
-            self.root2,
-        );
+        let u3 = self.rotate45(u3);
+        let u5 = self.rotate(u5);
+        let u7 = self.rotate135(u7);
 
         let (zy0, zy1) = NeonButterfly::butterfly2_f32(u0.v, u1.v);
-        let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2.v, u3);
-        let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4.v, u5);
-        let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6.v, u7);
+        let (zy2, zy3) = NeonButterfly::butterfly2_f32(u2.v, u3.v);
+        let (zy4, zy5) = NeonButterfly::butterfly2_f32(u4.v, u5.v);
+        let (zy6, zy7) = NeonButterfly::butterfly2_f32(u6.v, u7.v);
 
         [
             NeonStoreF::raw(zy0),

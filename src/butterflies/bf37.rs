@@ -98,7 +98,7 @@ where
 
         let mut scratch = [Complex::zero(); 36];
 
-        for chunk in in_place.chunks_exact_mut(37) {
+        for chunk in in_place.as_chunks_mut::<37>().0.iter_mut() {
             let (buffer_first, buffer) = chunk.split_first_mut().unwrap();
             let buffer_first_val = *buffer_first;
 
@@ -221,7 +221,12 @@ where
 
         let mut scratch = [Complex::zero(); 36];
 
-        for (dst, src) in dst.chunks_exact_mut(37).zip(src.chunks_exact(37)) {
+        for (dst, src) in dst
+            .as_chunks_mut::<37>()
+            .0
+            .iter_mut()
+            .zip(src.as_chunks::<37>().0.iter())
+        {
             let (buffer_first, buffer) = src.split_first().unwrap();
             let buffer_first_val = *buffer_first;
 

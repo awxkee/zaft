@@ -248,7 +248,6 @@ where
                             im: x16im_a - x16im_b,
                         };
 
-                        // Store results
                         *data.get_unchecked_mut(j) = y0;
                         *data.get_unchecked_mut(j + seventh) = y1;
                         *data.get_unchecked_mut(j + 2 * seventh) = y2;

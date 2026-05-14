@@ -66,8 +66,8 @@ impl $name {
 }
 
 impl $name {
-    #[inline(always)]
-    fn exec_bf32(&self, src: &mut [MaybeUninit<Complex<f32>>], dst: &mut [Complex<f32>]) {
+    #[target_feature(enable = $features)]
+    fn exec_bf32(&self, src: &[MaybeUninit<Complex<f32>>; 512], dst: &mut [Complex<f32>]) {
         unsafe {
             for k in 0..8 {
                 macro_rules! load {
@@ -99,7 +99,7 @@ impl $name {
                 let mut mid2 = self.bf8.bf4.exec(input2);
 
                 mid2[1] = NeonStoreF::$mul(mid2[1], self.twiddles32[1]);
-                mid2[2] = self.bf8.rotate1(mid2[2]);
+                mid2[2] = self.bf8.rotate45(mid2[2]);
                 mid2[3] = NeonStoreF::$mul(mid2[3], self.twiddles32[4]);
 
                 let input3 = [
@@ -122,9 +122,9 @@ impl $name {
                 ];
                 let mut mid4 = self.bf8.bf4.exec(input4);
 
-                mid4[1] = self.bf8.rotate1(mid4[1]);
+                mid4[1] = self.bf8.rotate45(mid4[1]);
                 mid4[2] = self.bf8.rotate(mid4[2]);
-                mid4[3] = self.bf8.rotate3(mid4[3]);
+                mid4[3] = self.bf8.rotate135(mid4[3]);
 
                 let input5 = [
                     load!(src, k, 5),
@@ -147,7 +147,7 @@ impl $name {
                 let mut mid6 = self.bf8.bf4.exec(input6);
 
                 mid6[1] = NeonStoreF::$mul(mid6[1], self.twiddles32[4]);
-                mid6[2] = self.bf8.rotate3(mid6[2]);
+                mid6[2] = self.bf8.rotate135(mid6[2]);
                 mid6[3] = NeonStoreF::$mul(mid6[3], self.twiddles32[1].neg());
 
                 let input7 = [
@@ -194,41 +194,41 @@ impl $name {
         let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 512];
 
         unsafe {
-         // columns
-         for k in 0..16 {
-            for i in 0..16 {
-                rows[i] =
-                    NeonStoreF::from_complex_ref(chunk.slice_from(i * 32 + k * 2..));
-            }
+             // columns
+             for k in 0..16 {
+                for i in 0..16 {
+                    rows[i] =
+                        NeonStoreF::from_complex_ref(chunk.slice_from(i * 32 + k * 2..));
+                }
 
-            rows = self.bf16.exec(rows);
+                rows = self.bf16.exec(rows);
 
-            let q1 = NeonStoreF::$mul(rows[1], self.twiddles[15 * k]);
-            let t = transpose_2x2([rows[0], q1]);
-            t[0].write_uninit(scratch.get_unchecked_mut(k * 2 * 16..));
-            t[1].write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16..));
+                let q1 = NeonStoreF::$mul(rows[1], self.twiddles[15 * k]);
+                let t = transpose_2x2([rows[0], q1]);
+                t[0].write_uninit(scratch.get_unchecked_mut(k * 2 * 16..));
+                t[1].write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16..));
 
-            for i in 1..8 {
-                let q0 = NeonStoreF::$mul(
-                    rows[i * 2],
-                    self.twiddles[(i - 1) * 2 + 1 + 15 * k],
-                );
-                let q1 = NeonStoreF::$mul(
-                    rows[i * 2 + 1],
-                    self.twiddles[(i - 1) * 2 + 2 + 15 * k],
-                );
-                let t = transpose_2x2([q0, q1]);
-                t[0]
-                    .write_uninit(scratch.get_unchecked_mut(k * 2 * 16 + i * 2..));
-                t[1]
-                    .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..));
+                for i in 1..8 {
+                    let q0 = NeonStoreF::$mul(
+                        rows[i * 2],
+                        self.twiddles[(i - 1) * 2 + 1 + 15 * k],
+                    );
+                    let q1 = NeonStoreF::$mul(
+                        rows[i * 2 + 1],
+                        self.twiddles[(i - 1) * 2 + 2 + 15 * k],
+                    );
+                    let t = transpose_2x2([q0, q1]);
+                    t[0]
+                        .write_uninit(scratch.get_unchecked_mut(k * 2 * 16 + i * 2..));
+                    t[1]
+                        .write_uninit(scratch.get_unchecked_mut((k * 2 + 1) * 16 + i * 2..));
+                }
             }
         }
 
         // rows
 
-        self.exec_bf32(&mut scratch, chunk.slice_from_mut(0..));
-        }
+        self.exec_bf32(&scratch, chunk.slice_from_mut(0..));
     }
 }
 
