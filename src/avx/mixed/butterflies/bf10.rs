@@ -93,4 +93,34 @@ impl ColumnButterfly10f {
         let [y8, y9] = self.bf2.exec([mid0[4], mid1[4]]);
         [y0, y3, y4, y7, y8, y1, y2, y5, y6, y9]
     }
+
+    #[inline(always)]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> AvxStoreF, J: FnMut(usize, AvxStoreF)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        let mid0 = self.bf5.exec([v(0), v(2), v(4), v(6), v(8)]);
+        let mid1 = self.bf5.exec([v(5), v(7), v(9), v(1), v(3)]);
+
+        let [y0, y1] = self.bf2.exec([mid0[0], mid1[0]]);
+        store(0, y0);
+        store(5, y1);
+
+        let [y2, y3] = self.bf2.exec([mid0[1], mid1[1]]);
+        store(6, y2);
+        store(1, y3);
+
+        let [y4, y5] = self.bf2.exec([mid0[2], mid1[2]]);
+        store(2, y4);
+        store(7, y5);
+
+        let [y6, y7] = self.bf2.exec([mid0[3], mid1[3]]);
+        store(8, y6);
+        store(3, y7);
+
+        let [y8, y9] = self.bf2.exec([mid0[4], mid1[4]]);
+        store(4, y8);
+        store(9, y9);
+    }
 }

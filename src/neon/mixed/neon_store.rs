@@ -26,9 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::util::{
-    vfcmul_f32, vfcmulq_conj_b_f32, vfcmulq_conj_b_f64, vfcmulq_f32, vfcmulq_f64,
-};
+use crate::neon::util::{vfcmul_f32, vfcmulq_f32, vfcmulq_f64};
 use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::aarch64::*;
@@ -258,13 +256,6 @@ impl NeonStoreD {
         }
     }
 
-    #[inline(always)]
-    pub(crate) fn mul_by_complex_conj_b(self, other: NeonStoreD) -> Self {
-        NeonStoreD {
-            v: vfcmulq_conj_b_f64(self.v, other.v),
-        }
-    }
-
     #[inline]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
@@ -287,19 +278,6 @@ impl NeonStoreD {
                 vcmlaq_f64(vdupq_n_f64(0.), self.v, other.v),
                 self.v,
                 other.v,
-            ),
-        }
-    }
-
-    #[inline]
-    #[cfg(feature = "fcma")]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn fcmul_conj_b(self, other: NeonStoreD) -> Self {
-        NeonStoreD {
-            v: vcmlaq_rot270_f64(
-                vcmlaq_f64(vdupq_n_f64(0.), other.v, self.v),
-                other.v,
-                self.v,
             ),
         }
     }
@@ -467,6 +445,18 @@ impl NeonStoreF {
         }
     }
 
+    #[inline]
+    pub(crate) fn load_complex(complex: &Complex<f32>) -> Self {
+        unsafe {
+            NeonStoreF {
+                v: vcombine_f32(
+                    vld1_f32(complex as *const Complex<f32> as *const f32),
+                    vdup_n_f32(0.),
+                ),
+            }
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn dup_even_odds(&self) -> [Self; 2] {
         unsafe {
@@ -624,13 +614,6 @@ impl NeonStoreF {
         }
     }
 
-    #[inline(always)]
-    pub(crate) fn mul_by_complex_conj_b(self, other: NeonStoreF) -> Self {
-        NeonStoreF {
-            v: vfcmulq_conj_b_f32(self.v, other.v),
-        }
-    }
-
     #[inline]
     #[cfg(feature = "fcma")]
     #[target_feature(enable = "fcma")]
@@ -653,19 +636,6 @@ impl NeonStoreF {
                 vcmlaq_f32(vdupq_n_f32(0.), self.v, other.v),
                 self.v,
                 other.v,
-            ),
-        }
-    }
-
-    #[inline]
-    #[cfg(feature = "fcma")]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn fcmul_conj_b(self, other: NeonStoreF) -> Self {
-        NeonStoreF {
-            v: vcmlaq_rot270_f32(
-                vcmlaq_f32(vdupq_n_f32(0.), other.v, self.v),
-                other.v,
-                self.v,
             ),
         }
     }

@@ -204,7 +204,7 @@ macro_rules! gen_bf25f {
                 for i in 0..5 {
                     rows0[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 5..));
                     rows1[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 5 + 2..));
-                    rows2[i] = NeonStoreF::from_complex(chunk.index(i * 5 + 4));
+                    rows2[i] = NeonStoreF::load_complex(chunk.index(i * 5 + 4));
                 }
 
                 rows0 = self.bf5.exec(rows0);

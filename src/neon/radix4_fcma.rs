@@ -252,7 +252,7 @@ impl NeonFcmaRadix4<f64> {
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
             neon_bitreversed_transpose_f64_radix4(self.base_len, chunk, scratch);
-            self.base_fft.execute_out_of_place(&scratch, chunk)?;
+            self.base_fft.execute_out_of_place(scratch, chunk)?;
             self.base_run(chunk)
         }
         Ok(())
@@ -637,7 +637,7 @@ impl NeonFcmaRadix4<f32> {
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // bit reversal first
             neon_bitreversed_transpose_f32_radix4(self.base_len, chunk, scratch);
-            self.base_fft.execute_out_of_place(&scratch, chunk)?;
+            self.base_fft.execute_out_of_place(scratch, chunk)?;
             match self.direction {
                 FftDirection::Forward => self.base_run::<true>(chunk),
                 FftDirection::Inverse => self.base_run::<false>(chunk),

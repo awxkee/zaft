@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
+use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF};
 use crate::neon::mixed::{
     ColumnButterfly3d, ColumnButterfly3f, ColumnButterfly4d, ColumnButterfly4f,
 };
@@ -118,19 +118,6 @@ impl ColumnButterfly12f {
         let [v3, v7, v11] = self.bf3.exec([u3, u7, u11]); // (v3, v7, v11)
         [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
     }
-
-    #[inline(always)]
-    pub(crate) fn exech(&self, v: [NeonStoreFh; 12]) -> [NeonStoreFh; 12] {
-        let [u0, u1, u2, u3] = self.bf4.exech([v[0], v[3], v[6], v[9]]);
-        let [u4, u5, u6, u7] = self.bf4.exech([v[4], v[7], v[10], v[1]]);
-        let [u8, u9, u10, u11] = self.bf4.exech([v[8], v[11], v[2], v[5]]);
-
-        let [v0, v4, v8] = self.bf3.exech([u0, u4, u8]); // (v0, v4, v8)
-        let [v9, v1, v5] = self.bf3.exech([u1, u5, u9]); // (v9, v1, v5)
-        let [v6, v10, v2] = self.bf3.exech([u2, u6, u10]); // (v6, v10, v2)
-        let [v3, v7, v11] = self.bf3.exech([u3, u7, u11]); // (v3, v7, v11)
-        [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
-    }
 }
 
 #[cfg(feature = "fcma")]
@@ -159,20 +146,6 @@ impl ColumnFcmaButterfly12f {
         let [v9, v1, v5] = self.bf3.exec([u1, u5, u9]); // (v9, v1, v5)
         let [v6, v10, v2] = self.bf3.exec([u2, u6, u10]); // (v6, v10, v2)
         let [v3, v7, v11] = self.bf3.exec([u3, u7, u11]); // (v3, v7, v11)
-        [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
-    }
-
-    #[inline]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn exech(&self, v: [NeonStoreFh; 12]) -> [NeonStoreFh; 12] {
-        let [u0, u1, u2, u3] = self.bf4.exech([v[0], v[3], v[6], v[9]]);
-        let [u4, u5, u6, u7] = self.bf4.exech([v[4], v[7], v[10], v[1]]);
-        let [u8, u9, u10, u11] = self.bf4.exech([v[8], v[11], v[2], v[5]]);
-
-        let [v0, v4, v8] = self.bf3.exech([u0, u4, u8]); // (v0, v4, v8)
-        let [v9, v1, v5] = self.bf3.exech([u1, u5, u9]); // (v9, v1, v5)
-        let [v6, v10, v2] = self.bf3.exech([u2, u6, u10]); // (v6, v10, v2)
-        let [v3, v7, v11] = self.bf3.exech([u3, u7, u11]); // (v3, v7, v11)
         [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
     }
 }

@@ -667,10 +667,12 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
-    fn butterfly36(_direction: FftDirection) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
-        make_optional_butterfly!(
-            FftExecutor,
+    fn butterfly36(
+        _direction: FftDirection,
+    ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
+        make_default_butterfly!(
             _direction,
+            Butterfly36,
             AvxButterfly36d,
             NeonButterfly36d,
             NeonFcmaButterfly36d
@@ -1017,6 +1019,33 @@ impl AlgorithmFactory<f64> for f64 {
             .clone()
     }
 
+    fn butterfly576(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::Avx512vlButterfly576d;
+                        return Some(Arc::new(Avx512vlButterfly576d::new(_fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::AvxButterfly576d;
+                        return Some(Arc::new(AvxButterfly576d::new(_fft_direction)));
+                    }
+                }
+                None
+            })
+            .clone()
+    }
+
     fn butterfly1024(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
@@ -1037,6 +1066,60 @@ impl AlgorithmFactory<f64> for f64 {
                     if has_valid_avx() {
                         use crate::avx::AvxButterfly1024d;
                         return Some(Arc::new(AvxButterfly1024d::new(_fft_direction)));
+                    }
+                }
+                None
+            })
+            .clone()
+    }
+
+    fn butterfly1152(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::Avx512vlButterfly1152d;
+                        return Some(Arc::new(Avx512vlButterfly1152d::new(_fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::AvxButterfly1152d;
+                        return Some(Arc::new(AvxButterfly1152d::new(_fft_direction)));
+                    }
+                }
+                None
+            })
+            .clone()
+    }
+
+    fn butterfly1296(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn FftExecutor<f64> + Send + Sync>>> = OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::Avx512vlButterfly1296d;
+                        return Some(Arc::new(Avx512vlButterfly1296d::new(_fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::AvxButterfly1296d;
+                        return Some(Arc::new(AvxButterfly1296d::new(_fft_direction)));
                     }
                 }
                 None
@@ -1190,28 +1273,18 @@ impl AlgorithmFactory<f64> for f64 {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        make_default_radix!(
-            n,
-            fft_direction,
-            Radix11,
-            AvxFmaRadix11,
-            NeonRadix11,
-            NeonFcmaRadix11
-        )
+        use crate::Radix11;
+        Radix11::new(n, fft_direction)
+            .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>)
     }
 
     fn radix13(
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        make_default_radix!(
-            n,
-            fft_direction,
-            Radix13,
-            AvxFmaRadix13,
-            NeonRadix13,
-            NeonFcmaRadix13
-        )
+        use crate::Radix13;
+        Radix13::new(n, fft_direction)
+            .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>)
     }
 
     fn dft(

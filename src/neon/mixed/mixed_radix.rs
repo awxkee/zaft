@@ -31,7 +31,7 @@ use crate::err::try_vec;
 use crate::neon::mixed::bf2::{ColumnButterfly2d, ColumnButterfly2f};
 use crate::neon::mixed::bf3::*;
 use crate::neon::mixed::bf4::{ColumnButterfly4d, ColumnButterfly4f};
-use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
+use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF};
 use crate::transpose::{TransposeExecutor, TransposeFactory};
 use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
@@ -585,8 +585,7 @@ macro_rules! define_mixed_radix_neon_f {
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(chunk.get_unchecked_mut(index_base..));
@@ -614,37 +613,36 @@ macro_rules! define_mixed_radix_neon_f {
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
-                    let mut columns = [NeonStoreFh::default(); ROW_COUNT];
+                    let mut columns = [NeonStoreF::default(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            columns[i] = NeonStoreFh::load(
-                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            columns[i] = NeonStoreF::load_complex(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i),
                             );
                         }
                     }
 
                     // apply our butterfly function down the columns
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exech(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
-                        output[0].write(chunk.get_unchecked_mut(partial_remainder_base..));
+                        output[0].write_lo(chunk.get_unchecked_mut(partial_remainder_base..));
                     }
 
                     // here LLVM doesn't "see" NeonStoreFh as the same type returned by output
                     // so we need to force cast it onwards to the same type
-                    let mut twiddles = [NeonStoreFh::default(); ROW_COUNT - 1];
+                    let mut twiddles = [NeonStoreF::default(); ROW_COUNT - 1];
                     for i in 0..ROW_COUNT - 1 {
-                        twiddles[i] = final_twiddle_chunk[i].lo();
+                        twiddles[i] = final_twiddle_chunk[i];
                     }
 
                     // for the remaining rows, apply twiddle factors and then write back to memory
                     for i in 1..ROW_COUNT {
                         let twiddle = twiddles[i - 1];
-                        let output = NeonStoreFh::$mul(output[i], twiddle);
+                        let output = NeonStoreF::$mul(output[i], twiddle);
                         unsafe {
-                            output.write(
+                            output.write_lo(
                                 chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
                             );
                         }
@@ -711,8 +709,7 @@ macro_rules! define_mixed_radix_neon_f {
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(scratch.get_unchecked_mut(index_base..));
@@ -740,37 +737,36 @@ macro_rules! define_mixed_radix_neon_f {
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
-                    let mut columns = [NeonStoreFh::default(); ROW_COUNT];
+                    let mut columns = [NeonStoreF::default(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            columns[i] = NeonStoreFh::load(
-                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            columns[i] = NeonStoreF::load_complex(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i),
                             );
                         }
                     }
 
                     // apply our butterfly function down the columns
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exech(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
-                        output[0].write(scratch.get_unchecked_mut(partial_remainder_base..));
+                        output[0].write_lo(scratch.get_unchecked_mut(partial_remainder_base..));
                     }
 
                     // here LLVM doesn't "see" NeonStoreFh as the same type returned by output
                     // so we need to force cast it onwards to the same type
-                    let mut twiddles = [NeonStoreFh::default(); ROW_COUNT - 1];
+                    let mut twiddles = [NeonStoreF::default(); ROW_COUNT - 1];
                     for i in 0..ROW_COUNT - 1 {
-                        twiddles[i] = final_twiddle_chunk[i].lo();
+                        twiddles[i] = final_twiddle_chunk[i];
                     }
 
                     // for the remaining rows, apply twiddle factors and then write back to memory
                     for i in 1..ROW_COUNT {
                         let twiddle = twiddles[i - 1];
-                        let output = NeonStoreFh::$mul(output[i], twiddle);
+                        let output = NeonStoreF::$mul(output[i], twiddle);
                         unsafe {
-                            output.write(
+                            output.write_lo(
                                 scratch
                                     .get_unchecked_mut(partial_remainder_base + len_per_row * i..),
                             );

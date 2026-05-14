@@ -341,8 +341,8 @@ impl R2CNeonTwiddlesFcma {
                     .zip(rem_left.iter_mut())
                     .zip(rem_right.iter_mut().rev())
                 {
-                    let out = NeonStoreF::from_complex(s_out);
-                    let out_rev = NeonStoreF::from_complex(s_out_rev);
+                    let out = NeonStoreF::load_complex(s_out);
+                    let out_rev = NeonStoreF::load_complex(s_out_rev);
 
                     let sum = out + out_rev;
                     let diff = out - out_rev;
@@ -350,7 +350,7 @@ impl R2CNeonTwiddlesFcma {
                     let sumdiff_blended = sum.select(diff, blend_mask);
                     let diffsum_blended = diff.select(sum, blend_mask);
 
-                    let twiddle = NeonStoreF::from_complex(twiddle);
+                    let twiddle = NeonStoreF::load_complex(twiddle);
                     let dt = NeonStoreF::fcmul_fcma(diffsum_blended, twiddle);
                     let twiddled_output = dt.reverse_complex_elements().xor(conj);
 

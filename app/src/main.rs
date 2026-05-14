@@ -347,7 +347,7 @@ fn main() {
     // // );
     // println!("{}", rs.0);
     // println!("{}", rs.1);
-    let mut data = vec![Complex::new(0.0019528865, 0.); 2048];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 12 * 12 * 12];
     let mut c = Criterion::default().sample_size(10);
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);

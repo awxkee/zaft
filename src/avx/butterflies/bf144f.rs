@@ -94,13 +94,10 @@ impl AvxButterfly144f {
             // rows
 
             for k in 0..3 {
-                for i in 0..12 {
-                    rows[i] = AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 12 + k * 4..));
-                }
-                rows = self.bf12.exec(rows);
-                for i in 0..12 {
-                    rows[i].write(chunk.slice_from_mut(i * 12 + k * 4..));
-                }
+                self.bf12.exec_streaming(
+                    |i| AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 12 + k * 4..)),
+                    |i, v| v.write(chunk.slice_from_mut(i * 12 + k * 4..)),
+                )
             }
         }
     }

@@ -94,7 +94,7 @@ macro_rules! gen_bf81f {
                     {
                         let k = 8;
                         for i in 0..9 {
-                            rows[i] = NeonStoreF::from_complex(chunk.index(i * 9 + k));
+                            rows[i] = NeonStoreF::load_complex(chunk.index(i * 9 + k));
                         }
 
                         rows = self.bf9.exec(rows);

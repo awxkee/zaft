@@ -341,10 +341,10 @@ impl R2CTwiddlesHandler<f32> for R2CNeonTwiddles {
                     .zip(rem_right.iter_mut().rev())
                 {
                     let [twiddle_re, twiddle_im] =
-                        NeonStoreF::from_complex(twiddle).dup_even_odds();
+                        NeonStoreF::load_complex(twiddle).dup_even_odds();
                     let twiddle_re = twiddle_re.xor(conj);
-                    let out = NeonStoreF::from_complex(s_out);
-                    let out_rev = NeonStoreF::from_complex(s_out_rev);
+                    let out = NeonStoreF::load_complex(s_out);
+                    let out_rev = NeonStoreF::load_complex(s_out_rev);
 
                     let sum = out + out_rev;
                     let diff = out - out_rev;

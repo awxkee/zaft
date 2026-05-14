@@ -229,7 +229,7 @@ impl NeonFcmaRadix3<f64> {
             // Digit-reversal permutation
             neon_bitreversed_transpose_f64_radix3(self.base_len, chunk, scratch);
 
-            self.base_fft.execute_out_of_place(&scratch, chunk)?;
+            self.base_fft.execute_out_of_place(scratch, chunk)?;
             self.base_run(chunk);
         }
         Ok(())
@@ -505,7 +505,7 @@ impl NeonFcmaRadix3<f32> {
             // Digit-reversal permutation
             neon_bitreversed_transpose_f32_radix3(self.base_len, chunk, scratch);
 
-            self.base_fft.execute_out_of_place(&scratch, chunk)?;
+            self.base_fft.execute_out_of_place(scratch, chunk)?;
             self.base_run(chunk);
         }
         Ok(())

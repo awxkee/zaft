@@ -7,6 +7,7 @@
 use criterion::measurement::WallTime;
 use criterion::{BatchSize, BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use num_complex::Complex;
+use num_traits::Zero;
 use rand::RngExt;
 use rustfft::FftPlanner;
 use std::time::Duration;
@@ -190,9 +191,10 @@ fn check_power_groups(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String)
             .iter()
             .map(|&x| Complex::new(x.re as f32, x.im as f32))
             .collect::<Vec<_>>();
+        let mut scratch = vec![Complex::zero(); plan.get_inplace_scratch_len()];
         let mut working = s.to_vec();
         b.iter(|| {
-            plan.process(&mut working);
+            plan.process_with_scratch(&mut working, &mut scratch);
         })
     });
 
@@ -203,8 +205,10 @@ fn check_power_groups(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String)
             .map(|&x| Complex::new(x.re as f32, x.im as f32))
             .collect::<Vec<_>>();
         let mut working = s.to_vec();
+        let mut scratch = vec![Complex::default(); plan.scratch_length()];
         b.iter(|| {
-            plan.execute(&mut working).unwrap();
+            plan.execute_with_scratch(&mut working, &mut scratch)
+                .unwrap();
         })
     });
 }
@@ -220,17 +224,20 @@ fn check_power_groupd(c: &mut BenchmarkGroup<WallTime>, n: usize, group: String)
 
     c.bench_function(format!("rustfft {group}").as_str(), |b| {
         let plan = FftPlanner::new().plan_fft_forward(input_power.len());
+        let mut scratch = vec![Complex::default(); plan.get_inplace_scratch_len()];
         let mut working = input_power.to_vec();
         b.iter(|| {
-            plan.process(&mut working);
+            plan.process_with_scratch(&mut working, &mut scratch);
         })
     });
 
     c.bench_function(format!("zaft {group}").as_str(), |b| {
         let plan = Zaft::make_inverse_fft_f64(input_power.len()).unwrap();
+        let mut scratch = vec![Complex::default(); plan.scratch_length()];
         let mut working = input_power.to_vec();
         b.iter(|| {
-            plan.execute(&mut working).unwrap();
+            plan.execute_with_scratch(&mut working, &mut scratch)
+                .unwrap();
         })
     });
 }
@@ -348,17 +355,62 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             im: rand::rng().random(),
         };
     }
-
-    // check_power_groupd(c, 144, "144".to_string());
-    // check_power_groups(c, 144, "144".to_string());
+    //
+    // check_power_groupd(c, 576, "576".to_string());
+    // check_power_groups(c, 576, "576".to_string());
     // check_power_groups(c, 729, "729".to_string());
     // check_power_groups(c, 2187, "2187".to_string());
     // check_power_group(c, 1536, "1536".to_string());
 
-    // check_power_groups(c, 512, "512".to_string());
-    // check_power_groups(c, 1024, "1024".to_string());
+    // check_power_groupd(c, 128, "128".to_string());
+    // check_power_groups(c, 128, "128".to_string());
     // check_power_groupd(c, 256, "256".to_string());
-    check_power_groups(c, 256, "256".to_string());
+    // check_power_groups(c, 256, "256".to_string());
+    // check_power_groups(c, 9 * 9 * 9 * 9, "9 * 9 * 9 * 9".to_string());
+    // check_power_groups(c, 9 * 9 * 9 * 9 * 9, "9 * 9 * 9 * 9 * 9".to_string());
+    // check_power_groups(
+    //     c,
+    //     9 * 9 * 9 * 9 * 9 * 9,
+    //     "9 * 9 * 9 * 9 * 9 * 9".to_string(),
+    // );
+    // check_power_groups(c, 10 * 10 * 10, "10 * 10 * 10".to_string());
+    // check_power_groups(c, 10 * 10 * 10 * 10, "10 * 10 * 10 * 10".to_string());
+    // check_power_groups(
+    //     c,
+    //     10 * 10 * 10 * 10 * 10,
+    //     "10 * 10 * 10 * 10 * 10".to_string(),
+    // );
+    // check_power_groups(c, 11 * 11 * 11, "11 * 11 * 11".to_string());
+    // check_power_groups(c, 11 * 11 * 11 * 11, "11 * 11 * 11 * 11".to_string());
+    // check_power_groups(
+    //     c,
+    //     11 * 11 * 11 * 11 * 11,
+    //     "11 * 11 * 11 * 11 * 11".to_string(),
+    // );
+    // check_power_groups(c, 12 * 12 * 12, "12 * 12 * 12".to_string());
+    // check_power_groups(c, 12 * 12 * 12 * 12, "12 * 12 * 12 * 12".to_string());
+    // check_power_groups(
+    //     c,
+    //     12 * 12 * 12 * 12 * 12,
+    //     "12 * 12 * 12 * 12 * 12".to_string(),
+    // );
+    // check_power_groups(c, 13 * 13 * 13, "13 * 13 * 13".to_string());
+    // check_power_groups(c, 13 * 13 * 13 * 13, "13 * 13 * 13 * 13".to_string());
+    // check_power_groups(
+    //     c,
+    //     13 * 13 * 13 * 13 * 13,
+    //     "13 * 13 * 13 * 13 * 13".to_string(),
+    // );
+
+    check_power_groupd(c, 1296, "1296".to_string());
+    check_power_groups(c, 1296, "1296".to_string());
+    check_power_groupd(c, 7776, "7776".to_string());
+    check_power_groups(c, 7776, "7776".to_string());
+
+    check_power_groupd(c, 512, "512".to_string());
+    check_power_groups(c, 512, "512".to_string());
+    check_power_groupd(c, 1024, "1024".to_string());
+    check_power_groups(c, 1024, "1024".to_string());
     check_power_groups(c, 2048, "2048".to_string());
     check_power_groups(c, 4096, "4096".to_string());
     check_power_groups(c, 8192, "8192".to_string());
@@ -369,8 +421,8 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     check_power_groups(c, 262144, "262144".to_string());
     check_power_groups(c, 524288, "524288".to_string());
     check_power_groups(c, 1048576, "1048576".to_string());
-    check_power_groups(c, 2097152, "2097152".to_string());
-    check_power_groups(c, 4194304, "4194304".to_string());
+    // check_power_groups(c, 2097152, "2097152".to_string());
+    // check_power_groups(c, 4194304, "4194304".to_string());
     // check_power_group(c, 8388608, "8388608".to_string());
     // check_power_group(c, 16777216, "16777216".to_string());
     // check_power_group(c, 33554432, "33554432".to_string());

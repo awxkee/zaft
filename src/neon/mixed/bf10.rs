@@ -28,11 +28,10 @@
  */
 use crate::FftDirection;
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
+use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF};
 use crate::neon::mixed::{ColumnButterfly5d, ColumnButterfly5f};
 #[cfg(feature = "fcma")]
 use crate::neon::mixed::{ColumnFcmaButterfly5d, ColumnFcmaButterfly5f};
-use std::arch::aarch64::*;
 
 pub(crate) struct ColumnButterfly10d {
     bf5: ColumnButterfly5d,
@@ -161,44 +160,6 @@ impl ColumnButterfly10f {
             NeonStoreF::raw(y9),
         ]
     }
-
-    #[inline(always)]
-    pub(crate) fn exech(&self, store: [NeonStoreFh; 10]) -> [NeonStoreFh; 10] {
-        unsafe {
-            let mid0 = self.bf5.exec([
-                NeonStoreF::raw(vcombine_f32(store[0].v, store[5].v)),
-                NeonStoreF::raw(vcombine_f32(store[2].v, store[7].v)),
-                NeonStoreF::raw(vcombine_f32(store[4].v, store[9].v)),
-                NeonStoreF::raw(vcombine_f32(store[6].v, store[1].v)),
-                NeonStoreF::raw(vcombine_f32(store[8].v, store[3].v)),
-            ]);
-
-            // Since this is good-thomas algorithm, we don't need twiddle factors
-            let (y0, y1) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[0].v), vget_high_f32(mid0[0].v));
-            let (y2, y3) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[1].v), vget_high_f32(mid0[1].v));
-            let (y4, y5) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[2].v), vget_high_f32(mid0[2].v));
-            let (y6, y7) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[3].v), vget_high_f32(mid0[3].v));
-            let (y8, y9) =
-                NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[4].v), vget_high_f32(mid0[4].v));
-
-            [
-                NeonStoreFh::raw(y0),
-                NeonStoreFh::raw(y3),
-                NeonStoreFh::raw(y4),
-                NeonStoreFh::raw(y7),
-                NeonStoreFh::raw(y8),
-                NeonStoreFh::raw(y1),
-                NeonStoreFh::raw(y2),
-                NeonStoreFh::raw(y5),
-                NeonStoreFh::raw(y6),
-                NeonStoreFh::raw(y9),
-            ]
-        }
-    }
 }
 
 #[cfg(feature = "fcma")]
@@ -242,43 +203,6 @@ impl ColumnFcmaButterfly10f {
             NeonStoreF::raw(y5),
             NeonStoreF::raw(y6),
             NeonStoreF::raw(y9),
-        ]
-    }
-
-    #[inline]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn exech(&self, store: [NeonStoreFh; 10]) -> [NeonStoreFh; 10] {
-        let mid0 = self.bf5.exec([
-            NeonStoreF::raw(vcombine_f32(store[0].v, store[5].v)),
-            NeonStoreF::raw(vcombine_f32(store[2].v, store[7].v)),
-            NeonStoreF::raw(vcombine_f32(store[4].v, store[9].v)),
-            NeonStoreF::raw(vcombine_f32(store[6].v, store[1].v)),
-            NeonStoreF::raw(vcombine_f32(store[8].v, store[3].v)),
-        ]);
-
-        // Since this is good-thomas algorithm, we don't need twiddle factors
-        let (y0, y1) =
-            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[0].v), vget_high_f32(mid0[0].v));
-        let (y2, y3) =
-            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[1].v), vget_high_f32(mid0[1].v));
-        let (y4, y5) =
-            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[2].v), vget_high_f32(mid0[2].v));
-        let (y6, y7) =
-            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[3].v), vget_high_f32(mid0[3].v));
-        let (y8, y9) =
-            NeonButterfly::butterfly2h_f32(vget_low_f32(mid0[4].v), vget_high_f32(mid0[4].v));
-
-        [
-            NeonStoreFh::raw(y0),
-            NeonStoreFh::raw(y3),
-            NeonStoreFh::raw(y4),
-            NeonStoreFh::raw(y7),
-            NeonStoreFh::raw(y8),
-            NeonStoreFh::raw(y1),
-            NeonStoreFh::raw(y2),
-            NeonStoreFh::raw(y5),
-            NeonStoreFh::raw(y6),
-            NeonStoreFh::raw(y9),
         ]
     }
 }

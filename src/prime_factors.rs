@@ -28,7 +28,7 @@
  */
 use crate::util::{
     is_power_of_eleven, is_power_of_five, is_power_of_seven, is_power_of_six, is_power_of_ten,
-    is_power_of_thirteen, is_power_of_three,
+    is_power_of_thirteen, is_power_of_three, is_power_of_twelve,
 };
 use num_traits::{One, PrimInt, Zero};
 
@@ -146,6 +146,7 @@ pub(crate) struct PrimeFactors {
     pub(crate) is_power_of_ten: bool,
     pub(crate) is_power_of_eleven: bool,
     pub(crate) is_power_of_thirteen: bool,
+    pub(crate) is_power_of_twelve: bool,
     pub(crate) factorization: Vec<(u64, u32)>,
 }
 
@@ -168,6 +169,7 @@ impl PrimeFactors {
             is_power_of_seven,
             is_power_of_eleven,
             is_power_of_ten,
+            is_power_of_twelve: is_power_of_twelve(n),
             is_power_of_thirteen: is_power_of_thirteen(n),
             factorization,
         }

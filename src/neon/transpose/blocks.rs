@@ -135,7 +135,7 @@ pub(crate) fn transpose_height_block_executor2_f32<
                 let dst = output.get_unchecked_mut(y + output_stride * output_x..);
 
                 for i in 0..Y_BLOCK_SIZE {
-                    store[i] = NeonStoreF::from_complex(src.get_unchecked(i * input_stride));
+                    store[i] = NeonStoreF::load_complex(src.get_unchecked(i * input_stride));
                 }
 
                 let q = exec(store);
@@ -209,7 +209,7 @@ pub(crate) fn transpose_height_block_executor2_f32_odd<
                 let dst = output.get_unchecked_mut(y + output_stride * output_x..);
 
                 for i in 0..Y_BLOCK_SIZE {
-                    store[i] = NeonStoreF::from_complex(src.get_unchecked(i * input_stride));
+                    store[i] = NeonStoreF::load_complex(src.get_unchecked(i * input_stride));
                 }
 
                 let q = exec(store);

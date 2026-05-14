@@ -211,4 +211,34 @@ impl ColumnButterfly8f {
         let [y6, y7] = self.bf2.exec([u6, u7]);
         [y0, y2, y4, y6, y1, y3, y5, y7]
     }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> AvxStoreF, J: FnMut(usize, AvxStoreF)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        let [u0, u2, u4, u6] = self.bf4.exec([v(0), v(2), v(4), v(6)]);
+        let [u1, u3, u5, u7] = self.bf4.exec([v(1), v(3), v(5), v(7)]);
+
+        let [y0, y1] = self.bf2.exec([u0, u1]);
+        store(0, y0);
+        store(4, y1);
+
+        let u3 = self.rotate45(u3);
+        let [y2, y3] = self.bf2.exec([u2, u3]);
+        store(1, y2);
+        store(5, y3);
+
+        let u5 = self.rotate(u5);
+        let [y4, y5] = self.bf2.exec([u4, u5]);
+        store(2, y4);
+        store(6, y5);
+
+        let u7 = self.rotate135(u7);
+        let [y6, y7] = self.bf2.exec([u6, u7]);
+        store(3, y6);
+        store(7, y7);
+    }
 }

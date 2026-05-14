@@ -66,14 +66,14 @@ pub(crate) fn block_transpose_f32x2_11x2(
     unsafe {
         let rows0: [NeonStoreF; 6] = std::array::from_fn(|x| {
             if x == 5 {
-                NeonStoreF::from_complex(src.get_unchecked(x * 2))
+                NeonStoreF::load_complex(src.get_unchecked(x * 2))
             } else {
                 NeonStoreF::from_complex_ref(src.get_unchecked(x * 2..))
             }
         });
         let rows1: [NeonStoreF; 6] = std::array::from_fn(|x| {
             if x == 5 {
-                NeonStoreF::from_complex(src.get_unchecked(src_stride + x * 2))
+                NeonStoreF::load_complex(src.get_unchecked(src_stride + x * 2))
             } else {
                 NeonStoreF::from_complex_ref(src.get_unchecked(src_stride + x * 2..))
             }
@@ -86,7 +86,7 @@ pub(crate) fn block_transpose_f32x2_11x2(
         }
 
         // Last partial (11th) pair
-        t[11].write(dst.get_unchecked_mut(10 * dst_stride..));
+        t[10].write(dst.get_unchecked_mut(10 * dst_stride..));
     }
 }
 

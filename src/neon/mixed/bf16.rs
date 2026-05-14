@@ -27,81 +27,61 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF};
-use crate::neon::mixed::{
-    ColumnButterfly2d, ColumnButterfly2f, ColumnButterfly8d, ColumnButterfly8f,
-};
 #[cfg(feature = "fcma")]
-use crate::neon::mixed::{ColumnFcmaButterfly8d, ColumnFcmaButterfly8f};
+use crate::neon::mixed::ColumnFcmaButterfly8d;
+use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF};
+use crate::neon::mixed::{ColumnButterfly8d, ColumnButterfly8f};
 use crate::util::compute_twiddle;
+use std::ops::Neg;
 
 pub(crate) struct ColumnButterfly16d {
     bf8: ColumnButterfly8d,
-    bf2: ColumnButterfly2d,
-    twiddle1: NeonStoreD,
-    twiddle2: NeonStoreD,
-    twiddle3: NeonStoreD,
+    twiddles16: [NeonStoreD; 2],
 }
 
 impl ColumnButterfly16d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         let tw1 = compute_twiddle(1, 16, fft_direction);
-        let tw2 = compute_twiddle(2, 16, fft_direction);
         let tw3 = compute_twiddle(3, 16, fft_direction);
         Self {
             bf8: ColumnButterfly8d::new(fft_direction),
-            bf2: ColumnButterfly2d::new(fft_direction),
-            twiddle1: NeonStoreD::from_complex(&tw1),
-            twiddle2: NeonStoreD::from_complex(&tw2),
-            twiddle3: NeonStoreD::from_complex(&tw3),
+            twiddles16: [
+                NeonStoreD::from_complex(&tw1),
+                NeonStoreD::from_complex(&tw3),
+            ],
         }
     }
 
     #[inline(always)]
     pub(crate) fn exec(&self, v: [NeonStoreD; 16]) -> [NeonStoreD; 16] {
-        let evens = self
-            .bf8
-            .exec([v[0], v[2], v[4], v[6], v[8], v[10], v[12], v[14]]);
+        let mut col1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
 
-        let odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
-        let odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
+        col1[1] = NeonStoreD::mul_by_complex(col1[1], self.twiddles16[0]);
+        col1[2] = self.bf8.rotate45(col1[2]);
+        col1[3] = NeonStoreD::mul_by_complex(col1[3], self.twiddles16[1]);
 
-        // Twiddle + butterfly2 + rotate + final add/sub, one lane at a time.
-        // Each group keeps only 2 odds registers live alongside evens[i]/evens[i+4],
-        // freeing them before moving to the next group.
+        let mut col2 = self.bf8.bf4.exec([v[2], v[6], v[10], v[14]]);
 
-        // lane 0 — no twiddle
-        let [o0a, o0b] = self.bf2.exec([odds_1[0], odds_2[0]]);
-        let o0b = self.bf8.rotate(o0b);
-        let (y00, y08) = (evens[0] + o0a, evens[0] - o0a);
-        let (y04, y12) = (evens[4] + o0b, evens[4] - o0b);
+        col2[1] = self.bf8.rotate45(col2[1]);
+        col2[2] = self.bf8.rotate(col2[2]);
+        col2[3] = self.bf8.rotate135(col2[3]);
 
-        // lane 1
-        let o1a = NeonStoreD::mul_by_complex(odds_1[1], self.twiddle1);
-        let o1b = NeonStoreD::mul_by_complex_conj_b(odds_2[1], self.twiddle1);
-        let [o1a, o1b] = self.bf2.exec([o1a, o1b]);
-        let o1b = self.bf8.rotate(o1b);
-        let (y01, y09) = (evens[1] + o1a, evens[1] - o1a);
-        let (y05, y13) = (evens[5] + o1b, evens[5] - o1b);
+        let mut col3 = self.bf8.bf4.exec([v[3], v[7], v[11], v[15]]);
 
-        // lane 2
-        let o2a = NeonStoreD::mul_by_complex(odds_1[2], self.twiddle2);
-        let o2b = NeonStoreD::mul_by_complex_conj_b(odds_2[2], self.twiddle2);
-        let [o2a, o2b] = self.bf2.exec([o2a, o2b]);
-        let o2b = self.bf8.rotate(o2b);
-        let (y02, y10) = (evens[2] + o2a, evens[2] - o2a);
-        let (y06, y14) = (evens[6] + o2b, evens[6] - o2b);
+        col3[1] = NeonStoreD::mul_by_complex(col3[1], self.twiddles16[1]);
+        col3[2] = self.bf8.rotate135(col3[2]);
+        col3[3] = NeonStoreD::mul_by_complex(col3[3], self.twiddles16[0].neg());
 
-        // lane 3
-        let o3a = NeonStoreD::mul_by_complex(odds_1[3], self.twiddle3);
-        let o3b = NeonStoreD::mul_by_complex_conj_b(odds_2[3], self.twiddle3);
-        let [o3a, o3b] = self.bf2.exec([o3a, o3b]);
-        let o3b = self.bf8.rotate(o3b);
-        let (y03, y11) = (evens[3] + o3a, evens[3] - o3a);
-        let (y07, y15) = (evens[7] + o3b, evens[7] - o3b);
+        let col0 = self.bf8.bf4.exec([v[0], v[4], v[8], v[12]]);
+
+        let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+        let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+        let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+        let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
 
         [
-            y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15,
+            r0[0], r1[0], r2[0], r3[0], r0[1], r1[1], r2[1], r3[1], r0[2], r1[2], r2[2], r3[2],
+            r0[3], r1[3], r2[3], r3[3],
         ]
     }
 }
@@ -109,218 +89,281 @@ impl ColumnButterfly16d {
 #[cfg(feature = "fcma")]
 pub(crate) struct ColumnFcmaButterfly16d {
     bf8: ColumnFcmaButterfly8d,
-    bf2: ColumnButterfly2d,
-    twiddle1: NeonStoreD,
-    twiddle2: NeonStoreD,
-    twiddle3: NeonStoreD,
+    twiddles16: [NeonStoreD; 2],
 }
 
 #[cfg(feature = "fcma")]
 impl ColumnFcmaButterfly16d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         let tw1 = compute_twiddle(1, 16, fft_direction);
-        let tw2 = compute_twiddle(2, 16, fft_direction);
         let tw3 = compute_twiddle(3, 16, fft_direction);
         Self {
             bf8: ColumnFcmaButterfly8d::new(fft_direction),
-            bf2: ColumnButterfly2d::new(fft_direction),
-            twiddle1: NeonStoreD::from_complex(&tw1),
-            twiddle2: NeonStoreD::from_complex(&tw2),
-            twiddle3: NeonStoreD::from_complex(&tw3),
+            twiddles16: [
+                NeonStoreD::from_complex(&tw1),
+                NeonStoreD::from_complex(&tw3),
+            ],
         }
     }
 
     #[inline]
     #[target_feature(enable = "fcma")]
     pub(crate) fn exec(&self, v: [NeonStoreD; 16]) -> [NeonStoreD; 16] {
-        let evens = self
-            .bf8
-            .exec([v[0], v[2], v[4], v[6], v[8], v[10], v[12], v[14]]);
+        let mut col1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
 
-        let odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
-        let odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
+        col1[1] = NeonStoreD::fcmul_fcma(col1[1], self.twiddles16[0]);
+        col1[2] = self.bf8.rotate45(col1[2]);
+        col1[3] = NeonStoreD::fcmul_fcma(col1[3], self.twiddles16[1]);
 
-        // Twiddle + butterfly2 + rotate + final add/sub, one lane at a time.
-        // Each group keeps only 2 odds registers live alongside evens[i]/evens[i+4],
-        // freeing them before moving to the next group.
+        let mut col2 = self.bf8.bf4.exec([v[2], v[6], v[10], v[14]]);
 
-        // lane 0 — no twiddle
-        let [o0a, o0b] = self.bf2.exec([odds_1[0], odds_2[0]]);
-        let o0b = self.bf8.rotate(o0b);
-        let (y00, y08) = (evens[0] + o0a, evens[0] - o0a);
-        let (y04, y12) = (evens[4] + o0b, evens[4] - o0b);
+        col2[1] = self.bf8.rotate45(col2[1]);
+        col2[2] = self.bf8.rotate(col2[2]);
+        col2[3] = self.bf8.rotate135(col2[3]);
 
-        // lane 1
-        let o1a = NeonStoreD::fcmul_fcma(odds_1[1], self.twiddle1);
-        let o1b = NeonStoreD::fcmul_conj_b(odds_2[1], self.twiddle1);
-        let [o1a, o1b] = self.bf2.exec([o1a, o1b]);
-        let o1b = self.bf8.rotate(o1b);
-        let (y01, y09) = (evens[1] + o1a, evens[1] - o1a);
-        let (y05, y13) = (evens[5] + o1b, evens[5] - o1b);
+        let mut col3 = self.bf8.bf4.exec([v[3], v[7], v[11], v[15]]);
 
-        // lane 2
-        let o2a = NeonStoreD::fcmul_fcma(odds_1[2], self.twiddle2);
-        let o2b = NeonStoreD::fcmul_conj_b(odds_2[2], self.twiddle2);
-        let [o2a, o2b] = self.bf2.exec([o2a, o2b]);
-        let o2b = self.bf8.rotate(o2b);
-        let (y02, y10) = (evens[2] + o2a, evens[2] - o2a);
-        let (y06, y14) = (evens[6] + o2b, evens[6] - o2b);
+        col3[1] = NeonStoreD::fcmul_fcma(col3[1], self.twiddles16[1]);
+        col3[2] = self.bf8.rotate135(col3[2]);
+        col3[3] = NeonStoreD::fcmul_fcma(col3[3], self.twiddles16[0].neg());
 
-        // lane 3
-        let o3a = NeonStoreD::fcmul_fcma(odds_1[3], self.twiddle3);
-        let o3b = NeonStoreD::fcmul_conj_b(odds_2[3], self.twiddle3);
-        let [o3a, o3b] = self.bf2.exec([o3a, o3b]);
-        let o3b = self.bf8.rotate(o3b);
-        let (y03, y11) = (evens[3] + o3a, evens[3] - o3a);
-        let (y07, y15) = (evens[7] + o3b, evens[7] - o3b);
+        let col0 = self.bf8.bf4.exec([v[0], v[4], v[8], v[12]]);
+
+        let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+        let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+        let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+        let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
 
         [
-            y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15,
+            r0[0], r1[0], r2[0], r3[0], r0[1], r1[1], r2[1], r3[1], r0[2], r1[2], r2[2], r3[2],
+            r0[3], r1[3], r2[3], r3[3],
         ]
     }
 }
 
 pub(crate) struct ColumnButterfly16f {
     pub(crate) bf8: ColumnButterfly8f,
-    bf2: ColumnButterfly2f,
-    twiddle1: NeonStoreF,
-    twiddle2: NeonStoreF,
-    twiddle3: NeonStoreF,
+    twiddles16: [NeonStoreF; 2],
 }
 
 impl ColumnButterfly16f {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         let tw1 = compute_twiddle(1, 16, fft_direction);
-        let tw2 = compute_twiddle(2, 16, fft_direction);
         let tw3 = compute_twiddle(3, 16, fft_direction);
         Self {
             bf8: ColumnButterfly8f::new(fft_direction),
-            bf2: ColumnButterfly2f::new(fft_direction),
-            twiddle1: NeonStoreF::from_complex(&tw1),
-            twiddle2: NeonStoreF::from_complex(&tw2),
-            twiddle3: NeonStoreF::from_complex(&tw3),
+            twiddles16: [
+                NeonStoreF::from_complex(&tw1),
+                NeonStoreF::from_complex(&tw3),
+            ],
         }
     }
 
     #[inline(always)]
     pub(crate) fn exec(&self, v: [NeonStoreF; 16]) -> [NeonStoreF; 16] {
-        let evens = self
-            .bf8
-            .exec([v[0], v[2], v[4], v[6], v[8], v[10], v[12], v[14]]);
+        let mut col1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
 
-        let odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
-        let odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
+        col1[1] = NeonStoreF::mul_by_complex(col1[1], self.twiddles16[0]);
+        col1[2] = self.bf8.rotate45(col1[2]);
+        col1[3] = NeonStoreF::mul_by_complex(col1[3], self.twiddles16[1]);
 
-        // Twiddle + butterfly2 + rotate + final add/sub, one lane at a time.
-        // Each group keeps only 2 odds registers live alongside evens[i]/evens[i+4],
-        // freeing them before moving to the next group.
+        let mut col2 = self.bf8.bf4.exec([v[2], v[6], v[10], v[14]]);
 
-        // lane 0 — no twiddle
-        let [o0a, o0b] = self.bf2.exec([odds_1[0], odds_2[0]]);
-        let o0b = self.bf8.rotate(o0b);
-        let (y00, y08) = (evens[0] + o0a, evens[0] - o0a);
-        let (y04, y12) = (evens[4] + o0b, evens[4] - o0b);
+        col2[1] = self.bf8.rotate45(col2[1]);
+        col2[2] = self.bf8.rotate(col2[2]);
+        col2[3] = self.bf8.rotate135(col2[3]);
 
-        // lane 1
-        let o1a = NeonStoreF::mul_by_complex(odds_1[1], self.twiddle1);
-        let o1b = NeonStoreF::mul_by_complex_conj_b(odds_2[1], self.twiddle1);
-        let [o1a, o1b] = self.bf2.exec([o1a, o1b]);
-        let o1b = self.bf8.rotate(o1b);
-        let (y01, y09) = (evens[1] + o1a, evens[1] - o1a);
-        let (y05, y13) = (evens[5] + o1b, evens[5] - o1b);
+        let mut col3 = self.bf8.bf4.exec([v[3], v[7], v[11], v[15]]);
 
-        // lane 2
-        let o2a = NeonStoreF::mul_by_complex(odds_1[2], self.twiddle2);
-        let o2b = NeonStoreF::mul_by_complex_conj_b(odds_2[2], self.twiddle2);
-        let [o2a, o2b] = self.bf2.exec([o2a, o2b]);
-        let o2b = self.bf8.rotate(o2b);
-        let (y02, y10) = (evens[2] + o2a, evens[2] - o2a);
-        let (y06, y14) = (evens[6] + o2b, evens[6] - o2b);
+        col3[1] = NeonStoreF::mul_by_complex(col3[1], self.twiddles16[1]);
+        col3[2] = self.bf8.rotate135(col3[2]);
+        col3[3] = NeonStoreF::mul_by_complex(col3[3], self.twiddles16[0].neg());
 
-        // lane 3
-        let o3a = NeonStoreF::mul_by_complex(odds_1[3], self.twiddle3);
-        let o3b = NeonStoreF::mul_by_complex_conj_b(odds_2[3], self.twiddle3);
-        let [o3a, o3b] = self.bf2.exec([o3a, o3b]);
-        let o3b = self.bf8.rotate(o3b);
-        let (y03, y11) = (evens[3] + o3a, evens[3] - o3a);
-        let (y07, y15) = (evens[7] + o3b, evens[7] - o3b);
+        let col0 = self.bf8.bf4.exec([v[0], v[4], v[8], v[12]]);
+
+        let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+        let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+        let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+        let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
 
         [
-            y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15,
+            r0[0], r1[0], r2[0], r3[0], r0[1], r1[1], r2[1], r3[1], r0[2], r1[2], r2[2], r3[2],
+            r0[3], r1[3], r2[3], r3[3],
         ]
+    }
+
+    #[inline(always)]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> NeonStoreF, J: FnMut(usize, NeonStoreF)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        let mut col1 = self.bf8.bf4.exec([v(1), v(5), v(9), v(13)]);
+
+        col1[1] = NeonStoreF::mul_by_complex(col1[1], self.twiddles16[0]);
+        col1[2] = self.bf8.rotate45(col1[2]);
+        col1[3] = NeonStoreF::mul_by_complex(col1[3], self.twiddles16[1]);
+
+        let mut col2 = self.bf8.bf4.exec([v(2), v(6), v(10), v(14)]);
+
+        col2[1] = self.bf8.rotate45(col2[1]);
+        col2[2] = self.bf8.rotate(col2[2]);
+        col2[3] = self.bf8.rotate135(col2[3]);
+
+        let mut col3 = self.bf8.bf4.exec([v(3), v(7), v(11), v(15)]);
+
+        col3[1] = NeonStoreF::mul_by_complex(col3[1], self.twiddles16[1]);
+        col3[2] = self.bf8.rotate135(col3[2]);
+        col3[3] = NeonStoreF::mul_by_complex(col3[3], self.twiddles16[0].neg());
+
+        let col0 = self.bf8.bf4.exec([v(0), v(4), v(8), v(12)]);
+
+        let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+        store(0, r0[0]);
+        store(4, r0[1]);
+        store(8, r0[2]);
+        store(12, r0[3]);
+
+        let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+        store(1, r1[0]);
+        store(5, r1[1]);
+        store(9, r1[2]);
+        store(13, r1[3]);
+
+        let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+        store(2, r2[0]);
+        store(6, r2[1]);
+        store(10, r2[2]);
+        store(14, r2[3]);
+
+        let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
+        store(3, r3[0]);
+        store(7, r3[1]);
+        store(11, r3[2]);
+        store(15, r3[3]);
     }
 }
 
 #[cfg(feature = "fcma")]
-pub(crate) struct ColumnFcmaButterfly16f {
-    pub(crate) bf8: ColumnFcmaButterfly8f,
-    bf2: ColumnButterfly2f,
-    twiddle1: NeonStoreF,
-    twiddle2: NeonStoreF,
-    twiddle3: NeonStoreF,
-}
-
-#[cfg(feature = "fcma")]
-impl ColumnFcmaButterfly16f {
-    pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        let tw1 = compute_twiddle(1, 16, fft_direction);
-        let tw2 = compute_twiddle(2, 16, fft_direction);
-        let tw3 = compute_twiddle(3, 16, fft_direction);
-        Self {
-            bf8: ColumnFcmaButterfly8f::new(fft_direction),
-            bf2: ColumnButterfly2f::new(fft_direction),
-            twiddle1: NeonStoreF::from_complex(&tw1),
-            twiddle2: NeonStoreF::from_complex(&tw2),
-            twiddle3: NeonStoreF::from_complex(&tw3),
+macro_rules! define_fcma_butterfly16f {
+    ($bf_name: ident, $inner_bf8_name: ident) => {
+        use crate::neon::mixed::$inner_bf8_name;
+        #[allow(unused)]
+        pub(crate) struct $bf_name {
+            pub(crate) bf8: $inner_bf8_name,
+            twiddles16: [NeonStoreF; 2],
         }
-    }
 
-    #[inline]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn exec(&self, v: [NeonStoreF; 16]) -> [NeonStoreF; 16] {
-        let evens = self
-            .bf8
-            .exec([v[0], v[2], v[4], v[6], v[8], v[10], v[12], v[14]]);
+        impl $bf_name {
+            pub(crate) fn new(fft_direction: FftDirection) -> Self {
+                let tw1 = compute_twiddle(1, 16, fft_direction);
+                let tw3 = compute_twiddle(3, 16, fft_direction);
+                Self {
+                    bf8: $inner_bf8_name::new(fft_direction),
+                    twiddles16: [
+                        NeonStoreF::from_complex(&tw1),
+                        NeonStoreF::from_complex(&tw3),
+                    ],
+                }
+            }
 
-        let odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
-        let odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
+            #[inline]
+            #[allow(unused)]
+            #[target_feature(enable = "fcma")]
+            pub(crate) fn exec(&self, v: [NeonStoreF; 16]) -> [NeonStoreF; 16] {
+                let mut col1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
 
-        // Twiddle + butterfly2 + rotate + final add/sub, one lane at a time.
-        // Each group keeps only 2 odds registers live alongside evens[i]/evens[i+4],
-        // freeing them before moving to the next group.
+                col1[1] = NeonStoreF::fcmul_fcma(col1[1], self.twiddles16[0]);
+                col1[2] = self.bf8.rotate45(col1[2]);
+                col1[3] = NeonStoreF::fcmul_fcma(col1[3], self.twiddles16[1]);
 
-        // lane 0 — no twiddle
-        let [o0a, o0b] = self.bf2.exec([odds_1[0], odds_2[0]]);
-        let o0b = self.bf8.rotate(o0b);
-        let (y00, y08) = (evens[0] + o0a, evens[0] - o0a);
-        let (y04, y12) = (evens[4] + o0b, evens[4] - o0b);
+                let mut col2 = self.bf8.bf4.exec([v[2], v[6], v[10], v[14]]);
 
-        // lane 1
-        let o1a = NeonStoreF::fcmul_fcma(odds_1[1], self.twiddle1);
-        let o1b = NeonStoreF::fcmul_conj_b(odds_2[1], self.twiddle1);
-        let [o1a, o1b] = self.bf2.exec([o1a, o1b]);
-        let o1b = self.bf8.rotate(o1b);
-        let (y01, y09) = (evens[1] + o1a, evens[1] - o1a);
-        let (y05, y13) = (evens[5] + o1b, evens[5] - o1b);
+                col2[1] = self.bf8.rotate45(col2[1]);
+                col2[2] = self.bf8.rotate(col2[2]);
+                col2[3] = self.bf8.rotate135(col2[3]);
 
-        // lane 2
-        let o2a = NeonStoreF::fcmul_fcma(odds_1[2], self.twiddle2);
-        let o2b = NeonStoreF::fcmul_conj_b(odds_2[2], self.twiddle2);
-        let [o2a, o2b] = self.bf2.exec([o2a, o2b]);
-        let o2b = self.bf8.rotate(o2b);
-        let (y02, y10) = (evens[2] + o2a, evens[2] - o2a);
-        let (y06, y14) = (evens[6] + o2b, evens[6] - o2b);
+                let mut col3 = self.bf8.bf4.exec([v[3], v[7], v[11], v[15]]);
 
-        // lane 3
-        let o3a = NeonStoreF::fcmul_fcma(odds_1[3], self.twiddle3);
-        let o3b = NeonStoreF::fcmul_conj_b(odds_2[3], self.twiddle3);
-        let [o3a, o3b] = self.bf2.exec([o3a, o3b]);
-        let o3b = self.bf8.rotate(o3b);
-        let (y03, y11) = (evens[3] + o3a, evens[3] - o3a);
-        let (y07, y15) = (evens[7] + o3b, evens[7] - o3b);
+                col3[1] = NeonStoreF::fcmul_fcma(col3[1], self.twiddles16[1]);
+                col3[2] = self.bf8.rotate135(col3[2]);
+                col3[3] = NeonStoreF::fcmul_fcma(col3[3], self.twiddles16[0].neg());
 
-        [
-            y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15,
-        ]
-    }
+                let col0 = self.bf8.bf4.exec([v[0], v[4], v[8], v[12]]);
+
+                let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+                let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+                let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+                let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
+
+                [
+                    r0[0], r1[0], r2[0], r3[0], r0[1], r1[1], r2[1], r3[1], r0[2], r1[2], r2[2],
+                    r3[2], r0[3], r1[3], r2[3], r3[3],
+                ]
+            }
+
+            #[inline]
+            #[allow(unused)]
+            #[target_feature(enable = "fcma")]
+            pub(crate) fn exec_streaming<
+                A: Fn(usize) -> NeonStoreF,
+                J: FnMut(usize, NeonStoreF),
+            >(
+                &self,
+                v: A,
+                mut store: J,
+            ) {
+                let mut col1 = self.bf8.bf4.exec([v(1), v(5), v(9), v(13)]);
+
+                col1[1] = NeonStoreF::fcmul_fcma(col1[1], self.twiddles16[0]);
+                col1[2] = self.bf8.rotate45(col1[2]);
+                col1[3] = NeonStoreF::fcmul_fcma(col1[3], self.twiddles16[1]);
+
+                let mut col2 = self.bf8.bf4.exec([v(2), v(6), v(10), v(14)]);
+
+                col2[1] = self.bf8.rotate45(col2[1]);
+                col2[2] = self.bf8.rotate(col2[2]);
+                col2[3] = self.bf8.rotate135(col2[3]);
+
+                let mut col3 = self.bf8.bf4.exec([v(3), v(7), v(11), v(15)]);
+
+                col3[1] = NeonStoreF::fcmul_fcma(col3[1], self.twiddles16[1]);
+                col3[2] = self.bf8.rotate135(col3[2]);
+                col3[3] = NeonStoreF::fcmul_fcma(col3[3], self.twiddles16[0].neg());
+
+                let col0 = self.bf8.bf4.exec([v(0), v(4), v(8), v(12)]);
+
+                let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+                store(0, r0[0]);
+                store(4, r0[1]);
+                store(8, r0[2]);
+                store(12, r0[3]);
+
+                let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+                store(1, r1[0]);
+                store(5, r1[1]);
+                store(9, r1[2]);
+                store(13, r1[3]);
+
+                let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+                store(2, r2[0]);
+                store(6, r2[1]);
+                store(10, r2[2]);
+                store(14, r2[3]);
+
+                let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
+                store(3, r3[0]);
+                store(7, r3[1]);
+                store(11, r3[2]);
+                store(15, r3[3]);
+            }
+        }
+    };
 }
+
+#[cfg(feature = "fcma")]
+define_fcma_butterfly16f!(ColumnFcmaButterfly16f, ColumnFcmaButterfly8f);
+#[cfg(feature = "fcma")]
+define_fcma_butterfly16f!(ColumnFcmaForwardButterfly16f, ColumnFcmaForwardButterfly8f);
+#[cfg(feature = "fcma")]
+define_fcma_butterfly16f!(ColumnFcmaInverseButterfly16f, ColumnFcmaInverseButterfly8f);

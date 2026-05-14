@@ -28,7 +28,7 @@
  */
 use crate::FftDirection;
 use crate::neon::butterflies::NeonButterfly;
-use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
+use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF};
 use crate::util::compute_twiddle;
 use std::arch::aarch64::*;
 
@@ -111,37 +111,6 @@ impl ColumnButterfly6f {
             NeonStoreF::raw(y5),
         ]
     }
-
-    #[inline(always)]
-    pub(crate) fn exech(&self, store: [NeonStoreFh; 6]) -> [NeonStoreFh; 6] {
-        unsafe {
-            let (t0, t2, t4) = NeonButterfly::butterfly3h_f32(
-                store[0].v,
-                store[2].v,
-                store[4].v,
-                vget_low_f32(self.tw_re),
-                vget_low_f32(self.tw_im),
-            );
-            let (t1, t3, t5) = NeonButterfly::butterfly3h_f32(
-                store[3].v,
-                store[5].v,
-                store[1].v,
-                vget_low_f32(self.tw_re),
-                vget_low_f32(self.tw_im),
-            );
-            let (y0, y3) = NeonButterfly::butterfly2h_f32(t0, t1);
-            let (y4, y1) = NeonButterfly::butterfly2h_f32(t2, t3);
-            let (y2, y5) = NeonButterfly::butterfly2h_f32(t4, t5);
-            [
-                NeonStoreFh::raw(y0),
-                NeonStoreFh::raw(y1),
-                NeonStoreFh::raw(y2),
-                NeonStoreFh::raw(y3),
-                NeonStoreFh::raw(y4),
-                NeonStoreFh::raw(y5),
-            ]
-        }
-    }
 }
 
 #[cfg(feature = "fcma")]
@@ -186,36 +155,6 @@ impl ColumnFcmaButterfly6f {
             NeonStoreF::raw(y3),
             NeonStoreF::raw(y4),
             NeonStoreF::raw(y5),
-        ]
-    }
-
-    #[inline]
-    #[target_feature(enable = "fcma")]
-    pub(crate) fn exech(&self, store: [NeonStoreFh; 6]) -> [NeonStoreFh; 6] {
-        let (t0, t2, t4) = NeonButterfly::butterfly3h_f32_fcma(
-            store[0].v,
-            store[2].v,
-            store[4].v,
-            vget_low_f32(self.tw_re),
-            vget_low_f32(self.tw_im),
-        );
-        let (t1, t3, t5) = NeonButterfly::butterfly3h_f32_fcma(
-            store[3].v,
-            store[5].v,
-            store[1].v,
-            vget_low_f32(self.tw_re),
-            vget_low_f32(self.tw_im),
-        );
-        let (y0, y3) = NeonButterfly::butterfly2h_f32(t0, t1);
-        let (y4, y1) = NeonButterfly::butterfly2h_f32(t2, t3);
-        let (y2, y5) = NeonButterfly::butterfly2h_f32(t4, t5);
-        [
-            NeonStoreFh::raw(y0),
-            NeonStoreFh::raw(y1),
-            NeonStoreFh::raw(y2),
-            NeonStoreFh::raw(y3),
-            NeonStoreFh::raw(y4),
-            NeonStoreFh::raw(y5),
         ]
     }
 }

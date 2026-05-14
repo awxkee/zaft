@@ -74,11 +74,18 @@ where
         let butterfly = match exponent {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly6(fft_direction)?,
-            2 => T::butterfly36(fft_direction).map_or_else(|| T::butterfly6(fft_direction), Ok)?,
-            _ => T::butterfly216(fft_direction).map_or_else(
-                || T::butterfly36(fft_direction).map_or_else(|| T::butterfly6(fft_direction), Ok),
-                Ok,
-            )?,
+            2 => T::butterfly36(fft_direction)
+                .ok()
+                .map_or_else(|| T::butterfly6(fft_direction), Ok)?,
+            3 => T::butterfly216(fft_direction)
+                .or_else(|| T::butterfly36(fft_direction).ok())
+                .or_else(|| T::butterfly6(fft_direction).ok())
+                .ok_or(ZaftError::Overflow)?,
+            _ => T::butterfly1296(fft_direction)
+                .or_else(|| T::butterfly216(fft_direction))
+                .or_else(|| T::butterfly36(fft_direction).ok())
+                .or_else(|| T::butterfly6(fft_direction).ok())
+                .ok_or(ZaftError::Overflow)?,
         };
 
         let butterfly_length: usize = butterfly.length();

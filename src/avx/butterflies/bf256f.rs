@@ -31,9 +31,8 @@
 use crate::avx::butterflies::shared::{
     boring_avx_butterfly, boring_avx512vl_butterfly, gen_butterfly_twiddles_f32,
 };
-use crate::avx::mixed::{AvxStoreF, ColumnButterfly8f};
+use crate::avx::mixed::{AvxStoreF, ColumnButterfly32f};
 use crate::store::BidirectionalStore;
-use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
@@ -42,9 +41,8 @@ macro_rules! define_bf256 {
     ($bf_name: ident, $features: literal) => {
         pub(crate) struct $bf_name {
             direction: FftDirection,
-            bf8: ColumnButterfly8f,
+            bf32: ColumnButterfly32f,
             twiddles: [AvxStoreF; 56],
-            twiddles32: [AvxStoreF; 6],
         }
 
         impl $bf_name {
@@ -57,145 +55,12 @@ macro_rules! define_bf256 {
                 Self {
                     direction: fft_direction,
                     twiddles: gen_butterfly_twiddles_f32(32, 8, fft_direction, 256),
-                    bf8: ColumnButterfly8f::new(fft_direction),
-                    twiddles32: [
-                        AvxStoreF::set_complex(compute_twiddle(1, 32, fft_direction)),
-                        AvxStoreF::set_complex(compute_twiddle(2, 32, fft_direction)),
-                        AvxStoreF::set_complex(compute_twiddle(3, 32, fft_direction)),
-                        AvxStoreF::set_complex(compute_twiddle(5, 32, fft_direction)),
-                        AvxStoreF::set_complex(compute_twiddle(6, 32, fft_direction)),
-                        AvxStoreF::set_complex(compute_twiddle(7, 32, fft_direction)),
-                    ],
+                    bf32: ColumnButterfly32f::new(fft_direction),
                 }
             }
         }
 
         impl $bf_name {
-            #[target_feature(enable = $features)]
-            fn exec_bf32(&self, src: &[MaybeUninit<Complex<f32>>; 256], dst: &mut [Complex<f32>]) {
-                unsafe {
-                    for k in 0..2 {
-                        macro_rules! load {
-                            ($src: expr, $k: expr, $idx: expr) => {{ AvxStoreF::from_complex_refu($src.get_unchecked($k * 4 + $idx * 8..)) }};
-                        }
-
-                        macro_rules! store {
-                            ($v: expr, $idx: expr, $dst: expr, $k: expr) => {{ $v.write($dst.get_unchecked_mut($k * 4 + $idx * 8..)) }};
-                        }
-
-                        let input1 = [
-                            load!(src, k, 1),
-                            load!(src, k, 9),
-                            load!(src, k, 17),
-                            load!(src, k, 25),
-                        ];
-                        let mut mid1 = self.bf8.bf4.exec(input1);
-
-                        mid1[1] = AvxStoreF::mul_by_complex(mid1[1], self.twiddles32[0]);
-                        mid1[2] = AvxStoreF::mul_by_complex(mid1[2], self.twiddles32[1]);
-                        mid1[3] = AvxStoreF::mul_by_complex(mid1[3], self.twiddles32[2]);
-
-                        let input2 = [
-                            load!(src, k, 2),
-                            load!(src, k, 10),
-                            load!(src, k, 18),
-                            load!(src, k, 26),
-                        ];
-                        let mut mid2 = self.bf8.bf4.exec(input2);
-
-                        mid2[1] = AvxStoreF::mul_by_complex(mid2[1], self.twiddles32[1]);
-                        mid2[2] = self.bf8.rotate45(mid2[2]);
-                        mid2[3] = AvxStoreF::mul_by_complex(mid2[3], self.twiddles32[4]);
-
-                        let input3 = [
-                            load!(src, k, 3),
-                            load!(src, k, 11),
-                            load!(src, k, 19),
-                            load!(src, k, 27),
-                        ];
-                        let mut mid3 = self.bf8.bf4.exec(input3);
-
-                        mid3[1] = AvxStoreF::mul_by_complex(mid3[1], self.twiddles32[2]);
-                        mid3[2] = AvxStoreF::mul_by_complex(mid3[2], self.twiddles32[4]);
-                        mid3[3] =
-                            AvxStoreF::mul_by_complex(mid3[3], self.bf8.rotate(self.twiddles32[0]));
-
-                        let input4 = [
-                            load!(src, k, 4),
-                            load!(src, k, 12),
-                            load!(src, k, 20),
-                            load!(src, k, 28),
-                        ];
-                        let mut mid4 = self.bf8.bf4.exec(input4);
-
-                        mid4[1] = self.bf8.rotate45(mid4[1]);
-                        mid4[2] = self.bf8.rotate(mid4[2]);
-                        mid4[3] = self.bf8.rotate135(mid4[3]);
-
-                        let input5 = [
-                            load!(src, k, 5),
-                            load!(src, k, 13),
-                            load!(src, k, 21),
-                            load!(src, k, 29),
-                        ];
-                        let mut mid5 = self.bf8.bf4.exec(input5);
-
-                        mid5[1] = AvxStoreF::mul_by_complex(mid5[1], self.twiddles32[3]);
-                        mid5[2] =
-                            AvxStoreF::mul_by_complex(mid5[2], self.bf8.rotate(self.twiddles32[1]));
-                        mid5[3] =
-                            AvxStoreF::mul_by_complex(mid5[3], self.bf8.rotate(self.twiddles32[5]));
-
-                        let input6 = [
-                            load!(src, k, 6),
-                            load!(src, k, 14),
-                            load!(src, k, 22),
-                            load!(src, k, 30),
-                        ];
-                        let mut mid6 = self.bf8.bf4.exec(input6);
-
-                        mid6[1] = AvxStoreF::mul_by_complex(mid6[1], self.twiddles32[4]);
-                        mid6[2] = self.bf8.rotate135(mid6[2]);
-                        mid6[3] = AvxStoreF::mul_by_complex(mid6[3], self.twiddles32[1].neg());
-
-                        let input7 = [
-                            load!(src, k, 7),
-                            load!(src, k, 15),
-                            load!(src, k, 23),
-                            load!(src, k, 31),
-                        ];
-                        let mut mid7 = self.bf8.bf4.exec(input7);
-
-                        mid7[1] = AvxStoreF::mul_by_complex(mid7[1], self.twiddles32[5]);
-                        mid7[2] =
-                            AvxStoreF::mul_by_complex(mid7[2], self.bf8.rotate(self.twiddles32[4]));
-                        mid7[3] = AvxStoreF::mul_by_complex(mid7[3], self.twiddles32[3].neg());
-
-                        let input0 = [
-                            load!(src, k, 0),
-                            load!(src, k, 8),
-                            load!(src, k, 16),
-                            load!(src, k, 24),
-                        ];
-                        let mid0 = self.bf8.bf4.exec(input0);
-
-                        for i in 0..4 {
-                            let output = self.bf8.exec([
-                                mid0[i], mid1[i], mid2[i], mid3[i], mid4[i], mid5[i], mid6[i], mid7[i],
-                            ]);
-                            store!(output[0], i, dst, k);
-                            store!(output[1], i + 4, dst, k);
-                            store!(output[2], i + 8, dst, k);
-                            store!(output[3], i + 12, dst, k);
-                            store!(output[4], i + 16, dst, k);
-                            store!(output[5], i + 20, dst, k);
-                            store!(output[6], i + 24, dst, k);
-                            store!(output[7], i + 28, dst, k);
-                        }
-                    }
-                }
-            }
-
             #[inline]
             #[target_feature(enable = $features)]
             fn exec_bf16(&self, src: &[Complex<f32>], dst: &mut [MaybeUninit<Complex<f32>>; 256]) {
@@ -208,7 +73,7 @@ macro_rules! define_bf256 {
                                 AvxStoreF::from_complex_ref(src.get_unchecked(i * 32 + k * 4..));
                         }
 
-                        rows = self.bf8.exec(rows);
+                        rows = self.bf32.bf16.bf8.exec(rows);
 
                         let q1 = AvxStoreF::mul_by_complex(rows[1], self.twiddles[7 * k]);
                         let q2 = AvxStoreF::mul_by_complex(rows[2], self.twiddles[7 * k + 1]);
@@ -253,7 +118,14 @@ macro_rules! define_bf256 {
             pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
                 let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 256];
                 self.exec_bf16(chunk.slice_from(0..), &mut scratch);
-                self.exec_bf32(&scratch, chunk.slice_from_mut(0..));
+                for k in 0..2 {
+                    self.bf32.exec_streaming(
+                        |i| unsafe {
+                            AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 8 + k * 4..))
+                        },
+                        |i, store| store.write(chunk.slice_from_mut(i * 8 + k * 4..)),
+                    );
+                }
             }
         }
     };

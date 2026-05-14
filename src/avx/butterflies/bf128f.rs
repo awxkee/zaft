@@ -57,8 +57,6 @@ impl AvxButterfly128f {
     }
 }
 
-boring_avx_butterfly!(AvxButterfly128f, f32, 128);
-
 impl AvxButterfly128f {
     #[target_feature(enable = "avx2,fma")]
     fn exec_bf8(&self, src: &[Complex<f32>], dst: &mut [MaybeUninit<Complex<f32>>; 128]) {
@@ -90,34 +88,22 @@ impl AvxButterfly128f {
         }
     }
 
-    #[target_feature(enable = "avx2,fma")]
-    fn exec_bf16_2(&self, src: &[MaybeUninit<Complex<f32>>; 128], dst: &mut [Complex<f32>]) {
-        let mut rows16: [AvxStoreF; 16] = [AvxStoreF::zero(); 16];
-
-        for k in 0..2 {
-            for i in 0..16 {
-                unsafe {
-                    rows16[i] = AvxStoreF::from_complex_refu(src.get_unchecked(i * 8 + k * 4..));
-                }
-            }
-            rows16 = self.bf16.exec(rows16);
-            for i in 0..16 {
-                unsafe {
-                    rows16[i].write(dst.get_unchecked_mut(i * 8 + k * 4..));
-                }
-            }
-        }
-    }
-
     #[inline]
     #[target_feature(enable = "avx2,fma")]
     pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
         let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 128];
         self.exec_bf8(chunk.slice_from(0..), &mut scratch);
         // rows
-        self.exec_bf16_2(&scratch, chunk.slice_from_mut(0..));
+        for k in 0..2 {
+            self.bf16.exec_streaming(
+                |i| unsafe { AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 8 + k * 4..)) },
+                |i, store| store.write(chunk.slice_from_mut(i * 8 + k * 4..)),
+            );
+        }
     }
 }
+
+boring_avx_butterfly!(AvxButterfly128f, f32, 128);
 
 #[cfg(test)]
 mod tests {

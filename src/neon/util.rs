@@ -45,18 +45,18 @@ pub(crate) fn vfcmulq_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
     }
 }
 
-#[inline(always)]
-pub(crate) fn vfcmulq_conj_b_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_t {
-    // Multiply lhs * conj(rhs)
-    // rhs = [re0, im0, re1, im1]
-    // conj(rhs) = [re0, -im0, re1, -im1]
-
-    unsafe {
-        let temp = vcombine_f64(vneg_f64(vget_high_f64(lhs)), vget_low_f64(lhs));
-        let sum = vmulq_laneq_f64::<0>(lhs, rhs);
-        vfmaq_laneq_f64::<1>(sum, temp, vnegq_f64(rhs))
-    }
-}
+// #[inline(always)]
+// pub(crate) fn vfcmulq_conj_b_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_t {
+//     // Multiply lhs * conj(rhs)
+//     // rhs = [re0, im0, re1, im1]
+//     // conj(rhs) = [re0, -im0, re1, -im1]
+//
+//     unsafe {
+//         let temp = vcombine_f64(vneg_f64(vget_high_f64(lhs)), vget_low_f64(lhs));
+//         let sum = vmulq_laneq_f64::<0>(lhs, rhs);
+//         vfmaq_laneq_f64::<1>(sum, temp, vnegq_f64(rhs))
+//     }
+// }
 
 #[inline(always)]
 pub(crate) fn vfcmul_f32(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
@@ -170,17 +170,17 @@ pub(crate) fn conj_f64(v: float64x2_t, a: float64x2_t) -> float64x2_t {
     }
 }
 
-#[inline(always)]
-pub(crate) fn vfcmulq_conj_b_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
-    unsafe {
-        let temp1 = vtrn1q_f32(rhs, rhs);
-        let v_rhs = vnegq_f32(rhs);
-        let temp2 = vtrn2q_f32(v_rhs, vnegq_f32(v_rhs));
-        let temp3 = vmulq_f32(temp2, lhs);
-        let temp4 = vrev64q_f32(temp3);
-        vfmaq_f32(temp4, temp1, lhs)
-    }
-}
+// #[inline(always)]
+// pub(crate) fn vfcmulq_conj_b_f32(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+//     unsafe {
+//         let temp1 = vtrn1q_f32(rhs, rhs);
+//         let v_rhs = vnegq_f32(rhs);
+//         let temp2 = vtrn2q_f32(v_rhs, vnegq_f32(v_rhs));
+//         let temp3 = vmulq_f32(temp2, lhs);
+//         let temp4 = vrev64q_f32(temp3);
+//         vfmaq_f32(temp4, temp1, lhs)
+//     }
+// }
 
 pub(crate) fn create_neon_twiddles<T: FftTrigonometry + 'static + Float + Sized, const N: usize>(
     base: usize,
@@ -223,30 +223,30 @@ where
     }
     Ok(twiddles)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use num_complex::{Complex, ComplexFloat};
-
-    #[test]
-    fn complex_a_to_b_conj_neon() {
-        let values_a = [Complex::new(7.0f32, 5.0)];
-        let values_b = [Complex::new(-5.0f32, 3.0)];
-        let r = values_a
-            .iter()
-            .zip(values_b.iter())
-            .map(|(a, b)| a * b.conj())
-            .collect::<Vec<Complex<_>>>();
-        unsafe {
-            let a0 = vld1q_f32(values_a.as_ptr().cast());
-            let b0 = vld1q_f32(values_b.as_ptr().cast());
-            let product = vfcmulq_conj_b_f32(a0, b0);
-            let mut vec_b = vec![Complex::<f32>::default(); 2];
-            vst1q_f32(vec_b.as_mut_ptr().cast(), product);
-            vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
-                assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");
-            });
-        }
-    }
-}
+//
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use num_complex::{Complex, ComplexFloat};
+//
+//     #[test]
+//     fn complex_a_to_b_conj_neon() {
+//         let values_a = [Complex::new(7.0f32, 5.0)];
+//         let values_b = [Complex::new(-5.0f32, 3.0)];
+//         let r = values_a
+//             .iter()
+//             .zip(values_b.iter())
+//             .map(|(a, b)| a * b.conj())
+//             .collect::<Vec<Complex<_>>>();
+//         unsafe {
+//             let a0 = vld1q_f32(values_a.as_ptr().cast());
+//             let b0 = vld1q_f32(values_b.as_ptr().cast());
+//             let product = vfcmulq_conj_b_f32(a0, b0);
+//             let mut vec_b = vec![Complex::<f32>::default(); 2];
+//             vst1q_f32(vec_b.as_mut_ptr().cast(), product);
+//             vec_b.iter().zip(r.iter()).for_each(|(a, b)| {
+//                 assert!((a - b).abs() < 1e-5, "complex_a_to_b_conj_sse a {a}, b {b}");
+//             });
+//         }
+//     }
+// }

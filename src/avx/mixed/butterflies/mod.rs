@@ -34,6 +34,8 @@ mod bf16;
 mod bf18;
 mod bf2;
 mod bf3;
+mod bf32;
+mod bf36;
 mod bf4;
 mod bf5;
 mod bf6;
@@ -67,3 +69,5 @@ pub(crate) use bf13::{
 };
 pub(crate) use bf16::{ColumnButterfly16d, ColumnButterfly16f};
 pub(crate) use bf18::{ColumnButterfly18d, ColumnButterfly18f};
+pub(crate) use bf32::{ColumnButterfly32d, ColumnButterfly32f};
+pub(crate) use bf36::{ColumnButterfly36d, ColumnButterfly36f};

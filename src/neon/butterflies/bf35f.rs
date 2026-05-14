@@ -105,7 +105,7 @@ macro_rules! gen_bf35f {
                     {
                         let k = 6;
                         for i in 0..5 {
-                            rows0[i] = NeonStoreF::from_complex(chunk.index(i * 7 + k));
+                            rows0[i] = NeonStoreF::load_complex(chunk.index(i * 7 + k));
                         }
 
                         rows0 = self.bf5.exec(rows0);

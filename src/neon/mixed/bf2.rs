@@ -27,7 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftDirection;
-use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF, NeonStoreFh};
+use crate::neon::mixed::neon_store::{NeonStoreD, NeonStoreF};
 use std::arch::aarch64::*;
 
 pub(crate) struct ColumnButterfly2d {}
@@ -65,16 +65,6 @@ impl ColumnButterfly2f {
             let y1 = vsubq_f32(store[0].v, store[1].v);
             let y0 = t;
             [NeonStoreF { v: y0 }, NeonStoreF { v: y1 }]
-        }
-    }
-
-    #[inline]
-    pub(crate) fn exech(&self, store: [NeonStoreFh; 2]) -> [NeonStoreFh; 2] {
-        unsafe {
-            let t = vadd_f32(store[0].v, store[1].v);
-            let y1 = vsub_f32(store[0].v, store[1].v);
-            let y0 = t;
-            [NeonStoreFh { v: y0 }, NeonStoreFh { v: y1 }]
         }
     }
 }

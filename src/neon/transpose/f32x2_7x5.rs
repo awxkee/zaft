@@ -212,7 +212,7 @@ pub(crate) fn block_transpose_f32x2_7x5(
             NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 4..))
         });
         let rows3: [NeonStoreF; 5] = std::array::from_fn(|x| {
-            NeonStoreF::from_complex(src.get_unchecked(x * src_stride + 6))
+            NeonStoreF::load_complex(src.get_unchecked(x * src_stride + 6))
         });
 
         let (v0, v1, v2) = neon_transpose_f32x2_7x5_aos(rows0, rows1, rows2, rows3);
@@ -261,7 +261,7 @@ pub(crate) fn block_transpose_f32x2_7x6(
             NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 4..))
         });
         let rows3: [NeonStoreF; 6] = std::array::from_fn(|x| {
-            NeonStoreF::from_complex(src.get_unchecked(x * src_stride + 6))
+            NeonStoreF::load_complex(src.get_unchecked(x * src_stride + 6))
         });
 
         let (v0, v1, v2) = neon_transpose_f32x2_7x6_aos(rows0, rows1, rows2, rows3);
@@ -289,7 +289,7 @@ pub(crate) fn block_transpose_f32x2_5x7(
             NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 2..))
         });
         let r2: [NeonStoreF; 7] = std::array::from_fn(|x| {
-            NeonStoreF::from_complex(src.get_unchecked(x * src_stride + 4))
+            NeonStoreF::load_complex(src.get_unchecked(x * src_stride + 4))
         });
 
         let q0 = neon_transpose_f32x2_2x2_impl(float32x4x2_t(r0[0].v, r0[1].v));

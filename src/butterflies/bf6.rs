@@ -49,7 +49,7 @@ impl<T: FftSample> Butterfly6<T>
 where
     f64: AsPrimitive<T>,
 {
-    pub fn new(fft_direction: FftDirection) -> Self {
+    pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Butterfly6 {
             direction: fft_direction,
             twiddle: compute_twiddle(1, 3, fft_direction),

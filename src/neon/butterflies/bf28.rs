@@ -200,7 +200,7 @@ macro_rules! gen_bf28f {
                     rows0[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 7..));
                     rows1[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 7 + 2..));
                     rows2[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 7 + 4..));
-                    rows3[i] = NeonStoreF::from_complex(chunk.index(i * 7 + 6));
+                    rows3[i] = NeonStoreF::load_complex(chunk.index(i * 7 + 6));
                 }
 
                 rows0 = self.bf4.exec(rows0);
