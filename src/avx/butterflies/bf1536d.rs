@@ -29,169 +29,72 @@
 use crate::avx::butterflies::shared::{
     boring_avx_butterfly, boring_avx512vl_butterfly, gen_butterfly_twiddles_f64,
 };
-use crate::avx::mixed::{AvxStoreD, ColumnButterfly6d, ColumnButterfly32d};
+use crate::avx::mixed::{AvxStoreD, ColumnButterfly32d, ColumnButterfly48d};
 use crate::store::BidirectionalStore;
-use crate::util::compute_twiddle;
 use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
 macro_rules! define_bf1536 {
     ($bf_name: ident, $features: literal) => {
-
-pub(crate) struct $bf_name {
-    direction: FftDirection,
-    bf32: ColumnButterfly32d,
-    bf6: ColumnButterfly6d,
-    twiddles: [AvxStoreD; 744],
-    twiddles48: [AvxStoreD; 5],
-}
-
-impl $bf_name {
-    pub(crate) fn new(fft_direction: FftDirection) -> Self {
-        unsafe { Self::new_init(fft_direction) }
-    }
-
-    #[target_feature(enable = $features)]
-    fn new_init(fft_direction: FftDirection) -> Self {
-        Self {
-            direction: fft_direction,
-            twiddles: gen_butterfly_twiddles_f64(48, 32, fft_direction, 1536),
-            twiddles48: [
-                AvxStoreD::set_complex(&compute_twiddle(1, 48, fft_direction)),
-                AvxStoreD::set_complex(&compute_twiddle(2, 48, fft_direction)),
-                AvxStoreD::set_complex(&compute_twiddle(3, 48, fft_direction)),
-                AvxStoreD::set_complex(&compute_twiddle(4, 48, fft_direction)),
-                AvxStoreD::set_complex(&compute_twiddle(5, 48, fft_direction)),
-            ],
-            bf32: ColumnButterfly32d::new(fft_direction),
-            bf6: ColumnButterfly6d::new(fft_direction),
+        pub(crate) struct $bf_name {
+            direction: FftDirection,
+            bf32: ColumnButterfly32d,
+            bf48: ColumnButterfly48d,
+            twiddles: [AvxStoreD; 744],
         }
-    }
-}
 
-impl $bf_name {
-    #[target_feature(enable = $features)]
-    fn exec_bf48(&self, src: &[MaybeUninit<Complex<f64>>; 1536], dst: &mut [Complex<f64>]) {
-        unsafe {
-            for k in 0..16 {
-                macro_rules! load {
-                    ($src: expr, $k: expr, $idx: expr) => {{ AvxStoreD::from_complex_refu($src.get_unchecked($k * 2 + $idx * 32..)) }};
-                }
+        impl $bf_name {
+            pub(crate) fn new(fft_direction: FftDirection) -> Self {
+                unsafe { Self::new_init(fft_direction) }
+            }
 
-                macro_rules! store {
-                    ($v: expr, $idx: expr, $dst: expr, $k: expr) => {{ $v.write($dst.get_unchecked_mut($k * 2 + $idx * 32..)) }};
-                }
-
-                let input1 = std::array::from_fn(|x| load!(src, k, x * 8 + 1));
-                let mut mid1 = self.bf6.exec(input1);
-
-                mid1[1] = AvxStoreD::mul_by_complex(mid1[1], self.twiddles48[0]);          // W_48^ 1 = T[0]
-                mid1[2] = AvxStoreD::mul_by_complex(mid1[2], self.twiddles48[1]);          // W_48^ 2 = T[1]
-                mid1[3] = AvxStoreD::mul_by_complex(mid1[3], self.twiddles48[2]);          // W_48^ 3 = T[2]
-                mid1[4] = AvxStoreD::mul_by_complex(mid1[4], self.twiddles48[3]);          // W_48^ 4 = T[3]
-                mid1[5] = AvxStoreD::mul_by_complex(mid1[5], self.twiddles48[4]);          // W_48^ 5 = T[4]
-
-                let input2 = std::array::from_fn(|x| load!(src, k, x * 8 + 2));
-                let mut mid2 = self.bf6.exec(input2);
-
-                mid2[1] = AvxStoreD::mul_by_complex(mid2[1], self.twiddles48[1]);          // W_48^ 2 = T[1]
-                mid2[2] = AvxStoreD::mul_by_complex(mid2[2], self.twiddles48[3]);          // W_48^ 4 = T[3]
-                mid2[3] = self.bf32.bf16.bf8.rotate45(mid2[3]);                              // W_48^ 6 = rot1
-                mid2[4] = AvxStoreD::mul_by_complex(mid2[4], self.bf32.bf16.bf8.rotate45(self.twiddles48[1]));
-                mid2[5] = AvxStoreD::mul_by_complex(mid2[5], self.bf32.bf16.bf8.rotate45(self.twiddles48[3]));
-
-                let input3 = std::array::from_fn(|x| load!(src, k, x * 8 + 3));
-                let mut mid3 = self.bf6.exec(input3);
-
-                let tw_mid3_5 = self.bf32.bf16.bf8.rotate(self.twiddles48[2]);
-
-                mid3[1] = AvxStoreD::mul_by_complex(mid3[1], self.twiddles48[2]);          // W_48^ 3 = T[2]
-                mid3[2] = self.bf32.bf16.bf8.rotate45(mid3[2]);                              // W_48^ 6 = rot1
-                mid3[3] = AvxStoreD::mul_by_complex(mid3[3], self.bf32.bf16.bf8.rotate45(self.twiddles48[2]));
-                mid3[4] = self.bf32.bf16.bf8.rotate(mid3[4]);                               // W_48^12 = rot
-                mid3[5] = AvxStoreD::mul_by_complex(mid3[5], tw_mid3_5);
-
-                let input4 = std::array::from_fn(|x| load!(src, k, x * 8 + 4));
-                let mut mid4 = self.bf6.exec(input4);
-
-                let tw_mid_4_5 = self.bf32.bf16.bf8.rotate135(self.twiddles48[1]);
-
-                mid4[1] = AvxStoreD::mul_by_complex(mid4[1], self.twiddles48[3]);          // W_48^ 4 = T[3]
-                mid4[2] = AvxStoreD::mul_by_complex(mid4[2], self.bf32.bf16.bf8.rotate45(self.twiddles48[1]));
-                mid4[3] = self.bf32.bf16.bf8.rotate(mid4[3]);                               // W_48^12 = rot
-                mid4[4] = AvxStoreD::mul_by_complex(mid4[4], self.bf32.bf16.bf8.rotate(self.twiddles48[3]));
-                mid4[5] = AvxStoreD::mul_by_complex(mid4[5], tw_mid_4_5);
-
-                let input5 = std::array::from_fn(|x| load!(src, k, x * 8 + 5));
-                let mut mid5 = self.bf6.exec(input5);
-
-                mid5[1] = AvxStoreD::mul_by_complex(mid5[1], self.twiddles48[4]);          // W_48^ 5 = T[4]
-                mid5[2] = AvxStoreD::mul_by_complex(mid5[2], self.bf32.bf16.bf8.rotate45(self.twiddles48[3]));
-                mid5[3] = AvxStoreD::mul_by_complex(mid5[3], tw_mid3_5);
-                mid5[4] = AvxStoreD::mul_by_complex(mid5[4], tw_mid_4_5);
-                mid5[5] = AvxStoreD::mul_by_complex(mid5[5], self.twiddles48[0].neg());
-
-                let input6 = std::array::from_fn(|x| load!(src, k, x * 8 + 6));
-                let mut mid6 = self.bf6.exec(input6);
-
-                mid6[1] = self.bf32.bf16.bf8.rotate45(mid6[1]);
-                mid6[2] = self.bf32.bf16.bf8.rotate(mid6[2]);
-                mid6[3] = self.bf32.bf16.bf8.rotate135(mid6[3]);
-                mid6[4] = mid6[4].neg();
-                mid6[5] = self.bf32.bf16.bf8.rotate45(mid6[5]).neg();
-
-                let input7 = std::array::from_fn(|x| load!(src, k, x * 8 + 7));
-                let mut mid7 = self.bf6.exec(input7);
-
-                mid7[1] = AvxStoreD::mul_by_complex(mid7[1], self.bf32.bf16.bf8.rotate45(self.twiddles48[0]));
-                mid7[2] = AvxStoreD::mul_by_complex(mid7[2], self.bf32.bf16.bf8.rotate(self.twiddles48[1]));
-                mid7[3] = AvxStoreD::mul_by_complex(mid7[3], self.bf32.bf16.bf8.rotate135(self.twiddles48[2]));
-                mid7[4] = AvxStoreD::mul_by_complex(mid7[4], self.twiddles48[3].neg());
-                mid7[5] = AvxStoreD::mul_by_complex(mid7[5], self.bf32.bf16.bf8.rotate45(self.twiddles48[4])).neg();
-
-                let input0 = std::array::from_fn(|x| load!(src, k, x * 8));
-                let mid0 = self.bf6.exec(input0);
-
-                for i in 0..6 {
-                    let output = self.bf32.bf16.bf8.exec([
-                        mid0[i], mid1[i], mid2[i], mid3[i], mid4[i], mid5[i], mid6[i], mid7[i],
-                    ]);
-                    store!(output[0], i, dst, k);
-                    store!(output[1], i + 6, dst, k);
-                    store!(output[2], i + 12, dst, k);
-                    store!(output[3], i + 18, dst, k);
-                    store!(output[4], i + 24, dst, k);
-                    store!(output[5], i + 30, dst, k);
-                    store!(output[6], i + 36, dst, k);
-                    store!(output[7], i + 42, dst, k);
+            #[target_feature(enable = $features)]
+            fn new_init(fft_direction: FftDirection) -> Self {
+                Self {
+                    direction: fft_direction,
+                    twiddles: gen_butterfly_twiddles_f64(48, 32, fft_direction, 1536),
+                    bf32: ColumnButterfly32d::new(fft_direction),
+                    bf48: ColumnButterfly48d::new(fft_direction),
                 }
             }
         }
-    }
-}
 
-impl $bf_name {
-    #[target_feature(enable = $features)]
-    pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
-        let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 1536];
-        // columns
-        for k in 0..24 {
-            let tw = k * 31;
-            self.bf32.exec_transpose_streaming(
-                |idx| AvxStoreD::from_complex_ref(chunk.slice_from(k * 2 + idx * 48..)),
-                |idx| self.twiddles[tw + idx],
-                |idx, val| unsafe {
-                    let row = k * 2 + idx % 2;
-                    let col = (idx / 2) * 2;
-                    val.write_u(scratch.get_unchecked_mut(row * 32 + col..))
-                },
-            );
+        impl $bf_name {
+            #[target_feature(enable = $features)]
+            fn exec_bf48(&self, src: &[MaybeUninit<Complex<f64>>; 1536], dst: &mut [Complex<f64>]) {
+                for k in 0..16 {
+                    self.bf48.exec_streaming(
+                        |i| unsafe {
+                            AvxStoreD::from_complex_refu(src.get_unchecked(i * 32 + k * 2..))
+                        },
+                        |i, store| unsafe { store.write(dst.get_unchecked_mut(i * 32 + k * 2..)) },
+                    );
+                }
+            }
         }
-        // rows
-        self.exec_bf48(&scratch, chunk.slice_from_mut(0..));
-    }
-}
+
+        impl $bf_name {
+            #[target_feature(enable = $features)]
+            pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
+                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 1536];
+                // columns
+                for k in 0..24 {
+                    let tw = k * 31;
+                    self.bf32.exec_transpose_streaming(
+                        |idx| AvxStoreD::from_complex_ref(chunk.slice_from(k * 2 + idx * 48..)),
+                        |idx| self.twiddles[tw + idx],
+                        |idx, val| unsafe {
+                            let row = k * 2 + idx % 2;
+                            let col = (idx / 2) * 2;
+                            val.write_u(scratch.get_unchecked_mut(row * 32 + col..))
+                        },
+                    );
+                }
+                // rows
+                self.exec_bf48(&scratch, chunk.slice_from_mut(0..));
+            }
+        }
     };
 }
 

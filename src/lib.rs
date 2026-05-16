@@ -725,9 +725,6 @@ impl Zaft {
             }
             let factor_2 = prime_factors.factor_of_2();
             let rem2_8 = factor_2 % 3;
-            if product.is_multiple_of(10) {
-                get_mixed_butterflies!(10, product / 10)
-            }
             if product.is_multiple_of(12) {
                 get_mixed_butterflies!(12, product / 12)
             }
@@ -898,7 +895,7 @@ impl Zaft {
             }
             37 => return Some(T::butterfly37(fft_direction)),
             40 => {
-                return T::butterfly40(fft_direction).map(Ok);
+                return Some(T::butterfly40(fft_direction));
             }
             41 => return Some(T::butterfly41(fft_direction)),
             42 => {
@@ -991,6 +988,9 @@ impl Zaft {
             1536 => {
                 return T::butterfly1536(fft_direction).map(Ok);
             }
+            1800 => {
+                return T::butterfly1800(fft_direction).map(Ok);
+            }
             2048 => {
                 return T::butterfly2048(fft_direction).map(Ok);
             }
@@ -1009,7 +1009,14 @@ impl Zaft {
         if n == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
-        if (n <= 512 || n == 576 || n == 1024 || n == 1152 || n == 1296 || n == 1536 || n == 2048)
+        if (n <= 512
+            || n == 576
+            || n == 1024
+            || n == 1152
+            || n == 1296
+            || n == 1536
+            || n == 1800
+            || n == 2048)
             && let Some(bf) = Zaft::plan_butterfly(n, fft_direction)
         {
             return bf;

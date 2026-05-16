@@ -402,6 +402,11 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     //     "13 * 13 * 13 * 13 * 13".to_string(),
     // );
 
+    check_power_groups(c, 1536, "1536".to_string());
+
+    check_power_groupd(c, 1800, "1800".to_string());
+    check_power_groups(c, 1800, "1800".to_string());
+
     check_power_groupd(c, 1296, "1296".to_string());
     check_power_groups(c, 1296, "1296".to_string());
     check_power_groupd(c, 7776, "7776".to_string());

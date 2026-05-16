@@ -37,6 +37,9 @@ mod bf3;
 mod bf32;
 mod bf36;
 mod bf4;
+mod bf40;
+mod bf45;
+mod bf48;
 mod bf5;
 mod bf6;
 mod bf7;
@@ -114,6 +117,15 @@ pub(crate) use bf32::{
 pub(crate) use bf36::ColumnButterfly36f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf36::ColumnFcmaButterfly36f;
+pub(crate) use bf40::ColumnButterfly40f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf40::ColumnFcmaButterfly40f;
+pub(crate) use bf45::ColumnButterfly45f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf45::ColumnFcmaButterfly45f;
+pub(crate) use bf48::ColumnButterfly48f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf48::ColumnFcmaButterfly48f;
 #[cfg(feature = "fcma")]
 pub(crate) use mixed_radix::{
     NeonFcmaForwardMixedRadix4f, NeonFcmaForwardMixedRadix8f, NeonFcmaInverseMixedRadix4f,

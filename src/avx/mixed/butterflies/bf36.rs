@@ -204,8 +204,7 @@ impl ColumnButterfly36f {
         mid5[4] = AvxStoreF::mul_by_complex(mid5[4], self.twiddles36[1].neg());
         mid5[5] = AvxStoreF::mul_by_complex(mid5[5], self.twiddles36[12]);
 
-        let input0 = [v(0), v(6), v(12), v(18), v(24), v(30)];
-        let mid0 = self.bf6.exec(input0);
+        let mid0 = self.bf6.exec([v(0), v(6), v(12), v(18), v(24), v(30)]);
 
         let cols0 = self
             .bf6
@@ -344,8 +343,7 @@ impl ColumnButterfly36d {
         mid5[4] = AvxStoreD::mul_by_complex(mid5[4], self.twiddles36[1].neg());
         mid5[5] = AvxStoreD::mul_by_complex(mid5[5], self.twiddles36[12]);
 
-        let input0 = [v(0), v(6), v(12), v(18), v(24), v(30)];
-        let mid0 = self.bf6.exec(input0);
+        let mid0 = self.bf6.exec([v(0), v(6), v(12), v(18), v(24), v(30)]);
 
         for i in 0..6 {
             let output = self

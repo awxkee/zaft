@@ -196,6 +196,7 @@ impl ColumnButterfly8f {
             ))
         }
     }
+
     #[inline(always)]
     pub(crate) fn exec(&self, v: [AvxStoreF; 8]) -> [AvxStoreF; 8] {
         let [u0, u2, u4, u6] = self.bf4.exec([v[0], v[2], v[4], v[6]]);

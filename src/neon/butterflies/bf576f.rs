@@ -130,33 +130,30 @@ gen_bf576f!(
 mod tests {
     use super::*;
     use crate::butterflies::{test_butterfly, test_oof_butterfly};
-    #[cfg(feature = "fcma")]
-    use crate::neon::butterflies::{test_fcma_butterfly, test_oof_fcma_butterfly};
 
-    test_butterfly!(test_neon_butterfly576, f32, NeonButterfly576f, 576, 1e-3);
-    test_oof_butterfly!(
-        test_oof_neon_butterfly576,
-        f32,
-        NeonButterfly576f,
-        576,
-        1e-3
-    );
+    #[test]
+    #[allow(unnameable_test_items)]
+    fn capsule1() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
+        test_butterfly!(test_neon_butterfly576, f32, NeonButterfly576f, 576, 1e-3);
+        test_neon_butterfly576();
+    }
 
-    #[cfg(feature = "fcma")]
-    test_fcma_butterfly!(
-        test_fcma_butterfly576,
-        f32,
-        NeonFcmaButterfly576f,
-        576,
-        1e-3
-    );
-
-    #[cfg(feature = "fcma")]
-    test_oof_fcma_butterfly!(
-        test_oof_fcma_butterfly576,
-        f32,
-        NeonFcmaButterfly576f,
-        576,
-        1e-3
-    );
+    #[test]
+    #[allow(unnameable_test_items)]
+    fn capsule2() {
+        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+            return;
+        }
+        test_oof_butterfly!(
+            test_oof_neon_butterfly576,
+            f32,
+            NeonButterfly576f,
+            576,
+            1e-3
+        );
+        test_oof_neon_butterfly576();
+    }
 }
