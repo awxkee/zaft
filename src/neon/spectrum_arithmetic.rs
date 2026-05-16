@@ -397,13 +397,13 @@ impl ComplexArith<f32> for NeonSpectrumArithmetic<f32> {
             .zip(forward_twiddles.iter())
             .zip(backward_twiddles.iter().rev())
         {
-            let cell = NeonStoreF::from_complex(scratch_cell);
+            let cell = NeonStoreF::load_complex(scratch_cell);
             let fw = cell
-                .mul_by_complex(NeonStoreF::from_complex(twiddle))
+                .mul_by_complex(NeonStoreF::load_complex(twiddle))
                 .xor(conjugate_factors);
             let bw = cell
                 .xor(conjugate_factors)
-                .mul_by_complex(NeonStoreF::from_complex(twiddle_rev))
+                .mul_by_complex(NeonStoreF::load_complex(twiddle_rev))
                 .xor(conjugate_factors);
             fw.write_single(scratch_cell);
             bw.write_single(scratch_cell_rev);

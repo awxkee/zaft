@@ -144,7 +144,7 @@ pub(crate) fn block_transpose_f32x2_7x7(
             NeonStoreF::from_complex_ref(src.get_unchecked(x * src_stride + 4..))
         });
         let rows3: [NeonStoreF; 7] = std::array::from_fn(|x| {
-            NeonStoreF::from_complex(src.get_unchecked(x * src_stride + 6))
+            NeonStoreF::load_complex(src.get_unchecked(x * src_stride + 6))
         });
 
         let (v0, v1, v2, v3) = neon_transpose_f32x2_7x7_aos(rows0, rows1, rows2, rows3);

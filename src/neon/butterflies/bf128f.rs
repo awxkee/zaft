@@ -63,7 +63,6 @@ macro_rules! gen_bf128f {
             #[target_feature(enable = $features)]
             pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
                 let mut rows: [NeonStoreF; 8] = [NeonStoreF::default(); 8];
-                let mut rows16: [NeonStoreF; 16] = [NeonStoreF::default(); 16];
                 let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 128];
                 unsafe {
                     // columns
@@ -92,15 +91,14 @@ macro_rules! gen_bf128f {
                     // rows
 
                     for k in 0..4 {
-                        for i in 0..16 {
-                            rows16[i] = NeonStoreF::from_complex_refu(
-                                scratch.get_unchecked(i * 8 + k * 2..),
-                            );
-                        }
-                        rows16 = self.bf16.exec(rows16);
-                        for i in 0..16 {
-                            rows16[i].write(chunk.slice_from_mut(i * 8 + k * 2..));
-                        }
+                        self.bf16.exec_streaming(
+                            |i| {
+                                NeonStoreF::from_complex_refu(
+                                    scratch.get_unchecked(i * 8 + k * 2..),
+                                )
+                            },
+                            |i, store| store.write(chunk.slice_from_mut(i * 8 + k * 2..)),
+                        );
                     }
                 }
             }

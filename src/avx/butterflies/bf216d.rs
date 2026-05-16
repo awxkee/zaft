@@ -59,7 +59,6 @@ impl AvxButterfly216d {
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
         let mut rows12: [AvxStoreD; 12] = [AvxStoreD::zero(); 12];
-        let mut rows18: [AvxStoreD; 18] = [AvxStoreD::zero(); 18];
         let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 216];
         unsafe {
             // columns
@@ -86,14 +85,10 @@ impl AvxButterfly216d {
             // rows
 
             for k in 0..6 {
-                for i in 0..18 {
-                    rows18[i] =
-                        AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 12 + k * 2..));
-                }
-                rows18 = self.bf18.exec(rows18);
-                for i in 0..18 {
-                    rows18[i].write(chunk.slice_from_mut(i * 12 + k * 2..));
-                }
+                self.bf18.exec_streaming(
+                    |i| AvxStoreD::from_complex_refu(scratch.get_unchecked(i * 12 + k * 2..)),
+                    |i, v| v.write(chunk.slice_from_mut(i * 12 + k * 2..)),
+                )
             }
         }
     }

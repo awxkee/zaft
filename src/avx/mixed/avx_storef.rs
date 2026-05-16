@@ -27,8 +27,7 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::util::{
-    _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_fcmul_ps_conj_a,
-    _mm256_fcmul_ps_conj_b, shuffle,
+    _mm_unpacklo_ps64, _mm256_create_ps, _mm256_fcmul_ps, _mm256_fcmul_ps_conj_a, shuffle,
 };
 use num_complex::Complex;
 use num_traits::MulAdd;
@@ -499,14 +498,6 @@ impl AvxStoreF {
     pub(crate) fn mul_by_complex(self, other: AvxStoreF) -> Self {
         AvxStoreF {
             v: _mm256_fcmul_ps(self.v, other.v),
-        }
-    }
-
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
-    pub(crate) fn mul_by_conj_b(self, other: AvxStoreF) -> Self {
-        AvxStoreF {
-            v: _mm256_fcmul_ps_conj_b(self.v, other.v),
         }
     }
 

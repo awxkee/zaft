@@ -96,7 +96,7 @@ macro_rules! gen_bf13f {
             pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
                 let mut rows = [NeonStoreF::default(); 13];
                 for i in 0..13 {
-                    rows[i] = NeonStoreF::from_complex(chunk.index(i));
+                    rows[i] = NeonStoreF::load_complex(chunk.index(i));
                 }
                 rows = self.bf13.exec(rows);
                 for i in 0..13 {

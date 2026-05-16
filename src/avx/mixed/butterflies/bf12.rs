@@ -49,7 +49,8 @@ impl ColumnButterfly12d {
 }
 
 impl ColumnButterfly12d {
-    #[inline(always)]
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn exec(&self, v: [AvxStoreD; 12]) -> [AvxStoreD; 12] {
         let [u0, u1, u2, u3] = self.bf4.exec([v[0], v[3], v[6], v[9]]);
         let [u4, u5, u6, u7] = self.bf4.exec([v[4], v[7], v[10], v[1]]);
@@ -80,7 +81,8 @@ impl ColumnButterfly12f {
 }
 
 impl ColumnButterfly12f {
-    #[inline(always)]
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn exec(&self, v: [AvxStoreF; 12]) -> [AvxStoreF; 12] {
         let [u0, u1, u2, u3] = self.bf4.exec([v[0], v[3], v[6], v[9]]);
         let [u4, u5, u6, u7] = self.bf4.exec([v[4], v[7], v[10], v[1]]);
@@ -92,5 +94,37 @@ impl ColumnButterfly12f {
         let [v3, v7, v11] = self.bf3.exec([u3, u7, u11]); // (v3, v7, v11)
 
         [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11]
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> AvxStoreF, J: FnMut(usize, AvxStoreF)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        let [u0, u1, u2, u3] = self.bf4.exec([v(0), v(3), v(6), v(9)]);
+        let [u4, u5, u6, u7] = self.bf4.exec([v(4), v(7), v(10), v(1)]);
+        let [u8, u9, u10, u11] = self.bf4.exec([v(8), v(11), v(2), v(5)]);
+
+        let [v0, v4, v8] = self.bf3.exec([u0, u4, u8]);
+        store(0, v0);
+        store(4, v4);
+        store(8, v8);
+
+        let [v9, v1, v5] = self.bf3.exec([u1, u5, u9]);
+        store(9, v9);
+        store(1, v1);
+        store(5, v5);
+
+        let [v6, v10, v2] = self.bf3.exec([u2, u6, u10]);
+        store(6, v6);
+        store(10, v10);
+        store(2, v2);
+
+        let [v3, v7, v11] = self.bf3.exec([u3, u7, u11]);
+        store(3, v3);
+        store(7, v7);
+        store(11, v11);
     }
 }

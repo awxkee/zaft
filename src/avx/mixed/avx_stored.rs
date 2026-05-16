@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::util::{_mm256_fcmul_pd, _mm256_fcmul_pd_conj_a, _mm256_fcmul_pd_conj_b, shuffle};
+use crate::avx::util::{_mm256_fcmul_pd, _mm256_fcmul_pd_conj_a, shuffle};
 use num_complex::Complex;
 use num_traits::MulAdd;
 use std::arch::x86_64::*;
@@ -306,14 +306,6 @@ impl AvxStoreD {
     pub(crate) fn mul_by_conj_a(self, other: AvxStoreD) -> Self {
         AvxStoreD {
             v: _mm256_fcmul_pd_conj_a(self.v, other.v),
-        }
-    }
-
-    #[inline]
-    #[target_feature(enable = "avx2", enable = "fma")]
-    pub(crate) fn mul_by_complex_conj_b(self, other: AvxStoreD) -> Self {
-        AvxStoreD {
-            v: _mm256_fcmul_pd_conj_b(self.v, other.v),
         }
     }
 

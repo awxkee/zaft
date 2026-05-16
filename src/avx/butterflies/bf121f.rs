@@ -192,24 +192,16 @@ impl AvxButterfly121f {
             // rows
 
             for k in 0..2 {
-                for i in 0..11 {
-                    rows[i] = AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 11 + k * 4..));
-                }
-                rows = self.bf11.exec(rows);
-                for i in 0..11 {
-                    rows[i].write(chunk.slice_from_mut(i * 11 + k * 4..));
-                }
+                self.bf11.exec_streaming(
+                    |i| AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 11 + k * 4..)),
+                    |i, v| v.write(chunk.slice_from_mut(i * 11 + k * 4..)),
+                );
             }
 
-            {
-                for i in 0..11 {
-                    rows[i] = AvxStoreF::from_complex3u(scratch.get_unchecked(i * 11 + 8..));
-                }
-                rows = self.bf11.exec(rows);
-                for i in 0..11 {
-                    rows[i].write_lo3(chunk.slice_from_mut(i * 11 + 8..));
-                }
-            }
+            self.bf11.exec_streaming(
+                |i| AvxStoreF::from_complex3u(scratch.get_unchecked(i * 11 + 8..)),
+                |i, v| v.write_lo3(chunk.slice_from_mut(i * 11 + 8..)),
+            );
         }
     }
 }

@@ -186,7 +186,7 @@ impl NeonFcmaRadix5<f64> {
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
             bitreversed_transpose::<Complex<f64>, 5>(self.butterfly_length, chunk, scratch);
-            self.butterfly.execute_out_of_place(&scratch, chunk)?;
+            self.butterfly.execute_out_of_place(scratch, chunk)?;
             self.base_run(chunk);
         }
         Ok(())
@@ -468,7 +468,7 @@ impl NeonFcmaRadix5<f32> {
             // Digit-reversal permutation
             neon_bitreversed_transpose_f32_radix5(self.butterfly_length, chunk, scratch);
 
-            self.butterfly.execute_out_of_place(&scratch, chunk)?;
+            self.butterfly.execute_out_of_place(scratch, chunk)?;
             self.base_run(chunk)
         }
         Ok(())

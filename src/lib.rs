@@ -522,7 +522,7 @@ impl Zaft {
                 if product.is_multiple_of(36)
                     && product / 36 > 1
                     && product / 36 <= 16
-                    && T::butterfly36(direction).is_some()
+                    && T::butterfly36(direction).is_ok()
                 {
                     try_mixed_radix!(36, product / 36)
                 }
@@ -728,6 +728,9 @@ impl Zaft {
             if product.is_multiple_of(10) {
                 get_mixed_butterflies!(10, product / 10)
             }
+            if product.is_multiple_of(12) {
+                get_mixed_butterflies!(12, product / 12)
+            }
             if factor_2 > 0 {
                 if rem2_8 == 1 {
                     get_mixed_butterflies!(2, product / 2)
@@ -736,9 +739,6 @@ impl Zaft {
                     get_mixed_butterflies!(4, product / 4)
                 }
                 get_mixed_butterflies!(8, product / 8)
-            }
-            if product.is_multiple_of(12) {
-                get_mixed_butterflies!(12, product / 12)
             }
             if product.is_multiple_of(9) {
                 get_mixed_butterflies!(9, product / 9)
@@ -894,7 +894,7 @@ impl Zaft {
                 return T::butterfly35(fft_direction).map(Ok);
             }
             36 => {
-                return T::butterfly36(fft_direction).map(Ok);
+                return Some(T::butterfly36(fft_direction));
             }
             37 => return Some(T::butterfly37(fft_direction)),
             40 => {
@@ -976,8 +976,17 @@ impl Zaft {
             512 => {
                 return T::butterfly512(fft_direction).map(Ok);
             }
+            576 => {
+                return T::butterfly576(fft_direction).map(Ok);
+            }
             1024 => {
                 return T::butterfly1024(fft_direction).map(Ok);
+            }
+            1152 => {
+                return T::butterfly1152(fft_direction).map(Ok);
+            }
+            1296 => {
+                return T::butterfly1296(fft_direction).map(Ok);
             }
             1536 => {
                 return T::butterfly1536(fft_direction).map(Ok);
@@ -1000,7 +1009,7 @@ impl Zaft {
         if n == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
-        if (n <= 512 || n == 1024 || n == 1536 || n == 2048)
+        if (n <= 512 || n == 576 || n == 1024 || n == 1152 || n == 1296 || n == 1536 || n == 2048)
             && let Some(bf) = Zaft::plan_butterfly(n, fft_direction)
         {
             return bf;
@@ -1026,11 +1035,18 @@ impl Zaft {
                 {
                     return Ok(bf);
                 }
-                if n == 4096
-                    && let Some(bf) =
-                        T::mixed_radix_butterfly4(Zaft::strategy(n / 4, fft_direction)?)?
-                {
-                    return Ok(bf);
+                let has1024 = T::butterfly1024(fft_direction).is_some();
+                if n == 4096 {
+                    if has1024
+                        && let Some(bf) =
+                            T::mixed_radix_butterfly4(Zaft::strategy(n / 4, fft_direction)?)?
+                    {
+                        return Ok(bf);
+                    } else if let Some(bf) =
+                        T::mixed_radix_butterfly8(Zaft::strategy(n / 8, fft_direction)?)?
+                    {
+                        return Ok(bf);
+                    }
                 }
                 let rem3 = prime_factors.factor_of_2() % 3;
                 if rem3 == 2 {
@@ -1060,61 +1076,29 @@ impl Zaft {
             }
             T::radix4(n, fft_direction)
         } else if prime_factors.is_power_of_six {
-            if Zaft::could_do_split_mixed_radix() {
-                let has216 = T::butterfly216(fft_direction).is_some();
-                let has36 = T::butterfly36(fft_direction).is_some();
-
-                let terminal = if has216 && n.is_multiple_of(216) {
-                    216
-                } else if has36 && n.is_multiple_of(36) {
-                    36
-                } else {
-                    0
-                };
-
-                #[allow(clippy::manual_checked_ops)]
-                if terminal > 0 {
-                    let remaining = n / terminal;
-                    if remaining == 1 {
-                        // n IS the terminal
-                    } else if remaining.is_multiple_of(6) {
-                        // Peel radix-6 toward terminal
-                        if let Some(bf) =
-                            T::mixed_radix_butterfly6(Zaft::strategy(n / 6, fft_direction)?)?
-                        {
-                            return Ok(bf);
-                        }
-                    }
-                } else if n.is_multiple_of(6)
-                    && let Some(bf) =
-                        T::mixed_radix_butterfly6(Zaft::strategy(n / 6, fft_direction)?)?
-                {
-                    return Ok(bf);
-                }
-            }
             T::radix6(n, fft_direction)
         } else if prime_factors.is_power_of_seven {
             T::radix7(n, fft_direction)
         } else if prime_factors.is_power_of_ten {
             T::radix10(n, fft_direction)
         } else if prime_factors.is_power_of_eleven {
-            T::radix11(n, fft_direction)
-        } else if prime_factors.is_power_of_thirteen {
-            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+            if Zaft::could_do_split_mixed_radix()
+                && let Some(bf) =
+                    T::mixed_radix_butterfly11(Zaft::strategy(n / 11, fft_direction)?)?
             {
-                if Zaft::could_do_split_mixed_radix() {
-                    let r = n / 13;
-                    if r == 13 {
-                        let right_fft = T::butterfly13(fft_direction)?;
-                        if let Ok(Some(v)) = T::mixed_radix_butterfly13(right_fft) {
-                            return Ok(v);
-                        }
-                    }
-                    let right_fft = T::radix13(r, fft_direction)?;
-                    if let Ok(Some(v)) = T::mixed_radix_butterfly13(right_fft) {
-                        return Ok(v);
-                    }
-                }
+                return Ok(bf);
+            }
+            T::radix11(n, fft_direction)
+        } else if prime_factors.is_power_of_twelve
+            && let Some(bf) = T::mixed_radix_butterfly12(Zaft::strategy(n / 12, fft_direction)?)?
+        {
+            Ok(bf)
+        } else if prime_factors.is_power_of_thirteen {
+            if Zaft::could_do_split_mixed_radix()
+                && let Some(bf) =
+                    T::mixed_radix_butterfly13(Zaft::strategy(n / 13, fft_direction)?)?
+            {
+                return Ok(bf);
             }
             T::radix13(n, fft_direction)
         } else if prime_factors.may_be_represented_in_mixed_radix() {

@@ -180,24 +180,15 @@ impl AvxButterfly169f {
             // rows
 
             for k in 0..3 {
-                for i in 0..13 {
-                    rows[i] = AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 13 + k * 4..));
-                }
-                rows = self.bf13.exec(rows);
-                for i in 0..13 {
-                    rows[i].write(chunk.slice_from_mut(i * 13 + k * 4..));
-                }
+                self.bf13.exec_streaming(
+                    |i| AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 13 + k * 4..)),
+                    |i, v| v.write(chunk.slice_from_mut(i * 13 + k * 4..)),
+                );
             }
-
-            {
-                for i in 0..13 {
-                    rows[i] = AvxStoreF::from_complexu(scratch.get_unchecked(i * 13 + 12));
-                }
-                rows = self.bf13.exec(rows);
-                for i in 0..13 {
-                    rows[i].write_lo1(chunk.slice_from_mut(i * 13 + 12..));
-                }
-            }
+            self.bf13.exec_streaming(
+                |i| AvxStoreF::from_complexu(scratch.get_unchecked(i * 13 + 12)),
+                |i, v| v.write_lo1(chunk.slice_from_mut(i * 13 + 12..)),
+            );
         }
     }
 }

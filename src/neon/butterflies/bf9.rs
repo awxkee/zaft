@@ -199,7 +199,7 @@ macro_rules! gen_bf9f {
                 // columns
                 for i in 0..3 {
                     rows0[i] = NeonStoreF::from_complex_ref(chunk.slice_from(i * 3..));
-                    rows1[i] = NeonStoreF::from_complex(chunk.index(i * 3 + 2));
+                    rows1[i] = NeonStoreF::load_complex(chunk.index(i * 3 + 2));
                 }
 
                 rows0 = self.bf3.exec(rows0);

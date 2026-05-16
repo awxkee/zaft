@@ -181,6 +181,17 @@ pub(crate) fn is_power_of_ten(n: u64) -> bool {
     n == 1
 }
 
+pub(crate) fn is_power_of_twelve(n: u64) -> bool {
+    let mut n = n;
+    if n == 0 {
+        return false;
+    }
+    while n.is_multiple_of(12) {
+        n /= 12;
+    }
+    n == 1
+}
+
 pub(crate) fn is_power_of_eleven(n: u64) -> bool {
     let mut n = n;
     if n == 0 {

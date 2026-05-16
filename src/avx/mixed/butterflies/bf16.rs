@@ -29,158 +29,269 @@
 use crate::FftDirection;
 use crate::avx::mixed::avx_stored::AvxStoreD;
 use crate::avx::mixed::avx_storef::AvxStoreF;
-use crate::avx::mixed::{
-    ColumnButterfly2d, ColumnButterfly2f, ColumnButterfly8d, ColumnButterfly8f,
-};
+use crate::avx::mixed::{ColumnButterfly8d, ColumnButterfly8f};
+use crate::avx::transpose::{transpose_f32x2_4x4_aos, transpose_f64x2_2x2d};
 use crate::util::compute_twiddle;
 
 pub(crate) struct ColumnButterfly16d {
     pub(crate) bf8: ColumnButterfly8d,
-    bf2: ColumnButterfly2d,
-    twiddle1: AvxStoreD,
-    twiddle2: AvxStoreD,
-    twiddle3: AvxStoreD,
+    pub(crate) twiddles16: [AvxStoreD; 2],
 }
 
 impl ColumnButterfly16d {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly16d {
         let tw1 = compute_twiddle(1, 16, direction);
-        let tw2 = compute_twiddle(2, 16, direction);
         let tw3 = compute_twiddle(3, 16, direction);
         Self {
             bf8: ColumnButterfly8d::new(direction),
-            bf2: ColumnButterfly2d::new(direction),
-            twiddle1: AvxStoreD::set_complex(&tw1),
-            twiddle2: AvxStoreD::set_complex(&tw2),
-            twiddle3: AvxStoreD::set_complex(&tw3),
+            twiddles16: [AvxStoreD::set_complex(&tw1), AvxStoreD::set_complex(&tw3)],
         }
     }
 }
 
 impl ColumnButterfly16d {
-    #[target_feature(enable = "avx2", enable = "fma")]
     #[inline]
-    pub(crate) fn exec(&self, v: [AvxStoreD; 16]) -> [AvxStoreD; 16] {
-        let evens = self
-            .bf8
-            .exec([v[0], v[2], v[4], v[6], v[8], v[10], v[12], v[14]]);
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> AvxStoreD, J: FnMut(usize, AvxStoreD)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        let mut col1 = self.bf8.bf4.exec([v(1), v(5), v(9), v(13)]);
 
-        let odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
-        let odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
+        col1[1] = AvxStoreD::mul_by_complex(col1[1], self.twiddles16[0]);
+        col1[2] = self.bf8.rotate45(col1[2]);
+        col1[3] = AvxStoreD::mul_by_complex(col1[3], self.twiddles16[1]);
 
-        // Twiddle + butterfly2 + rotate + final add/sub, one lane at a time.
-        // Each group keeps only 2 odds registers live alongside evens[i]/evens[i+4],
-        // freeing them before moving to the next group.
+        let mut col2 = self.bf8.bf4.exec([v(2), v(6), v(10), v(14)]);
 
-        // lane 0 — no twiddle
-        let [o0a, o0b] = self.bf2.exec([odds_1[0], odds_2[0]]);
-        let o0b = self.bf8.rotate(o0b);
-        let (y00, y08) = (evens[0] + o0a, evens[0] - o0a);
-        let (y04, y12) = (evens[4] + o0b, evens[4] - o0b);
+        col2[1] = self.bf8.rotate45(col2[1]);
+        col2[2] = self.bf8.rotate(col2[2]);
+        col2[3] = self.bf8.rotate135(col2[3]);
 
-        // lane 1
-        let o1a = AvxStoreD::mul_by_complex(odds_1[1], self.twiddle1);
-        let o1b = AvxStoreD::mul_by_complex_conj_b(odds_2[1], self.twiddle1);
-        let [o1a, o1b] = self.bf2.exec([o1a, o1b]);
-        let o1b = self.bf8.rotate(o1b);
-        let (y01, y09) = (evens[1] + o1a, evens[1] - o1a);
-        let (y05, y13) = (evens[5] + o1b, evens[5] - o1b);
+        let mut col3 = self.bf8.bf4.exec([v(3), v(7), v(11), v(15)]);
 
-        // lane 2
-        let o2a = AvxStoreD::mul_by_complex(odds_1[2], self.twiddle2);
-        let o2b = AvxStoreD::mul_by_complex_conj_b(odds_2[2], self.twiddle2);
-        let [o2a, o2b] = self.bf2.exec([o2a, o2b]);
-        let o2b = self.bf8.rotate(o2b);
-        let (y02, y10) = (evens[2] + o2a, evens[2] - o2a);
-        let (y06, y14) = (evens[6] + o2b, evens[6] - o2b);
+        col3[1] = AvxStoreD::mul_by_complex(col3[1], self.twiddles16[1]);
+        col3[2] = self.bf8.rotate135(col3[2]);
+        col3[3] = AvxStoreD::mul_by_complex(col3[3], self.twiddles16[0].neg());
 
-        // lane 3
-        let o3a = AvxStoreD::mul_by_complex(odds_1[3], self.twiddle3);
-        let o3b = AvxStoreD::mul_by_complex_conj_b(odds_2[3], self.twiddle3);
-        let [o3a, o3b] = self.bf2.exec([o3a, o3b]);
-        let o3b = self.bf8.rotate(o3b);
-        let (y03, y11) = (evens[3] + o3a, evens[3] - o3a);
-        let (y07, y15) = (evens[7] + o3b, evens[7] - o3b);
+        let col0 = self.bf8.bf4.exec([v(0), v(4), v(8), v(12)]);
 
-        [
-            y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15,
-        ]
+        let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+        store(0, r0[0]);
+        store(4, r0[1]);
+        store(8, r0[2]);
+        store(12, r0[3]);
+
+        let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+        store(1, r1[0]);
+        store(5, r1[1]);
+        store(9, r1[2]);
+        store(13, r1[3]);
+
+        let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+        store(2, r2[0]);
+        store(6, r2[1]);
+        store(10, r2[2]);
+        store(14, r2[3]);
+
+        let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
+        store(3, r3[0]);
+        store(7, r3[1]);
+        store(11, r3[2]);
+        store(15, r3[3]);
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec_transpose_streaming<
+        A: Fn(usize) -> AvxStoreD,
+        T: Fn(usize) -> AvxStoreD,
+        J: FnMut(usize, AvxStoreD),
+    >(
+        &self,
+        v: A,
+        twiddle: T,
+        mut store: J,
+    ) {
+        let mut col1 = self.bf8.bf4.exec([v(1), v(5), v(9), v(13)]);
+        col1[1] = AvxStoreD::mul_by_complex(col1[1], self.twiddles16[0]);
+        col1[2] = self.bf8.rotate45(col1[2]);
+        col1[3] = AvxStoreD::mul_by_complex(col1[3], self.twiddles16[1]);
+
+        let mut col2 = self.bf8.bf4.exec([v(2), v(6), v(10), v(14)]);
+        col2[1] = self.bf8.rotate45(col2[1]);
+        col2[2] = self.bf8.rotate(col2[2]);
+        col2[3] = self.bf8.rotate135(col2[3]);
+
+        let mut col3 = self.bf8.bf4.exec([v(3), v(7), v(11), v(15)]);
+        col3[1] = AvxStoreD::mul_by_complex(col3[1], self.twiddles16[1]);
+        col3[2] = self.bf8.rotate135(col3[2]);
+        col3[3] = AvxStoreD::mul_by_complex(col3[3], self.twiddles16[0].neg());
+
+        let col0 = self.bf8.bf4.exec([v(0), v(4), v(8), v(12)]);
+
+        let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+        let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+        let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+        let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
+
+        {
+            let q1 = AvxStoreD::mul_by_complex(r1[0], twiddle(0));
+            let q2 = AvxStoreD::mul_by_complex(r2[0], twiddle(1));
+            let q3 = AvxStoreD::mul_by_complex(r3[0], twiddle(2));
+            let t = transpose_f64x2_2x2d([r0[0], q1]);
+            let t1 = transpose_f64x2_2x2d([q2, q3]);
+            store(0, t[0]);
+            store(1, t[1]);
+            store(2, t1[0]);
+            store(3, t1[1]);
+        }
+
+        for i in 1..4 {
+            let q0 = AvxStoreD::mul_by_complex(r0[i], twiddle((i - 1) * 4 + 3));
+            let q1 = AvxStoreD::mul_by_complex(r1[i], twiddle((i - 1) * 4 + 4));
+            let q2 = AvxStoreD::mul_by_complex(r2[i], twiddle((i - 1) * 4 + 5));
+            let q3 = AvxStoreD::mul_by_complex(r3[i], twiddle((i - 1) * 4 + 6));
+            let t = transpose_f64x2_2x2d([q0, q1]);
+            let t1 = transpose_f64x2_2x2d([q2, q3]);
+            store(i * 4, t[0]);
+            store(i * 4 + 1, t[1]);
+            store(i * 4 + 2, t1[0]);
+            store(i * 4 + 3, t1[1]);
+        }
     }
 }
 
 pub(crate) struct ColumnButterfly16f {
     pub(crate) bf8: ColumnButterfly8f,
-    bf2: ColumnButterfly2f,
-    twiddle1: AvxStoreF,
-    twiddle2: AvxStoreF,
-    twiddle3: AvxStoreF,
+    pub(crate) twiddles16: [AvxStoreF; 2],
 }
 
 impl ColumnButterfly16f {
     #[target_feature(enable = "avx2")]
     pub(crate) fn new(direction: FftDirection) -> ColumnButterfly16f {
         let tw1 = compute_twiddle(1, 16, direction);
-        let tw2 = compute_twiddle(2, 16, direction);
         let tw3 = compute_twiddle(3, 16, direction);
         Self {
             bf8: ColumnButterfly8f::new(direction),
-            bf2: ColumnButterfly2f::new(direction),
-            twiddle1: AvxStoreF::set_complex(tw1),
-            twiddle2: AvxStoreF::set_complex(tw2),
-            twiddle3: AvxStoreF::set_complex(tw3),
+            twiddles16: [AvxStoreF::set_complex(tw1), AvxStoreF::set_complex(tw3)],
         }
     }
 }
 
 impl ColumnButterfly16f {
-    #[inline(always)]
-    pub(crate) fn exec(&self, v: [AvxStoreF; 16]) -> [AvxStoreF; 16] {
-        unsafe {
-            let evens = self
-                .bf8
-                .exec([v[0], v[2], v[4], v[6], v[8], v[10], v[12], v[14]]);
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> AvxStoreF, J: FnMut(usize, AvxStoreF)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        let mut col1 = self.bf8.bf4.exec([v(1), v(5), v(9), v(13)]);
 
-            let odds_1 = self.bf8.bf4.exec([v[1], v[5], v[9], v[13]]);
-            let odds_2 = self.bf8.bf4.exec([v[15], v[3], v[7], v[11]]);
+        col1[1] = AvxStoreF::mul_by_complex(col1[1], self.twiddles16[0]);
+        col1[2] = self.bf8.rotate45(col1[2]);
+        col1[3] = AvxStoreF::mul_by_complex(col1[3], self.twiddles16[1]);
 
-            // Twiddle + butterfly2 + rotate + final add/sub, one lane at a time.
-            // Each group keeps only 2 odds registers live alongside evens[i]/evens[i+4],
-            // freeing them before moving to the next group.
+        let mut col2 = self.bf8.bf4.exec([v(2), v(6), v(10), v(14)]);
 
-            // lane 0 — no twiddle
-            let [o0a, o0b] = self.bf2.exec([odds_1[0], odds_2[0]]);
-            let o0b = self.bf8.rotate(o0b);
-            let (y00, y08) = (evens[0] + o0a, evens[0] - o0a);
-            let (y04, y12) = (evens[4] + o0b, evens[4] - o0b);
+        col2[1] = self.bf8.rotate45(col2[1]);
+        col2[2] = self.bf8.rotate(col2[2]);
+        col2[3] = self.bf8.rotate135(col2[3]);
 
-            // lane 1
-            let o1a = AvxStoreF::mul_by_complex(odds_1[1], self.twiddle1);
-            let o1b = AvxStoreF::mul_by_conj_b(odds_2[1], self.twiddle1);
-            let [o1a, o1b] = self.bf2.exec([o1a, o1b]);
-            let o1b = self.bf8.rotate(o1b);
-            let (y01, y09) = (evens[1] + o1a, evens[1] - o1a);
-            let (y05, y13) = (evens[5] + o1b, evens[5] - o1b);
+        let mut col3 = self.bf8.bf4.exec([v(3), v(7), v(11), v(15)]);
 
-            // lane 2
-            let o2a = AvxStoreF::mul_by_complex(odds_1[2], self.twiddle2);
-            let o2b = AvxStoreF::mul_by_conj_b(odds_2[2], self.twiddle2);
-            let [o2a, o2b] = self.bf2.exec([o2a, o2b]);
-            let o2b = self.bf8.rotate(o2b);
-            let (y02, y10) = (evens[2] + o2a, evens[2] - o2a);
-            let (y06, y14) = (evens[6] + o2b, evens[6] - o2b);
+        col3[1] = AvxStoreF::mul_by_complex(col3[1], self.twiddles16[1]);
+        col3[2] = self.bf8.rotate135(col3[2]);
+        col3[3] = AvxStoreF::mul_by_complex(col3[3], self.twiddles16[0].neg());
 
-            // lane 3
-            let o3a = AvxStoreF::mul_by_complex(odds_1[3], self.twiddle3);
-            let o3b = AvxStoreF::mul_by_conj_b(odds_2[3], self.twiddle3);
-            let [o3a, o3b] = self.bf2.exec([o3a, o3b]);
-            let o3b = self.bf8.rotate(o3b);
-            let (y03, y11) = (evens[3] + o3a, evens[3] - o3a);
-            let (y07, y15) = (evens[7] + o3b, evens[7] - o3b);
+        let col0 = self.bf8.bf4.exec([v(0), v(4), v(8), v(12)]);
 
-            [
-                y00, y01, y02, y03, y04, y05, y06, y07, y08, y09, y10, y11, y12, y13, y14, y15,
-            ]
+        let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+        store(0, r0[0]);
+        store(4, r0[1]);
+        store(8, r0[2]);
+        store(12, r0[3]);
+
+        let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+        store(1, r1[0]);
+        store(5, r1[1]);
+        store(9, r1[2]);
+        store(13, r1[3]);
+
+        let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+        store(2, r2[0]);
+        store(6, r2[1]);
+        store(10, r2[2]);
+        store(14, r2[3]);
+
+        let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
+        store(3, r3[0]);
+        store(7, r3[1]);
+        store(11, r3[2]);
+        store(15, r3[3]);
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec_transpose_streaming<
+        A: Fn(usize) -> AvxStoreF,
+        T: Fn(usize) -> AvxStoreF,
+        J: FnMut(usize, AvxStoreF),
+    >(
+        &self,
+        v: A,
+        twiddle: T,
+        mut store: J,
+    ) {
+        let mut col1 = self.bf8.bf4.exec([v(1), v(5), v(9), v(13)]);
+
+        col1[1] = AvxStoreF::mul_by_complex(col1[1], self.twiddles16[0]);
+        col1[2] = self.bf8.rotate45(col1[2]);
+        col1[3] = AvxStoreF::mul_by_complex(col1[3], self.twiddles16[1]);
+
+        let mut col2 = self.bf8.bf4.exec([v(2), v(6), v(10), v(14)]);
+
+        col2[1] = self.bf8.rotate45(col2[1]);
+        col2[2] = self.bf8.rotate(col2[2]);
+        col2[3] = self.bf8.rotate135(col2[3]);
+
+        let mut col3 = self.bf8.bf4.exec([v(3), v(7), v(11), v(15)]);
+
+        col3[1] = AvxStoreF::mul_by_complex(col3[1], self.twiddles16[1]);
+        col3[2] = self.bf8.rotate135(col3[2]);
+        col3[3] = AvxStoreF::mul_by_complex(col3[3], self.twiddles16[0].neg());
+
+        let col0 = self.bf8.bf4.exec([v(0), v(4), v(8), v(12)]);
+
+        let r0 = self.bf8.bf4.exec([col0[0], col1[0], col2[0], col3[0]]);
+        let r1 = self.bf8.bf4.exec([col0[1], col1[1], col2[1], col3[1]]);
+        let r2 = self.bf8.bf4.exec([col0[2], col1[2], col2[2], col3[2]]);
+        let r3 = self.bf8.bf4.exec([col0[3], col1[3], col2[3], col3[3]]);
+
+        {
+            let q1 = AvxStoreF::mul_by_complex(r1[0], twiddle(0));
+            let q2 = AvxStoreF::mul_by_complex(r2[0], twiddle(1));
+            let q3 = AvxStoreF::mul_by_complex(r3[0], twiddle(2));
+            let t = transpose_f32x2_4x4_aos([r0[0], q1, q2, q3]);
+            store(0, t[0]);
+            store(1, t[1]);
+            store(2, t[2]);
+            store(3, t[3]);
+        }
+
+        for i in 1..4 {
+            let q0 = AvxStoreF::mul_by_complex(r0[i], twiddle((i - 1) * 4 + 3));
+            let q1 = AvxStoreF::mul_by_complex(r1[i], twiddle((i - 1) * 4 + 4));
+            let q2 = AvxStoreF::mul_by_complex(r2[i], twiddle((i - 1) * 4 + 5));
+            let q3 = AvxStoreF::mul_by_complex(r3[i], twiddle((i - 1) * 4 + 6));
+            let t = transpose_f32x2_4x4_aos([q0, q1, q2, q3]);
+            store(i * 4, t[0]);
+            store(i * 4 + 1, t[1]);
+            store(i * 4 + 2, t[2]);
+            store(i * 4 + 3, t[3]);
         }
     }
 }

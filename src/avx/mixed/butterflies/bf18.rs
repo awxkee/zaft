@@ -46,51 +46,47 @@ impl ColumnButterfly18d {
         }
     }
 
-    #[inline(always)]
-    pub(crate) fn exec(&self, v: [AvxStoreD; 18]) -> [AvxStoreD; 18] {
-        unsafe {
-            let u0 = v[0]; // 0
-            let u3 = v[1]; // 3
-            let u4 = v[2]; // 4
-            let u7 = v[3]; // 7
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> AvxStoreD, J: FnMut(usize, AvxStoreD)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        let [t0, t1] = self.bf2.exec([v(0), v(9)]);
+        let [t2, t3] = self.bf2.exec([v(10), v(1)]);
+        let [t4, t5] = self.bf2.exec([v(2), v(11)]);
+        let [t6, t7] = self.bf2.exec([v(12), v(3)]);
+        let [t8, t9] = self.bf2.exec([v(4), v(13)]);
+        let [t10, t11] = self.bf2.exec([v(14), v(5)]);
+        let [t12, t13] = self.bf2.exec([v(6), v(15)]);
+        let [t14, t15] = self.bf2.exec([v(16), v(7)]);
+        let [t16, t17] = self.bf2.exec([v(8), v(17)]);
 
-            let u8 = v[4]; // 8
-            let u11 = v[5]; // 11
-            let u12 = v[6]; // 12
-            let u15 = v[7]; // 15
+        let [u0, u2, u4, u6, u8, u10, u12, u14, u16] =
+            self.bf9.exec([t0, t2, t4, t6, t8, t10, t12, t14, t16]);
+        store(0, u0);
+        store(2, u2);
+        store(4, u4);
+        store(6, u6);
+        store(8, u8);
+        store(10, u10);
+        store(12, u12);
+        store(14, u14);
+        store(16, u16);
 
-            let u16 = v[8]; // 16
-            let u1 = v[9]; // 1
-            let u2 = v[10]; // 2
-            let u5 = v[11]; // 5
+        let [u9, u11, u13, u15, u17, u1, u3, u5, u7] =
+            self.bf9.exec([t1, t3, t5, t7, t9, t11, t13, t15, t17]);
 
-            let u6 = v[12]; // 6
-            let u9 = v[13]; // 9
-            let u10 = v[14]; // 10
-            let u13 = v[15]; // 13
-
-            let u14 = v[16]; // 14
-            let u17 = v[17]; // 17
-
-            let [t0, t1] = self.bf2.exec([u0, u1]);
-            let [t2, t3] = self.bf2.exec([u2, u3]);
-            let [t4, t5] = self.bf2.exec([u4, u5]);
-            let [t6, t7] = self.bf2.exec([u6, u7]);
-            let [t8, t9] = self.bf2.exec([u8, u9]);
-            let [t10, t11] = self.bf2.exec([u10, u11]);
-            let [t12, t13] = self.bf2.exec([u12, u13]);
-            let [t14, t15] = self.bf2.exec([u14, u15]);
-            let [t16, t17] = self.bf2.exec([u16, u17]);
-
-            let [u0, u2, u4, u6, u8, u10, u12, u14, u16] =
-                self.bf9.exec([t0, t2, t4, t6, t8, t10, t12, t14, t16]);
-            let [u9, u11, u13, u15, u17, u1, u3, u5, u7] =
-                self.bf9.exec([t1, t3, t5, t7, t9, t11, t13, t15, t17]);
-
-            [
-                u0, u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, u12, u13, u14, u15, u16, u17,
-            ]
-        }
+        store(9, u9);
+        store(11, u11);
+        store(13, u13);
+        store(15, u15);
+        store(17, u17);
+        store(1, u1);
+        store(3, u3);
+        store(5, u5);
+        store(7, u7);
     }
 }
 
@@ -108,48 +104,46 @@ impl ColumnButterfly18f {
         }
     }
 
-    #[inline(always)]
-    pub(crate) fn exec(&self, v: [AvxStoreF; 18]) -> [AvxStoreF; 18] {
-        let u0 = v[0]; // 0
-        let u3 = v[1]; // 3
-        let u4 = v[2]; // 4
-        let u7 = v[3]; // 7
-
-        let u8 = v[4]; // 8
-        let u11 = v[5]; // 11
-        let u12 = v[6]; // 12
-        let u15 = v[7]; // 15
-
-        let u16 = v[8]; // 16
-        let u1 = v[9]; // 1
-        let u2 = v[10]; // 2
-        let u5 = v[11]; // 5
-
-        let u6 = v[12]; // 6
-        let u9 = v[13]; // 9
-        let u10 = v[14]; // 10
-        let u13 = v[15]; // 13
-
-        let u14 = v[16]; // 14
-        let u17 = v[17]; // 17
-
-        let [t0, t1] = self.bf2.exec([u0, u1]);
-        let [t2, t3] = self.bf2.exec([u2, u3]);
-        let [t4, t5] = self.bf2.exec([u4, u5]);
-        let [t6, t7] = self.bf2.exec([u6, u7]);
-        let [t8, t9] = self.bf2.exec([u8, u9]);
-        let [t10, t11] = self.bf2.exec([u10, u11]);
-        let [t12, t13] = self.bf2.exec([u12, u13]);
-        let [t14, t15] = self.bf2.exec([u14, u15]);
-        let [t16, t17] = self.bf2.exec([u16, u17]);
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> AvxStoreF, J: FnMut(usize, AvxStoreF)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        let [t0, t1] = self.bf2.exec([v(0), v(9)]);
+        let [t2, t3] = self.bf2.exec([v(10), v(1)]);
+        let [t4, t5] = self.bf2.exec([v(2), v(11)]);
+        let [t6, t7] = self.bf2.exec([v(12), v(3)]);
+        let [t8, t9] = self.bf2.exec([v(4), v(13)]);
+        let [t10, t11] = self.bf2.exec([v(14), v(5)]);
+        let [t12, t13] = self.bf2.exec([v(6), v(15)]);
+        let [t14, t15] = self.bf2.exec([v(16), v(7)]);
+        let [t16, t17] = self.bf2.exec([v(8), v(17)]);
 
         let [u0, u2, u4, u6, u8, u10, u12, u14, u16] =
             self.bf9.exec([t0, t2, t4, t6, t8, t10, t12, t14, t16]);
+        store(0, u0);
+        store(2, u2);
+        store(4, u4);
+        store(6, u6);
+        store(8, u8);
+        store(10, u10);
+        store(12, u12);
+        store(14, u14);
+        store(16, u16);
+
         let [u9, u11, u13, u15, u17, u1, u3, u5, u7] =
             self.bf9.exec([t1, t3, t5, t7, t9, t11, t13, t15, t17]);
 
-        [
-            u0, u1, u2, u3, u4, u5, u6, u7, u8, u9, u10, u11, u12, u13, u14, u15, u16, u17,
-        ]
+        store(9, u9);
+        store(11, u11);
+        store(13, u13);
+        store(15, u15);
+        store(17, u17);
+        store(1, u1);
+        store(3, u3);
+        store(5, u5);
+        store(7, u7);
     }
 }

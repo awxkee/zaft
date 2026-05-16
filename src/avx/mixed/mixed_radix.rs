@@ -172,7 +172,7 @@ macro_rules! define_mixed_radixd {
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count)
                     .enumerate()
                 {
@@ -187,7 +187,7 @@ macro_rules! define_mixed_radixd {
                         }
                     }
 
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(chunk.get_unchecked_mut(index_base..));
@@ -223,7 +223,7 @@ macro_rules! define_mixed_radixd {
                     }
 
                     // apply our butterfly function down the columns
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -292,7 +292,7 @@ macro_rules! define_mixed_radixd {
                 let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
                 for (c, twiddle_chunk) in self
                     .twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count)
                     .enumerate()
                 {
@@ -615,7 +615,7 @@ macro_rules! define_mixed_radixf {
                         }
                     }
 
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(chunk.get_unchecked_mut(index_base..));
@@ -687,7 +687,7 @@ macro_rules! define_mixed_radixf {
                     }
 
                     // apply our butterfly function down the columns
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -723,7 +723,7 @@ macro_rules! define_mixed_radixf {
                     }
 
                     // apply our butterfly function down the columns
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -842,7 +842,7 @@ macro_rules! define_mixed_radixf {
                     }
 
                     // apply our butterfly function down the columns
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -880,7 +880,7 @@ macro_rules! define_mixed_radixf {
                     }
 
                     // apply our butterfly function down the columns
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -918,7 +918,7 @@ macro_rules! define_mixed_radixf {
                     }
 
                     // apply our butterfly function down the columns
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     // always write the first row without twiddles
                     unsafe {
@@ -1047,6 +1047,489 @@ macro_rules! define_mixed_radixf {
     };
 }
 
+macro_rules! define_mixed_radix_streaming_f {
+    ($mx_type: ident, $bf_type: ident, $features: literal, $row_count: expr) => {
+        pub(crate) struct $mx_type {
+            execution_length: usize,
+            direction: FftDirection,
+            twiddles: Vec<AvxStoreF>,
+            width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
+            width: usize,
+            height: usize,
+            transpose_executor: Box<dyn TransposeExecutor<f32> + Send + Sync>,
+            inner_bf: $bf_type,
+            width_scratch_length: usize,
+            oof_width_scratch_length: usize,
+        }
+
+        impl $mx_type {
+            pub fn new(
+                width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
+            ) -> Result<Self, ZaftError> {
+                unsafe { Self::new_init(width_executor) }
+            }
+
+            #[target_feature(enable = $features)]
+            fn new_init(
+                width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
+            ) -> Result<Self, ZaftError> {
+                let direction = width_executor.direction();
+
+                let width = width_executor.length();
+
+                const ROW_COUNT: usize = $row_count;
+                const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
+
+                // derive some info from our inner FFT
+                let len_per_row = width_executor.length();
+
+                let len = len_per_row * ROW_COUNT;
+                const COMPLEX_PER_VECTOR: usize = 4;
+
+                let quotient = len_per_row / COMPLEX_PER_VECTOR;
+                let remainder = len_per_row % COMPLEX_PER_VECTOR;
+
+                let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
+                let mut twiddles = Vec::new();
+                twiddles
+                    .try_reserve_exact(num_twiddle_columns * TWIDDLES_PER_COLUMN)
+                    .map_err(|_| {
+                        ZaftError::OutOfMemory(num_twiddle_columns * TWIDDLES_PER_COLUMN)
+                    })?;
+                for x in 0..num_twiddle_columns {
+                    for y in 1..ROW_COUNT {
+                        let mut data: [Complex<f32>; 4] = [Complex::zero(); 4];
+                        for i in 0..COMPLEX_PER_VECTOR {
+                            data[i] =
+                                compute_twiddle(y * (x * COMPLEX_PER_VECTOR + i), len, direction);
+                        }
+                        twiddles.push(AvxStoreF::from_complex_ref(data.as_ref()));
+                    }
+                }
+
+                let width_scratch_length = width_executor.destructive_scratch_length();
+                let execution_length = width * ROW_COUNT;
+                let oof_width_scratch_length = if execution_length >= width_executor.scratch_length() {
+                    0
+                } else {
+                    width_executor.scratch_length()
+                };
+
+                #[allow(unused_unsafe)]
+                Ok($mx_type {
+                    execution_length,
+                    width_executor,
+                    width,
+                    height: ROW_COUNT,
+                    direction,
+                    twiddles,
+                    transpose_executor: f32::transpose_strategy(width, ROW_COUNT),
+                    inner_bf: unsafe { $bf_type::new(direction) },
+                    width_scratch_length,
+                    oof_width_scratch_length,
+                })
+            }
+        }
+
+        impl $mx_type {
+            #[target_feature(enable = $features)]
+            fn execute_f32(
+                &self,
+                in_place: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                if !in_place.len().is_multiple_of(self.execution_length) {
+                    return Err(ZaftError::InvalidSizeMultiplier(
+                        in_place.len(),
+                        self.execution_length,
+                    ));
+                }
+
+                use crate::util::validate_scratch;
+                let scratch = validate_scratch!(scratch, self.scratch_length());
+                let (scratch, width_scratch) = scratch.split_at_mut(self.execution_length);
+
+                for chunk in in_place.chunks_exact_mut(self.execution_length) {
+                    self.process_columns_in_place(chunk);
+
+                    self.width_executor.execute_destructive_with_scratch(
+                        chunk,
+                        scratch,
+                        width_scratch,
+                    )?;
+
+                    self.transpose_executor
+                        .transpose(&scratch, chunk, self.width, self.height);
+                }
+                Ok(())
+            }
+
+            #[target_feature(enable = $features)]
+            fn process_columns_in_place(&self, chunk: &mut [Complex<f32>]) {
+                const ROW_COUNT: usize = $row_count;
+                const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
+                const COMPLEX_PER_VECTOR: usize = 4;
+
+                let len_per_row = self.length() / ROW_COUNT;
+                let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
+                for (c, twiddle_chunk) in self
+                    .twiddles
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
+                    .take(chunk_count)
+                    .enumerate()
+                {
+                    let index_base = c * COMPLEX_PER_VECTOR;
+
+                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = AvxStoreF::from_complex_ref(
+                                chunk.get_unchecked(index_base + len_per_row * i..),
+                            );
+                        }
+                    }
+
+                    self.inner_bf.exec_streaming(|i| {
+                         columns[i]
+                    }, |i, v| {
+                       if i == 0 {
+                            unsafe {
+                                v.write(chunk.get_unchecked_mut(index_base..));
+                            }
+                       } else {
+                           let twiddle: AvxStoreF = twiddle_chunk[i - 1];
+                           let v = AvxStoreF::mul_by_complex(v, twiddle);
+                           unsafe { v.write(chunk.get_unchecked_mut(index_base + len_per_row * i..)) }
+                       }
+                    });
+                }
+
+                let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
+                if partial_remainder == 1 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = AvxStoreF::from_complex(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i),
+                            );
+                        }
+                    }
+
+                    self.inner_bf.exec_streaming(|i| {
+                         columns[i]
+                    }, |i, v| {
+                       if i == 0 {
+                            unsafe {
+                                v.write_lo1(chunk.get_unchecked_mut(partial_remainder_base..));
+                            }
+                       } else {
+                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
+                           let v = AvxStoreF::mul_by_complex(v, twiddle);
+                           unsafe { v.write_lo1(chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
+                       }
+                    });
+                } else if partial_remainder == 2 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = AvxStoreF::from_complex2(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
+
+                    self.inner_bf.exec_streaming(|i| {
+                         columns[i]
+                    }, |i, v| {
+                       if i == 0 {
+                            unsafe {
+                                v.write_lo2(chunk.get_unchecked_mut(partial_remainder_base..));
+                            }
+                       } else {
+                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
+                           let v = AvxStoreF::mul_by_complex(v, twiddle);
+                           unsafe { v.write_lo2(chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
+                       }
+                    });
+                } else if partial_remainder == 3 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        unsafe {
+                            columns[i] = AvxStoreF::from_complex3(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            );
+                        }
+                    }
+
+                    self.inner_bf.exec_streaming(|i| {
+                         columns[i]
+                    }, |i, v| {
+                       if i == 0 {
+                            unsafe {
+                                v.write_lo3(chunk.get_unchecked_mut(partial_remainder_base..));
+                            }
+                       } else {
+                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
+                           let v = AvxStoreF::mul_by_complex(v, twiddle);
+                           unsafe { v.write_lo3(chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
+                       }
+                    });
+                }
+            }
+
+            #[target_feature(enable = $features)]
+            fn execute_d_oof_impl(
+                &self,
+                src: &mut [Complex<f32>],
+                dst: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                use crate::util::validate_oof_sizes;
+                validate_oof_sizes!(src, dst, self.execution_length);
+
+                use crate::util::validate_scratch;
+                let scratch = validate_scratch!(scratch, self.destructive_scratch_length());
+                let use_dst_as_scratch = self.execution_length >= self.oof_width_scratch_length;
+
+                for (dst_chunk, src_chunk) in dst
+                    .chunks_exact_mut(self.execution_length)
+                    .zip(src.chunks_exact_mut(self.execution_length))
+                {
+                    self.process_columns_in_place(src_chunk);
+
+                    self.width_executor
+                        .execute_with_scratch(src_chunk, if use_dst_as_scratch { dst_chunk } else { scratch })?;
+
+                    self.transpose_executor.transpose(
+                        src_chunk,
+                        dst_chunk,
+                        self.width,
+                        self.height,
+                    );
+                }
+                Ok(())
+            }
+
+            #[target_feature(enable = $features)]
+            fn process_columns_oof(&self, src: &[Complex<f32>], dst: &mut [Complex<f32>]) {
+                const ROW_COUNT: usize = $row_count;
+                const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
+                const COMPLEX_PER_VECTOR: usize = 4;
+
+                let len_per_row = self.length() / ROW_COUNT;
+                let chunk_count = len_per_row / COMPLEX_PER_VECTOR;
+                for (c, twiddle_chunk) in self
+                    .twiddles
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
+                    .take(chunk_count)
+                    .enumerate()
+                {
+                    let index_base = c * COMPLEX_PER_VECTOR;
+
+                    self.inner_bf.exec_streaming(|i| {
+                         unsafe {
+                            AvxStoreF::from_complex_ref(
+                                src.get_unchecked(index_base + len_per_row * i..),
+                            )
+                        }
+                    }, |i, v| {
+                       if i == 0 {
+                            unsafe {
+                                v.write(dst.get_unchecked_mut(index_base..));
+                            }
+                       } else {
+                           let twiddle: AvxStoreF = twiddle_chunk[i - 1];
+                           let v = AvxStoreF::mul_by_complex(v, twiddle);
+                           unsafe { v.write(dst.get_unchecked_mut(index_base + len_per_row * i..)) }
+                       }
+                    });
+                }
+
+                let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
+                if partial_remainder == 1 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                    self.inner_bf.exec_streaming(|i| {
+                         unsafe {
+                            AvxStoreF::from_complex(
+                                src.get_unchecked(partial_remainder_base + len_per_row * i),
+                            )
+                        }
+                    }, |i, v| {
+                       if i == 0 {
+                            unsafe {
+                                v.write_lo1(dst.get_unchecked_mut(partial_remainder_base..));
+                            }
+                       } else {
+                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
+                           let v = AvxStoreF::mul_by_complex(v, twiddle);
+                           unsafe { v.write_lo1(dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
+                       }
+                    });
+                } else if partial_remainder == 2 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                    self.inner_bf.exec_streaming(|i| {
+                         unsafe {
+                            AvxStoreF::from_complex2(
+                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            )
+                        }
+                    }, |i, v| {
+                       if i == 0 {
+                            unsafe {
+                                v.write_lo2(dst.get_unchecked_mut(partial_remainder_base..));
+                            }
+                       } else {
+                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
+                           let v = AvxStoreF::mul_by_complex(v, twiddle);
+                           unsafe { v.write_lo2(dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
+                       }
+                    });
+                } else if partial_remainder == 3 {
+                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
+                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
+                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
+
+                    self.inner_bf.exec_streaming(|i| {
+                         unsafe {
+                            AvxStoreF::from_complex3(
+                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                            )
+                        }
+                    }, |i, v| {
+                       if i == 0 {
+                            unsafe {
+                                v.write_lo3(dst.get_unchecked_mut(partial_remainder_base..));
+                            }
+                       } else {
+                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
+                           let v = AvxStoreF::mul_by_complex(v, twiddle);
+                           unsafe { v.write_lo3(dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
+                       }
+                    });
+                }
+            }
+
+            #[target_feature(enable = $features)]
+            fn execute_oof_f32(
+                &self,
+                src: &[Complex<f32>],
+                dst: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                use crate::util::validate_oof_sizes;
+                validate_oof_sizes!(src, dst, self.execution_length);
+
+                use crate::util::validate_scratch;
+                let scratch = validate_scratch!(scratch, self.out_of_place_scratch_length());
+                let (scratch, width_scratch) = scratch.split_at_mut(self.execution_length);
+                let use_dst_as_scratch = self.execution_length >= self.oof_width_scratch_length;
+
+                for (chunk, dst_chunk) in src
+                    .chunks_exact(self.execution_length)
+                    .zip(dst.chunks_exact_mut(self.execution_length))
+                {
+                    self.process_columns_oof(chunk, scratch);
+
+                    self.width_executor
+                        .execute_with_scratch(scratch, if use_dst_as_scratch { dst_chunk } else { width_scratch })?;
+
+                    self.transpose_executor.transpose(
+                        &scratch,
+                        dst_chunk,
+                        self.width,
+                        self.height,
+                    );
+                }
+                Ok(())
+            }
+        }
+
+        impl FftExecutor<f32> for $mx_type {
+            fn execute(&self, in_place: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                let mut scratch = try_vec![Complex::zero(); self.scratch_length()];
+                unsafe { self.execute_f32(in_place, scratch.as_mut_slice()) }
+            }
+
+            fn execute_with_scratch(
+                &self,
+                in_place: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_f32(in_place, scratch) }
+            }
+
+            fn execute_out_of_place(
+                &self,
+                src: &[Complex<f32>],
+                dst: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                  let mut scratch = try_vec![Complex::zero(); self.out_of_place_scratch_length()];
+                self.execute_out_of_place_with_scratch(src, dst, scratch.as_mut_slice())
+            }
+
+            fn execute_out_of_place_with_scratch(
+                &self,
+                src: &[Complex<f32>],
+                dst: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_oof_f32(src, dst, scratch) }
+            }
+
+            fn execute_destructive_with_scratch(
+                &self,
+                src: &mut [Complex<f32>],
+                dst: &mut [Complex<f32>],
+                scratch: &mut [Complex<f32>],
+            ) -> Result<(), ZaftError> {
+                unsafe { self.execute_d_oof_impl(src, dst, scratch) }
+            }
+
+            fn direction(&self) -> FftDirection {
+                self.direction
+            }
+
+            #[inline]
+            fn length(&self) -> usize {
+                self.execution_length
+            }
+
+            #[inline]
+            fn scratch_length(&self) -> usize {
+                self.execution_length + self.width_scratch_length
+            }
+
+            #[inline]
+            fn out_of_place_scratch_length(&self) -> usize {
+                self.execution_length + self.oof_width_scratch_length
+            }
+
+            #[inline]
+            fn destructive_scratch_length(&self) -> usize {
+                self.oof_width_scratch_length
+            }
+        }
+    };
+}
+
 define_mixed_radixd!(AvxMixedRadix2d, ColumnButterfly2d, "avx2,fma", 2);
 define_mixed_radixf!(AvxMixedRadix2f, ColumnButterfly2f, "avx2,fma", 2);
 define_mixed_radixd!(AvxMixedRadix3d, ColumnButterfly3d, "avx2,fma", 3);
@@ -1058,7 +1541,7 @@ define_mixed_radixf!(AvxMixedRadix5f, ColumnButterfly5f, "avx2,fma", 5);
 define_mixed_radixd!(AvxMixedRadix6d, ColumnButterfly6d, "avx2,fma", 6);
 define_mixed_radixf!(AvxMixedRadix6f, ColumnButterfly6f, "avx2,fma", 6);
 define_mixed_radixd!(AvxMixedRadix7d, ColumnButterfly7d, "avx2,fma", 7);
-define_mixed_radixf!(AvxMixedRadix7f, ColumnButterfly7f, "avx2,fma", 7);
+define_mixed_radix_streaming_f!(AvxMixedRadix7f, ColumnButterfly7f, "avx2,fma", 7);
 define_mixed_radixd!(AvxMixedRadix8d, ColumnButterfly8d, "avx2,fma", 8);
 define_mixed_radixd!(
     Avx512vlMixedRadix8d,
@@ -1066,8 +1549,8 @@ define_mixed_radixd!(
     "avx2,fma,avx512f,avx512vl",
     8
 );
-define_mixed_radixf!(AvxMixedRadix8f, ColumnButterfly8f, "avx2,fma", 8);
-define_mixed_radixf!(
+define_mixed_radix_streaming_f!(AvxMixedRadix8f, ColumnButterfly8f, "avx2,fma", 8);
+define_mixed_radix_streaming_f!(
     Avx512vlMixedRadix8f,
     ColumnButterfly8f,
     "avx2,fma,avx512f,avx512vl",
@@ -1076,19 +1559,19 @@ define_mixed_radixf!(
 define_mixed_radixd!(AvxMixedRadix9d, ColumnButterfly9d, "avx2,fma", 9);
 define_mixed_radixf!(AvxMixedRadix9f, ColumnButterfly9f, "avx2,fma", 9);
 define_mixed_radixd!(AvxMixedRadix10d, ColumnButterfly10d, "avx2,fma", 10);
-define_mixed_radixf!(AvxMixedRadix10f, ColumnButterfly10f, "avx2,fma", 10);
+define_mixed_radix_streaming_f!(AvxMixedRadix10f, ColumnButterfly10f, "avx2,fma", 10);
 define_mixed_radixd!(AvxMixedRadix11d, ColumnButterfly11d, "avx2,fma", 11);
-define_mixed_radixf!(AvxMixedRadix11f, ColumnButterfly11f, "avx2,fma", 11);
+define_mixed_radix_streaming_f!(AvxMixedRadix11f, ColumnButterfly11f, "avx2,fma", 11);
 define_mixed_radixd!(AvxMixedRadix12d, ColumnButterfly12d, "avx2,fma", 12);
-define_mixed_radixf!(AvxMixedRadix12f, ColumnButterfly12f, "avx2,fma", 12);
-define_mixed_radixf!(
+define_mixed_radix_streaming_f!(AvxMixedRadix12f, ColumnButterfly12f, "avx2,fma", 12);
+define_mixed_radix_streaming_f!(
     Avx512vlMixedRadix12f,
     ColumnButterfly12f,
     "avx2,fma,avx512f,avx512vl",
     12
 );
 define_mixed_radixd!(AvxMixedRadix13d, ColumnButterfly13d, "avx2,fma", 13);
-define_mixed_radixf!(AvxMixedRadix13f, ColumnButterfly13f, "avx2,fma", 13);
+define_mixed_radix_streaming_f!(AvxMixedRadix13f, ColumnButterfly13f, "avx2,fma", 13);
 
 #[cfg(test)]
 mod tests {

@@ -150,7 +150,7 @@ where
         {
             for (dst, input_pair) in output
                 .iter_mut()
-                .zip(input.chunks_exact(2))
+                .zip(input.as_chunks::<2>().0.iter())
                 .take(self.length / 2)
             {
                 *dst = Complex::new(input_pair[0], input_pair[1]);

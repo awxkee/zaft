@@ -380,7 +380,9 @@ pub(crate) trait AlgorithmFactory<T> {
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly35(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
-    fn butterfly36(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly36(
+        fft_direction: FftDirection,
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly37(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
@@ -413,7 +415,10 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly243(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly256(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly512(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly576(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly1024(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly1152(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly1296(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly1536(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly2048(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn radix3(
@@ -908,10 +913,10 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly36(
         _fft_direction: FftDirection,
-    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
-        make_optional_butterfly!(
-            FftExecutor,
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_default_butterfly!(
             _fft_direction,
+            Butterfly36,
             AvxButterfly36f,
             NeonButterfly36f,
             NeonFcmaButterfly36f
@@ -1245,6 +1250,19 @@ impl AlgorithmFactory<f32> for f32 {
         )
     }
 
+    fn butterfly576(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly512vl!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly576f,
+            Avx512vlButterfly576f,
+            NeonButterfly576f,
+            NeonFcmaButterfly576f
+        )
+    }
+
     fn butterfly1024(
         _fft_direction: FftDirection,
     ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
@@ -1295,6 +1313,67 @@ impl AlgorithmFactory<f32> for f32 {
                 }
             })
             .clone()
+    }
+
+    fn butterfly1152(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        static Q: OnceLock<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>> = OnceLock::new();
+        static B: OnceLock<Option<Arc<dyn FftExecutor<f32> + Send + Sync>>> = OnceLock::new();
+        let selector = match _fft_direction {
+            FftDirection::Forward => &Q,
+            FftDirection::Inverse => &B,
+        };
+        selector
+            .get_or_init(|| {
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                {
+                    if has_valid_avx512vl() {
+                        use crate::avx::Avx512vlButterfly1152f;
+                        return Some(Arc::new(Avx512vlButterfly1152f::new(_fft_direction)));
+                    }
+                    if has_valid_avx() {
+                        use crate::avx::AvxButterfly1152f;
+                        return Some(Arc::new(AvxButterfly1152f::new(_fft_direction)));
+                    }
+                }
+                #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                {
+                    #[cfg(feature = "fcma")]
+                    if std::arch::is_aarch64_feature_detected!("fcma") {
+                        return match _fft_direction {
+                            FftDirection::Forward => {
+                                use crate::neon::NeonFcmaForwardButterfly1152f;
+                                Some(Arc::new(NeonFcmaForwardButterfly1152f::new(_fft_direction)))
+                            }
+                            FftDirection::Inverse => {
+                                use crate::neon::NeonFcmaInverseButterfly1152f;
+                                Some(Arc::new(NeonFcmaInverseButterfly1152f::new(_fft_direction)))
+                            }
+                        };
+                    }
+                    use crate::neon::NeonButterfly1152f;
+                    Some(Arc::new(NeonButterfly1152f::new(_fft_direction)))
+                }
+                #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+                {
+                    None
+                }
+            })
+            .clone()
+    }
+
+    fn butterfly1296(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly512vl!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly1296f,
+            Avx512vlButterfly1296f,
+            NeonButterfly1296f,
+            NeonFcmaButterfly1296f
+        )
     }
 
     fn butterfly1536(
@@ -1493,28 +1572,18 @@ impl AlgorithmFactory<f32> for f32 {
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_radix!(
-            n,
-            fft_direction,
-            Radix11,
-            AvxFmaRadix11,
-            NeonRadix11,
-            NeonFcmaRadix11
-        )
+        use crate::Radix11;
+        Radix11::new(n, fft_direction)
+            .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
     }
 
     fn radix13(
         n: usize,
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
-        make_default_radix!(
-            n,
-            fft_direction,
-            Radix13,
-            AvxFmaRadix13,
-            NeonRadix13,
-            NeonFcmaRadix13
-        )
+        use crate::Radix13;
+        Radix13::new(n, fft_direction)
+            .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f32> + Send + Sync>)
     }
 
     fn dft(

@@ -66,7 +66,6 @@ impl AvxButterfly108f {
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
         let mut rows: [AvxStoreF; 9] = [AvxStoreF::zero(); 9];
-        let mut rows12: [AvxStoreF; 12] = [AvxStoreF::zero(); 12];
         let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 108];
         unsafe {
             // columns
@@ -108,25 +107,18 @@ impl AvxButterfly108f {
             // rows
 
             for k in 0..2 {
-                for i in 0..12 {
-                    rows12[i] =
-                        AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 9 + k * 4..));
-                }
-                rows12 = self.bf12.exec(rows12);
-                for i in 0..12 {
-                    rows12[i].write(chunk.slice_from_mut(i * 9 + k * 4..));
-                }
+                self.bf12.exec_streaming(
+                    |i| AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 9 + k * 4..)),
+                    |i, v| v.write(chunk.slice_from_mut(i * 9 + k * 4..)),
+                );
             }
 
             {
                 let k = 2;
-                for i in 0..12 {
-                    rows12[i] = AvxStoreF::from_complexu(scratch.get_unchecked(i * 9 + k * 4));
-                }
-                rows12 = self.bf12.exec(rows12);
-                for i in 0..12 {
-                    rows12[i].write_lo1(chunk.slice_from_mut(i * 9 + k * 4..));
-                }
+                self.bf12.exec_streaming(
+                    |i| AvxStoreF::from_complexu(scratch.get_unchecked(i * 9 + k * 4)),
+                    |i, v| v.write_lo1(chunk.slice_from_mut(i * 9 + k * 4..)),
+                );
             }
         }
     }

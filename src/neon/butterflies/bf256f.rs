@@ -89,15 +89,16 @@ macro_rules! gen_bf256f {
                     // rows
 
                     for k in 0..8 {
-                        for i in 0..16 {
-                            rows[i] = NeonStoreF::from_complex_refu(
-                                scratch.get_unchecked(i * 16 + k * 2..),
-                            );
-                        }
-                        rows = self.bf16.exec(rows);
-                        for i in 0..16 {
-                            rows[i].write(chunk.slice_from_mut(i * 16 + k * 2..));
-                        }
+                        self.bf16.exec_streaming(
+                            |i| {
+                                NeonStoreF::from_complex_refu(
+                                    scratch.get_unchecked(i * 16 + k * 2..),
+                                )
+                            },
+                            |i, v| {
+                                v.write(chunk.slice_from_mut(i * 16 + k * 2..));
+                            },
+                        )
                     }
                 }
             }

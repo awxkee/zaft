@@ -108,18 +108,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let c = group
         .measurement_time(Duration::from_millis(2500))
         .warm_up_time(Duration::from_millis(2500));
-    check_power_groups(c, 2048, "2048".to_string());
-    check_power_groups(c, 2744, "2744".to_string());
-    check_power_groups(c, 936, "936".to_string());
-    check_power_groups(c, 8 * 9, "8*9".to_string());
-    check_power_groups(c, 1372, "1372".to_string());
-    check_power_groups(c, 1250, "1250".to_string());
-    check_power_groups(c, 648, "648".to_string());
-    check_power_groups(c, 1331, "1331".to_string());
-    check_power_groups(c, 1352, "1352".to_string());
-    check_power_groups(c, 2197, "2197".to_string());
-    check_power_groups(c, 729, "729".to_string());
-    check_power_groups(c, 6561, "6561".to_string());
     //
     // check_power_groups(c, 2401, "2401".to_string());
     // check_power_groups(c, 3125, "3125".to_string());

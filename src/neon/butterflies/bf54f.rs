@@ -215,7 +215,7 @@ macro_rules! gen_bf54f {
                 // columns 8-9
 
                 for i in 0..6 {
-                    rows4[i] = NeonStoreF::from_complex(chunk.index(i * 9 + 8));
+                    rows4[i] = NeonStoreF::load_complex(chunk.index(i * 9 + 8));
                 }
 
                 rows4 = self.bf6.exec(rows4);

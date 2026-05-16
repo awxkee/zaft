@@ -190,6 +190,64 @@ impl ColumnButterfly7f {
             ]
         }
     }
+
+    #[inline(always)]
+    pub(crate) fn exec_streaming<A: Fn(usize) -> AvxStoreF, J: FnMut(usize, AvxStoreF)>(
+        &self,
+        v: A,
+        mut store: J,
+    ) {
+        unsafe {
+            let u0 = v(0).v;
+
+            let (x1p6, x1m6) = AvxButterfly::butterfly2_f32(v(1).v, v(6).v);
+            let (x2p5, x2m5) = AvxButterfly::butterfly2_f32(v(2).v, v(5).v);
+            let (x3p4, x3m4) = AvxButterfly::butterfly2_f32(v(3).v, v(4).v);
+
+            let x1m6 = self.rotate.rotate_m256(x1m6);
+            let x2m5 = self.rotate.rotate_m256(x2m5);
+            let x3m4 = self.rotate.rotate_m256(x3m4);
+
+            // y00
+            let y00 = _mm256_add_ps(u0, x1p6);
+            let y00 = _mm256_add_ps(y00, x2p5);
+            let y00 = _mm256_add_ps(y00, x3p4);
+            store(0, AvxStoreF::raw(y00));
+
+            // (y01, y06)
+            let m0106a = _mm256_fmadd_ps(x1p6, self.twiddle1_re, u0);
+            let m0106b = _mm256_mul_ps(x1m6, self.twiddle1_im);
+            let m0106a = _mm256_fmadd_ps(x2p5, self.twiddle2_re, m0106a);
+            let m0106b = _mm256_fmadd_ps(x2m5, self.twiddle2_im, m0106b);
+            let m0106a = _mm256_fmadd_ps(x3p4, self.twiddle3_re, m0106a);
+            let m0106b = _mm256_fmadd_ps(x3m4, self.twiddle3_im, m0106b);
+            let (y01, y06) = AvxButterfly::butterfly2_f32(m0106a, m0106b);
+            store(1, AvxStoreF::raw(y01));
+            store(6, AvxStoreF::raw(y06));
+
+            // (y02, y05)
+            let m0205a = _mm256_fmadd_ps(x1p6, self.twiddle2_re, u0);
+            let m0205b = _mm256_mul_ps(x1m6, self.twiddle2_im);
+            let m0205a = _mm256_fmadd_ps(x2p5, self.twiddle3_re, m0205a);
+            let m0205b = _mm256_fnmadd_ps(x2m5, self.twiddle3_im, m0205b);
+            let m0205a = _mm256_fmadd_ps(x3p4, self.twiddle1_re, m0205a);
+            let m0205b = _mm256_fnmadd_ps(x3m4, self.twiddle1_im, m0205b);
+            let (y02, y05) = AvxButterfly::butterfly2_f32(m0205a, m0205b);
+            store(2, AvxStoreF::raw(y02));
+            store(5, AvxStoreF::raw(y05));
+
+            // (y03, y04)
+            let m0304a = _mm256_fmadd_ps(x1p6, self.twiddle3_re, u0);
+            let m0304b = _mm256_mul_ps(x1m6, self.twiddle3_im);
+            let m0304a = _mm256_fmadd_ps(x2p5, self.twiddle1_re, m0304a);
+            let m0304b = _mm256_fnmadd_ps(x2m5, self.twiddle1_im, m0304b);
+            let m0304a = _mm256_fmadd_ps(x3p4, self.twiddle2_re, m0304a);
+            let m0304b = _mm256_fmadd_ps(x3m4, self.twiddle2_im, m0304b);
+            let (y03, y04) = AvxButterfly::butterfly2_f32(m0304a, m0304b);
+            store(3, AvxStoreF::raw(y03));
+            store(4, AvxStoreF::raw(y04));
+        }
+    }
 }
 
 pub(crate) struct ColumnRdftButterfly7f {

@@ -63,7 +63,6 @@ impl AvxButterfly192f {
     #[inline]
     #[target_feature(enable = "avx2", enable = "fma")]
     pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
-        let mut rows16: [AvxStoreF; 16] = [AvxStoreF::zero(); 16];
         let mut rows12: [AvxStoreF; 12] = [AvxStoreF::zero(); 12];
         let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 192];
         unsafe {
@@ -95,14 +94,10 @@ impl AvxButterfly192f {
             // rows
 
             for k in 0..3 {
-                for i in 0..16 {
-                    rows16[i] =
-                        AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 12 + k * 4..));
-                }
-                rows16 = self.bf16.exec(rows16);
-                for i in 0..16 {
-                    rows16[i].write(chunk.slice_from_mut(i * 12 + k * 4..));
-                }
+                self.bf16.exec_streaming(
+                    |i| AvxStoreF::from_complex_refu(scratch.get_unchecked(i * 12 + k * 4..)),
+                    |i, store| store.write(chunk.slice_from_mut(i * 12 + k * 4..)),
+                );
             }
         }
     }

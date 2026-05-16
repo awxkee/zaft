@@ -34,6 +34,8 @@ mod bf16;
 mod bf18;
 mod bf2;
 mod bf3;
+mod bf32;
+mod bf36;
 mod bf4;
 mod bf5;
 mod bf6;
@@ -97,10 +99,21 @@ pub(crate) use bf13::{
 pub(crate) use bf13::{ColumnFcmaButterfly13d, ColumnFcmaButterfly13f};
 pub(crate) use bf16::{ColumnButterfly16d, ColumnButterfly16f};
 #[cfg(feature = "fcma")]
-pub(crate) use bf16::{ColumnFcmaButterfly16d, ColumnFcmaButterfly16f};
+pub(crate) use bf16::{
+    ColumnFcmaButterfly16d, ColumnFcmaButterfly16f, ColumnFcmaForwardButterfly16f,
+    ColumnFcmaInverseButterfly16f,
+};
 pub(crate) use bf18::{ColumnButterfly18d, ColumnButterfly18f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf18::{ColumnFcmaButterfly18d, ColumnFcmaButterfly18f};
+pub(crate) use bf32::ColumnButterfly32f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf32::{
+    ColumnFcmaButterfly32f, ColumnFcmaForwardButterfly32f, ColumnFcmaInverseButterfly32f,
+};
+pub(crate) use bf36::ColumnButterfly36f;
+#[cfg(feature = "fcma")]
+pub(crate) use bf36::ColumnFcmaButterfly36f;
 #[cfg(feature = "fcma")]
 pub(crate) use mixed_radix::{
     NeonFcmaForwardMixedRadix4f, NeonFcmaForwardMixedRadix8f, NeonFcmaInverseMixedRadix4f,

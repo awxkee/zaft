@@ -88,19 +88,11 @@ impl AvxButterfly128d {
 
     #[target_feature(enable = "avx2,fma")]
     fn exec_bf16_2(&self, src: &[MaybeUninit<Complex<f64>>; 128], dst: &mut [Complex<f64>]) {
-        let mut rows16: [AvxStoreD; 16] = [AvxStoreD::zero(); 16];
         for k in 0..4 {
-            for i in 0..16 {
-                unsafe {
-                    rows16[i] = AvxStoreD::from_complex_refu(src.get_unchecked(i * 8 + k * 2..));
-                }
-            }
-            rows16 = self.bf16.exec(rows16);
-            for i in 0..16 {
-                unsafe {
-                    rows16[i].write(dst.get_unchecked_mut(i * 8 + k * 2..));
-                }
-            }
+            self.bf16.exec_streaming(
+                |i| unsafe { AvxStoreD::from_complex_refu(src.get_unchecked(i * 8 + k * 2..)) },
+                |i, store| unsafe { store.write(dst.get_unchecked_mut(i * 8 + k * 2..)) },
+            );
         }
     }
 

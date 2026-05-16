@@ -507,12 +507,12 @@ impl NeonFcmaSpectrumArithmetic<f32> {
             .zip(forward_twiddles.iter())
             .zip(backward_twiddles.iter().rev())
         {
-            let cell = NeonStoreF::from_complex(scratch_cell);
+            let cell = NeonStoreF::load_complex(scratch_cell);
             let fw = cell
-                .fcmul_fcma(NeonStoreF::from_complex(twiddle))
+                .fcmul_fcma(NeonStoreF::load_complex(twiddle))
                 .xor(conjugate_factors);
             let bw = cell
-                .fcmul_conj_a(NeonStoreF::from_complex(twiddle_rev))
+                .fcmul_conj_a(NeonStoreF::load_complex(twiddle_rev))
                 .xor(conjugate_factors);
             fw.write_single(scratch_cell);
             bw.write_single(scratch_cell_rev);

@@ -72,11 +72,18 @@ where
         let butterfly = match exponent {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly6(fft_direction)?,
-            2 => T::butterfly36(fft_direction).map_or_else(|| T::butterfly6(fft_direction), Ok)?,
-            _ => T::butterfly216(fft_direction).map_or_else(
-                || T::butterfly36(fft_direction).map_or_else(|| T::butterfly6(fft_direction), Ok),
-                Ok,
-            )?,
+            2 => T::butterfly36(fft_direction)
+                .ok()
+                .map_or_else(|| T::butterfly6(fft_direction), Ok)?,
+            3 => T::butterfly216(fft_direction)
+                .or_else(|| T::butterfly36(fft_direction).ok())
+                .or_else(|| T::butterfly6(fft_direction).ok())
+                .ok_or(ZaftError::Overflow)?,
+            _ => T::butterfly1296(fft_direction)
+                .or_else(|| T::butterfly216(fft_direction))
+                .or_else(|| T::butterfly36(fft_direction).ok())
+                .or_else(|| T::butterfly6(fft_direction).ok())
+                .ok_or(ZaftError::Overflow)?,
         };
 
         let butterfly_len = butterfly.length();
@@ -188,7 +195,7 @@ impl NeonFcmaRadix6<f64> {
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
             bitreversed_transpose::<Complex<f64>, 6>(self.butterfly_len, chunk, scratch);
-            self.butterfly.execute_out_of_place(&scratch, chunk)?;
+            self.butterfly.execute_out_of_place(scratch, chunk)?;
             self.base_run(chunk);
         }
         Ok(())
@@ -450,7 +457,7 @@ impl NeonFcmaRadix6<f32> {
         for chunk in in_place.chunks_exact_mut(self.execution_length) {
             // Digit-reversal permutation
             neon_bitreversed_transpose_f32_radix6(self.butterfly_len, chunk, scratch);
-            self.butterfly.execute_out_of_place(&scratch, chunk)?;
+            self.butterfly.execute_out_of_place(scratch, chunk)?;
             self.base_run(chunk);
         }
         Ok(())
