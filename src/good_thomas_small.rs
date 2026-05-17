@@ -171,6 +171,58 @@ where
             gather: T::make_gatherer(),
         })
     }
+
+    // fn generate_code(&self) -> String {
+    //     let n = self.execution_length;
+    //     let n1 = self.width;
+    //     let n2 = self.height;
+    //     let mut code = String::new();
+    //
+    //     // Precompute output_perm inverse: for each (row,col) in result grid,
+    //     // what sequential output index does it map to?
+    //     // output_perm[i] = src means chunk[i] = r{src/n1}_{src%n1}
+    //     // We need the reverse: given r{row}_{col}, which chunk[i] does it write to?
+    //     let mut grid_to_dst = vec![0usize; n];
+    //     for i in 0..n {
+    //         let src = self.output_permutation[i] as usize;
+    //         grid_to_dst[src] = i;
+    //     }
+    //
+    //     // bf_n1 — load directly from chunk via input_perm, no staging
+    //     for row in 0..n2 {
+    //         let base = row * n1;
+    //         let inputs: Vec<String> = (0..n1)
+    //             .map(|col| format!("chunk[{}]", self.input_permutation[base + col]))
+    //             .collect();
+    //         let outputs: Vec<String> = (0..n1).map(|col| format!("t{}_{}", row, col)).collect();
+    //         code.push_str(&format!(
+    //             "\t\tlet ({}) = self.bf{n1}.bf{n1}({});\n",
+    //             outputs.join(", "),
+    //             inputs.join(", ")
+    //         ));
+    //     }
+    //     code.push('\n');
+    //
+    //     // bf_n2 — compute each column and store outputs immediately
+    //     for col in 0..n1 {
+    //         let inputs: Vec<String> = (0..n2).map(|row| format!("t{}_{}", row, col)).collect();
+    //         let outputs: Vec<String> = (0..n2).map(|row| format!("r{}_{}", row, col)).collect();
+    //         code.push_str(&format!(
+    //             "\t\tlet ({}) = self.bf{n2}.bf{n2}({});\n",
+    //             outputs.join(", "),
+    //             inputs.join(", ")
+    //         ));
+    //         // Store immediately
+    //         for row in 0..n2 {
+    //             let flat = col * n2 + row;
+    //             let dst = grid_to_dst[flat];
+    //             code.push_str(&format!("\t\tchunk[{dst}] = r{row}_{col};\n"));
+    //         }
+    //         code.push('\n');
+    //     }
+    //
+    //     code
+    // }
 }
 
 fn build_input_permutation(width: usize, height: usize) -> Result<Vec<u32>, ZaftError> {
@@ -384,5 +436,94 @@ where
     fn destructive_scratch_length(&self) -> usize {
         self.width_scratch_length
             .max(self.height_destructive_scratch)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::dft::Dft;
+    use crate::good_thomas_small::GoodThomasSmallFft;
+    use crate::{FftDirection, FftExecutor, Zaft};
+    use num_complex::Complex;
+
+    #[test]
+    fn test_mixed_radixd() {
+        let src: [Complex<f64>; 45] = [
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.45, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(1.3, 1.6),
+            Complex::new(1.7, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+            Complex::new(-0.45, -0.4),
+            Complex::new(0.45, -0.4),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.45, -0.4),
+            Complex::new(8.2, -0.1),
+            Complex::new(0.9, 0.13),
+            Complex::new(3.25, 2.7),
+            Complex::new(0.654, 0.324),
+        ];
+        let good_thomas20 = GoodThomasSmallFft::new(
+            Zaft::strategy(5, FftDirection::Forward).unwrap(),
+            Zaft::strategy(9, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        // let code = good_thomas20.generate_code();
+        // println!("{}", code);
+        let mx = Dft::new(45, FftDirection::Forward).unwrap();
+        let mut reference_value = src.to_vec();
+        good_thomas20.execute(&mut reference_value).unwrap();
+        let mut test_value = src.to_vec();
+        mx.execute(&mut test_value).unwrap();
+        reference_value
+            .iter()
+            .zip(test_value.iter())
+            .enumerate()
+            .for_each(|(idx, (a, b))| {
+                assert!(
+                    (a.re - b.re).abs() < 1e-9,
+                    "a_re {} != b_re {} for at {idx}",
+                    a.re,
+                    b.re,
+                );
+                assert!(
+                    (a.im - b.im).abs() < 1e-9,
+                    "a_im {} != b_im {} for at {idx}",
+                    a.im,
+                    b.im,
+                );
+            });
     }
 }

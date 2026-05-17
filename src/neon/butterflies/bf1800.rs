@@ -1,5 +1,5 @@
 /*
- * // Copyright (c) Radzivon Bartoshyk 05/2026. All rights reserved.
+ * // Copyright (c) Radzivon Bartoshyk 5/2026. All rights reserved.
  * //
  * // Redistribution and use in source and binary forms, with or without modification,
  * // are permitted provided that the following conditions are met:
@@ -26,111 +26,117 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::butterflies::shared::{boring_neon_butterfly, gen_butterfly_twiddles_f32};
+use crate::FftDirection;
+use crate::FftExecutor;
+use crate::ZaftError;
+use crate::neon::butterflies::shared::boring_neon_butterfly;
+use crate::neon::butterflies::shared::gen_butterfly_twiddles_f32;
 use crate::neon::mixed::NeonStoreF;
 use crate::store::BidirectionalStore;
-use crate::{FftDirection, FftExecutor, ZaftError};
 use num_complex::Complex;
 use std::mem::MaybeUninit;
 
-macro_rules! gen_bf1536f {
-    ($name: ident, $features: literal, $internal_bf32: ident, $internal_bf48: ident, $mul: ident) => {
-        use crate::neon::mixed::$internal_bf32;
+macro_rules! gen_bf1800f {
+    ($name: ident, $features: literal, $internal_bf40: ident, $internal_bf45: ident, $mul: ident) => {
+        use crate::neon::mixed::{$internal_bf40, $internal_bf45};
         pub(crate) struct $name {
             direction: FftDirection,
-            bf32: $internal_bf32,
-            bf48: $internal_bf48,
-            twiddles: [NeonStoreF; 744],
+            bf40: $internal_bf40,
+            bf45: $internal_bf45,
+            twiddles: [NeonStoreF; 897],
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
                 Self {
                     direction: fft_direction,
-                    twiddles: gen_butterfly_twiddles_f32(48, 32, fft_direction, 1536),
-                    bf32: $internal_bf32::new(fft_direction),
-                    bf48: $internal_bf48::new(fft_direction),
+                    twiddles: gen_butterfly_twiddles_f32(45, 40, fft_direction, 1800),
+                    bf40: $internal_bf40::new(fft_direction),
+                    bf45: $internal_bf45::new(fft_direction),
                 }
             }
         }
 
         impl $name {
             #[target_feature(enable = $features)]
-            fn exec_bf48(&self, src: &[MaybeUninit<Complex<f32>>; 1536], dst: &mut [Complex<f32>]) {
-                for k in 0..16 {
-                    self.bf48.exec_streaming(
-                        |i| unsafe {
-                            NeonStoreF::from_complex_refu(src.get_unchecked(i * 32 + k * 2..))
-                        },
-                        |i, store| unsafe { store.write(dst.get_unchecked_mut(i * 32 + k * 2..)) },
-                    );
-                }
-            }
-        }
-
-        impl $name {
-            #[target_feature(enable = $features)]
-            fn exec_bf32(
+            fn exec_bf40(
                 &self,
                 src: &[Complex<f32>],
-                scratch: &mut [MaybeUninit<Complex<f32>>; 1536],
+                scratch: &mut [MaybeUninit<Complex<f32>>; 1800],
             ) {
-                for k in 0..24 {
-                    let tw = k * 31;
-                    self.bf32.exec_transpose_streaming(
+                for k in 0..22 {
+                    let tw = k * 39;
+                    self.bf40.exec_transpose_streaming(
                         |idx| unsafe {
-                            NeonStoreF::from_complex_ref(src.get_unchecked(k * 2 + idx * 48..))
+                            NeonStoreF::from_complex_ref(src.get_unchecked(k * 2 + 45 * idx..))
                         },
                         |idx| self.twiddles[tw + idx],
                         |idx, val| unsafe {
                             let row = k * 2 + idx % 2;
                             let col = (idx / 2) * 2;
-                            val.write_uninit(scratch.get_unchecked_mut(row * 32 + col..))
+                            val.write_uninit(scratch.get_unchecked_mut(row * 40 + col..))
+                        },
+                    );
+                }
+                {
+                    let k = 22;
+                    let tw = k * 39;
+                    self.bf40.exec_transpose_streaming(
+                        |idx| unsafe {
+                            NeonStoreF::from_complex(src.get_unchecked(k * 2 + 45 * idx))
+                        },
+                        |idx| self.twiddles[tw + idx],
+                        |idx, val| unsafe {
+                            let q = idx % 2;
+                            if q == 0 {
+                                let row = k * 2 + idx % 2;
+                                let col = (idx / 2) * 2;
+                                val.write_uninit(scratch.get_unchecked_mut(row * 40 + col..))
+                            }
                         },
                     );
                 }
             }
 
-            #[inline]
+            #[target_feature(enable = $features)]
+            fn exec_bf45(&self, src: &[MaybeUninit<Complex<f32>>; 1800], dst: &mut [Complex<f32>]) {
+                for k in 0..20 {
+                    self.bf45.exec_streaming(
+                        |i| unsafe {
+                            NeonStoreF::from_complex_refu(src.get_unchecked(i * 40 + k * 2..))
+                        },
+                        |i, store| unsafe { store.write(dst.get_unchecked_mut(i * 40 + k * 2..)) },
+                    );
+                }
+            }
+
             #[target_feature(enable = $features)]
             pub(crate) fn run<S: BidirectionalStore<Complex<f32>>>(&self, chunk: &mut S) {
-                let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 1536];
+                let mut scratch = [MaybeUninit::<Complex<f32>>::uninit(); 1800];
                 // columns
-                self.exec_bf32(chunk.slice_from(0..), &mut scratch);
+                self.exec_bf40(chunk.slice_from(0..), &mut scratch);
                 // rows
-                self.exec_bf48(&scratch, chunk.slice_from_mut(0..));
+                self.exec_bf45(&scratch, chunk.slice_from_mut(0..));
             }
         }
 
-        boring_neon_butterfly!($name, $features, f32, 1536);
+        boring_neon_butterfly!($name, $features, f32, 1800);
     };
 }
 
-use crate::neon::mixed::ColumnButterfly48f;
-#[cfg(feature = "fcma")]
-use crate::neon::mixed::ColumnFcmaButterfly48f;
-
-gen_bf1536f!(
-    NeonButterfly1536f,
+gen_bf1800f!(
+    NeonButterfly1800f,
     "neon",
-    ColumnButterfly32f,
-    ColumnButterfly48f,
+    ColumnButterfly40f,
+    ColumnButterfly45f,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
-gen_bf1536f!(
-    NeonFcmaForwardButterfly1536f,
+gen_bf1800f!(
+    NeonFcmaButterfly1800f,
     "fcma",
-    ColumnFcmaForwardButterfly32f,
-    ColumnFcmaButterfly48f,
-    fcmul_fcma
-);
-#[cfg(feature = "fcma")]
-gen_bf1536f!(
-    NeonFcmaInverseButterfly1536f,
-    "fcma",
-    ColumnFcmaInverseButterfly32f,
-    ColumnFcmaButterfly48f,
+    ColumnFcmaButterfly40f,
+    ColumnFcmaButterfly45f,
     fcmul_fcma
 );
 
@@ -145,8 +151,8 @@ mod tests {
         if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
             return;
         }
-        test_butterfly!(test_neon_butterfly1536, f32, NeonButterfly1536f, 1536, 1e-2);
-        test_neon_butterfly1536();
+        test_butterfly!(test_neon_butterfly1800, f32, NeonButterfly1800f, 1800, 1e-2);
+        test_neon_butterfly1800();
     }
 
     #[test]
@@ -156,12 +162,12 @@ mod tests {
             return;
         }
         test_oof_butterfly!(
-            test_oof_neon_butterfly1536,
+            test_oof_neon_butterfly1800,
             f32,
-            NeonButterfly1536f,
-            1536,
+            NeonButterfly1800f,
+            1800,
             1e-2
         );
-        test_oof_neon_butterfly1536();
+        test_oof_neon_butterfly1800();
     }
 }

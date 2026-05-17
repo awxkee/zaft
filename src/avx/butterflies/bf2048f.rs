@@ -77,7 +77,7 @@ impl Avx512vlButterfly2048f {
 
 impl Avx512vlButterfly2048f {
     #[target_feature(enable = "avx2,fma,avx512f,avx512vl")]
-    fn exec_bf64(&self, src: &mut [MaybeUninit<Complex<f32>>; 2048], dst: &mut [Complex<f32>]) {
+    fn exec_bf64(&self, src: &[MaybeUninit<Complex<f32>>; 2048], dst: &mut [Complex<f32>]) {
         unsafe {
             for k in 0..8 {
                 macro_rules! load {
@@ -361,7 +361,7 @@ impl Avx512vlButterfly2048f {
         // columns
         self.exec_bf32(chunk.slice_from(0..), &mut scratch);
         // rows
-        self.exec_bf64(&mut scratch, chunk.slice_from_mut(0..));
+        self.exec_bf64(&scratch, chunk.slice_from_mut(0..));
     }
 }
 

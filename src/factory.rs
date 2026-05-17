@@ -386,7 +386,9 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly37(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
-    fn butterfly40(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly40(
+        fft_direction: FftDirection,
+    ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
     fn butterfly41(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>;
@@ -420,6 +422,7 @@ pub(crate) trait AlgorithmFactory<T> {
     fn butterfly1152(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly1296(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly1536(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    fn butterfly1800(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn butterfly2048(fft_direction: FftDirection) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
     fn radix3(
         n: usize,
@@ -931,10 +934,10 @@ impl AlgorithmFactory<f32> for f32 {
 
     fn butterfly40(
         _fft_direction: FftDirection,
-    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
-        make_optional_butterfly!(
-            FftExecutor,
+    ) -> Result<Arc<dyn FftExecutor<f32> + Send + Sync>, ZaftError> {
+        make_default_butterfly!(
             _fft_direction,
+            Butterfly40,
             AvxButterfly40f,
             NeonButterfly40f,
             NeonFcmaButterfly40f
@@ -1402,20 +1405,16 @@ impl AlgorithmFactory<f32> for f32 {
                 {
                     #[cfg(feature = "fcma")]
                     if std::arch::is_aarch64_feature_detected!("fcma") {
-                        match _fft_direction {
+                        return match _fft_direction {
                             FftDirection::Forward => {
                                 use crate::neon::NeonFcmaForwardButterfly1536f;
-                                return Some(Arc::new(NeonFcmaForwardButterfly1536f::new(
-                                    _fft_direction,
-                                )));
+                                Some(Arc::new(NeonFcmaForwardButterfly1536f::new(_fft_direction)))
                             }
                             FftDirection::Inverse => {
                                 use crate::neon::NeonFcmaInverseButterfly1536f;
-                                return Some(Arc::new(NeonFcmaInverseButterfly1536f::new(
-                                    _fft_direction,
-                                )));
+                                Some(Arc::new(NeonFcmaInverseButterfly1536f::new(_fft_direction)))
                             }
-                        }
+                        };
                     }
                     use crate::neon::NeonButterfly1536f;
                     Some(Arc::new(NeonButterfly1536f::new(_fft_direction)))
@@ -1426,6 +1425,19 @@ impl AlgorithmFactory<f32> for f32 {
                 }
             })
             .clone()
+    }
+
+    fn butterfly1800(
+        _fft_direction: FftDirection,
+    ) -> Option<Arc<dyn FftExecutor<f32> + Send + Sync>> {
+        make_optional_butterfly512vl!(
+            FftExecutor,
+            _fft_direction,
+            AvxButterfly1800f,
+            Avx512vlButterfly1800f,
+            NeonButterfly1800f,
+            NeonFcmaButterfly1800f
+        )
     }
 
     fn butterfly2048(
