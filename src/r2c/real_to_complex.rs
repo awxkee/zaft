@@ -122,7 +122,7 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
+        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
         self.execute_with_scratch(input, output, scratch.as_mut_slice())
     }
 

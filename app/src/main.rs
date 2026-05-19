@@ -348,7 +348,7 @@ fn main() {
     // println!("{}", rs.0);
     // println!("{}", rs.1);
 
-    let mut data = vec![Complex::new(0.0019528865, 0.); 1800];
+    let mut data = vec![Complex::new(0.0019528865, 0.); 63];
     let mut c = Criterion::default().sample_size(10);
     for (i, chunk) in data.iter_mut().enumerate() {
         *chunk = Complex::new(-0.19528865 + i as f32 * 0.1, 0.0019528865 - i as f32 * 0.1);
@@ -359,14 +359,14 @@ fn main() {
     let forward = Zaft::make_forward_fft_f32(cvt.len()).unwrap();
     let inverse = Zaft::make_inverse_fft_f32(cvt.len()).unwrap();
 
-    let mut planner = FftPlanner::<f32>::new();
-
-    let planned_fft = planner.plan_fft_forward(data.len());
-    let planned_fft_inv = planner.plan_fft_inverse(data.len());
+    // let mut planner = FftPlanner::<f32>::new();
+    //
+    // let planned_fft = planner.plan_fft_forward(data.len());
+    // let planned_fft_inv = planner.plan_fft_inverse(data.len());
 
     // let mut output = vec![Complex::zero(); o_data.len()];
     forward.execute(&mut data).unwrap();
-    planned_fft.process(&mut cvt);
+    // planned_fft.process(&mut cvt);
 
     println!("Rust fft forward -----");
 

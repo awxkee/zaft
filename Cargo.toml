@@ -23,11 +23,15 @@ pxfm = "^0.1.29"
 num-integer = "0.1.46"
 novtb = "0.1.13"
 
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+getrandom = { version = "0.4.2", features = ["wasm_js"] }
+wasm-bindgen-test = "0.3.64"
+
 [dev-dependencies]
 rand = "0.10.0"
 
 [features]
-default = ["neon", "avx"]
+default = ["neon", "avx", "wasm"]
 # Aarch64 NEON intrinsics
 neon = []
 # Aarch64 FCMA feature, nightly is required
@@ -36,6 +40,7 @@ fcma = ["neon"]
 avx = []
 # Allows to use SVE, backups only few algorihms, NEON still is a baseline
 sve = ["neon"]
+wasm = []
 
 [package.metadata.docs.rs]
 # To build locally:

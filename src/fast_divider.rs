@@ -308,6 +308,9 @@ mod tests {
     use std::hint::black_box;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_node_experimental);
+
     struct Rng {
         state: u64,
     }

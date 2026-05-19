@@ -36,12 +36,11 @@ use num_complex::Complex;
 use std::mem::MaybeUninit;
 
 macro_rules! gen_bf128d {
-    ($name: ident, $features: literal, $internal_bf16: ident, $internal_bf8: ident, $mul: ident) => {
-        use crate::neon::mixed::{$internal_bf8, $internal_bf16};
+    ($name: ident, $features: literal, $internal_bf16: ident,  $mul: ident) => {
+        use crate::neon::mixed::$internal_bf16;
         pub(crate) struct $name {
             direction: FftDirection,
             bf16: $internal_bf16,
-            bf8: $internal_bf8,
             twiddles: [NeonStoreD; 112],
         }
 
@@ -51,7 +50,6 @@ macro_rules! gen_bf128d {
                     direction: fft_direction,
                     twiddles: gen_butterfly_twiddles_f64(16, 8, fft_direction, 128),
                     bf16: $internal_bf16::new(fft_direction),
-                    bf8: $internal_bf8::new(fft_direction),
                 }
             }
         }
@@ -63,7 +61,6 @@ macro_rules! gen_bf128d {
             #[target_feature(enable = $features)]
             pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
                 let mut rows: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
-                let mut rows16: [NeonStoreD; 16] = [NeonStoreD::default(); 16];
 
                 let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 128];
                 unsafe {
@@ -73,7 +70,7 @@ macro_rules! gen_bf128d {
                             rows[i] = NeonStoreD::from_complex_ref(chunk.slice_from(i * 16 + k..));
                         }
 
-                        rows = self.bf8.exec(rows);
+                        rows = self.bf16.bf8.exec(rows);
 
                         if k > 0 {
                             for i in 1..8 {
@@ -89,14 +86,10 @@ macro_rules! gen_bf128d {
                     // rows
 
                     for k in 0..8 {
-                        for i in 0..16 {
-                            rows16[i] =
-                                NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 8 + k..));
-                        }
-                        rows16 = self.bf16.exec(rows16);
-                        for i in 0..16 {
-                            rows16[i].write(chunk.slice_from_mut(i * 8 + k..));
-                        }
+                        self.bf16.exec_streaming(
+                            |i| NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 8 + k..)),
+                            |i, v| v.write(chunk.slice_from_mut(i * 8 + k..)),
+                        );
                     }
                 }
             }
@@ -108,7 +101,6 @@ gen_bf128d!(
     NeonButterfly128d,
     "neon",
     ColumnButterfly16d,
-    ColumnButterfly8d,
     mul_by_complex
 );
 #[cfg(feature = "fcma")]
@@ -116,7 +108,6 @@ gen_bf128d!(
     NeonFcmaButterfly128d,
     "fcma",
     ColumnFcmaButterfly16d,
-    ColumnFcmaButterfly8d,
     fcmul_fcma
 );
 

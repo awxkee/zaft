@@ -38,6 +38,23 @@ jobs:
       - run: RUSTFLAGS="-C target-feature=+avx2" cargo +nightly build --target x86_64-unknown-linux-gnu --no-default-features --features avx
       - run: RUSTFLAGS="-C target-feature=+simd128" cargo build --target wasm32-unknown-unknown
 
+  tests_wasm:
+    name: Tests WASM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v6
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: "latest"
+      - name: Run test suites with wasm-pack
+        run: wasm-pack test --node
+
   tests_arm:
     name: Tests
     strategy:
@@ -47,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo test  --no-default-features --features "${{ matrix.features }}"
+      - run: cargo test --no-default-features --features "${{ matrix.features }}"
 
   tests_x86:
     name: Tests
@@ -83,8 +100,13 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-unknown
+      - run: rustup component add clippy
       - run: cargo clippy -- -D warnings
+      - run: cargo clippy --all-features -- -D warnings
+      - run: cargo clippy --target wasm32-unknown-unknown -- -D warnings
 
   fuzz_arm:
     name: Fuzzing ARM

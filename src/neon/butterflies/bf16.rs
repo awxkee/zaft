@@ -230,7 +230,12 @@ macro_rules! gen_bf16f {
                     let mut rows0: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
                     let mut rows1: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
 
-                    for (dst, src) in dst.chunks_exact_mut(9).zip(src.chunks_exact(16)) {
+                    for (dst, src) in dst
+                        .as_chunks_mut::<9>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<16>().0.iter())
+                    {
                         // columns
                         for i in 0..4 {
                             let q = NeonStoreF::load(src.get_unchecked(i * 4..));

@@ -76,6 +76,9 @@ where
         if output.is_empty() {
             return Err(ZaftError::InvalidSizeMultiplier(output.len(), 1));
         }
+        if input.len() != output.len() {
+            return Err(ZaftError::InvalidSamplesCount(input.len(), output.len()));
+        }
         for (dst, src) in output.iter_mut().zip(input.iter()) {
             *dst = Complex::new(*src, 0.0f64.as_())
         }
@@ -111,6 +114,9 @@ impl<T: Copy + 'static> C2RFftExecutor<T> for OneSizedRealFft<T> {
         }
         if output.is_empty() {
             return Err(ZaftError::InvalidSizeMultiplier(output.len(), 1));
+        }
+        if input.len() != output.len() {
+            return Err(ZaftError::InvalidSamplesCount(input.len(), output.len()));
         }
         for (dst, src) in output.iter_mut().zip(input.iter()) {
             *dst = src.re
@@ -206,8 +212,58 @@ mod tests {
     use crate::*;
     use rand::RngExt;
 
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_node_experimental);
+
+    platform_test! {
+        fn test_r2c_and_c2r() {
+            if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+                return;
+            }
+            for i in 64..65 {
+                let data = (0..i)
+                    .map(|_| Complex::<f32>::new(rand::rng().random_range(-1.0..1.0), 0.))
+                    .collect::<Vec<_>>();
+
+                let mut real_data = data.iter().map(|x| x.re).collect::<Vec<_>>();
+                let real_data_ref = real_data.clone();
+
+                let forward_r2c = Zaft::make_r2c_fft_f32(data.len()).unwrap();
+                let inverse_r2c = Zaft::make_c2r_fft_f32(data.len()).unwrap();
+
+                let mut complex_data = vec![Complex::<f32>::default(); data.len() / 2 + 1];
+                forward_r2c
+                    .execute(&real_data, &mut complex_data)
+                    .expect(&format!("R2C Failed for size {i}"));
+
+                inverse_r2c
+                    .execute(&complex_data, &mut real_data)
+                    .expect(&format!("C2R Failed for size {i}"));
+
+                real_data = real_data
+                    .iter()
+                    .map(|&x| x * (1.0 / real_data.len() as f32))
+                    .collect();
+
+                real_data
+                    .iter()
+                    .zip(real_data_ref)
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a - b).abs() < 1e-2,
+                            "a_re {}, b_re {} at {idx} at size {}",
+                            a,
+                            b,
+                            data.len()
+                        );
+                    });
+            }
+        }
+    }
+
     #[test]
-    fn test_r2c_and_c2r() {
+    fn test_r2c_and_c2r1() {
         if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
             return;
         }
@@ -229,7 +285,7 @@ mod tests {
 
             inverse_r2c
                 .execute(&complex_data, &mut real_data)
-                .expect(&format!("R2C Failed for size {i}"));
+                .expect(&format!("C2R Failed for size {i}"));
 
             real_data = real_data
                 .iter()

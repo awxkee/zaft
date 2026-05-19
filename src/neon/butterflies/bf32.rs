@@ -26,34 +26,27 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::neon::butterflies::shared::{
-    boring_neon_butterfly, gen_butterfly_twiddles_f32, gen_butterfly_twiddles_f64,
-};
-use crate::neon::mixed::{NeonStoreD, NeonStoreF};
+use crate::neon::butterflies::shared::{boring_neon_butterfly, gen_butterfly_twiddles_f32};
+use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::neon_transpose_f32x2_2x2_impl;
-use crate::store::BidirectionalStore;
+use crate::store::{BidirectionalStore, InPlaceStore};
 use crate::{FftDirection, FftExecutor, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
 use std::arch::aarch64::*;
-use std::mem::MaybeUninit;
 
 macro_rules! gen_bf32d {
-    ($name: ident, $features: literal, $internal_bf8: ident, $internal_bf4: ident, $mul: ident) => {
-        use crate::neon::mixed::{$internal_bf4, $internal_bf8};
+    ($name: ident, $features: literal, $internal_bf32: ident) => {
+        use crate::neon::mixed::$internal_bf32;
         pub(crate) struct $name {
             direction: FftDirection,
-            bf4: $internal_bf4,
-            bf8: $internal_bf8,
-            twiddles: [NeonStoreD; 24],
+            bf32: $internal_bf32,
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
                 Self {
                     direction: fft_direction,
-                    twiddles: gen_butterfly_twiddles_f64(8, 4, fft_direction, 32),
-                    bf8: $internal_bf8::new(fft_direction),
-                    bf4: $internal_bf4::new(fft_direction),
+                    bf32: $internal_bf32::new(fft_direction),
                 }
             }
         }
@@ -64,43 +57,7 @@ macro_rules! gen_bf32d {
             #[inline]
             #[target_feature(enable = $features)]
             pub(crate) fn run<S: BidirectionalStore<Complex<f64>>>(&self, chunk: &mut S) {
-                let mut rows0: [NeonStoreD; 4] = [NeonStoreD::default(); 4];
-                let mut rows8: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
-
-                let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 32];
-
-                unsafe {
-                    for k in 0..8 {
-                        rows0[0] = NeonStoreD::from_complex_ref(chunk.slice_from(k..));
-                        rows0[1] = NeonStoreD::from_complex_ref(chunk.slice_from(8 + k..));
-                        rows0[2] = NeonStoreD::from_complex_ref(chunk.slice_from(2 * 8 + k..));
-                        rows0[3] = NeonStoreD::from_complex_ref(chunk.slice_from(3 * 8 + k..));
-
-                        rows0 = self.bf4.exec(rows0);
-
-                        for i in 1..4 {
-                            rows0[i] = NeonStoreD::$mul(rows0[i], self.twiddles[i - 1 + 3 * k]);
-                        }
-
-                        rows0[0].write_uninit(scratch.get_unchecked_mut(k * 4..));
-                        rows0[1].write_uninit(scratch.get_unchecked_mut(k * 4 + 1..));
-                        rows0[2].write_uninit(scratch.get_unchecked_mut(k * 4 + 2..));
-                        rows0[3].write_uninit(scratch.get_unchecked_mut(k * 4 + 3..));
-                    }
-
-                    // rows
-
-                    for k in 0..4 {
-                        for i in 0..8 {
-                            rows8[i] =
-                                NeonStoreD::from_complex_refu(scratch.get_unchecked(i * 4 + k..));
-                        }
-                        rows8 = self.bf8.exec(rows8);
-                        for i in 0..8 {
-                            rows8[i].write(chunk.slice_from_mut(i * 4 + k..));
-                        }
-                    }
-                }
+                self.bf32.exec_store(chunk);
             }
         }
 
@@ -120,76 +77,8 @@ macro_rules! gen_bf32d {
                     ));
                 }
 
-                unsafe {
-                    let mut rows0: [NeonStoreD; 4] = [NeonStoreD::default(); 4];
-                    let mut rows1: [NeonStoreD; 4] = [NeonStoreD::default(); 4];
-                    let mut rows8: [NeonStoreD; 8] = [NeonStoreD::default(); 8];
-
-                    let mut scratch = [MaybeUninit::<Complex<f64>>::uninit(); 32];
-
-                    for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
-                        for k in 0..4 {
-                            let [v0_0, v0_1] =
-                                NeonStoreD::load(src.get_unchecked(k * 2..)).to_complex();
-                            let [v1_0, v1_1] =
-                                NeonStoreD::load(src.get_unchecked(8 + k * 2..)).to_complex();
-                            let [v2_0, v2_1] =
-                                NeonStoreD::load(src.get_unchecked(2 * 8 + k * 2..)).to_complex();
-                            let [v3_0, v3_1] =
-                                NeonStoreD::load(src.get_unchecked(3 * 8 + k * 2..)).to_complex();
-                            rows0[0] = v0_0;
-                            rows1[0] = v0_1;
-                            rows0[1] = v1_0;
-                            rows1[1] = v1_1;
-                            rows0[2] = v2_0;
-                            rows1[2] = v2_1;
-                            rows0[3] = v3_0;
-                            rows1[3] = v3_1;
-
-                            rows0 = self.bf4.exec(rows0);
-                            rows1 = self.bf4.exec(rows1);
-
-                            for i in 1..4 {
-                                rows0[i] =
-                                    NeonStoreD::$mul(rows0[i], self.twiddles[i - 1 + 3 * k * 2]);
-                                rows1[i] = NeonStoreD::$mul(
-                                    rows1[i],
-                                    self.twiddles[i - 1 + 3 * (k * 2 + 1)],
-                                );
-                            }
-
-                            let qk = k * 2;
-
-                            rows0[0].write_uninit(scratch.get_unchecked_mut(qk * 4..));
-                            rows0[1].write_uninit(scratch.get_unchecked_mut(qk * 4 + 1..));
-                            rows0[2].write_uninit(scratch.get_unchecked_mut(qk * 4 + 2..));
-                            rows0[3].write_uninit(scratch.get_unchecked_mut(qk * 4 + 3..));
-
-                            let qk2 = k * 2 + 1;
-
-                            rows1[0].write_uninit(scratch.get_unchecked_mut(qk2 * 4..));
-                            rows1[1].write_uninit(scratch.get_unchecked_mut(qk2 * 4 + 1..));
-                            rows1[2].write_uninit(scratch.get_unchecked_mut(qk2 * 4 + 2..));
-                            rows1[3].write_uninit(scratch.get_unchecked_mut(qk2 * 4 + 3..));
-                        }
-
-                        // rows
-
-                        for k in 0..4 {
-                            for i in 0..8 {
-                                rows8[i] = NeonStoreD::from_complex_refu(
-                                    scratch.get_unchecked(i * 4 + k..),
-                                );
-                            }
-                            rows8 = self.bf8.exec(rows8);
-                            for i in 0..4 {
-                                rows8[i].write(dst.get_unchecked_mut(i * 4 + k..));
-                            }
-                            if k == 0 {
-                                rows8[4].write(dst.get_unchecked_mut(16..));
-                            }
-                        }
-                    }
+                for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
+                    self.bf32.exec_store_r2c(src, &mut InPlaceStore::new(dst));
                 }
                 Ok(())
             }
@@ -224,21 +113,9 @@ macro_rules! gen_bf32d {
     };
 }
 
-gen_bf32d!(
-    NeonButterfly32d,
-    "neon",
-    ColumnButterfly8d,
-    ColumnButterfly4d,
-    mul_by_complex
-);
+gen_bf32d!(NeonButterfly32d, "neon", ColumnButterfly32d);
 #[cfg(feature = "fcma")]
-gen_bf32d!(
-    NeonFcmaButterfly32d,
-    "fcma",
-    ColumnFcmaButterfly8d,
-    ColumnFcmaButterfly4d,
-    fcmul_fcma
-);
+gen_bf32d!(NeonFcmaButterfly32d, "fcma", ColumnFcmaButterfly32d);
 
 #[inline(always)]
 pub(crate) fn transpose_8x4_to_4x8_f32(

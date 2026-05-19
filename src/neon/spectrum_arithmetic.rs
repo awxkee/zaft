@@ -184,9 +184,11 @@ impl ComplexArith<f32> for NeonSpectrumArithmetic<f32> {
         let b = b.as_chunks::<8>().1;
 
         for ((dst, src), twiddle) in dst
-            .chunks_exact_mut(2)
-            .zip(a.chunks_exact(2))
-            .zip(b.chunks_exact(2))
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(a.as_chunks::<2>().0.iter())
+            .zip(b.as_chunks::<2>().0.iter())
         {
             let s0 = NeonStoreF::load2(src).to_complex()[0];
             let q0 = NeonStoreF::from_complex_ref(twiddle);

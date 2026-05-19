@@ -347,4 +347,74 @@ mod tests {
                 );
             });
     }
+
+    // #[test]
+    // fn test_good_thomas_width_one() {
+    //     // width=1, height=7 — coprime, width ends up as 1 after possible swap
+    //     let gt = GoodThomasFft::new(
+    //         Zaft::strategy(1, FftDirection::Forward).unwrap(),
+    //         Zaft::strategy(7, FftDirection::Forward).unwrap(),
+    //     )
+    //         .unwrap();
+    //     let mut data: Vec<Complex<f64>> = (0..7)
+    //         .map(|i| Complex::new(i as f64, -(i as f64)))
+    //         .collect();
+    //     gt.execute(&mut data).unwrap();
+    // }
+
+    // #[test]
+    // fn test_good_thomas_height_one() {
+    //     // height=1, width=7 — swapped internally so width becomes 1
+    //     let gt = GoodThomasFft::new(
+    //         Zaft::strategy(7, FftDirection::Forward).unwrap(),
+    //         Zaft::strategy(1, FftDirection::Forward).unwrap(),
+    //     )
+    //         .unwrap();
+    //     let mut data: Vec<Complex<f64>> = (0..7)
+    //         .map(|i| Complex::new(i as f64, 0.0))
+    //         .collect();
+    //     gt.execute(&mut data).unwrap();
+    // }
+
+    #[test]
+    fn test_mixed_radix_width_one() {
+        let mx = MixedRadix::new(
+            Zaft::strategy(1, FftDirection::Forward).unwrap(),
+            Zaft::strategy(7, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        let mut data: Vec<Complex<f64>> = (0..7)
+            .map(|i| Complex::new(i as f64, -(i as f64)))
+            .collect();
+        mx.execute(&mut data).unwrap();
+    }
+
+    #[test]
+    fn test_mixed_radix_height_one() {
+        let mx = MixedRadix::new(
+            Zaft::strategy(7, FftDirection::Forward).unwrap(),
+            Zaft::strategy(1, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        let mut data: Vec<Complex<f64>> = (0..7).map(|i| Complex::new(i as f64, 0.0)).collect();
+        mx.execute(&mut data).unwrap();
+    }
+
+    // #[test]
+    // fn test_good_thomas_one_by_one_roundtrip() {
+    //     // Degenerate: 1×1 FFT of a single element — should be identity
+    //     // gcd(1,1)=1 so it's technically valid for Good-Thomas
+    //     let gt_fwd = GoodThomasFft::new(
+    //         Zaft::strategy(1, FftDirection::Forward).unwrap(),
+    //         Zaft::strategy(1, FftDirection::Forward).unwrap(),
+    //     );
+    //     // This may legitimately fail construction (gcd check or size=1 assert),
+    //     // so just verify it doesn't panic with an OOB trap:
+    //     if let Ok(gt) = gt_fwd {
+    //         let mut data = vec![Complex::new(3.0f64, -1.0)];
+    //         gt.execute(&mut data).unwrap();
+    //         assert!((data[0].re - 3.0).abs() < 1e-12);
+    //         assert!((data[0].im - (-1.0)).abs() < 1e-12);
+    //     }
+    // }
 }
