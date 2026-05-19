@@ -109,10 +109,11 @@ pub(crate) use bf16::{
 pub(crate) use bf18::{ColumnButterfly18d, ColumnButterfly18f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf18::{ColumnFcmaButterfly18d, ColumnFcmaButterfly18f};
-pub(crate) use bf32::ColumnButterfly32f;
+pub(crate) use bf32::{ColumnButterfly32d, ColumnButterfly32f};
 #[cfg(feature = "fcma")]
 pub(crate) use bf32::{
-    ColumnFcmaButterfly32f, ColumnFcmaForwardButterfly32f, ColumnFcmaInverseButterfly32f,
+    ColumnFcmaButterfly32d, ColumnFcmaButterfly32f, ColumnFcmaForwardButterfly32f,
+    ColumnFcmaInverseButterfly32f,
 };
 pub(crate) use bf36::ColumnButterfly36f;
 #[cfg(feature = "fcma")]

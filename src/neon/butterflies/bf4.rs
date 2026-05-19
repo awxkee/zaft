@@ -64,7 +64,7 @@ impl FftExecutor<f32> for NeonButterfly4<f32> {
         let z_mul = unsafe { vld1q_f32(self.multiplier.as_ptr()) };
         let v_i_multiplier = unsafe { vreinterpretq_u32_f32(z_mul) };
 
-        for chunk in in_place.chunks_exact_mut(16) {
+        for chunk in in_place.as_chunks_mut::<16>().0.iter_mut() {
             unsafe {
                 let uzp0 = vld4q_f64(chunk.as_ptr().cast());
                 let uzp1 = vld4q_f64(chunk.get_unchecked(8..).as_ptr().cast());
@@ -116,7 +116,7 @@ impl FftExecutor<f32> for NeonButterfly4<f32> {
 
         let rem = in_place.chunks_exact_mut(16).into_remainder();
 
-        for chunk in rem.chunks_exact_mut(8) {
+        for chunk in rem.as_chunks_mut::<8>().0.iter_mut() {
             unsafe {
                 let uzp = vld4q_f64(chunk.as_ptr().cast());
 

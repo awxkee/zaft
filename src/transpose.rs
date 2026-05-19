@@ -205,93 +205,123 @@ impl TransposeFactory<f32> for f32 {
                 phantom_data: Default::default(),
             })
         }
+        #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+        {
+            if _height.is_multiple_of(9) {
+                use crate::wasm::WasmTransposeNx9F32;
+                return Box::new(WasmTransposeNx9F32::default());
+            }
+            if _height.is_multiple_of(8) {
+                use crate::wasm::WasmTransposeNx8F32;
+                return Box::new(WasmTransposeNx8F32::default());
+            }
+            if _height.is_multiple_of(7) {
+                use crate::wasm::WasmTransposeNx7F32;
+                return Box::new(WasmTransposeNx7F32::default());
+            }
+            if _height.is_multiple_of(5) {
+                use crate::wasm::WasmTransposeNx5F32;
+                return Box::new(WasmTransposeNx5F32::default());
+            }
+            if _height.is_multiple_of(4) {
+                use crate::wasm::WasmTransposeNx4F32;
+                return Box::new(WasmTransposeNx4F32::default());
+            }
+            if _height.is_multiple_of(3) {
+                use crate::wasm::WasmTransposeNx3F32;
+                return Box::new(WasmTransposeNx3F32::default());
+            }
+            if _height.is_multiple_of(2) {
+                use crate::wasm::WasmTransposeNx2F32;
+                return Box::new(WasmTransposeNx2F32::default());
+            }
+        }
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            if std::arch::is_x86_feature_detected!("avx2") {
+                if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
+                    use crate::avx::AvxTransposeF327x7;
+                    return Box::new(AvxTransposeF327x7::default());
+                }
+                if _width.is_multiple_of(5) && _height.is_multiple_of(5) {
+                    use crate::avx::AvxTransposeF325x5;
+                    return Box::new(AvxTransposeF325x5::default());
+                }
+                if _width.is_multiple_of(7) && _height.is_multiple_of(5) {
+                    use crate::avx::AvxTransposeF327x5;
+                    return Box::new(AvxTransposeF327x5::default());
+                }
+                if _width.is_multiple_of(7) && _height.is_multiple_of(6) {
+                    use crate::avx::AvxTransposeF327x6;
+                    return Box::new(AvxTransposeF327x6::default());
+                }
+                // generic multiple of N
+                if _height.is_multiple_of(16) {
+                    use crate::avx::AvxTransposeNx16F32;
+                    return Box::new(AvxTransposeNx16F32::default());
+                }
+                if _height.is_multiple_of(15) {
+                    use crate::avx::AvxTransposeNx15F32;
+                    return Box::new(AvxTransposeNx15F32::default());
+                }
+                if _height.is_multiple_of(14) {
+                    use crate::avx::AvxTransposeNx14F32;
+                    return Box::new(AvxTransposeNx14F32::default());
+                }
+                if _height.is_multiple_of(13) {
+                    use crate::avx::AvxTransposeNx13F32;
+                    return Box::new(AvxTransposeNx13F32::default());
+                }
+                if _height.is_multiple_of(12) {
+                    use crate::avx::AvxTransposeNx12F32;
+                    return Box::new(AvxTransposeNx12F32::default());
+                }
+                if _height.is_multiple_of(11) {
+                    use crate::avx::AvxTransposeNx11F32;
+                    return Box::new(AvxTransposeNx11F32::default());
+                }
+                if _height.is_multiple_of(10) {
+                    use crate::avx::AvxTransposeNx10F32;
+                    return Box::new(AvxTransposeNx10F32::default());
+                }
+                if _height.is_multiple_of(9) {
+                    use crate::avx::AvxTransposeNx9F32;
+                    return Box::new(AvxTransposeNx9F32::default());
+                }
+                if _height.is_multiple_of(8) {
+                    use crate::avx::AvxTransposeNx8F32;
+                    return Box::new(AvxTransposeNx8F32::default());
+                }
+                if _height.is_multiple_of(7) {
+                    use crate::avx::AvxTransposeNx7F32;
+                    return Box::new(AvxTransposeNx7F32::default());
+                }
+                if _height.is_multiple_of(6) {
+                    use crate::avx::AvxTransposeNx6F32;
+                    return Box::new(AvxTransposeNx6F32::default());
+                }
+                if _height.is_multiple_of(5) {
+                    use crate::avx::AvxTransposeNx5F32;
+                    return Box::new(AvxTransposeNx5F32::default());
+                }
+                if _height.is_multiple_of(4) {
+                    use crate::avx::AvxTransposeNx4F32;
+                    return Box::new(AvxTransposeNx4F32::default());
+                }
+                if _height.is_multiple_of(3) {
+                    use crate::avx::AvxTransposeNx3F32;
+                    return Box::new(AvxTransposeNx3F32::default());
+                }
+                if _height.is_multiple_of(2) {
+                    use crate::avx::AvxTransposeNx2F32;
+                    return Box::new(AvxTransposeNx2F32::default());
+                }
+
+                return Box::new(AvxDefaultExecutorSingle {});
+            }
+        }
         #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
         {
-            #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-            {
-                if std::arch::is_x86_feature_detected!("avx2") {
-                    if _width.is_multiple_of(7) && _height.is_multiple_of(7) {
-                        use crate::avx::AvxTransposeF327x7;
-                        return Box::new(AvxTransposeF327x7::default());
-                    }
-                    if _width.is_multiple_of(5) && _height.is_multiple_of(5) {
-                        use crate::avx::AvxTransposeF325x5;
-                        return Box::new(AvxTransposeF325x5::default());
-                    }
-                    if _width.is_multiple_of(7) && _height.is_multiple_of(5) {
-                        use crate::avx::AvxTransposeF327x5;
-                        return Box::new(AvxTransposeF327x5::default());
-                    }
-                    if _width.is_multiple_of(7) && _height.is_multiple_of(6) {
-                        use crate::avx::AvxTransposeF327x6;
-                        return Box::new(AvxTransposeF327x6::default());
-                    }
-
-                    // generic multiple of N
-                    if _height.is_multiple_of(16) {
-                        use crate::avx::AvxTransposeNx16F32;
-                        return Box::new(AvxTransposeNx16F32::default());
-                    }
-                    if _height.is_multiple_of(15) {
-                        use crate::avx::AvxTransposeNx15F32;
-                        return Box::new(AvxTransposeNx15F32::default());
-                    }
-                    if _height.is_multiple_of(14) {
-                        use crate::avx::AvxTransposeNx14F32;
-                        return Box::new(AvxTransposeNx14F32::default());
-                    }
-                    if _height.is_multiple_of(13) {
-                        use crate::avx::AvxTransposeNx13F32;
-                        return Box::new(AvxTransposeNx13F32::default());
-                    }
-                    if _height.is_multiple_of(12) {
-                        use crate::avx::AvxTransposeNx12F32;
-                        return Box::new(AvxTransposeNx12F32::default());
-                    }
-                    if _height.is_multiple_of(11) {
-                        use crate::avx::AvxTransposeNx11F32;
-                        return Box::new(AvxTransposeNx11F32::default());
-                    }
-                    if _height.is_multiple_of(10) {
-                        use crate::avx::AvxTransposeNx10F32;
-                        return Box::new(AvxTransposeNx10F32::default());
-                    }
-                    if _height.is_multiple_of(9) {
-                        use crate::avx::AvxTransposeNx9F32;
-                        return Box::new(AvxTransposeNx9F32::default());
-                    }
-                    if _height.is_multiple_of(8) {
-                        use crate::avx::AvxTransposeNx8F32;
-                        return Box::new(AvxTransposeNx8F32::default());
-                    }
-                    if _height.is_multiple_of(7) {
-                        use crate::avx::AvxTransposeNx7F32;
-                        return Box::new(AvxTransposeNx7F32::default());
-                    }
-                    if _height.is_multiple_of(6) {
-                        use crate::avx::AvxTransposeNx6F32;
-                        return Box::new(AvxTransposeNx6F32::default());
-                    }
-                    if _height.is_multiple_of(5) {
-                        use crate::avx::AvxTransposeNx5F32;
-                        return Box::new(AvxTransposeNx5F32::default());
-                    }
-                    if _height.is_multiple_of(4) {
-                        use crate::avx::AvxTransposeNx4F32;
-                        return Box::new(AvxTransposeNx4F32::default());
-                    }
-                    if _height.is_multiple_of(3) {
-                        use crate::avx::AvxTransposeNx3F32;
-                        return Box::new(AvxTransposeNx3F32::default());
-                    }
-                    if _height.is_multiple_of(2) {
-                        use crate::avx::AvxTransposeNx2F32;
-                        return Box::new(AvxTransposeNx2F32::default());
-                    }
-
-                    return Box::new(AvxDefaultExecutorSingle {});
-                }
-            }
             if _width > 31 && _height > 31 {
                 use crate::transpose_arbitrary::TransposeArbitrary;
                 return Box::new(TransposeArbitrary {

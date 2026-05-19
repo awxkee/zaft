@@ -28,8 +28,7 @@
  */
 #![allow(clippy::needless_range_loop)]
 
-use crate::neon::butterflies::gen_butterfly_twiddles_separated_columns_f32;
-use crate::neon::butterflies::shared::boring_neon_butterfly;
+use crate::neon::butterflies::shared::{boring_neon_butterfly, gen_butterfly_twiddles_f32};
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::transpose::transpose_8x8_f32;
 use crate::store::BidirectionalStore;
@@ -49,7 +48,7 @@ macro_rules! gen_bf64f {
             pub(crate) fn new(direction: FftDirection) -> Self {
                 $name {
                     direction,
-                    twiddles: gen_butterfly_twiddles_separated_columns_f32!(8, 8, 0, direction),
+                    twiddles: gen_butterfly_twiddles_f32(8, 8, direction, 64),
                     bf8: $internal_bf::new(direction),
                 }
             }

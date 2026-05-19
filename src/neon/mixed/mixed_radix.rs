@@ -241,8 +241,7 @@ macro_rules! define_mixed_radix_neon_d {
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(chunk.get_unchecked_mut(index_base..));
@@ -325,8 +324,7 @@ macro_rules! define_mixed_radix_neon_d {
                         }
                     }
 
-                    #[allow(unused_unsafe)]
-                    let output = unsafe { self.inner_bf.exec(columns) };
+                    let output = self.inner_bf.exec(columns);
 
                     unsafe {
                         output[0].write(scratch.get_unchecked_mut(index_base..));

@@ -391,49 +391,9 @@ pub(crate) use bf2048::NeonButterfly2048f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf2048::{NeonFcmaForwardButterfly2048f, NeonFcmaInverseButterfly2048f};
 pub(crate) use fast_bf5::NeonFastButterfly5;
-use num_complex::Complex;
 #[cfg(feature = "fcma")]
 pub(crate) use shared::FastFcmaBf4f;
 pub(crate) use shared::NeonButterfly;
-
-#[inline]
-pub(crate) fn make_mixedradix_twiddle_chunk_f32(
-    x: usize,
-    y: usize,
-    len: usize,
-    direction: FftDirection,
-) -> NeonStoreF {
-    let mut twiddle_chunk = [Complex::<f32>::default(); 2];
-    use crate::util::compute_twiddle;
-    #[allow(clippy::needless_range_loop)]
-    for i in 0..2 {
-        twiddle_chunk[i] = compute_twiddle(y * (x + i), len, direction);
-    }
-
-    NeonStoreF::from_complex_ref(twiddle_chunk.as_slice())
-}
-
-macro_rules! gen_butterfly_twiddles_separated_columns_f32 {
-    ($num_rows:expr, $num_cols:expr, $skip_cols:expr, $direction: expr) => {{
-        const FFT_LEN: usize = $num_rows * $num_cols;
-        const TWIDDLE_ROWS: usize = $num_rows - 1;
-        const TWIDDLE_COLS: usize = $num_cols - $skip_cols;
-        const TWIDDLE_VECTOR_COLS: usize = TWIDDLE_COLS / 2;
-        const TWIDDLE_VECTOR_COUNT: usize = TWIDDLE_VECTOR_COLS * TWIDDLE_ROWS;
-        let mut twiddles = [NeonStoreF::default(); TWIDDLE_VECTOR_COUNT];
-        for index in 0..TWIDDLE_VECTOR_COUNT {
-            let y = (index % TWIDDLE_ROWS) + 1;
-            let x = (index / TWIDDLE_ROWS) * 2 + $skip_cols;
-
-            use crate::neon::butterflies::make_mixedradix_twiddle_chunk_f32;
-
-            twiddles[index] = make_mixedradix_twiddle_chunk_f32(x, y, FFT_LEN, $direction);
-        }
-        twiddles
-    }};
-}
-
-pub(crate) use gen_butterfly_twiddles_separated_columns_f32;
 
 #[cfg(test)]
 #[cfg(feature = "fcma")]
@@ -603,8 +563,6 @@ macro_rules! test_oof_fcma_butterfly {
     };
 }
 
-use crate::FftDirection;
-use crate::neon::mixed::NeonStoreF;
 #[cfg(test)]
 #[cfg(feature = "fcma")]
 pub(crate) use test_oof_fcma_butterfly;

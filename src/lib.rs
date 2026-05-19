@@ -79,6 +79,8 @@ mod traits;
 mod transpose;
 mod transpose_arbitrary;
 mod util;
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+mod wasm;
 
 #[allow(unused_imports)]
 use radix3::Radix3;
@@ -381,7 +383,14 @@ impl Zaft {
         {
             true
         }
-        #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+        #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+        {
+            true
+        }
+        #[cfg(not(any(
+            all(target_arch = "aarch64", feature = "neon"),
+            all(target_arch = "wasm32", feature = "wasm")
+        )))]
         {
             false
         }
@@ -397,7 +406,8 @@ impl Zaft {
     {
         #[cfg(not(any(
             all(target_arch = "aarch64", feature = "neon"),
-            all(target_arch = "x86_64", feature = "avx")
+            all(target_arch = "x86_64", feature = "avx"),
+            all(target_arch = "wasm32", feature = "wasm")
         )))]
         {
             Ok(None)
@@ -410,7 +420,8 @@ impl Zaft {
         }
         #[cfg(any(
             all(target_arch = "aarch64", feature = "neon"),
-            all(target_arch = "x86_64", feature = "avx")
+            all(target_arch = "x86_64", feature = "avx"),
+            all(target_arch = "wasm32", feature = "wasm")
         ))]
         {
             let min_length = _n_length.min(_q_length);
@@ -510,7 +521,11 @@ impl Zaft {
             let factor2 = prime_factors.factor_of_2();
             let factor3 = prime_factors.factor_of_3();
 
-            if factor2 == 1 && factor3 > 3 && T::butterfly54(direction).is_some() {
+            if factor2 == 1
+                && factor3 > 3
+                && T::butterfly54(direction).is_some()
+                && product / 54 > 1
+            {
                 try_mixed_radix!(54, product / 54)
             }
 
@@ -560,7 +575,7 @@ impl Zaft {
                 if factor_of_2 >= 8 && factor_of_2 != 9 {
                     try_mixed_radix!(5, product / 5)
                 }
-                if (2..=6).contains(&factor_of_2) {
+                if (2..=6).contains(&factor_of_2) && product / 20 > 1 {
                     try_mixed_radix!(20, product / 20)
                 }
             } else if factor_of_5 == 2 {
@@ -591,7 +606,12 @@ impl Zaft {
             let factor_of_3 = prime_factors.factor_of_3();
             if factor_of_5 == 1 && factor_of_3 > 1 {
                 try_mixed_radix!(5, product / 5)
-            } else if factor_of_5 == 2 && factor_of_5 > 1 && factor_of_3 > 2 && factor_of_3 < 10 {
+            } else if factor_of_5 == 2
+                && factor_of_5 > 1
+                && factor_of_3 > 2
+                && factor_of_3 < 10
+                && product / 25 > 1
+            {
                 // 225 is more effective with mixed radix [9,25]
                 try_mixed_radix!(25, product / 25)
             }
@@ -607,7 +627,7 @@ impl Zaft {
             #[allow(clippy::collapsible_if)]
             if factor_of_7 == 1 || factor_of_5 == 1 {
                 if product == 560 || product == 2240 {
-                    if T::butterfly35(direction).is_some() {
+                    if T::butterfly35(direction).is_some() && product / 35 > 1 {
                         try_mixed_radix!(35, product / 35)
                     }
                 }
@@ -666,7 +686,7 @@ impl Zaft {
                 try_mixed_radix!(30, product / 30)
             }
 
-            if ((product.is_multiple_of(144) && (product / 144) <= 16)
+            if ((product.is_multiple_of(144) && (product / 144) <= 16 && (product / 144) > 1)
                 || product == 5040
                 || product == 4896
                 || product == 8496
@@ -696,6 +716,7 @@ impl Zaft {
 
         if product.is_multiple_of(63)
             && product / 63 <= 16
+            && product / 63 > 1
             && product != 126
             && T::butterfly64(direction).is_some()
         {
@@ -711,7 +732,8 @@ impl Zaft {
 
         #[cfg(any(
             all(target_arch = "aarch64", feature = "neon"),
-            all(target_arch = "x86_64", feature = "avx")
+            all(target_arch = "x86_64", feature = "avx"),
+            all(target_arch = "wasm32", feature = "wasm")
         ))]
         {
             macro_rules! get_mixed_butterflies {
@@ -728,7 +750,7 @@ impl Zaft {
             if product.is_multiple_of(12) {
                 get_mixed_butterflies!(12, product / 12)
             }
-            if factor_2 > 0 {
+            if factor_2 > 2 {
                 if rem2_8 == 1 {
                     get_mixed_butterflies!(2, product / 2)
                 }
@@ -1599,302 +1621,362 @@ impl Display for FftDirection {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[cfg(test)]
+macro_rules! platform_test {
+    ($(#[$meta:meta])* fn $name:ident() $body:block) => {
+        #[wasm_bindgen_test::wasm_bindgen_test]
+        $(#[$meta])*
+        fn $name() $body
+    };
+}
+#[cfg(target_arch = "wasm32")]
+#[cfg(test)]
+pub(crate) use platform_test;
+
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+macro_rules! platform_test {
+    ($(#[$meta:meta])* fn $name:ident() $body:block) => {
+        #[test]
+        $(#[$meta])*
+        fn $name() $body
+    };
+}
+#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+pub(crate) use platform_test;
+
 #[cfg(test)]
 mod tests {
     use crate::Zaft;
     use num_complex::Complex;
     use num_traits::Zero;
 
-    #[test]
-    fn power_of_four() {
-        fn is_power_of_four(n: u64) -> bool {
-            n != 0 && (n & (n - 1)) == 0 && (n & 0x5555_5555_5555_5555) != 0
-        }
-        assert_eq!(is_power_of_four(4), true);
-        assert_eq!(is_power_of_four(8), false);
-        assert_eq!(is_power_of_four(16), true);
-        assert_eq!(is_power_of_four(20), false);
-    }
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_node_experimental);
 
-    #[test]
-    fn test_everything_f32() {
-        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
-            return;
-        }
-        for i in 1..2010 {
-            let mut data = vec![Complex::new(0.0019528865, 0.); i];
-            for (i, chunk) in data.iter_mut().enumerate() {
-                *chunk = Complex::new(
-                    -0.19528865 + i as f32 * 0.001,
-                    0.0019528865 - i as f32 * 0.001,
-                );
+    platform_test! {
+        fn power_of_four() {
+            fn is_power_of_four(n: u64) -> bool {
+                n != 0 && (n & (n - 1)) == 0 && (n & 0x5555_5555_5555_5555) != 0
             }
-            let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
-            let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
-            let reference_clone = data.clone();
-            zaft_exec
-                .execute(&mut data)
-                .expect(&format!("Failed to execute forward FFT for size {i}!"));
-            zaft_inverse
-                .execute(&mut data)
-                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
-            let data_len = 1. / data.len() as f32;
-            for i in data.iter_mut() {
-                *i *= data_len;
-            }
-            data.iter()
-                .zip(reference_clone)
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-2,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.re,
-                        b.re
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-2,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.im,
-                        b.im
-                    );
-                });
+            assert_eq!(is_power_of_four(4), true);
+            assert_eq!(is_power_of_four(8), false);
+            assert_eq!(is_power_of_four(16), true);
+            assert_eq!(is_power_of_four(20), false);
         }
     }
 
-    #[test]
-    fn test_everything_oof_f32() {
-        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
-            return;
-        }
-        for i in 1..2010 {
-            let mut data = vec![Complex::new(0.0019528865, 0.); i];
-            let mut scratch = data.to_vec();
-            for (i, chunk) in data.iter_mut().enumerate() {
-                *chunk = Complex::new(
-                    -0.19528865 + i as f32 * 0.001,
-                    0.0019528865 - i as f32 * 0.001,
-                );
+    platform_test! {
+        fn test_everything_f32() {
+            if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+                return;
             }
-            let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
-            let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
-            let reference_clone = data.clone();
-            zaft_exec
-                .execute_out_of_place(&data, &mut scratch)
-                .expect(&format!("Failed to execute forward FFT for size {i}!"));
-            zaft_inverse
-                .execute_out_of_place(&scratch, &mut data)
-                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
-            let data_len = 1. / data.len() as f32;
-            for i in data.iter_mut() {
-                *i *= data_len;
+            #[cfg(target_arch = "wasm32")]
+            static HIGH_WATER: usize = 768;
+            #[cfg(not(target_arch = "wasm32"))]
+            static HIGH_WATER: usize = 2010;
+            for i in 1..HIGH_WATER {
+                let mut data = vec![Complex::new(0.0019528865, 0.); i];
+                for (i, chunk) in data.iter_mut().enumerate() {
+                    *chunk = Complex::new(
+                        -0.19528865 + i as f32 * 0.001,
+                        0.0019528865 - i as f32 * 0.001,
+                    );
+                }
+                let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
+                let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
+                let reference_clone = data.clone();
+                zaft_exec
+                    .execute(&mut data)
+                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                zaft_inverse
+                    .execute(&mut data)
+                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                let data_len = 1. / data.len() as f32;
+                for i in data.iter_mut() {
+                    *i *= data_len;
+                }
+                data.iter()
+                    .zip(reference_clone)
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < 1e-2,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.re,
+                            b.re
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < 1e-2,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.im,
+                            b.im
+                        );
+                    });
             }
-            data.iter()
-                .zip(reference_clone)
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-2,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.re,
-                        b.re
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-2,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.im,
-                        b.im
-                    );
-                });
-        }
-    }
-
-    #[test]
-    fn test_everything_f64() {
-        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
-            return;
-        }
-        for i in 1..1900 {
-            let mut data = vec![Complex::new(0.0019528865, 0.); i];
-            for (i, chunk) in data.iter_mut().enumerate() {
-                *chunk = Complex::new(
-                    -0.19528865 + i as f64 * 0.001,
-                    0.0019528865 - i as f64 * 0.001,
-                );
-            }
-            let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
-            let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
-            let rust_fft_clone = data.clone();
-            zaft_exec
-                .execute(&mut data)
-                .expect(&format!("Failed to execute forward FFT for size {i}!"));
-            zaft_inverse
-                .execute(&mut data)
-                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
-            let data_len = 1. / data.len() as f64;
-            for i in data.iter_mut() {
-                *i *= data_len;
-            }
-            data.iter()
-                .zip(rust_fft_clone)
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-6,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.re,
-                        b.re
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-6,
-                        "a_im {}, b_im {} at {idx}, for size {i}",
-                        a.im,
-                        b.im
-                    );
-                });
         }
     }
 
-    #[test]
-    fn test_everything_oof_f64() {
-        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
-            return;
-        }
-        for i in 1..1900 {
-            let mut data = vec![Complex::new(0.0019528865, 0.); i];
-            let mut scratch = data.clone();
-            for (i, chunk) in data.iter_mut().enumerate() {
-                *chunk = Complex::new(
-                    -0.19528865 + i as f64 * 0.001,
-                    0.0019528865 - i as f64 * 0.001,
-                );
+    platform_test! {
+        fn test_everything_oof_f32() {
+            if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+                return;
             }
-            let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
-            let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
-            let rust_fft_clone = data.clone();
-            zaft_exec
-                .execute_out_of_place(&data, &mut scratch)
-                .expect(&format!("Failed to execute forward FFT for size {i}!"));
-            zaft_inverse
-                .execute_out_of_place(&scratch, &mut data)
-                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
-            let data_len = 1. / data.len() as f64;
-            for i in data.iter_mut() {
-                *i *= data_len;
+            #[cfg(target_arch = "wasm32")]
+            static HIGH_WATER: usize = 768;
+            #[cfg(not(target_arch = "wasm32"))]
+            static HIGH_WATER: usize = 2010;
+            for i in 1..HIGH_WATER {
+                let mut data = vec![Complex::new(0.0019528865, 0.); i];
+                let mut scratch = data.to_vec();
+                for (i, chunk) in data.iter_mut().enumerate() {
+                    *chunk = Complex::new(
+                        -0.19528865 + i as f32 * 0.001,
+                        0.0019528865 - i as f32 * 0.001,
+                    );
+                }
+                let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
+                let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
+                let reference_clone = data.clone();
+                zaft_exec
+                    .execute_out_of_place(&data, &mut scratch)
+                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                zaft_inverse
+                    .execute_out_of_place(&scratch, &mut data)
+                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                let data_len = 1. / data.len() as f32;
+                for i in data.iter_mut() {
+                    *i *= data_len;
+                }
+                data.iter()
+                    .zip(reference_clone)
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < 1e-2,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.re,
+                            b.re
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < 1e-2,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.im,
+                            b.im
+                        );
+                    });
             }
-            data.iter()
-                .zip(rust_fft_clone)
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-6,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.re,
-                        b.re
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-6,
-                        "a_im {}, b_im {} at {idx}, for size {i}",
-                        a.im,
-                        b.im
-                    );
-                });
-        }
-    }
-
-    #[test]
-    fn test_destructive_everything_f64() {
-        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
-            return;
-        }
-        for i in 1..1900 {
-            let mut data = vec![Complex::new(0.0019528865, 0.); i];
-            for (i, chunk) in data.iter_mut().enumerate() {
-                *chunk = Complex::new(
-                    -0.19528865 + i as f64 * 0.001,
-                    0.0019528865 - i as f64 * 0.001,
-                );
-            }
-            let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
-            let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
-            let rust_fft_clone = data.clone();
-            let mut fwd = vec![Complex::zero(); data.len()];
-            let mut scratch = vec![Complex::zero(); zaft_exec.destructive_scratch_length()];
-            zaft_exec
-                .execute_destructive_with_scratch(&mut data, &mut fwd, &mut scratch)
-                .expect(&format!("Failed to execute forward FFT for size {i}!"));
-            zaft_inverse
-                .execute_destructive_with_scratch(&mut fwd, &mut data, &mut scratch)
-                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
-            let data_len = 1. / data.len() as f64;
-            for i in data.iter_mut() {
-                *i *= data_len;
-            }
-            data.iter()
-                .zip(rust_fft_clone)
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-6,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.re,
-                        b.re
-                    );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-6,
-                        "a_im {}, b_im {} at {idx}, for size {i}",
-                        a.im,
-                        b.im
-                    );
-                });
         }
     }
 
-    #[test]
-    fn test_destructive_everything_oof_f32() {
-        if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
-            return;
+    platform_test! {
+        fn test_everything_f64() {
+            if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+                return;
+            }
+            #[cfg(target_arch = "wasm32")]
+            static HIGH_WATER: usize = 768;
+            #[cfg(not(target_arch = "wasm32"))]
+            static HIGH_WATER: usize = 1900;
+            for i in 1..HIGH_WATER {
+                let mut data = vec![Complex::new(0.0019528865, 0.); i];
+                for (i, chunk) in data.iter_mut().enumerate() {
+                    *chunk = Complex::new(
+                        -0.19528865 + i as f64 * 0.001,
+                        0.0019528865 - i as f64 * 0.001,
+                    );
+                }
+                let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
+                let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
+                let rust_fft_clone = data.clone();
+                zaft_exec
+                    .execute(&mut data)
+                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                zaft_inverse
+                    .execute(&mut data)
+                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                let data_len = 1. / data.len() as f64;
+                for i in data.iter_mut() {
+                    *i *= data_len;
+                }
+                data.iter()
+                    .zip(rust_fft_clone)
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < 1e-6,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.re,
+                            b.re
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < 1e-6,
+                            "a_im {}, b_im {} at {idx}, for size {i}",
+                            a.im,
+                            b.im
+                        );
+                    });
+            }
         }
-        for i in 1..2010 {
-            let mut data = vec![Complex::new(0.0019528865, 0.); i];
-            for (i, chunk) in data.iter_mut().enumerate() {
-                *chunk = Complex::new(
-                    -0.19528865 + i as f32 * 0.001,
-                    0.0019528865 - i as f32 * 0.001,
-                );
+    }
+
+    platform_test! {
+        fn test_everything_oof_f64() {
+            if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+                return;
             }
-            let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
-            let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
-            let reference_clone = data.clone();
-            let mut scratch = vec![Complex::zero(); zaft_exec.destructive_scratch_length()];
-            let mut target = vec![Complex::zero(); data.len()];
-            zaft_exec
-                .execute_destructive_with_scratch(&mut data, &mut target, &mut scratch)
-                .expect(&format!("Failed to execute forward FFT for size {i}!"));
-            zaft_inverse
-                .execute_destructive_with_scratch(&mut target, &mut data, &mut scratch)
-                .expect(&format!("Failed to execute inverse FFT for size {i}!"));
-            let data_len = 1. / data.len() as f32;
-            for i in data.iter_mut() {
-                *i *= data_len;
+            #[cfg(target_arch = "wasm32")]
+            static HIGH_WATER: usize = 768;
+            #[cfg(not(target_arch = "wasm32"))]
+            static HIGH_WATER: usize = 1900;
+            for i in 1..HIGH_WATER {
+                let mut data = vec![Complex::new(0.0019528865, 0.); i];
+                let mut scratch = data.clone();
+                for (i, chunk) in data.iter_mut().enumerate() {
+                    *chunk = Complex::new(
+                        -0.19528865 + i as f64 * 0.001,
+                        0.0019528865 - i as f64 * 0.001,
+                    );
+                }
+                let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
+                let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
+                let rust_fft_clone = data.clone();
+                zaft_exec
+                    .execute_out_of_place(&data, &mut scratch)
+                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                zaft_inverse
+                    .execute_out_of_place(&scratch, &mut data)
+                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                let data_len = 1. / data.len() as f64;
+                for i in data.iter_mut() {
+                    *i *= data_len;
+                }
+                data.iter()
+                    .zip(rust_fft_clone)
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < 1e-6,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.re,
+                            b.re
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < 1e-6,
+                            "a_im {}, b_im {} at {idx}, for size {i}",
+                            a.im,
+                            b.im
+                        );
+                    });
             }
-            data.iter()
-                .zip(reference_clone)
-                .enumerate()
-                .for_each(|(idx, (a, b))| {
-                    assert!(
-                        (a.re - b.re).abs() < 1e-2,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.re,
-                        b.re
+        }
+    }
+
+    platform_test! {
+        fn test_destructive_everything_f64() {
+            if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+                return;
+            }
+            #[cfg(target_arch = "wasm32")]
+            static HIGH_WATER: usize = 768;
+            #[cfg(not(target_arch = "wasm32"))]
+            static HIGH_WATER: usize = 1900;
+            for i in 1..HIGH_WATER {
+                let mut data = vec![Complex::new(0.0019528865, 0.); i];
+                for (i, chunk) in data.iter_mut().enumerate() {
+                    *chunk = Complex::new(
+                        -0.19528865 + i as f64 * 0.001,
+                        0.0019528865 - i as f64 * 0.001,
                     );
-                    assert!(
-                        (a.im - b.im).abs() < 1e-2,
-                        "a_re {}, b_re {} at {idx}, for size {i}",
-                        a.im,
-                        b.im
+                }
+                let zaft_exec = Zaft::make_forward_fft_f64(data.len()).expect("Failed to make FFT!");
+                let zaft_inverse = Zaft::make_inverse_fft_f64(data.len()).expect("Failed to make FFT!");
+                let rust_fft_clone = data.clone();
+                let mut fwd = vec![Complex::zero(); data.len()];
+                let mut scratch = vec![Complex::zero(); zaft_exec.destructive_scratch_length()];
+                zaft_exec
+                    .execute_destructive_with_scratch(&mut data, &mut fwd, &mut scratch)
+                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                zaft_inverse
+                    .execute_destructive_with_scratch(&mut fwd, &mut data, &mut scratch)
+                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                let data_len = 1. / data.len() as f64;
+                for i in data.iter_mut() {
+                    *i *= data_len;
+                }
+                data.iter()
+                    .zip(rust_fft_clone)
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < 1e-6,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.re,
+                            b.re
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < 1e-6,
+                            "a_im {}, b_im {} at {idx}, for size {i}",
+                            a.im,
+                            b.im
+                        );
+                    });
+            }
+        }
+    }
+
+    platform_test! {
+        fn test_destructive_everything_oof_f32() {
+            if std::env::var("SHORT_TEST").as_deref() == Ok("yes") {
+                return;
+            }
+            #[cfg(target_arch = "wasm32")]
+            static HIGH_WATER: usize = 768;
+            #[cfg(not(target_arch = "wasm32"))]
+            static HIGH_WATER: usize = 1900;
+            for i in 1..HIGH_WATER {
+                let mut data = vec![Complex::new(0.0019528865, 0.); i];
+                for (i, chunk) in data.iter_mut().enumerate() {
+                    *chunk = Complex::new(
+                        -0.19528865 + i as f32 * 0.001,
+                        0.0019528865 - i as f32 * 0.001,
                     );
-                });
+                }
+                let zaft_exec = Zaft::make_forward_fft_f32(data.len()).expect("Failed to make FFT!");
+                let zaft_inverse = Zaft::make_inverse_fft_f32(data.len()).expect("Failed to make FFT!");
+                let reference_clone = data.clone();
+                let mut scratch = vec![Complex::zero(); zaft_exec.destructive_scratch_length()];
+                let mut target = vec![Complex::zero(); data.len()];
+                zaft_exec
+                    .execute_destructive_with_scratch(&mut data, &mut target, &mut scratch)
+                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                zaft_inverse
+                    .execute_destructive_with_scratch(&mut target, &mut data, &mut scratch)
+                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                let data_len = 1. / data.len() as f32;
+                for i in data.iter_mut() {
+                    *i *= data_len;
+                }
+                data.iter()
+                    .zip(reference_clone)
+                    .enumerate()
+                    .for_each(|(idx, (a, b))| {
+                        assert!(
+                            (a.re - b.re).abs() < 1e-2,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.re,
+                            b.re
+                        );
+                        assert!(
+                            (a.im - b.im).abs() < 1e-2,
+                            "a_re {}, b_re {} at {idx}, for size {i}",
+                            a.im,
+                            b.im
+                        );
+                    });
+            }
         }
     }
 }

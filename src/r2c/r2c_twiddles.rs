@@ -80,7 +80,15 @@ impl R2CTwiddlesFactory<f32> for f32 {
                     return Arc::new(R2CAvxTwiddles {});
                 }
             }
-            #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+            #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+            {
+                use crate::wasm::R2CWasmTwiddles;
+                Arc::new(R2CWasmTwiddles {})
+            }
+            #[cfg(not(any(
+                all(target_arch = "aarch64", feature = "neon"),
+                all(target_arch = "wasm32", feature = "wasm")
+            )))]
             {
                 Arc::new(R2CHandler {
                     phantom_data: PhantomData::<f32>,
@@ -115,7 +123,15 @@ impl R2CTwiddlesFactory<f64> for f64 {
                     return Arc::new(R2CAvxTwiddles {});
                 }
             }
-            #[cfg(not(all(target_arch = "aarch64", feature = "neon")))]
+            #[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+            {
+                use crate::wasm::R2CWasmTwiddles;
+                Arc::new(R2CWasmTwiddles {})
+            }
+            #[cfg(not(any(
+                all(target_arch = "aarch64", feature = "neon"),
+                all(target_arch = "wasm32", feature = "wasm")
+            )))]
             {
                 Arc::new(R2CHandler {
                     phantom_data: PhantomData::<f64>,
