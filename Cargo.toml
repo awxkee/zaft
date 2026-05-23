@@ -1,4 +1,4 @@
-workspace = { members = ["app"], exclude = ["fuzz"] }
+workspace = { members = ["app", "zaft-py"], exclude = ["fuzz"] }
 
 [package]
 name = "zaft"
