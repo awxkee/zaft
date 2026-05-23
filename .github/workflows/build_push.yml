@@ -226,3 +226,24 @@ jobs:
               fi
           done <<< "$tests"
           exit $failed
+
+  python_bindings:
+    name: Python bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Create venv and install dependencies
+        run: |
+          python -m venv zaft-py/.venv
+          zaft-py/.venv/bin/pip install --upgrade pip
+          zaft-py/.venv/bin/pip install maturin pytest numpy
+      - name: Build and install zaft
+        working-directory: zaft-py
+        run: .venv/bin/maturin develop --release
+      - name: Run Python tests
+        working-directory: zaft-py
+        run: .venv/bin/pytest tests/test_zaft.py -v

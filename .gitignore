@@ -4,3 +4,5 @@ app/target
 Cargo.lock
 docs
 .cargo/config.toml
+*.so
+zaft-py/.venv

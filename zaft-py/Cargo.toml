@@ -1,0 +1,28 @@
+[package]
+name = "zaft-py"
+version = "0.3.8"
+edition = "2024"
+description = "Fast fourier transform"
+readme = "README.md"
+keywords = ["fft", "dft", "discrete", "fourier"]
+license = "BSD-3-Clause OR Apache-2.0"
+authors = ["Radzivon Bartoshyk"]
+documentation = "https://github.com/awxkee/zaft"
+categories = ["algorithms", "science"]
+homepage = "https://github.com/awxkee/zaft"
+repository = "https://github.com/awxkee/zaft"
+exclude = ["*.jpg", "/assets", "*.png", "*.sh", "/assets/*", ".github"]
+rust-version = "1.89.0"
+
+[dependencies]
+zaft = { path = "../" }
+pyo3 = { version = "0.28.2", features = ["extension-module"] }
+numpy = "0.28.0"
+num-complex = "0.4.6"
+
+[features]
+default = ["avx", "neon"]
+avx = ["zaft/avx"]
+neon = ["zaft/neon"]
+fcma = ["zaft/fcma"]
+sve = ["zaft/sve"]
