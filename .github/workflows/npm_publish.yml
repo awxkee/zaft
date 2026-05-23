@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - '[0-9]*'
+      - 'npm[0-9]*'
 
 env:
   CARGO_TERM_COLOR: always
@@ -128,7 +129,7 @@ jobs:
           # Copy to .cjs so it loads correctly under "type":"module" packages.
           cp dist/nodejs/zaft_js.js dist/nodejs/zaft_js.cjs
 
-          cp README.md dist/README.md
+          cp zaft-js/README.md dist/README.md
 
           # Stamp version into the repo's package.json and write to dist/.
           sed "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" \
