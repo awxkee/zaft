@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - '[0-9]*'
-      - 'npm[0-9]*'
 
 env:
   CARGO_TERM_COLOR: always
