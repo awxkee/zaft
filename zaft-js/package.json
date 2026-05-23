@@ -2,7 +2,7 @@
   "name": "@radzivon.bartoshyk/zaft",
   "version": "0.3.10",
   "description": "High-performance FFT for JavaScript/TypeScript",
-  "license": "BSD-3-Clause",
+  "license": "(BSD-3-Clause OR Apache-2.0)",
   "repository": {
     "type": "git",
     "url": "https://github.com/awxkee/zaft"
