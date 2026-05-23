@@ -1,0 +1,106 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - '[0-9]*'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+permissions:
+  id-token: write  # Required for OIDC
+  contents: read
+
+jobs:
+  build:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build (bundler target)
+        run: wasm-pack build --release --target bundler --out-dir pkg/bundler zaft-js
+
+      - name: Build (web target)
+        run: wasm-pack build --release --target web --out-dir pkg/web zaft-js
+
+      - name: Build (nodejs target)
+        run: wasm-pack build --release --target nodejs --out-dir pkg/nodejs zaft-js
+
+      - name: Upload pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: zaft-js/pkg/
+          retention-days: 1
+
+  publish:
+    name: Publish to npm
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment: Cargo
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download pkg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: zaft-js/pkg/
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Connect
+        working-directory: zaft-js
+        run: npm install && npm ci
+
+      - name: Extract version from Cargo.toml
+        id: version
+        run: |
+          VERSION=$(grep '^version' zaft-js/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version $VERSION"
+
+      - name: Verify package versions match Cargo.toml
+        run: |
+          CARGO_VERSION="${{ steps.version.outputs.version }}"
+          for target in bundler web nodejs; do
+            PKG_VERSION=$(node -p "require('./zaft-js/pkg/$target/package.json').version")
+            if [ "$PKG_VERSION" != "$CARGO_VERSION" ]; then
+              echo "Version mismatch in $target: Cargo=$CARGO_VERSION pkg=$PKG_VERSION"
+              exit 1
+            fi
+          done
+
+      - name: Publish nodejs package
+        if: ${{ !inputs.dry_run }}
+        run: npm publish zaft-js/pkg/nodejs/ --access public

@@ -1,8 +1,8 @@
-workspace = { members = ["app", "zaft-py"], exclude = ["fuzz"] }
+workspace = { members = ["app", "zaft-js", "zaft-py"], exclude = ["fuzz"] }
 
 [package]
 name = "zaft"
-version = "0.3.8"
+version = "0.3.9"
 edition = "2024"
 description = "Fast fourier transform"
 readme = "README.md"
@@ -47,3 +47,11 @@ wasm = []
 # RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features --no-deps --open --manifest-path ./Cargo.toml
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+
+[profile.release.package."*"]
+strip = "debuginfo"
