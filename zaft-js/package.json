@@ -1,0 +1,52 @@
+{
+  "name": "zaft",
+  "version": "0.3.9",
+  "description": "High-performance FFT for JavaScript/TypeScript",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/awxkee/zaft"
+  },
+  "keywords": [
+    "fft",
+    "dft",
+    "signal-processing",
+    "wasm",
+    "webassembly",
+    "simd",
+    "audio",
+    "dsp",
+    "fourier"
+  ],
+  "type": "module",
+  "main": "./nodejs/zaft_js.js",
+  "module": "./bundler/zaft_js.js",
+  "browser": "./web/zaft_js.js",
+  "types": "./bundler/zaft_js.d.ts",
+  "exports": {
+    ".": {
+      "node": {
+        "require": "./nodejs/zaft_js.cjs",
+        "import": "./nodejs/zaft_js.js"
+      },
+      "browser": {
+        "import": "./web/zaft_js.js"
+      },
+      "default": {
+        "import": "./bundler/zaft_js.js"
+      }
+    }
+  },
+  "files": [
+    "bundler/",
+    "web/",
+    "nodejs/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "typescript": "^5.0"
+  }
+}
