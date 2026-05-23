@@ -10,7 +10,7 @@ env:
   RUST_BACKTRACE: 1
 
 permissions:
-  id-token: write  # Required for OIDC
+  id-token: write
   contents: read
 
 jobs:
@@ -41,13 +41,19 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Build (bundler target)
-        run: wasm-pack build --release --target bundler --out-dir pkg/bundler zaft-js
+        run: |
+          RUSTFLAGS="-C target-feature=+simd128" \
+          wasm-pack build --release --target bundler --out-dir pkg/bundler zaft-js
 
       - name: Build (web target)
-        run: wasm-pack build --release --target web --out-dir pkg/web zaft-js
+        run: |
+          RUSTFLAGS="-C target-feature=+simd128" \
+          wasm-pack build --release --target web --out-dir pkg/web zaft-js
 
       - name: Build (nodejs target)
-        run: wasm-pack build --release --target nodejs --out-dir pkg/nodejs zaft-js
+        run: |
+          RUSTFLAGS="-C target-feature=+simd128" \
+          wasm-pack build --release --target nodejs --out-dir pkg/nodejs zaft-js
 
       - name: Upload pkg artifact
         uses: actions/upload-artifact@v4
@@ -64,6 +70,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -79,7 +86,8 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Connect
+      # Required for OIDC trusted publishing
+      - name: Install dependencies
         working-directory: zaft-js
         run: npm install && npm ci
 
@@ -96,11 +104,37 @@ jobs:
           for target in bundler web nodejs; do
             PKG_VERSION=$(node -p "require('./zaft-js/pkg/$target/package.json').version")
             if [ "$PKG_VERSION" != "$CARGO_VERSION" ]; then
-              echo "Version mismatch in $target: Cargo=$CARGO_VERSION pkg=$PKG_VERSION"
+              echo "Version mismatch in $target: Cargo=$CARGO_VERSION, pkg=$PKG_VERSION"
               exit 1
             fi
           done
 
-      - name: Publish nodejs package
-        if: ${{ !inputs.dry_run }}
-        run: npm publish zaft-js/pkg/nodejs/ --access public
+      - name: Assemble dist/
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          mkdir -p dist/bundler dist/web dist/nodejs
+
+          # Copy build outputs, excluding the per-build package.json and
+          # .gitignore that wasm-pack generates — we use the repo's package.json.
+          rsync -a --exclude='package.json' --exclude='.gitignore' \
+            zaft-js/pkg/bundler/ dist/bundler/
+          rsync -a --exclude='package.json' --exclude='.gitignore' \
+            zaft-js/pkg/web/ dist/web/
+          rsync -a --exclude='package.json' --exclude='.gitignore' \
+            zaft-js/pkg/nodejs/ dist/nodejs/
+
+          # wasm-pack nodejs target emits zaft_js.js using require() internally.
+          # Copy to .cjs so it loads correctly under "type":"module" packages.
+          cp dist/nodejs/zaft_js.js dist/nodejs/zaft_js.cjs
+
+          cp README.md dist/README.md
+
+          # Stamp version into the repo's package.json and write to dist/.
+          sed "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" \
+            zaft-js/package.json > dist/package.json
+
+      - name: Publish dist/
+        run: npm publish dist/ --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
