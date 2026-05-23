@@ -48,12 +48,18 @@ fn norm_scale(norm: &str, n: usize, inverse: bool) -> Result<f64, JsValue> {
 
 /// View an interleaved f64 slice as Complex<f64> without copying.
 fn as_complex_f64(v: &[f64]) -> &[Complex<f64>] {
-    assert!(v.len() % 2 == 0, "interleaved array must have even length");
+    assert!(
+        v.len().is_multiple_of(2),
+        "interleaved array must have even length"
+    );
     unsafe { std::slice::from_raw_parts(v.as_ptr() as *const Complex<f64>, v.len() / 2) }
 }
 
 fn as_complex_f32(v: &[f32]) -> &[Complex<f32>] {
-    assert!(v.len() % 2 == 0, "interleaved array must have even length");
+    assert!(
+        v.len().is_multiple_of(2),
+        "interleaved array must have even length"
+    );
     unsafe { std::slice::from_raw_parts(v.as_ptr() as *const Complex<f32>, v.len() / 2) }
 }
 
@@ -417,13 +423,13 @@ pub fn irfft32(input: &[f32], n: Option<usize>, norm: Option<String>) -> Result<
 #[wasm_bindgen]
 pub fn fftfreq(n: usize, d: Option<f64>) -> Vec<f64> {
     let d = d.unwrap_or(1.0);
-    let half = (n + 1) / 2;
+    let half = n.div_ceil(2);
     let mut out = vec![0.0_f64; n];
-    for i in 0..half {
-        out[i] = i as f64 / (n as f64 * d);
+    for (i, dst) in out.iter_mut().enumerate().take(half) {
+        *dst = i as f64 / (n as f64 * d);
     }
-    for i in half..n {
-        out[i] = (i as f64 - n as f64) / (n as f64 * d);
+    for (i, dst) in out.iter_mut().enumerate().take(n).skip(half) {
+        *dst = (i as f64 - n as f64) / (n as f64 * d);
     }
     out
 }
@@ -445,7 +451,7 @@ pub fn next_fast_len(target: usize) -> usize {
     }
     let smooth = |mut n: usize| -> bool {
         for p in [2usize, 3, 5, 7, 11, 13] {
-            while n % p == 0 {
+            while n.is_multiple_of(p) {
                 n /= p;
             }
         }
