@@ -1,14 +1,14 @@
 # zaft — FFT for JavaScript / TypeScript
 
-[![npm](https://img.shields.io/npm/v/zaft)](https://www.npmjs.com/package/zaft)
-[![CI](https://github.com/yourname/zaft-wasm/actions/workflows/ci.yml/badge.svg)](https://github.com/yourname/zaft-wasm/actions)
+[![npm](https://img.shields.io/npm/v/zaft)](https://www.npmjs.com/package/@radzivon.bartoshyk/zaft)
+[![CI](https://github.com/awxkee/zaft/actions/workflows/ci.yml/badge.svg)](https://github.com/awxkee/zaft/npm_publish.yml)
 
 High-performance FFT for the browser and Node.js, compiled from Rust to WebAssembly with **SIMD acceleration** (`simd128`).
 
 ## Installation
 
 ```bash
-npm install zaft
+yarn add @radzivon.bartoshyk/zaft
 ```
 
 ## Complex number layout

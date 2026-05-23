@@ -6,3 +6,4 @@ docs
 .cargo/config.toml
 *.so
 zaft-py/.venv
+zaft-js/dist
