@@ -1,7 +1,7 @@
 # zaft — Fast Fourier Transform for Python
 
 [![PyPI](https://img.shields.io/pypi/v/zaft)](https://pypi.org/project/zaft/)
-[![CI](https://github.com/yourname/zaft-py/actions/workflows/ci.yml/badge.svg)](https://github.com/yourname/zaft-py/actions)
+[![CI](https://github.com/awxkee/zaft/actions/workflows/npm_publish.yml/badge.svg)]([https://github.com/awxkee/zaft/.github/workflows/publish_pypi.yml](https://github.com/awxkee/zaft/blob/master/.github/workflows/publish_pypi.yml))
 
 **zaft** is a drop-in replacement for `numpy.fft` and `scipy.fft` backed by a
 hand-tuned Rust engine with SIMD acceleration:
