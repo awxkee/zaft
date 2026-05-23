@@ -169,7 +169,7 @@ impl Plan {
                 let src = ro.as_slice()?;
                 let mut buf = vec![Complex::new(0.0_f64, 0.0); self.n];
                 buf[..src.len().min(self.n)].copy_from_slice(&src[..src.len().min(self.n)]);
-                fwd.execute(&mut buf).map_err(zaft_err)?;
+                py.detach(|| fwd.execute(&mut buf).map_err(zaft_err))?;
                 Ok(buf.into_pyarray(py).into_any().unbind())
             }
             PlanInner::F32 { fwd, .. } => {
@@ -180,7 +180,7 @@ impl Plan {
                 let src = ro.as_slice()?;
                 let mut buf = vec![Complex::new(0.0_f32, 0.0); self.n];
                 buf[..src.len().min(self.n)].copy_from_slice(&src[..src.len().min(self.n)]);
-                fwd.execute(&mut buf).map_err(zaft_err)?;
+                py.detach(|| fwd.execute(&mut buf).map_err(zaft_err))?;
                 Ok(buf.into_pyarray(py).into_any().unbind())
             }
         }
@@ -201,7 +201,7 @@ impl Plan {
                 let src = ro.as_slice()?;
                 let mut buf = vec![Complex::new(0.0_f64, 0.0); self.n];
                 buf[..src.len().min(self.n)].copy_from_slice(&src[..src.len().min(self.n)]);
-                inv.execute(&mut buf).map_err(zaft_err)?;
+                py.detach(|| inv.execute(&mut buf).map_err(zaft_err))?;
                 Ok(buf.into_pyarray(py).into_any().unbind())
             }
             PlanInner::F32 { inv, .. } => {
@@ -212,7 +212,7 @@ impl Plan {
                 let src = ro.as_slice()?;
                 let mut buf = vec![Complex::new(0.0_f32, 0.0); self.n];
                 buf[..src.len().min(self.n)].copy_from_slice(&src[..src.len().min(self.n)]);
-                inv.execute(&mut buf).map_err(zaft_err)?;
+                py.detach(|| inv.execute(&mut buf).map_err(zaft_err))?;
                 Ok(buf.into_pyarray(py).into_any().unbind())
             }
         }
@@ -328,7 +328,7 @@ fn rfft<'py>(
         let mut input = vec![0.0_f64; size];
         input[..sl.len().min(size)].copy_from_slice(&sl[..sl.len().min(size)]);
         let mut output = vec![Complex::new(0.0_f64, 0.0); size / 2 + 1];
-        exec.execute(&input, &mut output).map_err(zaft_err)?;
+        py.detach(|| exec.execute(&input, &mut output).map_err(zaft_err))?;
         if (scale - 1.0).abs() > f64::EPSILON {
             output.iter_mut().for_each(|v| *v *= scale);
         }
@@ -343,7 +343,7 @@ fn rfft<'py>(
         let mut input = vec![0.0_f32; size];
         input[..sl.len().min(size)].copy_from_slice(&sl[..sl.len().min(size)]);
         let mut output = vec![Complex::new(0.0_f32, 0.0); size / 2 + 1];
-        exec.execute(&input, &mut output).map_err(zaft_err)?;
+        py.detach(|| exec.execute(&input, &mut output).map_err(zaft_err))?;
         if (scale - 1.0f32).abs() > f32::EPSILON {
             output.iter_mut().for_each(|v| *v *= scale);
         }
@@ -372,7 +372,7 @@ fn irfft<'py>(
         let scale = parse_norm(norm, size, true)?;
         let exec = Zaft::make_c2r_fft_f64(size).map_err(zaft_err)?;
         let mut output = vec![0.0_f64; size];
-        exec.execute(src, &mut output).map_err(zaft_err)?;
+        py.detach(|| exec.execute(src, &mut output).map_err(zaft_err))?;
         if (scale - 1.0).abs() > f64::EPSILON {
             output.iter_mut().for_each(|v| *v *= scale);
         }
@@ -386,7 +386,7 @@ fn irfft<'py>(
         let scale = parse_norm(norm, size, true)? as f32;
         let exec = Zaft::make_c2r_fft_f32(size).map_err(zaft_err)?;
         let mut output = vec![0.0_f32; size];
-        exec.execute(src, &mut output).map_err(zaft_err)?;
+        py.detach(|| exec.execute(src, &mut output).map_err(zaft_err))?;
         if (scale - 1.0f32).abs() > f32::EPSILON {
             output.iter_mut().for_each(|v| *v *= scale);
         }
@@ -437,7 +437,7 @@ fn fft2<'py>(
         return Err(PyValueError::new_err("buffer size is too small"));
     }
     let mut buf = src[..rows * cols].to_vec();
-    exec.execute(&mut buf).map_err(zaft_err)?;
+    py.detach(|| exec.execute(&mut buf).map_err(zaft_err))?;
     let mut buf = transpose_back(&buf, out_rows, out_cols);
     if (scale - 1.0).abs() > f64::EPSILON {
         buf.iter_mut().for_each(|v| *v *= scale);
@@ -471,7 +471,7 @@ fn ifft2<'py>(
         return Err(PyValueError::new_err("buffer size is too small"));
     }
     let mut buf = transpose_back(&src, out_cols, out_rows);
-    exec.execute(&mut buf).map_err(zaft_err)?;
+    py.detach(|| exec.execute(&mut buf).map_err(zaft_err))?;
     buf.iter_mut().for_each(|v| *v *= scale);
     // buf after execute is row-major [out_rows x out_cols] — read as such.
     let rows2d: Vec<Vec<Complex64>> = buf.chunks(out_cols).map(|c| c.to_vec()).collect();
