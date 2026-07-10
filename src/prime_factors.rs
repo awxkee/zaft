@@ -30,86 +30,213 @@ use crate::util::{
     is_power_of_eleven, is_power_of_five, is_power_of_seven, is_power_of_six, is_power_of_ten,
     is_power_of_thirteen, is_power_of_three, is_power_of_twelve,
 };
-use num_traits::{One, PrimInt, Zero};
 
-/// Return the prime factors of `n` as a Vec with multiplicity.
-/// For example: `prime_factors(360) -> [2,2,2,3,3,5]`.
-/// Special cases:
-///  - n == 0 -> returns empty vec (undefined factorization)
-///  - n == 1 -> returns empty vec
+/// Uses deterministic Miller-Rabin primality testing and Pollard-Brent factorization,
+/// both valid for the full `u64` range. Small factors are stripped first so common FFT
+/// dimensions retain a very cheap fast path.
 pub(crate) fn prime_factors(mut n: u64) -> Vec<u64> {
-    let mut res = Vec::new();
+    static SMALL_PRIMES: [u64; 12] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
+
+    let mut factors = Vec::new();
     if n < 2 {
-        return res;
+        return factors;
     }
 
-    // factor out 2s
-    while (n & 1) == 0 {
-        res.push(2);
-        n >>= 1;
-    }
-
-    // factor out 3s
-    while n.is_multiple_of(3) {
-        res.push(3);
-        n /= 3;
-    }
-
-    // trial divide by 6k - 1 and 6k + 1
-    let mut p: u64 = 5;
-    while (p as u128) * (p as u128) <= n as u128 {
-        while n.is_multiple_of(p) {
-            res.push(p);
-            n /= p;
+    // This is faster than Miller-Rabin/Pollard for the overwhelmingly common small-radix cases.
+    for prime in SMALL_PRIMES {
+        while n.is_multiple_of(prime) {
+            factors.push(prime);
+            n /= prime;
         }
-        let q = p + 2; // p = 6k-1, q = 6k+1
-        while n.is_multiple_of(q) {
-            res.push(q);
-            n /= q;
-        }
-        p += 6;
     }
 
-    // if remaining n > 1 it's prime
+    let mut pending = Vec::new();
     if n > 1 {
-        res.push(n);
+        pending.push(n);
     }
-    res
+
+    while let Some(value) = pending.pop() {
+        if is_prime_u64(value) {
+            factors.push(value);
+            continue;
+        }
+
+        let divisor = pollard_brent(value);
+        pending.push(divisor);
+        pending.push(value / divisor);
+    }
+
+    factors.sort_unstable();
+    factors
+}
+
+#[inline]
+fn gcd_u64(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let rem = a % b;
+        a = b;
+        b = rem;
+    }
+    a
+}
+
+#[inline]
+fn mul_mod_u64(a: u64, b: u64, modulus: u64) -> u64 {
+    ((a as u128 * b as u128) % modulus as u128) as u64
+}
+
+#[inline]
+fn add_mod_u64(a: u64, b: u64, modulus: u64) -> u64 {
+    ((a as u128 + b as u128) % modulus as u128) as u64
+}
+
+#[inline]
+fn rho_step(value: u64, constant: u64, modulus: u64) -> u64 {
+    add_mod_u64(mul_mod_u64(value, value, modulus), constant, modulus)
+}
+
+/// Deterministic Miller-Rabin for all `u64` values.
+fn is_prime_u64(n: u64) -> bool {
+    static SMALL_PRIMES: [u64; 12] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
+    // This seven-base set is deterministic over the complete unsigned 64-bit domain.
+    static WITNESSES: [u64; 7] = [2, 325, 9_375, 28_178, 450_775, 9_780_504, 1_795_265_022];
+
+    if n < 2 {
+        return false;
+    }
+    for prime in SMALL_PRIMES {
+        if n.is_multiple_of(prime) {
+            return n == prime;
+        }
+    }
+
+    let powers_of_two = (n - 1).trailing_zeros();
+    let odd_part = (n - 1) >> powers_of_two;
+
+    'witness: for witness in WITNESSES {
+        let base = witness % n;
+        if base == 0 {
+            continue;
+        }
+
+        let mut value = modular_exponent(base, odd_part, n);
+        if value == 1 || value == n - 1 {
+            continue;
+        }
+
+        for _ in 1..powers_of_two {
+            value = mul_mod_u64(value, value, n);
+            if value == n - 1 {
+                continue 'witness;
+            }
+        }
+        return false;
+    }
+
+    true
+}
+
+#[inline]
+fn splitmix64(state: &mut u64) -> u64 {
+    *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    let mut value = *state;
+    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    value ^ (value >> 31)
+}
+
+/// Pollard's rho with Brent cycle detection and batched GCDs.
+///
+/// The caller only supplies odd composite values which have no factor <= 37.
+fn pollard_brent(n: u64) -> u64 {
+    const GCD_BATCH: usize = 128;
+
+    debug_assert!(n > 1 && !n.is_multiple_of(2) && !is_prime_u64(n));
+
+    let mut state = n ^ 0x243f_6a88_85a3_08d3;
+    loop {
+        // SplitMix gives deterministic but decorrelated retries, avoiding a `rand` dependency.
+        let mut y = 2 + splitmix64(&mut state) % (n - 3);
+        let constant = 1 + splitmix64(&mut state) % (n - 1);
+        let mut cycle_len = 1usize;
+        let mut gcd = 1u64;
+        let mut x = 0u64;
+        let mut saved_y = 0u64;
+
+        while gcd == 1 {
+            x = y;
+            for _ in 0..cycle_len {
+                y = rho_step(y, constant, n);
+            }
+
+            let mut offset = 0usize;
+            while offset < cycle_len && gcd == 1 {
+                saved_y = y;
+                let batch_len = (cycle_len - offset).min(GCD_BATCH);
+                let mut product = 1u64;
+
+                for _ in 0..batch_len {
+                    y = rho_step(y, constant, n);
+                    product = mul_mod_u64(product, x.abs_diff(y), n);
+                }
+
+                gcd = gcd_u64(product, n);
+                offset += batch_len;
+            }
+
+            let Some(next_cycle_len) = cycle_len.checked_mul(2) else {
+                gcd = n;
+                break;
+            };
+            cycle_len = next_cycle_len;
+        }
+
+        if gcd == n {
+            loop {
+                saved_y = rho_step(saved_y, constant, n);
+                gcd = gcd_u64(x.abs_diff(saved_y), n);
+                if gcd != 1 {
+                    break;
+                }
+            }
+        }
+
+        if gcd != n {
+            return gcd;
+        }
+    }
 }
 
 pub(crate) fn primitive_root(prime: u64) -> Option<u64> {
-    let test_exponents: Vec<u64> = prime_factors(prime - 1)
-        .iter()
-        .map(|factor| (prime - 1) / factor)
+    let test_exponents: Vec<u64> = prime_factorization(prime - 1)
+        .into_iter()
+        .map(|(factor, _)| (prime - 1) / factor)
         .collect();
     'next: for potential_root in 2..prime {
-        // for each distinct factor, if potential_root^(p-1)/factor mod p is 1, reject it
-        for exp in &test_exponents {
-            if modular_exponent(potential_root, *exp, prime) == 1 {
+        // For each distinct factor, if potential_root^((p - 1) / factor) mod p is 1,
+        // reject it.
+        for &exponent in &test_exponents {
+            if modular_exponent(potential_root, exponent, prime) == 1 {
                 continue 'next;
             }
         }
 
-        // if we reach this point, it means this root was not rejected, so return it
         return Some(potential_root);
     }
     None
 }
 
-/// computes base^exponent % modulo using the standard exponentiation by squaring algorithm
-pub(crate) fn modular_exponent<T: PrimInt>(mut base: T, mut exponent: T, modulo: T) -> T {
-    let one = T::one();
+fn modular_exponent(mut base: u64, mut exponent: u64, modulus: u64) -> u64 {
+    let mut result = 1u64;
+    base %= modulus;
 
-    let mut result = one;
-
-    while exponent > Zero::zero() {
-        if exponent & one == one {
-            result = result * base % modulo;
+    while exponent != 0 {
+        if exponent & 1 != 0 {
+            result = mul_mod_u64(result, base, modulus);
         }
-        exponent = exponent >> One::one();
-        base = (base * base) % modulo;
+        exponent >>= 1;
+        base = mul_mod_u64(base, base, modulus);
     }
-
     result
 }
 
@@ -276,61 +403,61 @@ impl PrimeFactors {
 }
 
 pub(crate) fn split_factors_closest(factors: &[(u64, u32)]) -> (u64, u64) {
-    // Step 1: expand the factors into a flat list of primes
-    let mut primes = Vec::new();
-    for &(p, exp) in factors {
-        for _ in 0..exp {
-            primes.push(p);
-        }
-    }
+    let total = factors.iter().fold(1u64, |product, &(prime, exponent)| {
+        let power = prime
+            .checked_pow(exponent)
+            .expect("prime factor power exceeds u64");
+        product
+            .checked_mul(power)
+            .expect("prime factorization product exceeds u64")
+    });
 
-    let total: u64 = primes.iter().product();
-
-    // Step 2: recursive helper to try all subset products
-    fn dfs(
-        primes: &[u64],
+    // Enumerate each distinct divisor once. The old implementation expanded repeated
+    // primes and visited 2^sum(exponents) subsets; this visits product(exponent + 1)
+    // states instead. Restricting products to <= sqrt(total) lets the closest pair be
+    // found by maximizing its smaller member.
+    fn visit_divisors(
+        factors: &[(u64, u32)],
         index: usize,
-        prod: u64,
+        product: u64,
         total: u64,
         best: &mut u64,
-        best_prod: &mut u64,
     ) {
-        if index == primes.len() {
-            let other = total / prod;
-            let diff = prod.abs_diff(other);
-            if diff < *best {
-                *best = diff;
-                *best_prod = prod;
-            }
+        if product > total / product {
+            return;
+        }
+        if index == factors.len() {
+            *best = (*best).max(product);
             return;
         }
 
-        // include current prime in prod
-        dfs(
-            primes,
-            index + 1,
-            prod * primes[index],
-            total,
-            best,
-            best_prod,
-        );
-        // exclude current prime from prod
-        dfs(primes, index + 1, prod, total, best, best_prod);
+        let (prime, exponent) = factors[index];
+        let mut next_product = product;
+        for power in 0..=exponent {
+            if next_product > total / next_product {
+                break;
+            }
+            visit_divisors(factors, index + 1, next_product, total, best);
+
+            if power != exponent {
+                let Some(value) = next_product.checked_mul(prime) else {
+                    break;
+                };
+                next_product = value;
+            }
+        }
     }
 
-    let mut best_diff = u64::MAX;
-    let mut best_prod = 1;
+    let mut smaller = 1u64;
+    visit_divisors(factors, 0, 1, total, &mut smaller);
 
-    dfs(&primes, 0, 1, total, &mut best_diff, &mut best_prod);
-
-    let n1 = best_prod;
-    let n2 = total / best_prod;
-    (n1, n2)
+    // Preserve the previous API's larger-first ordering.
+    (total / smaller, smaller)
 }
 
 pub(crate) fn can_be_two_factors(factors: &[(u64, u32)]) -> Option<(u64, u64)> {
     // Allowed numbers
-    const ALLOWED: [u64; 24] = [
+    static ALLOWED: [u64; 24] = [
         2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 23, 25, 27, 29, 31,
     ];
 
@@ -358,7 +485,7 @@ pub(crate) fn can_be_two_factors(factors: &[(u64, u32)]) -> Option<(u64, u64)> {
 
 pub(crate) fn try_greedy_pure_power_split(factors: &[(u64, u32)]) -> Option<(u64, u64)> {
     // Preferred bases (note: 4 is composite, but we allow it as "preferred")
-    const PREF_BASES: [u64; 8] = [2, 3, 4, 5, 7, 10, 11, 13];
+    static PREF_BASES: [u64; 8] = [2, 3, 4, 5, 7, 10, 11, 13];
     let number = factors.iter().map(|x| x.0.pow(x.1)).product::<u64>();
 
     // Recursive helper to find max power of `base` that divides `n`
@@ -405,6 +532,10 @@ mod tests {
     fn test_large_prime() {
         let p = 4_294_967_291u64; // this is prime
         assert_eq!(prime_factors(p), vec![p]);
+        assert_eq!(
+            prime_factors(18_446_744_073_709_551_557),
+            vec![18_446_744_073_709_551_557]
+        );
         assert_eq!(prime_factorization(p), vec![(p, 1)]);
         assert_eq!(prime_factorization(2028), vec![(2, 2), (3, 1), (13, 2)]);
         assert_eq!(prime_factorization(900), vec![(2, 2), (3, 2), (5, 2)]);
@@ -414,6 +545,20 @@ mod tests {
         assert_eq!(prime_factorization(1200), vec![(2, 4), (3, 1), (5, 2)]);
         assert_eq!(prime_factorization(1295), vec![(5, 1), (7, 1), (37, 1)]);
         assert_eq!(prime_factorization(1859), vec![(11, 1), (13, 2)]);
+    }
+
+    #[test]
+    fn test_full_width_factorization() {
+        let p = 4_294_967_279u64;
+        let q = 4_294_967_291u64;
+        assert_eq!(prime_factors(p * q), vec![p, q]);
+        assert_eq!(
+            prime_factors(u64::MAX),
+            vec![3, 5, 17, 257, 641, 65_537, 6_700_417]
+        );
+
+        // A strong pseudoprime for several smaller witness sets.
+        assert!(!is_prime_u64(341_550_071_728_321));
     }
 
     #[test]
@@ -437,6 +582,10 @@ mod tests {
         assert_eq!(
             split_factors_closest(&vec![(2, 2), (3, 1), (13, 2)]),
             (52, 39)
+        );
+        assert_eq!(
+            split_factors_closest(&[(2, 63)]),
+            (4_294_967_296, 2_147_483_648)
         );
     }
 
