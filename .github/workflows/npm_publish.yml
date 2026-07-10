@@ -86,7 +86,7 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
           
-      - run: npm install -g npm@latest
+      - run: npm install -g npm@11.18.0
 
       # Required for OIDC trusted publishing
       - name: Install dependencies
