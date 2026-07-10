@@ -114,6 +114,7 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_equal_oof_sizes(src.len(), dst.len(), self.length())?;
         self.execute_out_of_place_with_scratch(src, dst, &mut [])
     }
 
@@ -123,6 +124,7 @@ where
         dst: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_equal_oof_sizes(src.len(), dst.len(), self.length())?;
         if !src.len().is_multiple_of(self.execution_length) {
             return Err(ZaftError::InvalidSizeMultiplier(
                 src.len(),
@@ -167,6 +169,7 @@ where
         dst: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_equal_oof_sizes(src.len(), dst.len(), self.length())?;
         self.execute_out_of_place_with_scratch(src, dst, scratch)
     }
 

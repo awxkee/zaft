@@ -54,10 +54,11 @@ where
         fft_direction: FftDirection,
     ) -> Result<BluesteinRfft<T>, ZaftError> {
         let convolve_fft_len = convolve_fft.length();
+        let min_convolve_len = crate::util::checked_bluestein_convolution_len(size)?;
         assert!(
-            size * 2 - 1 <= convolve_fft_len,
+            min_convolve_len <= convolve_fft_len,
             "Bluestein requires convolve_fft.length() >= self.length() * 2 - 1. Expected >= {}, got {}",
-            size * 2 - 1,
+            min_convolve_len,
             convolve_fft_len
         );
 
@@ -69,7 +70,7 @@ where
         );
 
         let mut convolve_fft_twiddles = try_vec![Complex::zero(); convolve_fft_len];
-        make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse());
+        make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse())?;
 
         convolve_fft_twiddles[0] = convolve_fft_twiddles[0] * inner_fft_scale;
         let (lo, hi) = convolve_fft_twiddles.split_at_mut(convolve_fft_len - size + 1);
@@ -84,7 +85,7 @@ where
         convolve_fft.execute(&mut convolve_fft_twiddles)?;
 
         let mut twiddles = try_vec![Complex::zero(); size];
-        make_bluesteins_twiddles(&mut twiddles, direction);
+        make_bluesteins_twiddles(&mut twiddles, direction)?;
 
         let convolve_scratch_length = convolve_fft.scratch_length();
 
@@ -104,6 +105,12 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
         self.execute_with_scratch(input, output, scratch.as_mut_slice())
     }
@@ -114,18 +121,12 @@ where
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if !input.len().is_multiple_of(self.execution_length) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                input.len(),
-                self.execution_length,
-            ));
-        }
-        if !output.len().is_multiple_of(self.complex_length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                input.len(),
-                self.complex_length(),
-            ));
-        }
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
 
         let scratch = validate_scratch!(scratch, self.complex_scratch_length());
         let (inner_input, convolve_scratch) =

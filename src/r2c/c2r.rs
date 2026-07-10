@@ -120,6 +120,12 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.complex_length(),
+            output.len(),
+            self.real_length(),
+        )?;
         let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
         self.execute_with_scratch(input, output, scratch.as_mut_slice())
     }
@@ -130,15 +136,12 @@ where
         output: &mut [T],
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if !output.len().is_multiple_of(self.length) {
-            return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
-        }
-        if !input.len().is_multiple_of(self.complex_length) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                output.len(),
-                self.complex_length,
-            ));
-        }
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.complex_length(),
+            output.len(),
+            self.real_length(),
+        )?;
 
         // we want to do unsafe cast here, we'll need to ensure everything is correct for this one
         assert_eq!(align_of::<T>(), align_of::<Complex<T>>());

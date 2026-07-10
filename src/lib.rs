@@ -853,7 +853,7 @@ impl Zaft {
         // the only restriction is that it has to be (2 * len - 1) or larger. So we want the fastest FFT we can compute at or above that size.
 
         // the most obvious choice is the next-highest power of two, but there's one trick we can pull to get a smaller fft that we can be 100% certain will be faster
-        let min_inner_len = 2 * n - 1;
+        let min_inner_len = crate::util::checked_bluestein_convolution_len(n)?;
         let inner_len_pow2 = min_inner_len
             .checked_next_power_of_two()
             .ok_or(ZaftError::Overflow)?;

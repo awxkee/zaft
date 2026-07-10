@@ -221,6 +221,7 @@ where
         dst: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_equal_oof_sizes(src.len(), dst.len(), self.length())?;
         if !src.len().is_multiple_of(41) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), 41));
         }

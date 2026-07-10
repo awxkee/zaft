@@ -57,6 +57,7 @@ where
         src: &[Complex<T>],
         dst: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_equal_oof_sizes(src.len(), dst.len(), self.length())?;
         for (dst, src) in dst.iter_mut().zip(src.iter()) {
             *dst = *src;
         }
@@ -69,6 +70,7 @@ where
         dst: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_equal_oof_sizes(src.len(), dst.len(), self.length())?;
         for (dst, src) in dst.iter_mut().zip(src.iter()) {
             *dst = *src;
         }
@@ -81,6 +83,7 @@ where
         dst: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_equal_oof_sizes(src.len(), dst.len(), self.length())?;
         for (dst, src) in dst.iter_mut().zip(src.iter()) {
             *dst = *src;
         }

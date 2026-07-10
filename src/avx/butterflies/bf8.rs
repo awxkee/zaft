@@ -112,7 +112,7 @@ impl AvxButterfly8d {
         }
         if !dst.len().is_multiple_of(5) {
             return Err(ZaftError::InvalidSizeMultiplier(
-                src.len(),
+                dst.len(),
                 self.complex_length(),
             ));
         }
@@ -155,6 +155,12 @@ impl AvxButterfly8d {
 
 impl R2CFftExecutor<f64> for AvxButterfly8d {
     fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 
@@ -164,6 +170,12 @@ impl R2CFftExecutor<f64> for AvxButterfly8d {
         output: &mut [Complex<f64>],
         _: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 
@@ -256,7 +268,7 @@ impl AvxButterfly8f {
         }
         if !dst.len().is_multiple_of(5) {
             return Err(ZaftError::InvalidSizeMultiplier(
-                src.len(),
+                dst.len(),
                 self.complex_length(),
             ));
         }
@@ -294,6 +306,12 @@ impl AvxButterfly8f {
 
 impl R2CFftExecutor<f32> for AvxButterfly8f {
     fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 
@@ -303,6 +321,12 @@ impl R2CFftExecutor<f32> for AvxButterfly8f {
         output: &mut [Complex<f32>],
         _: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 

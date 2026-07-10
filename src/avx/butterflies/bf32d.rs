@@ -216,6 +216,12 @@ impl AvxButterfly32d {
 
 impl R2CFftExecutor<f64> for AvxButterfly32d {
     fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 
@@ -225,6 +231,12 @@ impl R2CFftExecutor<f64> for AvxButterfly32d {
         output: &mut [Complex<f64>],
         _: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 

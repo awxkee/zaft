@@ -200,6 +200,7 @@ where
         dst: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_equal_oof_sizes(src.len(), dst.len(), self.length())?;
         if !src.len().is_multiple_of(29) {
             return Err(ZaftError::InvalidSizeMultiplier(src.len(), self.length()));
         }
@@ -371,18 +372,12 @@ where
 
 impl<T: FftSample> R2CFftExecutor<T> for RfftButterfly29<T> {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !input.len().is_multiple_of(self.real_length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                input.len(),
-                self.real_length(),
-            ));
-        }
-        if !output.len().is_multiple_of(self.complex_length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                input.len(),
-                self.complex_length(),
-            ));
-        }
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
 
         for (chunk, dst) in input
             .as_chunks::<29>()
@@ -967,6 +962,12 @@ impl<T: FftSample> R2CFftExecutor<T> for RfftButterfly29<T> {
         output: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         R2CFftExecutor::execute(self, input, output)
     }
 

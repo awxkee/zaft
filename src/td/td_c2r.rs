@@ -109,21 +109,12 @@ impl<T: Copy + Default + Send + Sync> TwoDimensionalExecutorC2R<T> for TwoDimens
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
         let complex_size = self.complex_size();
-        if !source.len().is_multiple_of(complex_size) {
-            return Err(ZaftError::InvalidSizeMultiplier(output.len(), complex_size));
-        }
-        if !output.len().is_multiple_of(self.real_size()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                output.len(),
-                self.real_size(),
-            ));
-        }
-        if source.len() / complex_size != output.len() / self.real_size() {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                output.len() / self.real_size(),
-                source.len() / complex_size,
-            ));
-        }
+        crate::util::validate_oof_block_sizes(
+            source.len(),
+            complex_size,
+            output.len(),
+            self.real_size(),
+        )?;
 
         let complex_row_size = (self.width / 2) + 1;
         let scratch = validate_scratch!(scratch, self.scratch_length());

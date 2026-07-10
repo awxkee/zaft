@@ -162,11 +162,23 @@ macro_rules! define_mixed_radix_avx_f {
 
         impl C2RFftExecutor<f32> for $radix_name {
             fn execute(&self, input: &[Complex<f32>], output: &mut [f32]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.complex_length(),
+                    output.len(),
+                    self.real_length(),
+                )?;
                 let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
 
             fn execute_with_scratch(&self, input: &[Complex<f32>], output: &mut [f32], scratch: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.complex_length(),
+                    output.len(),
+                    self.real_length(),
+                )?;
                 unsafe {
                     self.execute_oof_impl(input, output, scratch)
                 }
