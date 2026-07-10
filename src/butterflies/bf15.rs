@@ -133,7 +133,12 @@ where
             self.complex_length(),
         )?;
 
-        for (chunk, complex) in input.chunks_exact(15).zip(output.chunks_exact_mut(8)) {
+        for (chunk, complex) in input
+            .as_chunks::<15>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<8>().0.iter_mut())
+        {
             let u0 = Complex::from(chunk[0]);
             let u1 = Complex::from(chunk[1]);
             let u2 = Complex::from(chunk[2]);

@@ -386,7 +386,12 @@ where
             self.complex_length(),
         )?;
 
-        for (input, complex) in input.chunks_exact(17).zip(output.chunks_exact_mut(9)) {
+        for (input, complex) in input
+            .as_chunks::<17>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<9>().0.iter_mut())
+        {
             let u0 = input[0];
             let u1 = input[1];
             let u2 = input[2];

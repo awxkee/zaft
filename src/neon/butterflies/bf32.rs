@@ -77,7 +77,12 @@ macro_rules! gen_bf32d {
                     ));
                 }
 
-                for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
+                for (dst, src) in dst
+                    .as_chunks_mut::<17>()
+                    .0
+                    .iter_mut()
+                    .zip(src.as_chunks::<32>().0.iter())
+                {
                     self.bf32.exec_store_r2c(src, &mut InPlaceStore::new(dst));
                 }
                 Ok(())
@@ -247,7 +252,12 @@ macro_rules! gen_bf32f {
                     let mut rows2: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
                     let mut rows3: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
 
-                    for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
+                    for (dst, src) in dst
+                        .as_chunks_mut::<17>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<32>().0.iter())
+                    {
                         for i in 0..4 {
                             let s0 = NeonStoreF::load(src.get_unchecked(i * 8..));
                             let s1 = NeonStoreF::load(src.get_unchecked(i * 8 + 4..));

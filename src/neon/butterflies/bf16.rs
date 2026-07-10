@@ -87,7 +87,12 @@ macro_rules! gen_bf16d {
                 unsafe {
                     let mut rows = [NeonStoreD::default(); 16];
 
-                    for (dst, src) in dst.chunks_exact_mut(9).zip(src.chunks_exact(16)) {
+                    for (dst, src) in dst
+                        .as_chunks_mut::<9>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<16>().0.iter())
+                    {
                         for i in 0..8 {
                             let [v0, v1] =
                                 NeonStoreD::load(src.get_unchecked(i * 2..)).to_complex();

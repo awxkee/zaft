@@ -104,12 +104,12 @@ pub(crate) fn block_transpose_f32x2_9x2(
 //         // Call the transpose
 //         block_transpose_f32x2_9x2(&src, 9, &mut dst, 2);
 //
-//         for chunk in src.chunks_exact(11) {
+//         for chunk in src.as_chunks::<11>().0.iter() {
 //             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
 //         }
 //         println!("-----");
 //
-//         for chunk in dst.chunks_exact(2) {
+//         for chunk in dst.as_chunks::<2>().0.iter() {
 //             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
 //         }
 //     }

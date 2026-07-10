@@ -193,7 +193,9 @@ macro_rules! test_r2c_butterfly {
                 R2CFftExecutor::execute(&radix_forward, &input, &mut output).unwrap();
 
                 let ref_src = ref_src
-                    .chunks_exact($scale)
+                    .as_chunks::<$scale>()
+                    .0
+                    .iter()
                     .flat_map(|x| (&x[..$scale / 2 + 1]).to_vec())
                     .collect::<Vec<_>>();
 

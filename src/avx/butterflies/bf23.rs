@@ -394,7 +394,7 @@ impl AvxButterfly23<f64> {
         }
 
         unsafe {
-            for chunk in in_place.chunks_exact_mut(23) {
+            for chunk in in_place.as_chunks_mut::<23>().0.iter_mut() {
                 let u0u1 = _mm256_loadu_pd(chunk.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
@@ -499,7 +499,12 @@ impl AvxButterfly23<f64> {
         validate_oof_sizes!(src, dst, 23);
 
         unsafe {
-            for (dst, src) in dst.chunks_exact_mut(23).zip(src.chunks_exact(23)) {
+            for (dst, src) in dst
+                .as_chunks_mut::<23>()
+                .0
+                .iter_mut()
+                .zip(src.as_chunks::<23>().0.iter())
+            {
                 let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
@@ -976,7 +981,7 @@ impl AvxButterfly23<f32> {
         }
 
         unsafe {
-            for chunk in in_place.chunks_exact_mut(46) {
+            for chunk in in_place.as_chunks_mut::<46>().0.iter_mut() {
                 let (u0, u1, u2, u3) = shift_load4!(chunk, 23, 0);
                 let (u4, u5, u6, u7) = shift_load4!(chunk, 23, 4);
                 let (u8, u9, u10, u11) = shift_load4!(chunk, 23, 8);
@@ -997,9 +1002,9 @@ impl AvxButterfly23<f32> {
                 shift_store4!(chunk, 23, 19, q[19], q[20], q[21], q[22]);
             }
 
-            let rem = in_place.chunks_exact_mut(46).into_remainder();
+            let rem = in_place.as_chunks_mut::<46>().1;
 
-            for chunk in rem.chunks_exact_mut(23) {
+            for chunk in rem.as_chunks_mut::<23>().0.iter_mut() {
                 let u0u1u2u3 = _mm256_loadu_ps(chunk.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());
                 let u8u9u10u11 = _mm256_loadu_ps(chunk.get_unchecked(8..).as_ptr().cast());
@@ -1102,7 +1107,12 @@ impl AvxButterfly23<f32> {
         validate_oof_sizes!(src, dst, 23);
 
         unsafe {
-            for (dst, src) in dst.chunks_exact_mut(46).zip(src.chunks_exact(46)) {
+            for (dst, src) in dst
+                .as_chunks_mut::<46>()
+                .0
+                .iter_mut()
+                .zip(src.as_chunks::<46>().0.iter())
+            {
                 let (u0, u1, u2, u3) = shift_load4!(src, 23, 0);
                 let (u4, u5, u6, u7) = shift_load4!(src, 23, 4);
                 let (u8, u9, u10, u11) = shift_load4!(src, 23, 8);
@@ -1123,10 +1133,15 @@ impl AvxButterfly23<f32> {
                 shift_store4!(dst, 23, 19, q[19], q[20], q[21], q[22]);
             }
 
-            let rem_dst = dst.chunks_exact_mut(46).into_remainder();
-            let rem_src = src.chunks_exact(46).remainder();
+            let rem_dst = dst.as_chunks_mut::<46>().1;
+            let rem_src = src.as_chunks::<46>().1;
 
-            for (dst, src) in rem_dst.chunks_exact_mut(23).zip(rem_src.chunks_exact(23)) {
+            for (dst, src) in rem_dst
+                .as_chunks_mut::<23>()
+                .0
+                .iter_mut()
+                .zip(rem_src.as_chunks::<23>().0.iter())
+            {
                 let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
                 let u8u9u10u11 = _mm256_loadu_ps(src.get_unchecked(8..).as_ptr().cast());

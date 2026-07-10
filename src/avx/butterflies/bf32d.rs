@@ -163,7 +163,12 @@ impl AvxButterfly32d {
         unsafe {
             let mut rows0 = [AvxStoreD::zero(); 4];
             let mut rows1 = [AvxStoreD::zero(); 4];
-            for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
+            for (dst, src) in dst
+                .as_chunks_mut::<17>()
+                .0
+                .iter_mut()
+                .zip(src.as_chunks::<32>().0.iter())
+            {
                 for r in 0..4 {
                     let q = AvxStoreD::load(src.get_unchecked(8 * r..));
                     let [v0, v1] = q.to_complex();

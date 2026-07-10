@@ -290,7 +290,7 @@ macro_rules! boring_avx_butterfly_definition {
                     return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
                 }
 
-                for chunk in in_place.chunks_exact_mut($size) {
+                for chunk in in_place.as_chunks_mut::<$size>().0.iter_mut() {
                     use crate::store::InPlaceStore;
                     self.run(&mut InPlaceStore::new(chunk));
                 }
@@ -307,7 +307,12 @@ macro_rules! boring_avx_butterfly_definition {
                 use crate::util::validate_oof_sizes;
                 validate_oof_sizes!(src, dst, $size);
 
-                for (dst, src) in dst.chunks_exact_mut($size).zip(src.chunks_exact($size)) {
+                for (dst, src) in dst
+                    .as_chunks_mut::<$size>()
+                    .0
+                    .iter_mut()
+                    .zip(src.as_chunks::<$size>().0.iter())
+                {
                     use crate::store::BiStore;
                     self.run(&mut BiStore::new(src, dst));
                 }
@@ -412,14 +417,14 @@ macro_rules! boring_avx_butterfly2 {
                     return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
                 }
 
-                for chunk in in_place.chunks_exact_mut($size * 2) {
+                for chunk in in_place.as_chunks_mut::<{ $size * 2 }>().0.iter_mut() {
                     use crate::store::InPlaceStore;
                     self.run2(&mut InPlaceStore::new(chunk));
                 }
 
-                let rem = in_place.chunks_exact_mut($size * 2).into_remainder();
+                let rem = in_place.as_chunks_mut::<{ $size * 2 }>().1;
 
-                for chunk in rem.chunks_exact_mut($size) {
+                for chunk in rem.as_chunks_mut::<$size>().0.iter_mut() {
                     use crate::store::InPlaceStore;
                     self.run(&mut InPlaceStore::new(chunk));
                 }
@@ -437,19 +442,23 @@ macro_rules! boring_avx_butterfly2 {
                 validate_oof_sizes!(src, dst, $size);
 
                 for (dst, src) in dst
-                    .chunks_exact_mut($size * 2)
-                    .zip(src.chunks_exact($size * 2))
+                    .as_chunks_mut::<{ $size * 2 }>()
+                    .0
+                    .iter_mut()
+                    .zip(src.as_chunks::<{ $size * 2 }>().0.iter())
                 {
                     use crate::store::BiStore;
                     self.run2(&mut BiStore::new(src, dst));
                 }
 
-                let rem_dst = dst.chunks_exact_mut($size * 2).into_remainder();
-                let rem_src = src.chunks_exact($size * 2).remainder();
+                let rem_dst = dst.as_chunks_mut::<{ $size * 2 }>().1;
+                let rem_src = src.as_chunks::<{ $size * 2 }>().1;
 
                 for (dst, src) in rem_dst
-                    .chunks_exact_mut($size)
-                    .zip(rem_src.chunks_exact($size))
+                    .as_chunks_mut::<$size>()
+                    .0
+                    .iter_mut()
+                    .zip(rem_src.as_chunks::<$size>().0.iter())
                 {
                     use crate::store::BiStore;
                     self.run(&mut BiStore::new(src, dst));

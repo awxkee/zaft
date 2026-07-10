@@ -251,7 +251,7 @@ macro_rules! define_mixed_radix_neon_d {
                 // Pass 2: chunks that cross or lie beyond the Middle boundary.
                 // The middle row must be assembled from the end of src based on middle_lane.
                 for (c, twiddle_chunk) in twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count - complex_chunks_count)
                     .enumerate()
                 {

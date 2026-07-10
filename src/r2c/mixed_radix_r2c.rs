@@ -285,7 +285,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..10]).chunks_exact(5) {
+        for chunk in (&reference_value[..10]).as_chunks::<5>().0.iter() {
             println!("{:?}", chunk);
         }
 
@@ -333,7 +333,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..10]).chunks_exact(5) {
+        for chunk in (&reference_value[..10]).as_chunks::<5>().0.iter() {
             println!("{:?}", chunk);
         }
 
@@ -379,7 +379,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..8]).chunks_exact(4) {
+        for chunk in (&reference_value[..8]).as_chunks::<4>().0.iter() {
             println!("{:?}", chunk);
         }
 
@@ -426,7 +426,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..11]).chunks_exact(2) {
+        for chunk in (&reference_value[..11]).as_chunks::<2>().0.iter() {
             println!("{:?}", chunk);
         }
 
@@ -473,7 +473,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..8]).chunks_exact(3) {
+        for chunk in (&reference_value[..8]).as_chunks::<3>().0.iter() {
             println!("{:?}", chunk);
         }
 

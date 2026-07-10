@@ -124,7 +124,12 @@ impl AvxButterfly8d {
             let mut rows0: [AvxStoreD; 2] = [AvxStoreD::zero(); 2];
             let mut rows1: [AvxStoreD; 2] = [AvxStoreD::zero(); 2];
 
-            for (chunk, complex) in src.chunks_exact(8).zip(dst.chunks_exact_mut(5)) {
+            for (chunk, complex) in src
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .zip(dst.as_chunks_mut::<5>().0.iter_mut())
+            {
                 // columns
                 for i in 0..2 {
                     let q = AvxStoreD::load(chunk.get_unchecked(i * 4..));
@@ -279,7 +284,12 @@ impl AvxButterfly8f {
         unsafe {
             let mut rows0: [AvxStoreF; 2] = [AvxStoreF::zero(); 2];
 
-            for (chunk, complex) in src.chunks_exact(8).zip(dst.chunks_exact_mut(5)) {
+            for (chunk, complex) in src
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .zip(dst.as_chunks_mut::<5>().0.iter_mut())
+            {
                 // columns
                 let q0 = AvxStoreF::load(chunk);
                 let [v0, v1] = q0.to_complex();

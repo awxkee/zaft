@@ -89,7 +89,12 @@ macro_rules! gen_bf9d {
                 unsafe {
                     let mut rows = [NeonStoreD::default(); 9];
 
-                    for (dst, src) in dst.chunks_exact_mut(5).zip(src.chunks_exact(9)) {
+                    for (dst, src) in dst
+                        .as_chunks_mut::<5>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<9>().0.iter())
+                    {
                         for i in 0..4 {
                             let q = NeonStoreD::load(src.get_unchecked(i * 2..));
                             let [v0, v1] = q.to_complex();
@@ -259,7 +264,12 @@ macro_rules! gen_bf9f {
                     let mut rows0: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
                     let mut rows1: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
 
-                    for (dst, src) in dst.chunks_exact_mut(5).zip(src.chunks_exact(9)) {
+                    for (dst, src) in dst
+                        .as_chunks_mut::<5>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<9>().0.iter())
+                    {
                         // columns
                         for i in 0..3 {
                             let q = NeonStoreF::load3(src.get_unchecked(i * 3..));
