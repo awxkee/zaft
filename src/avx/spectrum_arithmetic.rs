@@ -85,9 +85,11 @@ impl AvxSpectrumArithmetic<f32> {
         let b = b.as_chunks::<16>().1;
 
         for ((dst, src), twiddle) in dst
-            .chunks_exact_mut(2)
-            .zip(a.chunks_exact(2))
-            .zip(b.chunks_exact(2))
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(a.as_chunks::<2>().0.iter())
+            .zip(b.as_chunks::<2>().0.iter())
         {
             let s0 = AvxStoreF::from_complex2(src);
             let q0 = AvxStoreF::from_complex2(twiddle);
@@ -97,9 +99,9 @@ impl AvxSpectrumArithmetic<f32> {
             p0.write_lo2(dst);
         }
 
-        let dst = dst.chunks_exact_mut(2).into_remainder();
-        let a = a.chunks_exact(2).remainder();
-        let b = b.chunks_exact(2).remainder();
+        let dst = dst.as_chunks_mut::<2>().1;
+        let a = a.as_chunks::<2>().1;
+        let b = b.as_chunks::<2>().1;
 
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
             let s0 = AvxStoreF::from_complex(src);
@@ -147,9 +149,11 @@ impl AvxSpectrumArithmetic<f32> {
         let b = b.as_chunks::<16>().1;
 
         for ((dst, src), twiddle) in dst
-            .chunks_exact_mut(2)
-            .zip(a.chunks_exact(2))
-            .zip(b.chunks_exact(2))
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(a.as_chunks::<2>().0.iter())
+            .zip(b.as_chunks::<2>().0.iter())
         {
             let s0 = AvxStoreF::load2_as_complex(src);
             let q0 = AvxStoreF::from_complex2(twiddle);
@@ -211,7 +215,12 @@ impl AvxSpectrumArithmetic<f32> {
         let dst = dst.as_chunks_mut::<16>().1;
         let b = b.as_chunks::<16>().1;
 
-        for (dst, twiddle) in dst.chunks_exact_mut(2).zip(b.chunks_exact(2)) {
+        for (dst, twiddle) in dst
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(b.as_chunks::<2>().0.iter())
+        {
             let s0 = AvxStoreF::from_complex2(dst);
             let q0 = AvxStoreF::from_complex2(twiddle);
 
@@ -221,8 +230,8 @@ impl AvxSpectrumArithmetic<f32> {
             p0.write_lo2(dst);
         }
 
-        let dst = dst.chunks_exact_mut(2).into_remainder();
-        let b = b.chunks_exact(2).remainder();
+        let dst = dst.as_chunks_mut::<2>().1;
+        let b = b.as_chunks::<2>().1;
 
         for (dst, twiddle) in dst.iter_mut().zip(b.iter()) {
             let s0 = AvxStoreF::from_complex(dst);
@@ -275,9 +284,11 @@ impl AvxSpectrumArithmetic<f32> {
         let b = b.as_chunks::<16>().1;
 
         for ((dst, src), twiddle) in dst
-            .chunks_exact_mut(2)
-            .zip(a.chunks_exact(2))
-            .zip(b.chunks_exact(2))
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(a.as_chunks::<2>().0.iter())
+            .zip(b.as_chunks::<2>().0.iter())
         {
             let s0 = AvxStoreF::from_complex2(src);
             let q0 = AvxStoreF::from_complex2(twiddle);
@@ -287,9 +298,9 @@ impl AvxSpectrumArithmetic<f32> {
             p0.write_lo2(dst);
         }
 
-        let dst = dst.chunks_exact_mut(2).into_remainder();
-        let a = a.chunks_exact(2).remainder();
-        let b = b.chunks_exact(2).remainder();
+        let dst = dst.as_chunks_mut::<2>().1;
+        let a = a.as_chunks::<2>().1;
+        let b = b.as_chunks::<2>().1;
 
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
             let s0 = AvxStoreF::from_complex(src);
@@ -623,9 +634,9 @@ impl AvxSpectrumArithmetic<f64> {
             p3.write(&mut dst[6..]);
         }
 
-        let dst = dst.chunks_exact_mut(8).into_remainder();
-        let a = a.chunks_exact(8).remainder();
-        let b = b.chunks_exact(8).remainder();
+        let dst = dst.as_chunks_mut::<8>().1;
+        let a = a.as_chunks::<8>().1;
+        let b = b.as_chunks::<8>().1;
 
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
             let s0 = AvxStoreD::load1_ref(src);

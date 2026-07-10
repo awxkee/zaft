@@ -128,18 +128,12 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !input.len().is_multiple_of(self.real_length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                input.len(),
-                self.real_length(),
-            ));
-        }
-        if !output.len().is_multiple_of(self.complex_length()) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                input.len(),
-                self.complex_length(),
-            ));
-        }
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
 
         let bf2 = FastButterfly2::new(self.direction);
 
@@ -223,6 +217,12 @@ where
         output: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         R2CFftExecutor::execute(self, input, output)
     }
 

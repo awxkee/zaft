@@ -247,7 +247,12 @@ macro_rules! gen_bf15f {
                     let mut rows1: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
                     let mut rows2: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
 
-                    for (chunk, dst) in src.chunks_exact(15).zip(dst.chunks_exact_mut(8)) {
+                    for (chunk, dst) in src
+                        .as_chunks::<15>()
+                        .0
+                        .iter()
+                        .zip(dst.as_chunks_mut::<8>().0.iter_mut())
+                    {
                         // columns
                         for i in 0..3 {
                             let q0 = NeonStoreF::load(chunk.get_unchecked(i * 5..));
@@ -287,6 +292,12 @@ macro_rules! gen_bf15f {
 
         impl R2CFftExecutor<f32> for $name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 
@@ -296,6 +307,12 @@ macro_rules! gen_bf15f {
                 output: &mut [Complex<f32>],
                 _: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 

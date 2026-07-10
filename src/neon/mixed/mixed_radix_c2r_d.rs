@@ -132,6 +132,12 @@ macro_rules! define_mixed_radix_neon_d {
 
         impl C2RFftExecutor<f64> for $radix_name {
             fn execute(&self, input: &[Complex<f64>], output: &mut [f64]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.complex_length(),
+                    output.len(),
+                    self.real_length(),
+                )?;
              let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
@@ -142,6 +148,12 @@ macro_rules! define_mixed_radix_neon_d {
                 output: &mut [f64],
                 scratch: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.complex_length(),
+                    output.len(),
+                    self.real_length(),
+                )?;
                 unsafe { self.execute_oof_impl(input, output, scratch) }
             }
 
@@ -239,7 +251,7 @@ macro_rules! define_mixed_radix_neon_d {
                 // Pass 2: chunks that cross or lie beyond the Middle boundary.
                 // The middle row must be assembled from the end of src based on middle_lane.
                 for (c, twiddle_chunk) in twiddles
-                    .chunks_exact(TWIDDLES_PER_COLUMN)
+                    .as_chunks::<TWIDDLES_PER_COLUMN>().0.iter()
                     .take(chunk_count - complex_chunks_count)
                     .enumerate()
                 {

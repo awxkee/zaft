@@ -374,14 +374,19 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
-        if !input.len().is_multiple_of(13) {
-            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 13));
-        }
-        if !output.len().is_multiple_of(7) {
-            return Err(ZaftError::InvalidSizeMultiplier(input.len(), 7));
-        }
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
 
-        for (input, complex) in input.chunks_exact(13).zip(output.chunks_exact_mut(7)) {
+        for (input, complex) in input
+            .as_chunks::<13>()
+            .0
+            .iter()
+            .zip(output.as_chunks_mut::<7>().0.iter_mut())
+        {
             let u0 = input[0];
             let u1 = input[1];
             let u2 = input[2];
@@ -544,6 +549,12 @@ where
         output: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         R2CFftExecutor::execute(self, input, output)
     }
 

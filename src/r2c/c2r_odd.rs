@@ -161,6 +161,12 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[Complex<T>], output: &mut [T]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.complex_length(),
+            output.len(),
+            self.real_length(),
+        )?;
         let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
         self.execute_with_scratch(input, output, &mut scratch)
     }
@@ -171,15 +177,12 @@ where
         output: &mut [T],
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
-        if !output.len().is_multiple_of(self.length) {
-            return Err(ZaftError::InvalidSizeMultiplier(input.len(), self.length));
-        }
-        if !input.len().is_multiple_of(self.complex_length) {
-            return Err(ZaftError::InvalidSizeMultiplier(
-                output.len(),
-                self.complex_length,
-            ));
-        }
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.complex_length(),
+            output.len(),
+            self.real_length(),
+        )?;
 
         let scratch = validate_scratch!(scratch, self.complex_scratch_length());
         let (scratch, intercept_scratch) = scratch.split_at_mut(self.length);

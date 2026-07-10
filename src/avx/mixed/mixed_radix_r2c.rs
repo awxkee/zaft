@@ -125,6 +125,12 @@ macro_rules! define_mixed_radix_avx_d_rdft {
 
         impl R2CFftExecutor<f64> for $radix_name {
             fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
@@ -135,6 +141,12 @@ macro_rules! define_mixed_radix_avx_d_rdft {
                 output: &mut [Complex<f64>],
                 scratch: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_oof_impl(input, output, scratch) }
             }
 
@@ -488,6 +500,12 @@ macro_rules! define_mixed_radix_avx_f_rdft {
 
         impl R2CFftExecutor<f32> for $radix_name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
                 self.execute_with_scratch(input, output, scratch.as_mut_slice())
             }
@@ -498,6 +516,12 @@ macro_rules! define_mixed_radix_avx_f_rdft {
                 output: &mut [Complex<f32>],
                 scratch: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_oof_impl(input, output, scratch) }
             }
 
@@ -954,7 +978,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..10]).chunks_exact(5) {
+        for chunk in (&reference_value[..10]).as_chunks::<5>().0.iter() {
             println!("{:?}", chunk);
         }
 
@@ -1001,7 +1025,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..10]).chunks_exact(5) {
+        for chunk in (&reference_value[..10]).as_chunks::<5>().0.iter() {
             println!("{:?}", chunk);
         }
 

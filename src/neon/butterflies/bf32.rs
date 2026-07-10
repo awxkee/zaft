@@ -77,7 +77,12 @@ macro_rules! gen_bf32d {
                     ));
                 }
 
-                for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
+                for (dst, src) in dst
+                    .as_chunks_mut::<17>()
+                    .0
+                    .iter_mut()
+                    .zip(src.as_chunks::<32>().0.iter())
+                {
                     self.bf32.exec_store_r2c(src, &mut InPlaceStore::new(dst));
                 }
                 Ok(())
@@ -86,6 +91,12 @@ macro_rules! gen_bf32d {
 
         impl R2CFftExecutor<f64> for $name {
             fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 
@@ -95,6 +106,12 @@ macro_rules! gen_bf32d {
                 output: &mut [Complex<f64>],
                 _: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 
@@ -235,7 +252,12 @@ macro_rules! gen_bf32f {
                     let mut rows2: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
                     let mut rows3: [NeonStoreF; 4] = [NeonStoreF::default(); 4];
 
-                    for (dst, src) in dst.chunks_exact_mut(17).zip(src.chunks_exact(32)) {
+                    for (dst, src) in dst
+                        .as_chunks_mut::<17>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<32>().0.iter())
+                    {
                         for i in 0..4 {
                             let s0 = NeonStoreF::load(src.get_unchecked(i * 8..));
                             let s1 = NeonStoreF::load(src.get_unchecked(i * 8 + 4..));
@@ -277,6 +299,12 @@ macro_rules! gen_bf32f {
 
         impl R2CFftExecutor<f32> for $name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 
@@ -286,6 +314,12 @@ macro_rules! gen_bf32f {
                 output: &mut [Complex<f32>],
                 _: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 

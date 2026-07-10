@@ -112,7 +112,7 @@ impl AvxButterfly8d {
         }
         if !dst.len().is_multiple_of(5) {
             return Err(ZaftError::InvalidSizeMultiplier(
-                src.len(),
+                dst.len(),
                 self.complex_length(),
             ));
         }
@@ -124,7 +124,12 @@ impl AvxButterfly8d {
             let mut rows0: [AvxStoreD; 2] = [AvxStoreD::zero(); 2];
             let mut rows1: [AvxStoreD; 2] = [AvxStoreD::zero(); 2];
 
-            for (chunk, complex) in src.chunks_exact(8).zip(dst.chunks_exact_mut(5)) {
+            for (chunk, complex) in src
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .zip(dst.as_chunks_mut::<5>().0.iter_mut())
+            {
                 // columns
                 for i in 0..2 {
                     let q = AvxStoreD::load(chunk.get_unchecked(i * 4..));
@@ -155,6 +160,12 @@ impl AvxButterfly8d {
 
 impl R2CFftExecutor<f64> for AvxButterfly8d {
     fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 
@@ -164,6 +175,12 @@ impl R2CFftExecutor<f64> for AvxButterfly8d {
         output: &mut [Complex<f64>],
         _: &mut [Complex<f64>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 
@@ -256,7 +273,7 @@ impl AvxButterfly8f {
         }
         if !dst.len().is_multiple_of(5) {
             return Err(ZaftError::InvalidSizeMultiplier(
-                src.len(),
+                dst.len(),
                 self.complex_length(),
             ));
         }
@@ -267,7 +284,12 @@ impl AvxButterfly8f {
         unsafe {
             let mut rows0: [AvxStoreF; 2] = [AvxStoreF::zero(); 2];
 
-            for (chunk, complex) in src.chunks_exact(8).zip(dst.chunks_exact_mut(5)) {
+            for (chunk, complex) in src
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .zip(dst.as_chunks_mut::<5>().0.iter_mut())
+            {
                 // columns
                 let q0 = AvxStoreF::load(chunk);
                 let [v0, v1] = q0.to_complex();
@@ -294,6 +316,12 @@ impl AvxButterfly8f {
 
 impl R2CFftExecutor<f32> for AvxButterfly8f {
     fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 
@@ -303,6 +331,12 @@ impl R2CFftExecutor<f32> for AvxButterfly8f {
         output: &mut [Complex<f32>],
         _: &mut [Complex<f32>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output) }
     }
 

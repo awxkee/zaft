@@ -218,7 +218,12 @@ macro_rules! gen_bf12f {
                     let mut rows0: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
                     let mut rows1: [NeonStoreF; 3] = [NeonStoreF::default(); 3];
 
-                    for (chunk, complex) in src.chunks_exact(12).zip(dst.chunks_exact_mut(7)) {
+                    for (chunk, complex) in src
+                        .as_chunks::<12>()
+                        .0
+                        .iter()
+                        .zip(dst.as_chunks_mut::<7>().0.iter_mut())
+                    {
                         // columns
                         for i in 0..3 {
                             let q = NeonStoreF::load(chunk.get_unchecked(i * 4..));
@@ -254,6 +259,12 @@ macro_rules! gen_bf12f {
 
         impl R2CFftExecutor<f32> for $name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 
@@ -263,6 +274,12 @@ macro_rules! gen_bf12f {
                 output: &mut [Complex<f32>],
                 _: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 

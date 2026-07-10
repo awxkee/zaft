@@ -76,9 +76,12 @@ where
         if output.is_empty() {
             return Err(ZaftError::InvalidSizeMultiplier(output.len(), 1));
         }
-        if input.len() != output.len() {
-            return Err(ZaftError::InvalidSamplesCount(input.len(), output.len()));
-        }
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            R2CFftExecutor::real_length(self),
+            output.len(),
+            R2CFftExecutor::complex_length(self),
+        )?;
         for (dst, src) in output.iter_mut().zip(input.iter()) {
             *dst = Complex::new(*src, 0.0f64.as_())
         }
@@ -91,6 +94,12 @@ where
         output: &mut [Complex<T>],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            R2CFftExecutor::real_length(self),
+            output.len(),
+            R2CFftExecutor::complex_length(self),
+        )?;
         R2CFftExecutor::execute(self, input, output)
     }
 
@@ -115,9 +124,12 @@ impl<T: Copy + 'static> C2RFftExecutor<T> for OneSizedRealFft<T> {
         if output.is_empty() {
             return Err(ZaftError::InvalidSizeMultiplier(output.len(), 1));
         }
-        if input.len() != output.len() {
-            return Err(ZaftError::InvalidSamplesCount(input.len(), output.len()));
-        }
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            C2RFftExecutor::complex_length(self),
+            output.len(),
+            C2RFftExecutor::real_length(self),
+        )?;
         for (dst, src) in output.iter_mut().zip(input.iter()) {
             *dst = src.re
         }
@@ -130,6 +142,12 @@ impl<T: Copy + 'static> C2RFftExecutor<T> for OneSizedRealFft<T> {
         output: &mut [T],
         _: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            C2RFftExecutor::complex_length(self),
+            output.len(),
+            C2RFftExecutor::real_length(self),
+        )?;
         self.execute(input, output)
     }
 
@@ -175,7 +193,9 @@ macro_rules! test_r2c_butterfly {
                 R2CFftExecutor::execute(&radix_forward, &input, &mut output).unwrap();
 
                 let ref_src = ref_src
-                    .chunks_exact($scale)
+                    .as_chunks::<$scale>()
+                    .0
+                    .iter()
                     .flat_map(|x| (&x[..$scale / 2 + 1]).to_vec())
                     .collect::<Vec<_>>();
 

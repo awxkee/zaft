@@ -238,6 +238,12 @@ where
     f64: AsPrimitive<T>,
 {
     fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         let mut scratch = vec![Complex::zero(); self.complex_scratch_length()];
         unsafe { self.execute_r2c(input, output, scratch.as_mut_slice()) }
     }
@@ -248,6 +254,12 @@ where
         output: &mut [Complex<T>],
         scratch: &mut [Complex<T>],
     ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
         unsafe { self.execute_r2c(input, output, scratch) }
     }
 

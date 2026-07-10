@@ -140,7 +140,12 @@ impl RadersIndicer<f32> for NeonRadersIndicer {
         unsafe {
             static CONJ: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
             let conj = vld1q_f32(CONJ.as_ptr());
-            for (src, buffer_idx) in scratch.chunks_exact(6).zip(indices.chunks_exact(6)) {
+            for (src, buffer_idx) in scratch
+                .as_chunks::<6>()
+                .0
+                .iter()
+                .zip(indices.as_chunks::<6>().0.iter())
+            {
                 let mut v0 = vld1q_f32(src.as_ptr().cast());
                 let mut v1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
                 let mut v2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
@@ -183,8 +188,8 @@ impl RadersIndicer<f32> for NeonRadersIndicer {
                 );
             }
 
-            let rem_scratch = scratch.chunks_exact(6).remainder();
-            let rem_indices = indices.chunks_exact(6).remainder();
+            let rem_scratch = scratch.as_chunks::<6>().1;
+            let rem_indices = indices.as_chunks::<6>().1;
 
             for (scratch_element, &buffer_idx) in rem_scratch.iter().zip(rem_indices.iter()) {
                 *buffer.get_unchecked_mut(buffer_idx as usize) = scratch_element.conj();
@@ -262,7 +267,12 @@ impl RadersIndicer<f64> for NeonRadersIndicer {
         unsafe {
             static CONJ: [f64; 2] = [0.0, -0.0];
             let conj = vld1q_f64(CONJ.as_ptr());
-            for (src, buffer_idx) in scratch.chunks_exact(6).zip(indices.chunks_exact(6)) {
+            for (src, buffer_idx) in scratch
+                .as_chunks::<6>()
+                .0
+                .iter()
+                .zip(indices.as_chunks::<6>().0.iter())
+            {
                 let mut v0 = vld1q_f64(src.as_ptr().cast());
                 let mut v1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
 
@@ -334,8 +344,8 @@ impl RadersIndicer<f64> for NeonRadersIndicer {
                 );
             }
 
-            let rem_scratch = scratch.chunks_exact(6).remainder();
-            let rem_indices = indices.chunks_exact(6).remainder();
+            let rem_scratch = scratch.as_chunks::<6>().1;
+            let rem_indices = indices.as_chunks::<6>().1;
 
             for (scratch_element, &buffer_idx) in rem_scratch.iter().zip(rem_indices.iter()) {
                 *buffer.get_unchecked_mut(buffer_idx as usize) = scratch_element.conj();

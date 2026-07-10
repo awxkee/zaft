@@ -94,7 +94,7 @@ impl AvxButterfly5<f32> {
             static ROT_90: [f32; 8] = [-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0];
             let rot_sign = _mm256_loadu_ps(ROT_90.as_ptr());
 
-            for chunk in in_place.chunks_exact_mut(20) {
+            for chunk in in_place.as_chunks_mut::<20>().0.iter_mut() {
                 let u0u1u2u3 = _mm256_loadu_ps(chunk.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());
                 let u8u9 = _mm_loadu_ps(chunk.get_unchecked(8..).as_ptr().cast());
@@ -206,9 +206,9 @@ impl AvxButterfly5<f32> {
                 _mm_storeu_ps(chunk.get_unchecked_mut(18..).as_mut_ptr().cast(), zu4h);
             }
 
-            let rem = in_place.chunks_exact_mut(20).into_remainder();
+            let rem = in_place.as_chunks_mut::<20>().1;
 
-            for chunk in rem.chunks_exact_mut(10) {
+            for chunk in rem.as_chunks_mut::<10>().0.iter_mut() {
                 let u0u1u2u3 = _mm256_loadu_ps(chunk.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(chunk.get_unchecked(4..).as_ptr().cast());
                 let u8u9 = _mm_loadu_ps(chunk.get_unchecked(8..).as_ptr().cast());
@@ -279,9 +279,9 @@ impl AvxButterfly5<f32> {
                 _mm_storeu_ps(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), zu4);
             }
 
-            let remainder = rem.chunks_exact_mut(10).into_remainder();
+            let remainder = rem.as_chunks_mut::<10>().1;
 
-            for chunk in remainder.chunks_exact_mut(5) {
+            for chunk in remainder.as_chunks_mut::<5>().0.iter_mut() {
                 let u0u1u2u3 = _mm256_loadu_ps(chunk.get_unchecked(0..).as_ptr().cast());
 
                 let u0u1 = _mm256_castps256_ps128(u0u1u2u3);
@@ -363,7 +363,12 @@ impl AvxButterfly5<f32> {
             static ROT_90: [f32; 8] = [-0.0f32, 0.0, -0.0, 0.0, -0.0f32, 0.0, -0.0, 0.0];
             let rot_sign = _mm256_loadu_ps(ROT_90.as_ptr());
 
-            for (dst, src) in dst.chunks_exact_mut(20).zip(src.chunks_exact(20)) {
+            for (dst, src) in dst
+                .as_chunks_mut::<20>()
+                .0
+                .iter_mut()
+                .zip(src.as_chunks::<20>().0.iter())
+            {
                 let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
                 let u8u9 = _mm_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
@@ -475,10 +480,15 @@ impl AvxButterfly5<f32> {
                 _mm_storeu_ps(dst.get_unchecked_mut(18..).as_mut_ptr().cast(), zu4h);
             }
 
-            let rem_dst = dst.chunks_exact_mut(20).into_remainder();
-            let rem_src = src.chunks_exact(20).remainder();
+            let rem_dst = dst.as_chunks_mut::<20>().1;
+            let rem_src = src.as_chunks::<20>().1;
 
-            for (dst, src) in rem_dst.chunks_exact_mut(10).zip(rem_src.chunks_exact(10)) {
+            for (dst, src) in rem_dst
+                .as_chunks_mut::<10>()
+                .0
+                .iter_mut()
+                .zip(rem_src.as_chunks::<10>().0.iter())
+            {
                 let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
                 let u4u5u6u7 = _mm256_loadu_ps(src.get_unchecked(4..).as_ptr().cast());
                 let u8u9 = _mm_loadu_ps(src.get_unchecked(8..).as_ptr().cast());
@@ -549,10 +559,15 @@ impl AvxButterfly5<f32> {
                 _mm_storeu_ps(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), zu4);
             }
 
-            let rem_dst = rem_dst.chunks_exact_mut(10).into_remainder();
-            let rem_src = rem_src.chunks_exact(10).remainder();
+            let rem_dst = rem_dst.as_chunks_mut::<10>().1;
+            let rem_src = rem_src.as_chunks::<10>().1;
 
-            for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
+            for (dst, src) in rem_dst
+                .as_chunks_mut::<5>()
+                .0
+                .iter_mut()
+                .zip(rem_src.as_chunks::<5>().0.iter())
+            {
                 let u0u1u2u3 = _mm256_loadu_ps(src.as_ptr().cast());
 
                 let u0u1 = _mm256_castps256_ps128(u0u1u2u3);
@@ -692,7 +707,7 @@ impl AvxButterfly5<f64> {
             let tw2_im = _mm256_set1_pd(self.twiddle2.im);
             let rot_sign = _mm256_loadu_pd([-0.0f64, 0.0, -0.0, 0.0].as_ptr());
 
-            for chunk in in_place.chunks_exact_mut(10) {
+            for chunk in in_place.as_chunks_mut::<10>().0.iter_mut() {
                 let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(chunk.get_unchecked(4..).as_ptr().cast());
@@ -750,7 +765,7 @@ impl AvxButterfly5<f64> {
                 _mm256_storeu_pd(chunk.get_unchecked_mut(8..).as_mut_ptr().cast(), u8u9);
             }
 
-            let rem = in_place.chunks_exact_mut(10).into_remainder();
+            let rem = in_place.as_chunks_mut::<10>().1;
 
             let tw1tw2_im = _mm256_loadu_pd(self.tw1tw2_im.as_ptr().cast());
             let tw2ntw1_im = _mm256_loadu_pd(self.tw2ntw1_im.as_ptr().cast());
@@ -758,7 +773,7 @@ impl AvxButterfly5<f64> {
             let tw2tw1_re = _mm256_loadu_pd(self.tw2tw1_re.as_ptr().cast());
             let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
 
-            for chunk in rem.chunks_exact_mut(5) {
+            for chunk in rem.as_chunks_mut::<5>().0.iter_mut() {
                 let u0u1 = _mm256_loadu_pd(chunk.get_unchecked(0..).as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(chunk.get_unchecked(2..).as_ptr().cast());
 
@@ -840,7 +855,12 @@ impl AvxButterfly5<f64> {
             let tw2_im = _mm256_set1_pd(self.twiddle2.im);
             let rot_sign = _mm256_loadu_pd([-0.0f64, 0.0, -0.0, 0.0].as_ptr());
 
-            for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
+            for (dst, src) in dst
+                .as_chunks_mut::<10>()
+                .0
+                .iter_mut()
+                .zip(src.as_chunks::<10>().0.iter())
+            {
                 let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
                 let u4u5 = _mm256_loadu_pd(src.get_unchecked(4..).as_ptr().cast());
@@ -898,8 +918,8 @@ impl AvxButterfly5<f64> {
                 _mm256_storeu_pd(dst.get_unchecked_mut(8..).as_mut_ptr().cast(), u8u9);
             }
 
-            let rem_dst = dst.chunks_exact_mut(10).into_remainder();
-            let rem_src = src.chunks_exact(10).remainder();
+            let rem_dst = dst.as_chunks_mut::<10>().1;
+            let rem_src = src.as_chunks::<10>().1;
 
             let tw1tw2_im = _mm256_loadu_pd(self.tw1tw2_im.as_ptr().cast());
             let tw2ntw1_im = _mm256_loadu_pd(self.tw2ntw1_im.as_ptr().cast());
@@ -907,7 +927,12 @@ impl AvxButterfly5<f64> {
             let tw2tw1_re = _mm256_loadu_pd(self.tw2tw1_re.as_ptr().cast());
             let rotate = AvxRotate::<f64>::new(FftDirection::Inverse);
 
-            for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
+            for (dst, src) in rem_dst
+                .as_chunks_mut::<5>()
+                .0
+                .iter_mut()
+                .zip(rem_src.as_chunks::<5>().0.iter())
+            {
                 let u0u1 = _mm256_loadu_pd(src.as_ptr().cast());
                 let u2u3 = _mm256_loadu_pd(src.get_unchecked(2..).as_ptr().cast());
 

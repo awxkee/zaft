@@ -47,7 +47,7 @@ macro_rules! gen_bf25d {
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
                 let mut twiddles = [NeonStoreD::default(); 20];
-                for (x, row) in twiddles.chunks_exact_mut(5).enumerate() {
+                for (x, row) in twiddles.as_chunks_mut::<5>().0.iter_mut().enumerate() {
                     for (y, dst) in row.iter_mut().enumerate() {
                         *dst = NeonStoreD::from_complex(&compute_twiddle(
                             (x + 1) * y,

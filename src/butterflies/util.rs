@@ -38,7 +38,7 @@ macro_rules! boring_scalar_butterfly {
                     return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
                 }
 
-                for chunk in in_place.chunks_exact_mut($size) {
+                for chunk in in_place.as_chunks_mut::<$size>().0.iter_mut() {
                     use crate::store::InPlaceStore;
                     self.run(&mut InPlaceStore::new(chunk));
                 }
@@ -54,7 +54,7 @@ macro_rules! boring_scalar_butterfly {
                     return Err(ZaftError::InvalidSizeMultiplier(in_place.len(), $size));
                 }
 
-                for chunk in in_place.chunks_exact_mut($size) {
+                for chunk in in_place.as_chunks_mut::<$size>().0.iter_mut() {
                     use crate::store::InPlaceStore;
                     self.run(&mut InPlaceStore::new(chunk));
                 }
@@ -78,7 +78,12 @@ macro_rules! boring_scalar_butterfly {
                 use crate::util::validate_oof_sizes;
                 validate_oof_sizes!(src, dst, $size);
 
-                for (dst, src) in dst.chunks_exact_mut($size).zip(src.chunks_exact($size)) {
+                for (dst, src) in dst
+                    .as_chunks_mut::<$size>()
+                    .0
+                    .iter_mut()
+                    .zip(src.as_chunks::<$size>().0.iter())
+                {
                     use crate::store::BiStore;
                     self.run(&mut BiStore::new(src, dst));
                 }

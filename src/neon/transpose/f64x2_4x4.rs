@@ -114,12 +114,12 @@ pub(crate) fn block_transpose_f64x2_4x4(
 //         // Call the transpose
 //         block_transpose_f64x2_4x4(&src, 4, &mut dst, 4);
 //
-//         for chunk in src.chunks_exact(4) {
+//         for chunk in src.as_chunks::<4>().0.iter() {
 //             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
 //         }
 //         println!("-----");
 //
-//         for chunk in dst.chunks_exact(4) {
+//         for chunk in dst.as_chunks::<4>().0.iter() {
 //             println!("{:?}", chunk.iter().map(|x| x.re).collect::<Vec<_>>());
 //         }
 //     }

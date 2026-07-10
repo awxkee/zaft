@@ -51,13 +51,16 @@ pub(crate) struct BluesteinFft<T> {
 pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
     destination: &mut [Complex<T>],
     direction: FftDirection,
-) where
+) -> Result<(), ZaftError>
+where
     f64: AsPrimitive<T>,
 {
-    let is_overflowed = destination.len().overflowing_mul(2).1;
-    let twice_len = destination.len() * 2;
+    let twice_len = destination
+        .len()
+        .checked_mul(2)
+        .ok_or(ZaftError::Overflow)?;
 
-    if !is_overflowed && destination.len() < u32::MAX as usize {
+    if destination.len() < u32::MAX as usize {
         let twice_len_divider = DividerU64::new(twice_len as u64);
 
         for (i, e) in destination.iter_mut().enumerate() {
@@ -74,6 +77,8 @@ pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
             *e = compute_twiddle(i_mod as usize, twice_len, direction);
         }
     }
+
+    Ok(())
 }
 
 impl<T: FftSample> BluesteinFft<T>
@@ -86,10 +91,11 @@ where
         fft_direction: FftDirection,
     ) -> Result<BluesteinFft<T>, ZaftError> {
         let convolve_fft_len = convolve_fft.length();
+        let min_convolve_len = crate::util::checked_bluestein_convolution_len(size)?;
         assert!(
-            size * 2 - 1 <= convolve_fft_len,
+            min_convolve_len <= convolve_fft_len,
             "Bluestein requires convolve_fft.length() >= self.length() * 2 - 1. Expected >= {}, got {}",
-            size * 2 - 1,
+            min_convolve_len,
             convolve_fft_len
         );
 
@@ -101,7 +107,7 @@ where
         );
 
         let mut convolve_fft_twiddles = try_vec![Complex::zero(); convolve_fft_len];
-        make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse());
+        make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse())?;
 
         // Scale the computed twiddles and copy them to the end of the array
         convolve_fft_twiddles[0] = convolve_fft_twiddles[0] * inner_fft_scale;
@@ -118,7 +124,7 @@ where
 
         // also compute some more mundane twiddle factors to start and end with
         let mut twiddles = try_vec![Complex::zero(); size];
-        make_bluesteins_twiddles(&mut twiddles, direction);
+        make_bluesteins_twiddles(&mut twiddles, direction)?;
 
         let convolve_scratch_length = convolve_fft.scratch_length();
         let destructive_inner_scratch_len = if size >= convolve_scratch_length {

@@ -536,8 +536,8 @@ macro_rules! validate_scratch {
     ($scratch: expr, $size: expr) => {{
         if $scratch.len() < $size {
             return Err(crate::ZaftError::ScratchBufferIsTooSmall(
-                $size,
                 $scratch.len(),
+                $size,
             ));
         }
         let (left, _) = $scratch.split_at_mut($size);
@@ -546,6 +546,61 @@ macro_rules! validate_scratch {
 }
 
 pub(crate) use validate_scratch;
+
+#[inline]
+pub(crate) fn validate_oof_block_sizes(
+    src_len: usize,
+    src_block_len: usize,
+    dst_len: usize,
+    dst_block_len: usize,
+) -> Result<(), ZaftError> {
+    if src_block_len == 0 || dst_block_len == 0 {
+        return Err(ZaftError::ZeroSizedFft);
+    }
+    if !src_len.is_multiple_of(src_block_len) {
+        return Err(ZaftError::InvalidSizeMultiplier(src_len, src_block_len));
+    }
+    if !dst_len.is_multiple_of(dst_block_len) {
+        return Err(ZaftError::InvalidSizeMultiplier(dst_len, dst_block_len));
+    }
+
+    let src_blocks = src_len / src_block_len;
+    let dst_blocks = dst_len / dst_block_len;
+    if src_blocks != dst_blocks {
+        return Err(ZaftError::InvalidSamplesCount(src_blocks, dst_blocks));
+    }
+
+    Ok(())
+}
+
+#[inline]
+pub(crate) fn validate_equal_oof_sizes(
+    src_len: usize,
+    dst_len: usize,
+    block_len: usize,
+) -> Result<(), ZaftError> {
+    if block_len == 0 {
+        return Err(ZaftError::ZeroSizedFft);
+    }
+    if !src_len.is_multiple_of(block_len) {
+        return Err(ZaftError::InvalidSizeMultiplier(src_len, block_len));
+    }
+    if !dst_len.is_multiple_of(block_len) {
+        return Err(ZaftError::InvalidSizeMultiplier(dst_len, block_len));
+    }
+    if src_len != dst_len {
+        return Err(ZaftError::OutOfPlaceSizeDoesntMatch(src_len, dst_len));
+    }
+
+    Ok(())
+}
+
+#[inline]
+pub(crate) fn checked_bluestein_convolution_len(n: usize) -> Result<usize, ZaftError> {
+    n.checked_mul(2)
+        .and_then(|length| length.checked_sub(1))
+        .ok_or(ZaftError::Overflow)
+}
 
 macro_rules! validate_oof_sizes {
     ($src: expr, $dst: expr, $length: expr) => {{
@@ -562,3 +617,31 @@ macro_rules! validate_oof_sizes {
 }
 
 pub(crate) use validate_oof_sizes;
+
+#[cfg(test)]
+mod security_validation_tests {
+    use super::{
+        checked_bluestein_convolution_len, validate_equal_oof_sizes, validate_oof_block_sizes,
+    };
+    use crate::ZaftError;
+
+    #[test]
+    fn rejects_mismatched_real_complex_batch_counts() {
+        let error = validate_oof_block_sizes(16, 8, 15, 5).unwrap_err();
+        assert!(matches!(error, ZaftError::InvalidSamplesCount(2, 3)));
+    }
+
+    #[test]
+    fn rejects_mismatched_equal_width_output() {
+        let error = validate_equal_oof_sizes(8, 16, 8).unwrap_err();
+        assert!(matches!(error, ZaftError::OutOfPlaceSizeDoesntMatch(8, 16)));
+    }
+
+    #[test]
+    fn rejects_bluestein_length_overflow() {
+        assert!(matches!(
+            checked_bluestein_convolution_len(usize::MAX),
+            Err(ZaftError::Overflow)
+        ));
+    }
+}

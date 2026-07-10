@@ -87,7 +87,12 @@ macro_rules! gen_bf16d {
                 unsafe {
                     let mut rows = [NeonStoreD::default(); 16];
 
-                    for (dst, src) in dst.chunks_exact_mut(9).zip(src.chunks_exact(16)) {
+                    for (dst, src) in dst
+                        .as_chunks_mut::<9>()
+                        .0
+                        .iter_mut()
+                        .zip(src.as_chunks::<16>().0.iter())
+                    {
                         for i in 0..8 {
                             let [v0, v1] =
                                 NeonStoreD::load(src.get_unchecked(i * 2..)).to_complex();
@@ -106,6 +111,12 @@ macro_rules! gen_bf16d {
 
         impl R2CFftExecutor<f64> for $name {
             fn execute(&self, input: &[f64], output: &mut [Complex<f64>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 
@@ -115,6 +126,12 @@ macro_rules! gen_bf16d {
                 output: &mut [Complex<f64>],
                 _: &mut [Complex<f64>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 
@@ -223,7 +240,7 @@ macro_rules! gen_bf16f {
                     return Err(ZaftError::InvalidSizeMultiplier(src.len(), 16));
                 }
                 if !dst.len().is_multiple_of(9) {
-                    return Err(ZaftError::InvalidSizeMultiplier(src.len(), 9));
+                    return Err(ZaftError::InvalidSizeMultiplier(dst.len(), 9));
                 }
 
                 unsafe {
@@ -270,6 +287,12 @@ macro_rules! gen_bf16f {
 
         impl R2CFftExecutor<f32> for $name {
             fn execute(&self, input: &[f32], output: &mut [Complex<f32>]) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 
@@ -279,6 +302,12 @@ macro_rules! gen_bf16f {
                 output: &mut [Complex<f32>],
                 _: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
+                crate::util::validate_oof_block_sizes(
+                    input.len(),
+                    self.real_length(),
+                    output.len(),
+                    self.complex_length(),
+                )?;
                 unsafe { self.execute_r2c(input, output) }
             }
 

@@ -68,7 +68,7 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
             let tw2_im = vdupq_n_f32(self.twiddle2.im);
             let rot_sign = vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr());
 
-            for chunk in in_place.chunks_exact_mut(10) {
+            for chunk in in_place.as_chunks_mut::<10>().0.iter_mut() {
                 let uz0 = vld1q_f32(chunk.as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(chunk.get_unchecked(4..).as_ptr().cast());
@@ -129,14 +129,14 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
                 );
             }
 
-            let rem = in_place.chunks_exact_mut(10).into_remainder();
+            let rem = in_place.as_chunks_mut::<10>().1;
 
             let tw1_tw2_im = vcombine_f32(vget_low_f32(tw1_im), vget_low_f32(tw2_im));
             let tw2_ntw1_im = vcombine_f32(vget_low_f32(tw2_im), vdup_n_f32(-self.twiddle1.im));
             let a1_a2 = vcombine_f32(vget_low_f32(tw1_re), vget_low_f32(tw2_re));
             let a1_a2_2 = vcombine_f32(vget_low_f32(tw2_re), vget_low_f32(tw1_re));
 
-            for chunk in rem.chunks_exact_mut(5) {
+            for chunk in rem.as_chunks_mut::<5>().0.iter_mut() {
                 let uz0 = vld1q_f32(chunk.get_unchecked(0..).as_ptr().cast());
                 let uz1 = vld1q_f32(chunk.get_unchecked(2..).as_ptr().cast());
 
@@ -212,7 +212,12 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
             let tw2_im = vdupq_n_f32(self.twiddle2.im);
             let rot_sign = vld1q_f32([-0.0, 0.0, -0.0, 0.0].as_ptr());
 
-            for (dst, src) in dst.chunks_exact_mut(10).zip(src.chunks_exact(10)) {
+            for (dst, src) in dst
+                .as_chunks_mut::<10>()
+                .0
+                .iter_mut()
+                .zip(src.as_chunks::<10>().0.iter())
+            {
                 let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
                 let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
                 let uz2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
@@ -273,15 +278,20 @@ impl FftExecutor<f32> for NeonButterfly5<f32> {
                 );
             }
 
-            let rem_dst = dst.chunks_exact_mut(10).into_remainder();
-            let rem_src = src.chunks_exact(10).remainder();
+            let rem_dst = dst.as_chunks_mut::<10>().1;
+            let rem_src = src.as_chunks::<10>().1;
 
             let tw1_tw2_im = vcombine_f32(vget_low_f32(tw1_im), vget_low_f32(tw2_im));
             let tw2_ntw1_im = vcombine_f32(vget_low_f32(tw2_im), vdup_n_f32(-self.twiddle1.im));
             let a1_a2 = vcombine_f32(vget_low_f32(tw1_re), vget_low_f32(tw2_re));
             let a1_a2_2 = vcombine_f32(vget_low_f32(tw2_re), vget_low_f32(tw1_re));
 
-            for (dst, src) in rem_dst.chunks_exact_mut(5).zip(rem_src.chunks_exact(5)) {
+            for (dst, src) in rem_dst
+                .as_chunks_mut::<5>()
+                .0
+                .iter_mut()
+                .zip(rem_src.as_chunks::<5>().0.iter())
+            {
                 let uz0 = vld1q_f32(src.get_unchecked(0..).as_ptr().cast());
                 let uz1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
 
@@ -391,7 +401,7 @@ impl FftExecutor<f64> for NeonButterfly5<f64> {
         let tw2_im = unsafe { vdupq_n_f64(self.twiddle2.im) };
         let rot_sign = unsafe { vld1q_f64([-0.0, 0.0].as_ptr()) };
 
-        for chunk in in_place.chunks_exact_mut(5) {
+        for chunk in in_place.as_chunks_mut::<5>().0.iter_mut() {
             unsafe {
                 let u0 = vld1q_f64(chunk.get_unchecked(0..).as_ptr().cast());
                 let u1 = vld1q_f64(chunk.get_unchecked(1..).as_ptr().cast());
@@ -464,7 +474,12 @@ impl FftExecutor<f64> for NeonButterfly5<f64> {
         let tw2_im = unsafe { vdupq_n_f64(self.twiddle2.im) };
         let rot_sign = unsafe { vld1q_f64([-0.0, 0.0].as_ptr()) };
 
-        for (dst, src) in dst.chunks_exact_mut(5).zip(src.chunks_exact(5)) {
+        for (dst, src) in dst
+            .as_chunks_mut::<5>()
+            .0
+            .iter_mut()
+            .zip(src.as_chunks::<5>().0.iter())
+        {
             unsafe {
                 let u0 = vld1q_f64(src.get_unchecked(0..).as_ptr().cast());
                 let u1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
