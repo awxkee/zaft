@@ -43,9 +43,7 @@ pub(super) use butterflies::{
     ColumnButterfly9f, ColumnButterfly10d, ColumnButterfly10f, ColumnButterfly11d,
     ColumnButterfly11f, ColumnButterfly12d, ColumnButterfly12f, ColumnButterfly13d,
     ColumnButterfly13f, ColumnButterfly16d, ColumnButterfly16f, ColumnButterfly18d,
-    ColumnButterfly18f, ColumnButterfly32d, ColumnButterfly32f, ColumnButterfly36d,
-    ColumnButterfly36f, ColumnButterfly40d, ColumnButterfly40f, ColumnButterfly45d,
-    ColumnButterfly45f, ColumnButterfly48d, ColumnButterfly48f,
+    ColumnButterfly18f, ColumnButterfly32d, ColumnButterfly32f,
 };
 pub(crate) use mixed_radix::{
     Avx512vlMixedRadix8d, Avx512vlMixedRadix8f, Avx512vlMixedRadix12f, AvxMixedRadix2f,

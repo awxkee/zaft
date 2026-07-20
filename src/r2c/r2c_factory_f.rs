@@ -185,26 +185,6 @@ impl R2CAlgorithmFactory<f32> for f32 {
         make_default_butterfly!(RdftButterfly10)
     }
 
-    fn r2c_butterfly11() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_default_butterfly!(Butterfly11)
-    }
-
-    fn r2c_butterfly12() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_vec_default_butterfly!(Butterfly12, NeonButterfly12f, NeonFcmaButterfly12f)
-    }
-
-    fn r2c_butterfly13() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_default_butterfly!(Butterfly13)
-    }
-
-    fn r2c_butterfly14() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_default_butterfly!(Butterfly14)
-    }
-
-    fn r2c_butterfly15() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_vec_default_butterfly!(Butterfly15, NeonButterfly15f, NeonFcmaButterfly15f)
-    }
-
     fn r2c_butterfly16() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
         make_vec_default_butterfly2!(
             Butterfly16,
@@ -212,26 +192,6 @@ impl R2CAlgorithmFactory<f32> for f32 {
             NeonButterfly16f,
             NeonFcmaButterfly16f
         )
-    }
-
-    fn r2c_butterfly17() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_default_butterfly!(Butterfly17)
-    }
-
-    fn r2c_butterfly19() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_default_butterfly!(Butterfly19)
-    }
-
-    fn r2c_butterfly23() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_default_butterfly!(Butterfly23)
-    }
-
-    fn r2c_butterfly29() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_default_butterfly!(RfftButterfly29)
-    }
-
-    fn r2c_butterfly31() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {
-        make_default_butterfly!(Butterfly31)
     }
 
     fn r2c_butterfly32() -> Arc<dyn R2CFftExecutor<f32> + Send + Sync> {

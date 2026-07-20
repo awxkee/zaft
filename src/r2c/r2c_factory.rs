@@ -40,17 +40,7 @@ pub(crate) trait R2CAlgorithmFactory<T> {
     fn r2c_butterfly8() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly9() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly10() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly11() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly12() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly13() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly14() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly15() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly16() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly17() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly19() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly23() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly29() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
-    fn r2c_butterfly31() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly32() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_raders(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send + Sync>, ZaftError>;
     fn r2c_bluestein(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send + Sync>, ZaftError>;

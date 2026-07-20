@@ -113,7 +113,7 @@ pub(crate) use bf25::Butterfly25;
 #[allow(unused)]
 pub(crate) use bf27::Butterfly27;
 #[allow(unused)]
-pub(crate) use bf29::{Butterfly29, RfftButterfly29};
+pub(crate) use bf29::Butterfly29;
 pub(crate) use bf31::Butterfly31;
 #[allow(unused)]
 pub(crate) use bf32::Butterfly32;

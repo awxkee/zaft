@@ -72,6 +72,7 @@ impl<
 where
     f64: AsPrimitive<T>,
 {
+    #[allow(dead_code)] // live in scalar builds; displaced by SIMD butterflies
     #[inline]
     pub(crate) fn exec(
         &self,
