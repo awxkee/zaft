@@ -75,12 +75,7 @@ where
             2 => T::butterfly36(fft_direction)
                 .ok()
                 .map_or_else(|| T::butterfly6(fft_direction), Ok)?,
-            3 => T::butterfly216(fft_direction)
-                .or_else(|| T::butterfly36(fft_direction).ok())
-                .or_else(|| T::butterfly6(fft_direction).ok())
-                .ok_or(ZaftError::Overflow)?,
-            _ => T::butterfly1296(fft_direction)
-                .or_else(|| T::butterfly216(fft_direction))
+            _ => T::butterfly216(fft_direction)
                 .or_else(|| T::butterfly36(fft_direction).ok())
                 .or_else(|| T::butterfly6(fft_direction).ok())
                 .ok_or(ZaftError::Overflow)?,

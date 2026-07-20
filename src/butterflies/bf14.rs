@@ -61,6 +61,7 @@ impl<T: FftSample> Butterfly14<T>
 where
     f64: AsPrimitive<T>,
 {
+    #[allow(dead_code)] // live in scalar builds; displaced by SIMD butterflies
     #[inline(always)]
     pub(crate) fn run<S: BidirectionalStore<Complex<T>>>(&self, chunk: &mut S) {
         let bf2 = FastButterfly2::new(self.direction);

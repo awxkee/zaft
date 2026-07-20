@@ -707,11 +707,6 @@ impl Zaft {
                 // factor out 72
                 try_mixed_radix!(product / 72, 72)
             }
-
-            if product == 858 && T::butterfly66(direction).is_some() {
-                // factor out 66
-                try_mixed_radix!(66, product / 66)
-            }
         }
 
         if product.is_multiple_of(63)
@@ -932,29 +927,14 @@ impl Zaft {
             54 => {
                 return T::butterfly54(fft_direction).map(Ok);
             }
-            63 => {
-                return T::butterfly63(fft_direction).map(Ok);
-            }
             64 => {
                 return T::butterfly64(fft_direction).map(Ok);
-            }
-            66 => {
-                return T::butterfly66(fft_direction).map(Ok);
-            }
-            70 => {
-                return T::butterfly70(fft_direction).map(Ok);
             }
             72 => {
                 return T::butterfly72(fft_direction).map(Ok);
             }
-            78 => {
-                return T::butterfly78(fft_direction).map(Ok);
-            }
             81 => {
                 return T::butterfly81(fft_direction).map(Ok);
-            }
-            88 => {
-                return T::butterfly88(fft_direction).map(Ok);
             }
             96 => {
                 return T::butterfly96(fft_direction).map(Ok);
@@ -995,23 +975,8 @@ impl Zaft {
             512 => {
                 return T::butterfly512(fft_direction).map(Ok);
             }
-            576 => {
-                return T::butterfly576(fft_direction).map(Ok);
-            }
             1024 => {
                 return T::butterfly1024(fft_direction).map(Ok);
-            }
-            1152 => {
-                return T::butterfly1152(fft_direction).map(Ok);
-            }
-            1296 => {
-                return T::butterfly1296(fft_direction).map(Ok);
-            }
-            1536 => {
-                return T::butterfly1536(fft_direction).map(Ok);
-            }
-            1800 => {
-                return T::butterfly1800(fft_direction).map(Ok);
             }
             2048 => {
                 return T::butterfly2048(fft_direction).map(Ok);
