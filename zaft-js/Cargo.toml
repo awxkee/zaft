@@ -1,6 +1,6 @@
 [package]
 name = "zaft-js"
-version = "0.3.10"
+version = "0.3.12"
 edition = "2024"
 description = "Fast fourier transform"
 readme = "README.md"
