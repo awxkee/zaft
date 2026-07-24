@@ -38,7 +38,7 @@ use std::mem::MaybeUninit;
 pub(crate) struct Avx512vlButterfly2048d {
     direction: FftDirection,
     bf8: ColumnButterfly8d,
-    twiddles: [AvxStoreD; 992],
+    twiddles: Box<[AvxStoreD; 992]>,
     twiddles32: [AvxStoreD; 6],
     twiddles64: [AvxStoreD; 7],
 }
@@ -52,7 +52,7 @@ impl Avx512vlButterfly2048d {
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            twiddles: gen_butterfly_twiddles_f64(64, 32, fft_direction, 2048),
+            twiddles: Box::new(gen_butterfly_twiddles_f64(64, 32, fft_direction, 2048)),
             twiddles32: [
                 AvxStoreD::set_complex(&compute_twiddle(1, 32, fft_direction)),
                 AvxStoreD::set_complex(&compute_twiddle(2, 32, fft_direction)),

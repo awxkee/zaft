@@ -185,14 +185,19 @@ macro_rules! gen_bf243d {
         pub(crate) struct $name {
             direction: FftDirection,
             bf27: $bf27_name,
-            twiddles: [NeonStoreD; 216],
+            twiddles: Box<[NeonStoreD; 216]>,
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
                 Self {
                     direction: fft_direction,
-                    twiddles: gen_butterfly_twiddles_f64(27, 9, fft_direction, 243),
+                    twiddles: Box::new(gen_butterfly_twiddles_f64(
+                        27,
+                        9,
+                        fft_direction,
+                        243,
+                    )),
                     bf27: $bf27_name::new(fft_direction),
                 }
             }

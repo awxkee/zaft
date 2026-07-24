@@ -40,7 +40,7 @@ macro_rules! gen_bf64f {
         use crate::neon::mixed::$internal_bf;
         pub(crate) struct $name {
             direction: FftDirection,
-            twiddles: [NeonStoreF; 28],
+            twiddles: Box<[NeonStoreF; 28]>,
             bf8: $internal_bf,
         }
 
@@ -48,7 +48,7 @@ macro_rules! gen_bf64f {
             pub(crate) fn new(direction: FftDirection) -> Self {
                 $name {
                     direction,
-                    twiddles: gen_butterfly_twiddles_f32(8, 8, direction, 64),
+                    twiddles: Box::new(gen_butterfly_twiddles_f32(8, 8, direction, 64)),
                     bf8: $internal_bf::new(direction),
                 }
             }

@@ -236,7 +236,7 @@ impl ColumnButterfly25d {
 pub(crate) struct AvxButterfly125d {
     direction: FftDirection,
     bf25: ColumnButterfly25d,
-    twiddles: [AvxStoreD; 52],
+    twiddles: Box<[AvxStoreD; 52]>,
 }
 
 impl AvxButterfly125d {
@@ -248,7 +248,7 @@ impl AvxButterfly125d {
     fn new_init(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            twiddles: gen_butterfly_twiddles_f64(25, 5, fft_direction, 125),
+            twiddles: Box::new(gen_butterfly_twiddles_f64(25, 5, fft_direction, 125)),
             bf25: ColumnButterfly25d::new(fft_direction),
         }
     }

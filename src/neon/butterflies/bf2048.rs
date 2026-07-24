@@ -40,7 +40,7 @@ use crate::neon::mixed::$internal_bf32;
 pub(crate) struct $name {
     direction: FftDirection,
     bf32: $internal_bf32,
-    twiddles: [NeonStoreF; 992],
+    twiddles: Box<[NeonStoreF; 992]>,
     twiddles64: [NeonStoreF; 7],
 }
 
@@ -48,7 +48,12 @@ impl $name {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            twiddles: gen_butterfly_twiddles_f32(64, 32, fft_direction, 2048),
+            twiddles: Box::new(gen_butterfly_twiddles_f32(
+                64,
+                32,
+                fft_direction,
+                2048,
+            )),
             twiddles64: [
                 NeonStoreF::from_complex(&compute_twiddle(1, 64, fft_direction)),
                 NeonStoreF::from_complex(&compute_twiddle(2, 64, fft_direction)),

@@ -40,14 +40,14 @@ pub(crate) struct AvxButterfly192d {
     direction: FftDirection,
     bf16: ColumnButterfly16d,
     bf12: ColumnButterfly12d,
-    twiddles: [AvxStoreD; 88],
+    twiddles: Box<[AvxStoreD; 88]>,
 }
 
 impl AvxButterfly192d {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            twiddles: unsafe { gen_butterfly_twiddles_f64(16, 12, fft_direction, 192) },
+            twiddles: Box::new(unsafe { gen_butterfly_twiddles_f64(16, 12, fft_direction, 192) }),
             bf16: unsafe { ColumnButterfly16d::new(fft_direction) },
             bf12: unsafe { ColumnButterfly12d::new(fft_direction) },
         }

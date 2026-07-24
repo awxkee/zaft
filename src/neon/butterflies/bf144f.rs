@@ -43,14 +43,14 @@ macro_rules! gen_bf144f {
         pub(crate) struct $name {
             direction: FftDirection,
             bf12: $internal_bf12,
-            twiddles: [NeonStoreF; 66],
+            twiddles: Box<[NeonStoreF; 66]>,
         }
 
         impl $name {
             pub(crate) fn new(fft_direction: FftDirection) -> Self {
                 Self {
                     direction: fft_direction,
-                    twiddles: gen_butterfly_twiddles_f32(12, 12, fft_direction, 144),
+                    twiddles: Box::new(gen_butterfly_twiddles_f32(12, 12, fft_direction, 144)),
                     bf12: $internal_bf12::new(fft_direction),
                 }
             }

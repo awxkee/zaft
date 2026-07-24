@@ -39,7 +39,7 @@ use num_complex::Complex;
 pub(crate) struct AvxButterfly49d {
     direction: FftDirection,
     bf7: ColumnButterfly7d,
-    twiddles: [AvxStoreD; 24],
+    twiddles: Box<[AvxStoreD; 24]>,
 }
 
 impl AvxButterfly49d {
@@ -64,7 +64,7 @@ impl AvxButterfly49d {
             }
             Self {
                 direction: fft_direction,
-                twiddles,
+                twiddles: Box::new(twiddles),
                 bf7: ColumnButterfly7d::new(fft_direction),
             }
         }

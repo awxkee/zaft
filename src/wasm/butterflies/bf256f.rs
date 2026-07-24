@@ -40,14 +40,14 @@ use std::mem::MaybeUninit;
 pub(crate) struct WasmButterfly256f {
     direction: FftDirection,
     bf16: ColumnButterfly16f,
-    twiddles: [WasmStoreF; 120],
+    twiddles: Box<[WasmStoreF; 120]>,
 }
 
 impl WasmButterfly256f {
     pub(crate) fn new(fft_direction: FftDirection) -> Self {
         Self {
             direction: fft_direction,
-            twiddles: gen_butterfly_twiddles_f32(16, 16, fft_direction, 256),
+            twiddles: Box::new(gen_butterfly_twiddles_f32(16, 16, fft_direction, 256)),
             bf16: ColumnButterfly16f::new(fft_direction),
         }
     }

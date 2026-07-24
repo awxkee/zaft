@@ -41,7 +41,7 @@ macro_rules! gen_bf25d {
         pub(crate) struct $name {
             direction: FftDirection,
             bf5: $internal_bf,
-            twiddles: [NeonStoreD; 20],
+            twiddles: Box<[NeonStoreD; 20]>,
         }
 
         impl $name {
@@ -58,7 +58,7 @@ macro_rules! gen_bf25d {
                 }
                 Self {
                     direction: fft_direction,
-                    twiddles,
+                    twiddles: Box::new(twiddles),
                     bf5: $internal_bf::new(fft_direction),
                 }
             }

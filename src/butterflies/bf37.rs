@@ -37,7 +37,7 @@ use std::sync::Arc;
 
 pub(crate) struct Butterfly37<T> {
     convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
-    convolve_fft_twiddles: [Complex<T>; 36],
+    convolve_fft_twiddles: Box<[Complex<T>; 36]>,
     direction: FftDirection,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
 }
@@ -80,7 +80,7 @@ where
 
         Butterfly37 {
             convolve_fft,
-            convolve_fft_twiddles: inner_fft_input,
+            convolve_fft_twiddles: Box::new(inner_fft_input),
             direction: fft_direction,
             spectrum_ops: T::make_complex_arith(),
         }
@@ -143,8 +143,10 @@ where
 
             *buffer_first = *buffer_first + scratch[0];
 
-            self.spectrum_ops
-                .mul_conjugate_in_place(scratch.as_mut_slice(), &self.convolve_fft_twiddles);
+            self.spectrum_ops.mul_conjugate_in_place(
+                scratch.as_mut_slice(),
+                self.convolve_fft_twiddles.as_ref(),
+            );
 
             scratch[0] = scratch[0] + buffer_first_val.conj();
 
@@ -272,8 +274,10 @@ where
 
             dst[0] = *buffer_first + scratch[0];
 
-            self.spectrum_ops
-                .mul_conjugate_in_place(scratch.as_mut_slice(), &self.convolve_fft_twiddles);
+            self.spectrum_ops.mul_conjugate_in_place(
+                scratch.as_mut_slice(),
+                self.convolve_fft_twiddles.as_ref(),
+            );
 
             scratch[0] = scratch[0] + buffer_first_val.conj();
 

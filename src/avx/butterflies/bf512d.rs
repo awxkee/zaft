@@ -40,7 +40,7 @@ macro_rules! define_avx512 {
         pub(crate) struct $bf_name {
             direction: FftDirection,
             bf32: ColumnButterfly32d,
-            twiddles: [AvxStoreD; 240],
+            twiddles: Box<[AvxStoreD; 240]>,
         }
 
         impl $bf_name {
@@ -52,7 +52,7 @@ macro_rules! define_avx512 {
             fn new_init(fft_direction: FftDirection) -> Self {
                 Self {
                     direction: fft_direction,
-                    twiddles: gen_butterfly_twiddles_f64(32, 16, fft_direction, 512),
+                    twiddles: Box::new(gen_butterfly_twiddles_f64(32, 16, fft_direction, 512)),
                     bf32: ColumnButterfly32d::new(fft_direction),
                 }
             }

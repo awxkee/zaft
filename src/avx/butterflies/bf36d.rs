@@ -40,7 +40,7 @@ use std::arch::x86_64::*;
 
 pub(crate) struct AvxButterfly36d {
     direction: FftDirection,
-    twiddles: [Complex<f64>; 30],
+    twiddles: Box<[Complex<f64>; 30]>,
     bf6_column: ColumnButterfly6d,
 }
 
@@ -61,7 +61,7 @@ impl AvxButterfly36d {
         }
         AvxButterfly36d {
             direction,
-            twiddles,
+            twiddles: Box::new(twiddles),
             bf6_column: unsafe { ColumnButterfly6d::new(direction) },
         }
     }

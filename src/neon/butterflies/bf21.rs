@@ -86,7 +86,7 @@ macro_rules! gen_bf24d {
             direction: FftDirection,
             bf7: $internal_bf7,
             bf3: $internal_bf3,
-            twiddles: [NeonStoreD; 21],
+            twiddles: Box<[NeonStoreD; 21]>,
         }
 
         impl $name {
@@ -103,7 +103,7 @@ macro_rules! gen_bf24d {
                 }
                 Self {
                     direction: fft_direction,
-                    twiddles,
+                    twiddles: Box::new(twiddles),
                     bf7: $internal_bf7::new(fft_direction),
                     bf3: $internal_bf3::new(fft_direction),
                 }

@@ -127,7 +127,7 @@ pub(crate) fn transpose_8x8_f32(
 
 pub(crate) struct WasmButterfly64f {
     direction: FftDirection,
-    twiddles: [WasmStoreF; 28],
+    twiddles: Box<[WasmStoreF; 28]>,
     bf8: ColumnButterfly8f,
 }
 
@@ -135,7 +135,7 @@ impl WasmButterfly64f {
     pub(crate) fn new(direction: FftDirection) -> Self {
         Self {
             direction,
-            twiddles: gen_butterfly_twiddles_f32(8, 8, direction, 64),
+            twiddles: Box::new(gen_butterfly_twiddles_f32(8, 8, direction, 64)),
             bf8: ColumnButterfly8f::new(direction),
         }
     }
