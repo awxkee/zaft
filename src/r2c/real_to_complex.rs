@@ -74,6 +74,108 @@ pub(crate) struct R2CFftEvenInterceptor<T> {
     complex_scratch_len: usize,
 }
 
+#[cfg(any(target_arch = "wasm32", test))]
+pub(crate) struct R2CFftOddInterceptor<T> {
+    intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
+    length: usize,
+    complex_length: usize,
+    intercept_scratch_length: usize,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl<T: FftSample> R2CFftOddInterceptor<T>
+where
+    f64: AsPrimitive<T>,
+{
+    pub(crate) fn install(
+        length: usize,
+        intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
+    ) -> Result<Self, ZaftError> {
+        assert_ne!(length % 2, 0, "R2C must be odd in odd interceptor");
+        assert_eq!(
+            intercept.length(),
+            length,
+            "Underlying interceptor must have the full real length"
+        );
+        assert_eq!(
+            intercept.direction(),
+            FftDirection::Forward,
+            "Real to complex FFT must be forward"
+        );
+
+        let intercept_scratch_length = intercept.scratch_length();
+
+        Ok(Self {
+            intercept,
+            length,
+            complex_length: length / 2 + 1,
+            intercept_scratch_length,
+        })
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl<T: FftSample> R2CFftExecutor<T> for R2CFftOddInterceptor<T>
+where
+    f64: AsPrimitive<T>,
+{
+    fn execute(&self, input: &[T], output: &mut [Complex<T>]) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
+        let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
+        self.execute_with_scratch(input, output, &mut scratch)
+    }
+
+    fn execute_with_scratch(
+        &self,
+        input: &[T],
+        output: &mut [Complex<T>],
+        scratch: &mut [Complex<T>],
+    ) -> Result<(), ZaftError> {
+        crate::util::validate_oof_block_sizes(
+            input.len(),
+            self.real_length(),
+            output.len(),
+            self.complex_length(),
+        )?;
+
+        let scratch = validate_scratch!(scratch, self.complex_scratch_length());
+        let (complex_buffer, intercept_scratch) = scratch.split_at_mut(self.length);
+
+        for (input, output) in input
+            .chunks_exact(self.length)
+            .zip(output.chunks_exact_mut(self.complex_length))
+        {
+            for (dst, src) in complex_buffer.iter_mut().zip(input) {
+                *dst = Complex::new(*src, T::zero());
+            }
+            self.intercept
+                .execute_with_scratch(complex_buffer, intercept_scratch)?;
+            output.copy_from_slice(&complex_buffer[..self.complex_length]);
+        }
+
+        Ok(())
+    }
+
+    fn real_length(&self) -> usize {
+        self.length
+    }
+
+    #[inline]
+    fn complex_length(&self) -> usize {
+        self.complex_length
+    }
+
+    #[inline]
+    fn complex_scratch_length(&self) -> usize {
+        self.length + self.intercept_scratch_length
+    }
+}
+
 impl<T: FftSample> R2CFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
@@ -208,5 +310,38 @@ where
 
     fn complex_scratch_length(&self) -> usize {
         self.complex_scratch_len
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{R2CFftExecutor, R2CFftOddInterceptor};
+    use crate::dft::Dft;
+    use crate::{FftDirection, FftExecutor, Zaft};
+    use num_complex::Complex;
+
+    #[test]
+    fn test_odd_interceptor_prime_lengths() {
+        for length in [17, 19, 23, 29] {
+            let fft = Zaft::strategy(length, FftDirection::Forward).unwrap();
+            let r2c = R2CFftOddInterceptor::install(length, fft).unwrap();
+            let input = (0..length)
+                .map(|x| ((x * 17 + 3) % 29) as f32 / 29.0)
+                .collect::<Vec<_>>();
+            let mut output = vec![Complex::<f32>::default(); length / 2 + 1];
+            r2c.execute(&input, &mut output).unwrap();
+
+            let dft = Dft::new(length, FftDirection::Forward).unwrap();
+            let mut reference = input
+                .iter()
+                .map(|&x| Complex::new(x, 0.0))
+                .collect::<Vec<_>>();
+            dft.execute(&mut reference).unwrap();
+
+            for (actual, expected) in output.iter().zip(&reference) {
+                assert!((actual.re - expected.re).abs() < 1e-4);
+                assert!((actual.im - expected.im).abs() < 1e-4);
+            }
+        }
     }
 }

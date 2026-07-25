@@ -73,6 +73,7 @@ macro_rules! make_default_butterfly {
     }};
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 macro_rules! make_static_butterfly {
     ($fft_direction: expr, $scalar_name: ident) => {{
         static Q: OnceLock<Arc<dyn FftExecutor<f64> + Send + Sync>> = OnceLock::new();
@@ -643,6 +644,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly17(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -667,6 +669,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly19(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -703,6 +706,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly23(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -727,6 +731,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly25(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -761,6 +766,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly29(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -779,6 +785,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly31(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -808,6 +815,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly36(
         _direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -820,6 +828,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly37(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -828,16 +837,17 @@ impl AlgorithmFactory<f64> for f64 {
 
     fn butterfly40(
         _fft_direction: FftDirection,
-    ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        make_default_butterfly!(
+    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
+        make_optional_butterfly!(
+            FftExecutor,
             _fft_direction,
-            Butterfly40,
             AvxButterfly40d,
             NeonButterfly40d,
             NeonFcmaButterfly40d
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn butterfly41(
         fft_direction: FftDirection,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
@@ -950,18 +960,6 @@ impl AlgorithmFactory<f64> for f64 {
             AvxButterfly100d,
             NeonButterfly100d,
             NeonFcmaButterfly100d
-        )
-    }
-
-    fn butterfly108(
-        _fft_direction: FftDirection,
-    ) -> Option<Arc<dyn FftExecutor<f64> + Send + Sync>> {
-        make_optional_butterfly!(
-            FftExecutor,
-            _fft_direction,
-            AvxButterfly108d,
-            NeonButterfly108d,
-            NeonFcmaButterfly108d
         )
     }
 
@@ -1245,6 +1243,7 @@ impl AlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn radix11(
         n: usize,
         fft_direction: FftDirection,
@@ -1254,6 +1253,7 @@ impl AlgorithmFactory<f64> for f64 {
             .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn radix13(
         n: usize,
         fft_direction: FftDirection,
@@ -1270,6 +1270,7 @@ impl AlgorithmFactory<f64> for f64 {
         Dft::new(n, fft_direction).map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn raders(
         convolve_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
         n: usize,
@@ -1476,11 +1477,14 @@ impl AlgorithmFactory<f64> for f64 {
         left_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
         right_fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
     ) -> Result<Arc<dyn FftExecutor<f64> + Send + Sync>, ZaftError> {
-        let product = left_fft.length() * right_fft.length();
-        if product < 10_000 {
-            use crate::good_thomas_small::GoodThomasSmallFft;
-            return GoodThomasSmallFft::new(left_fft, right_fft)
-                .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let product = left_fft.length() * right_fft.length();
+            if product < 10_000 {
+                use crate::good_thomas_small::GoodThomasSmallFft;
+                return GoodThomasSmallFft::new(left_fft, right_fft)
+                    .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>);
+            }
         }
         GoodThomasFft::new(left_fft, right_fft)
             .map(|x| Arc::new(x) as Arc<dyn FftExecutor<f64> + Send + Sync>)

@@ -38,22 +38,30 @@ mod bf13;
 mod bf14;
 mod bf15;
 mod bf16;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf17;
 mod bf18;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf19;
 mod bf2;
 mod bf20;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf23;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf25;
 mod bf27;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf29;
 mod bf3;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf31;
 mod bf32;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf36;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf37;
 mod bf4;
-mod bf40;
+#[cfg(not(target_arch = "wasm32"))]
 mod bf41;
 mod bf5;
 mod bf6;
@@ -99,29 +107,36 @@ pub(crate) use bf15::Butterfly15;
 #[allow(unused)]
 pub(crate) use bf16::Butterfly16;
 #[allow(unused)]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf17::Butterfly17;
 #[allow(unused)]
 pub(crate) use bf18::Butterfly18;
 #[allow(unused)]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf19::Butterfly19;
 #[allow(unused)]
 pub(crate) use bf20::Butterfly20;
 #[allow(unused)]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf23::Butterfly23;
 #[allow(unused)]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf25::Butterfly25;
 #[allow(unused)]
 pub(crate) use bf27::Butterfly27;
 #[allow(unused)]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf29::Butterfly29;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf31::Butterfly31;
 #[allow(unused)]
 pub(crate) use bf32::Butterfly32;
 #[allow(unused)]
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf36::Butterfly36;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf37::Butterfly37;
-#[allow(unused)]
-pub(crate) use bf40::Butterfly40;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use bf41::Butterfly41;
 
 #[inline(always)]

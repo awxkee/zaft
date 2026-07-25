@@ -27,7 +27,8 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::FftSample;
-use crate::complex_fma::{c_conj_mul_fast, c_mul_fast};
+use crate::complex_fma::c_conj_mul_fast;
+use crate::complex_fma::c_mul_fast;
 use num_complex::Complex;
 use num_traits::AsPrimitive;
 use std::marker::PhantomData;
@@ -46,10 +47,12 @@ pub(crate) trait ComplexArith<T> {
         dst: &mut [Complex<T>],
     );
     // complex(a * b)
+    #[cfg(not(target_arch = "wasm32"))]
     fn mul_expand_to_complex(&self, a: &[T], b: &[Complex<T>], dst: &mut [Complex<T>]);
     // (a*b).conj()
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
     // (a*b).conj()
+    #[cfg(not(target_arch = "wasm32"))]
     fn mul_conjugate_expand_h2c(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
     // a.conj() * b
     fn conjugate_mul_by_b(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
@@ -151,6 +154,7 @@ where
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn mul_expand_to_complex(&self, a: &[T], b: &[Complex<T>], dst: &mut [Complex<T>]) {
         for ((dst, &src), &twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
             *dst = c_mul_fast(Complex::new(src, T::zero()), twiddle);
@@ -163,6 +167,7 @@ where
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn mul_conjugate_expand_h2c(&self, dst: &mut [Complex<T>], b: &[Complex<T>]) {
         assert_eq!(dst.len(), b.len());
         if dst.is_empty() {

@@ -39,7 +39,9 @@ mod r2c_factory_d;
 mod r2c_factory_f;
 mod r2c_twiddles;
 mod real_to_complex;
+#[cfg(not(target_arch = "wasm32"))]
 mod rfft_bluestein;
+#[cfg(not(target_arch = "wasm32"))]
 mod rfft_raders;
 mod strategy_c2r;
 mod strategy_r2c;
@@ -57,6 +59,8 @@ pub(crate) use r2c_factory::R2CAlgorithmFactory;
 pub(crate) use r2c_twiddles::{C2RTwiddlesHandler, R2CTwiddlesFactory, R2CTwiddlesHandler};
 pub(crate) use real_to_complex::R2CFftEvenInterceptor;
 pub use real_to_complex::R2CFftExecutor;
+#[cfg(target_arch = "wasm32")]
+pub(crate) use real_to_complex::R2CFftOddInterceptor;
 use std::marker::PhantomData;
 pub(crate) use strategy_c2r::strategy_c2r;
 pub(crate) use strategy_r2c::strategy_r2c;

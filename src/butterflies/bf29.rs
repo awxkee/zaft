@@ -46,7 +46,7 @@ impl<T: FftSample> Butterfly29<T>
 where
     f64: AsPrimitive<T>,
 {
-    pub fn new(fft_direction: FftDirection) -> Self {
+    pub(crate) fn new(fft_direction: FftDirection) -> Self {
         let convolve_fft = Zaft::strategy(28, fft_direction).unwrap();
         let size = 29;
         let direction = convolve_fft.direction();
