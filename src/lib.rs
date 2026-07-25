@@ -54,6 +54,7 @@ mod factory64;
 mod fast_divider;
 mod fast_divider_u128;
 mod good_thomas;
+#[cfg(not(target_arch = "wasm32"))]
 mod good_thomas_small;
 mod mixed_radix;
 mod mla;
@@ -61,9 +62,12 @@ mod mla;
 mod neon;
 mod prime_factors;
 mod r2c;
+#[cfg(not(target_arch = "wasm32"))]
 mod raders;
 mod radix10;
+#[cfg(not(target_arch = "wasm32"))]
 mod radix11;
+#[cfg(not(target_arch = "wasm32"))]
 mod radix13;
 mod radix3;
 mod radix4;
@@ -95,12 +99,16 @@ use radix7::Radix7;
 #[allow(unused_imports)]
 use radix10::Radix10;
 #[allow(unused_imports)]
+#[cfg(not(target_arch = "wasm32"))]
 use radix11::Radix11;
 #[allow(unused_imports)]
+#[cfg(not(target_arch = "wasm32"))]
 use radix13::Radix13;
+#[cfg(not(target_arch = "wasm32"))]
 use std::collections::HashMap;
 
 use crate::factory::AlgorithmFactory;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::good_thomas_small::LutGatherFactory;
 use crate::prime_factors::{
     PrimeFactors, can_be_two_factors, split_factors_closest, try_greedy_pure_power_split,
@@ -113,6 +121,7 @@ use crate::spectrum_arithmetic::ComplexArithFactory;
 use crate::td::{TwoDimensionalC2C, TwoDimensionalC2R, TwoDimensionalR2C};
 use crate::traits::FftTrigonometry;
 use crate::transpose::TransposeFactory;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::util::{
     ALWAYS_BLUESTEIN_1000, ALWAYS_BLUESTEIN_2000, ALWAYS_BLUESTEIN_3000, ALWAYS_BLUESTEIN_4000,
     ALWAYS_BLUESTEIN_5000, ALWAYS_BLUESTEIN_6000,
@@ -122,8 +131,22 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, MulAdd};
 pub use r2c::{C2RFftExecutor, R2CFftExecutor};
 use std::fmt::{Debug, Display, Formatter};
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::{OnceLock, RwLock};
 pub use td::{TwoDimensionalExecutorC2R, TwoDimensionalExecutorR2C, TwoDimensionalFftExecutor};
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) trait GoodThomasSmallFactory<T>: LutGatherFactory<T> {}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl<T, U: LutGatherFactory<T>> GoodThomasSmallFactory<T> for U {}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) trait GoodThomasSmallFactory<T> {}
+
+#[cfg(target_arch = "wasm32")]
+impl<T, U> GoodThomasSmallFactory<T> for U {}
 
 pub(crate) trait FftSample:
     AlgorithmFactory<Self>
@@ -144,7 +167,7 @@ pub(crate) trait FftSample:
     + C2RAlgorithmFactory<Self>
     + R2CTwiddlesFactory<Self>
     + C2ROddExpanderFactory
-    + LutGatherFactory<Self>
+    + GoodThomasSmallFactory<Self>
 {
     const HALF: Self;
     const SQRT_3_OVER_2: Self;
@@ -284,27 +307,34 @@ pub trait FftExecutor<T> {
     fn destructive_scratch_length(&self) -> usize;
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 static PRIME_CACHE_F: OnceLock<RwLock<HashMap<usize, Arc<dyn FftExecutor<f32> + Send + Sync>>>> =
     OnceLock::new();
 
+#[cfg(not(target_arch = "wasm32"))]
 static PRIME_CACHE_B: OnceLock<RwLock<HashMap<usize, Arc<dyn FftExecutor<f32> + Send + Sync>>>> =
     OnceLock::new();
 
+#[cfg(not(target_arch = "wasm32"))]
 static PRIME_CACHE_DF: OnceLock<RwLock<HashMap<usize, Arc<dyn FftExecutor<f64> + Send + Sync>>>> =
     OnceLock::new();
 
+#[cfg(not(target_arch = "wasm32"))]
 static PRIME_CACHE_DB: OnceLock<RwLock<HashMap<usize, Arc<dyn FftExecutor<f64> + Send + Sync>>>> =
     OnceLock::new();
 
 pub(crate) trait FftPrimeCache<T> {
+    #[cfg(not(target_arch = "wasm32"))]
     fn has_cached_prime(
         n: usize,
         fft_direction: FftDirection,
     ) -> Option<Arc<dyn FftExecutor<T> + Send + Sync>>;
+    #[cfg(not(target_arch = "wasm32"))]
     fn put_prime_to_cache(fft_direction: FftDirection, fft: Arc<dyn FftExecutor<T> + Send + Sync>);
 }
 
 impl FftPrimeCache<f32> for f32 {
+    #[cfg(not(target_arch = "wasm32"))]
     fn has_cached_prime(
         n: usize,
         fft_direction: FftDirection,
@@ -320,6 +350,7 @@ impl FftPrimeCache<f32> for f32 {
         cache.read().ok()?.get(&n).cloned()
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn put_prime_to_cache(
         fft_direction: FftDirection,
         fft: Arc<dyn FftExecutor<f32> + Send + Sync>,
@@ -338,6 +369,7 @@ impl FftPrimeCache<f32> for f32 {
 }
 
 impl FftPrimeCache<f64> for f64 {
+    #[cfg(not(target_arch = "wasm32"))]
     fn has_cached_prime(
         n: usize,
         fft_direction: FftDirection,
@@ -353,6 +385,7 @@ impl FftPrimeCache<f64> for f64 {
         cache.read().ok()?.get(&n).cloned()
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn put_prime_to_cache(
         fft_direction: FftDirection,
         fft: Arc<dyn FftExecutor<f64> + Send + Sync>,
@@ -534,6 +567,7 @@ impl Zaft {
             }
 
             if factor3 >= 1 && factor2 >= 4 {
+                #[cfg(not(target_arch = "wasm32"))]
                 if product.is_multiple_of(36)
                     && product / 36 > 1
                     && product / 36 <= 16
@@ -788,6 +822,7 @@ impl Zaft {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn make_prime<T: FftSample>(
         n: usize,
         direction: FftDirection,
@@ -826,6 +861,7 @@ impl Zaft {
         Ok(fft_executor)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn make_raders<T: FftSample>(
         n: usize,
         direction: FftDirection,
@@ -884,36 +920,45 @@ impl Zaft {
             14 => return Some(T::butterfly14(fft_direction)),
             15 => return Some(T::butterfly15(fft_direction)),
             16 => return Some(T::butterfly16(fft_direction)),
+            #[cfg(not(target_arch = "wasm32"))]
             17 => return Some(T::butterfly17(fft_direction)),
             18 => return Some(T::butterfly18(fft_direction)),
+            #[cfg(not(target_arch = "wasm32"))]
             19 => return Some(T::butterfly19(fft_direction)),
             20 => return Some(T::butterfly20(fft_direction)),
             21 => {
                 return T::butterfly21(fft_direction).map(Ok);
             }
+            #[cfg(not(target_arch = "wasm32"))]
             23 => return Some(T::butterfly23(fft_direction)),
             24 => {
                 return T::butterfly24(fft_direction).map(Ok);
             }
+            #[cfg(not(target_arch = "wasm32"))]
             25 => return Some(T::butterfly25(fft_direction)),
             27 => return Some(T::butterfly27(fft_direction)),
             28 => return T::butterfly28(fft_direction).map(Ok),
+            #[cfg(not(target_arch = "wasm32"))]
             29 => return Some(T::butterfly29(fft_direction)),
             30 => {
                 return T::butterfly30(fft_direction).map(Ok);
             }
+            #[cfg(not(target_arch = "wasm32"))]
             31 => return Some(T::butterfly31(fft_direction)),
             32 => return Some(T::butterfly32(fft_direction)),
             35 => {
                 return T::butterfly35(fft_direction).map(Ok);
             }
+            #[cfg(not(target_arch = "wasm32"))]
             36 => {
                 return Some(T::butterfly36(fft_direction));
             }
+            #[cfg(not(target_arch = "wasm32"))]
             37 => return Some(T::butterfly37(fft_direction)),
             40 => {
-                return Some(T::butterfly40(fft_direction));
+                return T::butterfly40(fft_direction).map(Ok);
             }
+            #[cfg(not(target_arch = "wasm32"))]
             41 => return Some(T::butterfly41(fft_direction)),
             42 => {
                 return T::butterfly42(fft_direction).map(Ok);
@@ -941,9 +986,6 @@ impl Zaft {
             }
             100 => {
                 return T::butterfly100(fft_direction).map(Ok);
-            }
-            108 => {
-                return T::butterfly108(fft_direction).map(Ok);
             }
             121 => {
                 return T::butterfly121(fft_direction).map(Ok);
@@ -1076,29 +1118,50 @@ impl Zaft {
         } else if prime_factors.is_power_of_ten {
             T::radix10(n, fft_direction)
         } else if prime_factors.is_power_of_eleven {
-            if Zaft::could_do_split_mixed_radix()
-                && let Some(bf) =
-                    T::mixed_radix_butterfly11(Zaft::strategy(n / 11, fft_direction)?)?
+            #[cfg(not(target_arch = "wasm32"))]
             {
-                return Ok(bf);
+                if Zaft::could_do_split_mixed_radix()
+                    && let Some(bf) =
+                        T::mixed_radix_butterfly11(Zaft::strategy(n / 11, fft_direction)?)?
+                {
+                    return Ok(bf);
+                }
+                T::radix11(n, fft_direction)
             }
-            T::radix11(n, fft_direction)
+            #[cfg(target_arch = "wasm32")]
+            {
+                Zaft::make_mixed_radix(fft_direction, prime_factors)
+            }
         } else if prime_factors.is_power_of_twelve
             && let Some(bf) = T::mixed_radix_butterfly12(Zaft::strategy(n / 12, fft_direction)?)?
         {
             Ok(bf)
         } else if prime_factors.is_power_of_thirteen {
-            if Zaft::could_do_split_mixed_radix()
-                && let Some(bf) =
-                    T::mixed_radix_butterfly13(Zaft::strategy(n / 13, fft_direction)?)?
+            #[cfg(not(target_arch = "wasm32"))]
             {
-                return Ok(bf);
+                if Zaft::could_do_split_mixed_radix()
+                    && let Some(bf) =
+                        T::mixed_radix_butterfly13(Zaft::strategy(n / 13, fft_direction)?)?
+                {
+                    return Ok(bf);
+                }
+                T::radix13(n, fft_direction)
             }
-            T::radix13(n, fft_direction)
+            #[cfg(target_arch = "wasm32")]
+            {
+                Zaft::make_mixed_radix(fft_direction, prime_factors)
+            }
         } else if prime_factors.may_be_represented_in_mixed_radix() {
             Zaft::make_mixed_radix(fft_direction, prime_factors)
         } else if prime_factors.is_prime() {
-            Zaft::make_prime(n, fft_direction)
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                Zaft::make_prime(n, fft_direction)
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                Zaft::make_bluestein(n, fft_direction)
+            }
         } else {
             T::dft(n, fft_direction)
         }
@@ -1614,12 +1677,43 @@ pub(crate) use platform_test;
 
 #[cfg(test)]
 mod tests {
-    use crate::Zaft;
+    use crate::prime_factors::PrimeFactors;
+    use crate::{FftDirection, Zaft};
     use num_complex::Complex;
     use num_traits::Zero;
 
     #[cfg(target_arch = "wasm32")]
     wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_node_experimental);
+
+    platform_test! {
+        fn test_generic_radix11_and_radix13_powers() {
+            for length in [121, 169] {
+                let forward = Zaft::make_mixed_radix::<f64>(
+                    FftDirection::Forward,
+                    PrimeFactors::from_number(length as u64),
+                )
+                .unwrap();
+                let inverse = Zaft::make_mixed_radix::<f64>(
+                    FftDirection::Inverse,
+                    PrimeFactors::from_number(length as u64),
+                )
+                .unwrap();
+                let mut data = (0..length)
+                    .map(|x| Complex::new((x * 17 % 31) as f64, (x * 7 % 23) as f64))
+                    .collect::<Vec<_>>();
+                let expected = data.clone();
+
+                forward.execute(&mut data).unwrap();
+                inverse.execute(&mut data).unwrap();
+
+                for (actual, expected) in data.iter_mut().zip(expected) {
+                    *actual /= length as f64;
+                    assert!((actual.re - expected.re).abs() < 1e-8);
+                    assert!((actual.im - expected.im).abs() < 1e-8);
+                }
+            }
+        }
+    }
 
     platform_test! {
         fn power_of_four() {

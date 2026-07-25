@@ -98,10 +98,16 @@ where
         );
 
         let log5 = int_logarithm::<5>(size).unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
         let butterfly = match log5 {
             0 => T::butterfly1(fft_direction)?,
             1 => T::butterfly5(fft_direction)?,
             _ => T::butterfly25(fft_direction)?,
+        };
+        #[cfg(target_arch = "wasm32")]
+        let butterfly = match log5 {
+            0 => T::butterfly1(fft_direction)?,
+            _ => T::butterfly5(fft_direction)?,
         };
 
         let twiddles = T::make_twiddles_with_base(butterfly.length(), size, fft_direction)?;

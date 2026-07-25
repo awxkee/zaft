@@ -26,10 +26,14 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#[cfg(not(target_arch = "wasm32"))]
 use crate::r2c::rfft_bluestein::BluesteinRfft;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::r2c::rfft_raders::RadersRfft;
 use crate::r2c::{OneSizedRealFft, R2CAlgorithmFactory};
-use crate::{FftDirection, FftExecutor, R2CFftExecutor, Zaft, ZaftError};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::{FftDirection, Zaft};
+use crate::{FftExecutor, R2CFftExecutor, ZaftError};
 use std::sync::Arc;
 
 macro_rules! make_default_butterfly {
@@ -185,6 +189,16 @@ impl R2CAlgorithmFactory<f64> for f64 {
         make_default_butterfly!(RdftButterfly10)
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn r2c_butterfly11() -> Arc<dyn R2CFftExecutor<f64> + Send + Sync> {
+        make_default_butterfly!(Butterfly11)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn r2c_butterfly13() -> Arc<dyn R2CFftExecutor<f64> + Send + Sync> {
+        make_default_butterfly!(Butterfly13)
+    }
+
     fn r2c_butterfly16() -> Arc<dyn R2CFftExecutor<f64> + Send + Sync> {
         make_vec_default_butterfly2!(
             Butterfly16,
@@ -203,6 +217,7 @@ impl R2CAlgorithmFactory<f64> for f64 {
         )
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn r2c_raders(n: usize) -> Result<Arc<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
         let convolve_fft = Zaft::strategy(n - 1, FftDirection::Forward)?;
         let convolve_r2c = Zaft::make_r2c_fft_f64(n - 1)?;
@@ -227,6 +242,7 @@ impl R2CAlgorithmFactory<f64> for f64 {
         )?))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn r2c_bluestein(n: usize) -> Result<Arc<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
         let min_inner_len = crate::util::checked_bluestein_convolution_len(n)?;
         let inner_len_pow2 = min_inner_len

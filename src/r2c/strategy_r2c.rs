@@ -28,7 +28,10 @@
  */
 use crate::prime_factors::PrimeFactors;
 use crate::r2c::R2CFftEvenInterceptor;
+#[cfg(target_arch = "wasm32")]
+use crate::r2c::R2CFftOddInterceptor;
 use crate::r2c::mixed_radix_r2c::MixedRadixR2cOdd;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::util::{
     ALWAYS_BLUESTEIN_1000, ALWAYS_BLUESTEIN_2000, ALWAYS_BLUESTEIN_3000, ALWAYS_BLUESTEIN_4000,
     ALWAYS_BLUESTEIN_5000, ALWAYS_BLUESTEIN_6000,
@@ -51,12 +54,17 @@ pub(crate) fn r2c_butterflies<T: FftSample>(
         8 => Some(T::r2c_butterfly8()),
         9 => Some(T::r2c_butterfly9()),
         10 => Some(T::r2c_butterfly10()),
+        #[cfg(target_arch = "wasm32")]
+        11 => Some(T::r2c_butterfly11()),
+        #[cfg(target_arch = "wasm32")]
+        13 => Some(T::r2c_butterfly13()),
         16 => Some(T::r2c_butterfly16()),
         32 => Some(T::r2c_butterfly32()),
         _ => None,
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn make_prime<T: FftSample>(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send + Sync>, ZaftError>
 where
     f64: AsPrimitive<T>,
@@ -127,7 +135,11 @@ where
             .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<T> + Send + Sync>)
     } else {
         if prime_factors.is_prime() {
+            #[cfg(not(target_arch = "wasm32"))]
             return make_prime(len);
+            #[cfg(target_arch = "wasm32")]
+            return R2CFftOddInterceptor::install(len, Zaft::strategy(len, FftDirection::Forward)?)
+                .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<T> + Send + Sync>);
         }
 
         if Zaft::could_do_split_mixed_radix() {

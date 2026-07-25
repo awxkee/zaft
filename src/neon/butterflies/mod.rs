@@ -31,8 +31,6 @@ mod bf10;
 mod bf100d;
 mod bf100f;
 mod bf1024;
-mod bf108d;
-mod bf108f;
 mod bf11;
 mod bf12;
 mod bf121d;
@@ -261,12 +259,6 @@ pub(crate) use bf100d::NeonFcmaButterfly100d;
 pub(crate) use bf100f::NeonButterfly100f;
 #[cfg(feature = "fcma")]
 pub(crate) use bf100f::NeonFcmaButterfly100f;
-pub(crate) use bf108d::NeonButterfly108d;
-#[cfg(feature = "fcma")]
-pub(crate) use bf108d::NeonFcmaButterfly108d;
-pub(crate) use bf108f::NeonButterfly108f;
-#[cfg(feature = "fcma")]
-pub(crate) use bf108f::NeonFcmaButterfly108f;
 pub(crate) use bf121d::NeonButterfly121d;
 #[cfg(feature = "fcma")]
 pub(crate) use bf121d::NeonFcmaButterfly121d;

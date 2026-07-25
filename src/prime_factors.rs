@@ -207,6 +207,7 @@ fn pollard_brent(n: u64) -> u64 {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn primitive_root(prime: u64) -> Option<u64> {
     let test_exponents: Vec<u64> = prime_factorization(prime - 1)
         .into_iter()
