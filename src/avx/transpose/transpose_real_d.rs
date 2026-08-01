@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::mixed::AvxStoreD;
+use crate::avx::mixed::{AvxMaskD, AvxStoreD};
 use crate::avx::transpose::f64x4_4xn::transpose_4x4_f64;
 use crate::transpose::TransposeExecutorReal;
 use num_complex::Complex;
@@ -35,179 +35,103 @@ pub(crate) struct AvxTransposeDReal4x4 {}
 
 impl AvxTransposeDReal4x4 {
     #[target_feature(enable = "avx2")]
-    fn transpose_y<const REMAINDER_Y: usize>(
+    fn transpose_y(
         &self,
         src: &[f64],
         dst: &mut [Complex<f64>],
         y: usize,
         width: usize,
         height: usize,
+        rows: usize,
     ) {
-        const BLOCK_SIZE_X: usize = 4;
-        let input_y = y;
+        const BLOCK_SIZE: usize = 4;
+        debug_assert!((1..=BLOCK_SIZE).contains(&rows));
 
         let input_stride = width;
         let output_stride = height;
+        let src = unsafe { src.get_unchecked(input_stride * y..) };
+        let full_load_mask = AvxMaskD::real(BLOCK_SIZE);
+        let lo_store_mask = AvxMaskD::complex(rows.min(2));
+        let hi_store_mask = (rows > 2).then(|| AvxMaskD::complex(rows - 2));
+        let mut x = 0;
 
-        let src = unsafe { src.get_unchecked(input_stride * input_y..) };
+        while x < width {
+            let columns = (width - x).min(BLOCK_SIZE);
+            let load_mask = if columns == BLOCK_SIZE {
+                full_load_mask
+            } else {
+                AvxMaskD::real(columns)
+            };
+            let block_src = unsafe { src.get_unchecked(x..) };
+            let block_dst = unsafe { dst.get_unchecked_mut(y + output_stride * x..) };
 
-        let mut x = 0usize;
-
-        while x + BLOCK_SIZE_X <= width {
-            let output_x = x;
-
-            let src = unsafe { src.get_unchecked(x..) };
-            let dst = unsafe { dst.get_unchecked_mut(y + output_stride * output_x..) };
-
-            let mut zbuffer: [AvxStoreD; 4] = std::array::from_fn(|x| {
-                if x < REMAINDER_Y {
-                    AvxStoreD::load(unsafe { src.get_unchecked(x * input_stride..) })
+            let zbuffer = std::array::from_fn(|row| {
+                if row < rows {
+                    AvxStoreD::load_partial(
+                        unsafe { block_src.get_unchecked(row * input_stride..) },
+                        load_mask,
+                    )
                 } else {
                     AvxStoreD::zero()
                 }
             });
+            let zbuffer = transpose_4x4_f64(zbuffer);
 
-            zbuffer = transpose_4x4_f64(zbuffer);
-
-            for i in 0..4 {
-                let [v0, v1] = zbuffer[i].to_complex();
-                if REMAINDER_Y == 4 {
-                    v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                    v1.write(unsafe { dst.get_unchecked_mut(output_stride * i + 2..) });
-                } else if REMAINDER_Y == 3 {
-                    v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                    v1.write_lo(unsafe { dst.get_unchecked_mut(output_stride * i + 2..) });
-                } else if REMAINDER_Y == 2 {
-                    v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                } else if REMAINDER_Y == 1 {
-                    v0.write_lo(unsafe { dst.get_unchecked_mut(output_stride * i..) });
+            for (column, values) in zbuffer.into_iter().take(columns).enumerate() {
+                let output = unsafe { block_dst.get_unchecked_mut(output_stride * column..) };
+                let [lo, hi] = values.to_complex();
+                lo.write_partial(output, lo_store_mask);
+                if let Some(hi_store_mask) = hi_store_mask {
+                    hi.write_partial(unsafe { output.get_unchecked_mut(2..) }, hi_store_mask);
                 }
             }
 
-            x += BLOCK_SIZE_X;
-        }
-
-        let rem = width - x;
-
-        match rem {
-            1 => {
-                let output_x = x;
-
-                let src = unsafe { src.get_unchecked(x..) };
-                let dst = unsafe { dst.get_unchecked_mut(y + output_stride * output_x..) };
-
-                let mut zbuffer: [AvxStoreD; 4] = std::array::from_fn(|x| {
-                    if x < REMAINDER_Y {
-                        AvxStoreD::load1(unsafe { src.get_unchecked(x * input_stride..) })
-                    } else {
-                        AvxStoreD::zero()
-                    }
-                });
-
-                zbuffer = transpose_4x4_f64(zbuffer);
-
-                let [v0, v1] = zbuffer[0].to_complex();
-                if REMAINDER_Y == 4 {
-                    v0.write(dst);
-                    unsafe {
-                        v1.write(dst.get_unchecked_mut(2..));
-                    }
-                } else if REMAINDER_Y == 3 {
-                    v0.write(dst);
-                    unsafe {
-                        v1.write_lo(dst.get_unchecked_mut(2..));
-                    }
-                } else if REMAINDER_Y == 2 {
-                    v0.write(dst);
-                } else if REMAINDER_Y == 1 {
-                    v0.write_lo(dst);
-                }
-            }
-            2 => {
-                let output_x = x;
-
-                let src = unsafe { src.get_unchecked(x..) };
-                let dst = unsafe { dst.get_unchecked_mut(y + output_stride * output_x..) };
-
-                let zbuffer: [AvxStoreD; 4] = std::array::from_fn(|x| {
-                    if x < REMAINDER_Y {
-                        AvxStoreD::load2(unsafe { src.get_unchecked(x * input_stride..) })
-                    } else {
-                        AvxStoreD::zero()
-                    }
-                });
-
-                let buffer = transpose_4x4_f64(zbuffer);
-
-                for i in 0..2 {
-                    let [v0, v1] = buffer[i].to_complex();
-                    if REMAINDER_Y == 4 {
-                        v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                        v1.write(unsafe { dst.get_unchecked_mut(output_stride * i + 2..) });
-                    } else if REMAINDER_Y == 3 {
-                        v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                        v1.write_lo(unsafe { dst.get_unchecked_mut(output_stride * i + 2..) });
-                    } else if REMAINDER_Y == 2 {
-                        v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                    } else if REMAINDER_Y == 1 {
-                        v0.write_lo(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                    }
-                }
-            }
-            3 => {
-                let output_x = x;
-
-                let src = unsafe { src.get_unchecked(x..) };
-                let dst = unsafe { dst.get_unchecked_mut(y + output_stride * output_x..) };
-
-                let zbuffer: [AvxStoreD; 4] = std::array::from_fn(|x| {
-                    if x < REMAINDER_Y {
-                        AvxStoreD::load3(unsafe { src.get_unchecked(x * input_stride..) })
-                    } else {
-                        AvxStoreD::zero()
-                    }
-                });
-
-                let buffer = transpose_4x4_f64(zbuffer);
-
-                for i in 0..3 {
-                    let [v0, v1] = buffer[i].to_complex();
-                    if REMAINDER_Y == 4 {
-                        v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                        v1.write(unsafe { dst.get_unchecked_mut(output_stride * i + 2..) });
-                    } else if REMAINDER_Y == 3 {
-                        v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                        v1.write_lo(unsafe { dst.get_unchecked_mut(output_stride * i + 2..) });
-                    } else if REMAINDER_Y == 2 {
-                        v0.write(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                    } else if REMAINDER_Y == 1 {
-                        v0.write_lo(unsafe { dst.get_unchecked_mut(output_stride * i..) });
-                    }
-                }
-            }
-            _ => {}
+            x += columns;
         }
     }
 }
 
 impl TransposeExecutorReal<f64> for AvxTransposeDReal4x4 {
     fn transpose(&self, input: &[f64], output: &mut [Complex<f64>], width: usize, height: usize) {
-        const BLOCK_SIZE_Y: usize = 4;
-        let mut y = 0usize;
+        const BLOCK_SIZE: usize = 4;
+        let mut y = 0;
 
         unsafe {
-            while y + BLOCK_SIZE_Y <= height {
-                self.transpose_y::<4>(input, output, y, width, height);
-                y += BLOCK_SIZE_Y;
+            while y + BLOCK_SIZE <= height {
+                self.transpose_y(input, output, y, width, height, BLOCK_SIZE);
+                y += BLOCK_SIZE;
             }
+            if y < height {
+                self.transpose_y(input, output, y, width, height, height - y);
+            }
+        }
+    }
+}
 
-            let rem_y = height - y;
-            if rem_y > 0 {
-                match rem_y {
-                    1 => self.transpose_y::<1>(input, output, y, width, height),
-                    2 => self.transpose_y::<2>(input, output, y, width, height),
-                    3 => self.transpose_y::<3>(input, output, y, width, height),
-                    _ => {}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn real_transpose_handles_every_avx_tail() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+
+        let transpose = AvxTransposeDReal4x4 {};
+        for height in 1..=6 {
+            for width in 1..=6 {
+                let input: Vec<_> = (0..width * height).map(|x| x as f64 + 0.25).collect();
+                let mut output = vec![Complex::new(f64::NAN, f64::NAN); input.len()];
+                transpose.transpose(&input, &mut output, width, height);
+
+                for y in 0..height {
+                    for x in 0..width {
+                        assert_eq!(
+                            output[x * height + y],
+                            Complex::new(input[y * width + x], 0.0)
+                        );
+                    }
                 }
             }
         }
