@@ -28,8 +28,8 @@
  */
 #![allow(unused_unsafe)]
 
-use crate::avx::mixed::avx_stored::AvxStoreD;
-use crate::avx::mixed::avx_storef::AvxStoreF;
+use crate::avx::mixed::avx_stored::{AvxMaskD, AvxStoreD};
+use crate::avx::mixed::avx_storef::{AvxMaskF, AvxStoreF};
 use crate::avx::mixed::butterflies::{
     ColumnButterfly2d, ColumnButterfly2f, ColumnButterfly3d, ColumnButterfly3f, ColumnButterfly4d,
     ColumnButterfly4f, ColumnButterfly5d, ColumnButterfly5f, ColumnButterfly6d, ColumnButterfly6f,
@@ -209,6 +209,7 @@ macro_rules! define_mixed_radixd {
 
                 let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
                 if partial_remainder > 0 {
+                    let partial_mask = AvxMaskD::complex(partial_remainder);
                     let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
@@ -216,8 +217,9 @@ macro_rules! define_mixed_radixd {
                     let mut columns = [AvxStoreD::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            columns[i] = AvxStoreD::from_complex(
-                                chunk.get_unchecked(partial_remainder_base + len_per_row * i),
+                            columns[i] = AvxStoreD::from_complex_partial(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
@@ -227,7 +229,10 @@ macro_rules! define_mixed_radixd {
 
                     // always write the first row without twiddles
                     unsafe {
-                        output[0].write_lo(chunk.get_unchecked_mut(partial_remainder_base..));
+                        output[0].write_partial(
+                            chunk.get_unchecked_mut(partial_remainder_base..),
+                            partial_mask,
+                        );
                     }
 
                     // here LLVM doesn't "see" AvxStoreD as the same type returned by output
@@ -241,8 +246,9 @@ macro_rules! define_mixed_radixd {
                         let twiddle = twiddles[i - 1];
                         let output = AvxStoreD::mul_by_complex(output[i], twiddle);
                         unsafe {
-                            output.write_lo(
+                            output.write_partial(
                                 chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
@@ -329,6 +335,7 @@ macro_rules! define_mixed_radixd {
 
                 let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
                 if partial_remainder > 0 {
+                    let partial_mask = AvxMaskD::complex(partial_remainder);
                     let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
@@ -336,8 +343,9 @@ macro_rules! define_mixed_radixd {
                     let mut columns = [AvxStoreD::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            columns[i] = AvxStoreD::from_complex(
-                                src.get_unchecked(partial_remainder_base + len_per_row * i),
+                            columns[i] = AvxStoreD::from_complex_partial(
+                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
@@ -347,7 +355,10 @@ macro_rules! define_mixed_radixd {
 
                     // always write the first row without twiddles
                     unsafe {
-                        output[0].write_lo(dst.get_unchecked_mut(partial_remainder_base..));
+                        output[0].write_partial(
+                            dst.get_unchecked_mut(partial_remainder_base..),
+                            partial_mask,
+                        );
                     }
 
                     // here LLVM doesn't "see" AvxStoreD as the same type returned by output
@@ -361,8 +372,9 @@ macro_rules! define_mixed_radixd {
                         let twiddle = twiddles[i - 1];
                         let output = AvxStoreD::mul_by_complex(output[i], twiddle);
                         unsafe {
-                            output.write_lo(
+                            output.write_partial(
                                 dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
@@ -636,7 +648,8 @@ macro_rules! define_mixed_radixf {
                 }
 
                 let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                if partial_remainder == 1 {
+                if partial_remainder > 0 {
+                    let partial_mask = AvxMaskF::complex(partial_remainder);
                     let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
@@ -644,18 +657,20 @@ macro_rules! define_mixed_radixf {
                     let mut columns = [AvxStoreF::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            columns[i] = AvxStoreF::from_complex(
-                                chunk.get_unchecked(partial_remainder_base + len_per_row * i),
+                            columns[i] = AvxStoreF::from_complex_partial(
+                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
 
-                    // apply our butterfly function down the columns
                     let output = unsafe { self.inner_bf.exec(columns) };
 
-                    // always write the first row without twiddles
                     unsafe {
-                        output[0].write_lo1(chunk.get_unchecked_mut(partial_remainder_base..));
+                        output[0].write_partial(
+                            chunk.get_unchecked_mut(partial_remainder_base..),
+                            partial_mask,
+                        );
                     }
 
                     let mut twiddles = [AvxStoreF::zero(); ROW_COUNT - 1];
@@ -667,80 +682,9 @@ macro_rules! define_mixed_radixf {
                         let twiddle = twiddles[i - 1];
                         let v = AvxStoreF::mul_by_complex(output[i], twiddle);
                         unsafe {
-                            v.write_lo1(
+                            v.write_partial(
                                 chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
-                            );
-                        }
-                    }
-                } else if partial_remainder == 2 {
-                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                    for i in 0..ROW_COUNT {
-                        unsafe {
-                            columns[i] = AvxStoreF::from_complex2(
-                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
-                            );
-                        }
-                    }
-
-                    // apply our butterfly function down the columns
-                    let output = self.inner_bf.exec(columns);
-
-                    // always write the first row without twiddles
-                    unsafe {
-                        output[0].write_lo2(chunk.get_unchecked_mut(partial_remainder_base..));
-                    }
-
-                    let mut twiddles = [AvxStoreF::zero(); ROW_COUNT - 1];
-                    for i in 0..ROW_COUNT - 1 {
-                        twiddles[i] = final_twiddle_chunk[i];
-                    }
-
-                    for i in 1..ROW_COUNT {
-                        let twiddle = twiddles[i - 1];
-                        let v = AvxStoreF::mul_by_complex(output[i], twiddle);
-                        unsafe {
-                            v.write_lo2(
-                                chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
-                            );
-                        }
-                    }
-                } else if partial_remainder == 3 {
-                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                    for i in 0..ROW_COUNT {
-                        unsafe {
-                            columns[i] = AvxStoreF::from_complex3(
-                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
-                            );
-                        }
-                    }
-
-                    // apply our butterfly function down the columns
-                    let output = self.inner_bf.exec(columns);
-
-                    // always write the first row without twiddles
-                    unsafe {
-                        output[0].write_lo3(chunk.get_unchecked_mut(partial_remainder_base..));
-                    }
-
-                    let mut twiddles = [AvxStoreF::zero(); ROW_COUNT - 1];
-                    for i in 0..ROW_COUNT - 1 {
-                        twiddles[i] = final_twiddle_chunk[i];
-                    }
-
-                    for i in 1..ROW_COUNT {
-                        let twiddle = twiddles[i - 1];
-                        let v = AvxStoreF::mul_by_complex(output[i], twiddle);
-                        unsafe {
-                            v.write_lo3(
-                                chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
@@ -827,7 +771,8 @@ macro_rules! define_mixed_radixf {
                 }
 
                 let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                if partial_remainder == 1 {
+                if partial_remainder > 0 {
+                    let partial_mask = AvxMaskF::complex(partial_remainder);
                     let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
@@ -835,60 +780,22 @@ macro_rules! define_mixed_radixf {
                     let mut columns = [AvxStoreF::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            columns[i] = AvxStoreF::from_complex(
-                                src.get_unchecked(partial_remainder_base + len_per_row * i),
-                            );
-                        }
-                    }
-
-                    // apply our butterfly function down the columns
-                    let output = self.inner_bf.exec(columns);
-
-                    // always write the first row without twiddles
-                    unsafe {
-                        output[0].write_lo1(dst.get_unchecked_mut(partial_remainder_base..));
-                    }
-
-                    // here LLVM doesn't "see" AvxStoreF as the same type returned by output
-                    // so we need to force cast it onwards to the same type
-                    let mut twiddles = [AvxStoreF::zero(); ROW_COUNT - 1];
-                    for i in 0..ROW_COUNT - 1 {
-                        twiddles[i] = final_twiddle_chunk[i];
-                    }
-
-                    for i in 1..ROW_COUNT {
-                        let twiddle = twiddles[i - 1];
-                        let v = AvxStoreF::mul_by_complex(output[i], twiddle);
-                        unsafe {
-                            v.write_lo1(
-                                dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
-                            );
-                        }
-                    }
-                } else if partial_remainder == 2 {
-                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                    for i in 0..ROW_COUNT {
-                        unsafe {
-                            columns[i] = AvxStoreF::from_complex2(
+                            columns[i] = AvxStoreF::from_complex_partial(
                                 src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
 
-                    // apply our butterfly function down the columns
                     let output = self.inner_bf.exec(columns);
 
-                    // always write the first row without twiddles
                     unsafe {
-                        output[0].write_lo2(dst.get_unchecked_mut(partial_remainder_base..));
+                        output[0].write_partial(
+                            dst.get_unchecked_mut(partial_remainder_base..),
+                            partial_mask,
+                        );
                     }
 
-                    // here LLVM doesn't "see" AvxStoreF as the same type returned by output
-                    // so we need to force cast it onwards to the same type
                     let mut twiddles = [AvxStoreF::zero(); ROW_COUNT - 1];
                     for i in 0..ROW_COUNT - 1 {
                         twiddles[i] = final_twiddle_chunk[i];
@@ -898,46 +805,9 @@ macro_rules! define_mixed_radixf {
                         let twiddle = twiddles[i - 1];
                         let v = AvxStoreF::mul_by_complex(output[i], twiddle);
                         unsafe {
-                            v.write_lo2(
+                            v.write_partial(
                                 dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
-                            );
-                        }
-                    }
-                } else if partial_remainder == 3 {
-                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                    for i in 0..ROW_COUNT {
-                        unsafe {
-                            columns[i] = AvxStoreF::from_complex3(
-                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
-                            );
-                        }
-                    }
-
-                    // apply our butterfly function down the columns
-                    let output = self.inner_bf.exec(columns);
-
-                    // always write the first row without twiddles
-                    unsafe {
-                        output[0].write_lo3(dst.get_unchecked_mut(partial_remainder_base..));
-                    }
-
-                    // here LLVM doesn't "see" AvxStoreF as the same type returned by output
-                    // so we need to force cast it onwards to the same type
-                    let mut twiddles = [AvxStoreF::zero(); ROW_COUNT - 1];
-                    for i in 0..ROW_COUNT - 1 {
-                        twiddles[i] = final_twiddle_chunk[i];
-                    }
-
-                    for i in 1..ROW_COUNT {
-                        let twiddle = twiddles[i - 1];
-                        let v = AvxStoreF::mul_by_complex(output[i], twiddle);
-                        unsafe {
-                            v.write_lo3(
-                                dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
@@ -1205,7 +1075,8 @@ macro_rules! define_mixed_radix_streaming_f {
                 }
 
                 let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                if partial_remainder == 1 {
+                if partial_remainder > 0 {
+                    let partial_mask = AvxMaskF::complex(partial_remainder);
                     let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
@@ -1213,35 +1084,9 @@ macro_rules! define_mixed_radix_streaming_f {
                     let mut columns = [AvxStoreF::zero(); ROW_COUNT];
                     for i in 0..ROW_COUNT {
                         unsafe {
-                            columns[i] = AvxStoreF::from_complex(
-                                chunk.get_unchecked(partial_remainder_base + len_per_row * i),
-                            );
-                        }
-                    }
-
-                    self.inner_bf.exec_streaming(|i| {
-                         columns[i]
-                    }, |i, v| {
-                       if i == 0 {
-                            unsafe {
-                                v.write_lo1(chunk.get_unchecked_mut(partial_remainder_base..));
-                            }
-                       } else {
-                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
-                           let v = AvxStoreF::mul_by_complex(v, twiddle);
-                           unsafe { v.write_lo1(chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
-                       }
-                    });
-                } else if partial_remainder == 2 {
-                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                    for i in 0..ROW_COUNT {
-                        unsafe {
-                            columns[i] = AvxStoreF::from_complex2(
+                            columns[i] = AvxStoreF::from_complex_partial(
                                 chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             );
                         }
                     }
@@ -1251,39 +1096,20 @@ macro_rules! define_mixed_radix_streaming_f {
                     }, |i, v| {
                        if i == 0 {
                             unsafe {
-                                v.write_lo2(chunk.get_unchecked_mut(partial_remainder_base..));
+                                v.write_partial(
+                                    chunk.get_unchecked_mut(partial_remainder_base..),
+                                    partial_mask,
+                                );
                             }
                        } else {
                            let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
                            let v = AvxStoreF::mul_by_complex(v, twiddle);
-                           unsafe { v.write_lo2(chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
-                       }
-                    });
-                } else if partial_remainder == 3 {
-                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                    let mut columns = [AvxStoreF::zero(); ROW_COUNT];
-                    for i in 0..ROW_COUNT {
-                        unsafe {
-                            columns[i] = AvxStoreF::from_complex3(
-                                chunk.get_unchecked(partial_remainder_base + len_per_row * i..),
-                            );
-                        }
-                    }
-
-                    self.inner_bf.exec_streaming(|i| {
-                         columns[i]
-                    }, |i, v| {
-                       if i == 0 {
-                            unsafe {
-                                v.write_lo3(chunk.get_unchecked_mut(partial_remainder_base..));
+                           unsafe {
+                                v.write_partial(
+                                    chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                                    partial_mask,
+                                );
                             }
-                       } else {
-                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
-                           let v = AvxStoreF::mul_by_complex(v, twiddle);
-                           unsafe { v.write_lo3(chunk.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
                        }
                     });
                 }
@@ -1358,70 +1184,36 @@ macro_rules! define_mixed_radix_streaming_f {
                 }
 
                 let partial_remainder = len_per_row % COMPLEX_PER_VECTOR;
-                if partial_remainder == 1 {
+                if partial_remainder > 0 {
+                    let partial_mask = AvxMaskF::complex(partial_remainder);
                     let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
                     let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
                     let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
 
                     self.inner_bf.exec_streaming(|i| {
                          unsafe {
-                            AvxStoreF::from_complex(
-                                src.get_unchecked(partial_remainder_base + len_per_row * i),
-                            )
-                        }
-                    }, |i, v| {
-                       if i == 0 {
-                            unsafe {
-                                v.write_lo1(dst.get_unchecked_mut(partial_remainder_base..));
-                            }
-                       } else {
-                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
-                           let v = AvxStoreF::mul_by_complex(v, twiddle);
-                           unsafe { v.write_lo1(dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
-                       }
-                    });
-                } else if partial_remainder == 2 {
-                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                    self.inner_bf.exec_streaming(|i| {
-                         unsafe {
-                            AvxStoreF::from_complex2(
+                            AvxStoreF::from_complex_partial(
                                 src.get_unchecked(partial_remainder_base + len_per_row * i..),
+                                partial_mask,
                             )
                         }
                     }, |i, v| {
                        if i == 0 {
                             unsafe {
-                                v.write_lo2(dst.get_unchecked_mut(partial_remainder_base..));
+                                v.write_partial(
+                                    dst.get_unchecked_mut(partial_remainder_base..),
+                                    partial_mask,
+                                );
                             }
                        } else {
                            let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
                            let v = AvxStoreF::mul_by_complex(v, twiddle);
-                           unsafe { v.write_lo2(dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
-                       }
-                    });
-                } else if partial_remainder == 3 {
-                    let partial_remainder_base = chunk_count * COMPLEX_PER_VECTOR;
-                    let partial_remainder_twiddle_base = self.twiddles.len() - TWIDDLES_PER_COLUMN;
-                    let final_twiddle_chunk = &self.twiddles[partial_remainder_twiddle_base..];
-
-                    self.inner_bf.exec_streaming(|i| {
-                         unsafe {
-                            AvxStoreF::from_complex3(
-                                src.get_unchecked(partial_remainder_base + len_per_row * i..),
-                            )
-                        }
-                    }, |i, v| {
-                       if i == 0 {
-                            unsafe {
-                                v.write_lo3(dst.get_unchecked_mut(partial_remainder_base..));
+                           unsafe {
+                                v.write_partial(
+                                    dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..),
+                                    partial_mask,
+                                );
                             }
-                       } else {
-                           let twiddle: AvxStoreF = final_twiddle_chunk[i - 1];
-                           let v = AvxStoreF::mul_by_complex(v, twiddle);
-                           unsafe { v.write_lo3(dst.get_unchecked_mut(partial_remainder_base + len_per_row * i..)) }
                        }
                     });
                 }
@@ -1579,6 +1371,50 @@ mod tests {
     use crate::Zaft;
     use crate::mixed_radix::MixedRadix;
     use crate::util::has_valid_avx;
+
+    fn verify_f32_remainder(executor: &dyn FftExecutor<f32>, row_count: usize, width: usize) {
+        let reference = MixedRadix::new(
+            Zaft::strategy(row_count, FftDirection::Forward).unwrap(),
+            Zaft::strategy(width, FftDirection::Forward).unwrap(),
+        )
+        .unwrap();
+        let input: Vec<_> = (0..row_count * width)
+            .map(|i| Complex::new(i as f32 * 0.125 - 1.0, i as f32 * -0.0625 + 0.5))
+            .collect();
+        let mut expected = input.clone();
+        reference.execute(&mut expected).unwrap();
+
+        let mut in_place = input.clone();
+        executor.execute(&mut in_place).unwrap();
+        let mut out_of_place = vec![Complex::zero(); input.len()];
+        executor
+            .execute_out_of_place(&input, &mut out_of_place)
+            .unwrap();
+
+        for (actual, expected) in in_place
+            .iter()
+            .chain(out_of_place.iter())
+            .zip(expected.iter().cycle())
+        {
+            assert!((actual.re - expected.re).abs() < 1e-3);
+            assert!((actual.im - expected.im).abs() < 1e-3);
+        }
+    }
+
+    #[test]
+    fn test_avx_mixed_radix_f32_two_complex_tail() {
+        if !has_valid_avx() {
+            return;
+        }
+
+        let regular =
+            AvxMixedRadix5f::new(Zaft::strategy(6, FftDirection::Forward).unwrap()).unwrap();
+        verify_f32_remainder(&regular, 5, 6);
+
+        let streaming =
+            AvxMixedRadix7f::new(Zaft::strategy(6, FftDirection::Forward).unwrap()).unwrap();
+        verify_f32_remainder(&streaming, 7, 6);
+    }
 
     #[test]
     fn test_avx_mixed_radix_f64() {

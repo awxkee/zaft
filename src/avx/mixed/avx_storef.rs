@@ -42,6 +42,34 @@ pub(crate) struct AvxStoreF {
 }
 
 #[derive(Copy, Clone)]
+pub(crate) struct AvxMaskF {
+    v: __m256i,
+    lanes: usize,
+}
+
+impl AvxMaskF {
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn real(count: usize) -> Self {
+        debug_assert!(count <= 8);
+        Self {
+            v: _mm256_cmpgt_epi32(
+                _mm256_set1_epi32(count as i32),
+                _mm256_setr_epi32(0, 1, 2, 3, 4, 5, 6, 7),
+            ),
+            lanes: count,
+        }
+    }
+
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn complex(count: usize) -> Self {
+        debug_assert!(count <= 4);
+        Self::real(count * 2)
+    }
+}
+
+#[derive(Copy, Clone)]
 #[repr(transparent)]
 pub(crate) struct SseStoreF {
     pub(crate) v: __m128,
@@ -141,6 +169,21 @@ impl AvxStoreF {
         }
     }
 
+    /// Loads `count` complex values and zeroes the remaining complex lanes.
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn from_complex_partial(complex: &[Complex<f32>], mask: AvxMaskF) -> Self {
+        debug_assert!(mask.lanes.is_multiple_of(2) && complex.len() >= mask.lanes / 2);
+        if mask.lanes == 8 {
+            return Self::from_complex_ref(complex);
+        }
+        unsafe {
+            AvxStoreF {
+                v: _mm256_maskload_ps(complex.as_ptr().cast(), mask.v),
+            }
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn pack_evens(self) -> SseStoreF {
         unsafe {
@@ -158,6 +201,21 @@ impl AvxStoreF {
         unsafe {
             AvxStoreF {
                 v: _mm256_loadu_ps(complex.as_ptr().cast()),
+            }
+        }
+    }
+
+    /// Loads `count` f32 lanes and zeroes the remaining lanes.
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn load_partial(complex: &[f32], mask: AvxMaskF) -> Self {
+        debug_assert!(complex.len() >= mask.lanes);
+        if mask.lanes == 8 {
+            return Self::load(complex);
+        }
+        unsafe {
+            AvxStoreF {
+                v: _mm256_maskload_ps(complex.as_ptr(), mask.v),
             }
         }
     }
@@ -302,63 +360,8 @@ impl AvxStoreF {
     }
 
     #[inline(always)]
-    pub(crate) fn load7(ptr: &[f32]) -> Self {
-        unsafe {
-            let q0 = _mm_loadu_ps(ptr.as_ptr().cast());
-            let q2 = _mm_castsi128_ps(_mm_loadu_si64(ptr.get_unchecked(4..).as_ptr().cast()));
-            let q3 = _mm_load_ss(ptr.get_unchecked(6..).as_ptr().cast());
-            let q4 = _mm_insert_ps::<0x20>(q2, q3);
-            AvxStoreF::raw(_mm256_setr_m128(q0, q4))
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn load6(ptr: &[f32]) -> Self {
-        unsafe {
-            let q0 = _mm_loadu_ps(ptr.as_ptr().cast());
-            let q1 = _mm_castsi128_ps(_mm_loadu_si64(ptr.get_unchecked(4..).as_ptr().cast()));
-            AvxStoreF::raw(_mm256_setr_m128(q0, q1))
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn load5(ptr: &[f32]) -> Self {
-        unsafe {
-            let q0 = _mm_loadu_ps(ptr.as_ptr().cast());
-            let q1 = _mm_load_ss(ptr.get_unchecked(4..).as_ptr().cast());
-            AvxStoreF::raw(_mm256_setr_m128(q0, q1))
-        }
-    }
-
-    #[inline(always)]
     pub(crate) fn load4(ptr: &[f32]) -> Self {
         unsafe { AvxStoreF::raw(_mm256_castps128_ps256(_mm_loadu_ps(ptr.as_ptr().cast()))) }
-    }
-
-    #[inline(always)]
-    pub(crate) fn load3(ptr: &[f32]) -> Self {
-        unsafe {
-            let q0 = _mm_castsi128_ps(_mm_loadu_si64(ptr.as_ptr().cast()));
-            let q1 = _mm_load_ss(ptr.get_unchecked(2..).as_ptr().cast());
-            let q2 = _mm_insert_ps::<0x20>(q0, q1);
-            AvxStoreF::raw(_mm256_castps128_ps256(q2))
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn load2(ptr: &[f32]) -> Self {
-        unsafe {
-            let q0 = _mm_castsi128_ps(_mm_loadu_si64(ptr.as_ptr().cast()));
-            AvxStoreF::raw(_mm256_castps128_ps256(q0))
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn load1(ptr: &[f32]) -> Self {
-        unsafe {
-            let q0 = _mm_load_ss(ptr.as_ptr().cast());
-            AvxStoreF::raw(_mm256_castps128_ps256(q0))
-        }
     }
 
     #[inline(always)]
@@ -412,6 +415,17 @@ impl AvxStoreF {
     #[inline(always)]
     pub(crate) fn write(&self, to_ref: &mut [Complex<f32>]) {
         unsafe { _mm256_storeu_ps(to_ref.as_mut_ptr().cast(), self.v) }
+    }
+
+    /// Stores the first `count` complex values without touching following values.
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn write_partial(&self, to_ref: &mut [Complex<f32>], mask: AvxMaskF) {
+        debug_assert!(mask.lanes.is_multiple_of(2) && to_ref.len() >= mask.lanes / 2);
+        if mask.lanes == 8 {
+            return self.write(to_ref);
+        }
+        unsafe { _mm256_maskstore_ps(to_ref.as_mut_ptr().cast(), mask.v, self.v) }
     }
 
     #[inline(always)]
@@ -659,5 +673,52 @@ impl Neg for AvxStoreF {
     #[inline(always)]
     fn neg(self) -> Self::Output {
         unsafe { AvxStoreF::raw(_mm256_xor_ps(self.v, _mm256_set1_ps(-0.0))) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_loads_zero_and_partial_stores_preserve_masked_lanes() {
+        if !is_x86_feature_detected!("avx2") {
+            return;
+        }
+
+        let source = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        for count in 0..=8 {
+            unsafe {
+                let mask = AvxMaskF::real(count);
+                let value = AvxStoreF::load_partial(&source, mask);
+                let mut loaded = [-1.0; 8];
+                _mm256_storeu_ps(loaded.as_mut_ptr(), value.v);
+                assert_eq!(&loaded[..count], &source[..count]);
+                assert_eq!(&loaded[count..], &vec![0.0; 8 - count]);
+            }
+        }
+
+        let source = [
+            Complex::new(1.0, 2.0),
+            Complex::new(3.0, 4.0),
+            Complex::new(5.0, 6.0),
+            Complex::new(7.0, 8.0),
+        ];
+        for count in 0..=4 {
+            unsafe {
+                let mask = AvxMaskF::complex(count);
+                let value = AvxStoreF::from_complex_partial(&source, mask);
+                let mut loaded = [Complex::new(-1.0, -1.0); 4];
+                value.write(&mut loaded);
+                assert_eq!(&loaded[..count], &source[..count]);
+                assert_eq!(&loaded[count..], &vec![Complex::new(0.0, 0.0); 4 - count]);
+
+                let sentinel = Complex::new(-1.0, -1.0);
+                let mut stored = [sentinel; 4];
+                value.write_partial(&mut stored, mask);
+                assert_eq!(&stored[..count], &source[..count]);
+                assert_eq!(&stored[count..], &vec![sentinel; 4 - count]);
+            }
+        }
     }
 }

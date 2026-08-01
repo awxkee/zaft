@@ -26,7 +26,7 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::avx::mixed::{AvxStoreD, AvxStoreF};
+use crate::avx::mixed::{AvxMaskF, AvxStoreD, AvxStoreF};
 use crate::spectrum_arithmetic::ComplexArith;
 use num_complex::Complex;
 use num_traits::{MulAdd, Num};
@@ -325,6 +325,7 @@ impl AvxSpectrumArithmetic<f32> {
         assert_eq!(a.len() / original_width, dst.len() / cut_width);
 
         let remainder = cut_width - (cut_width / 4) * 4;
+        let remainder_mask = (remainder > 0).then(|| AvxMaskF::complex(remainder));
 
         for ((source, twiddle), dst) in b
             .chunks_exact(cut_width)
@@ -358,24 +359,18 @@ impl AvxSpectrumArithmetic<f32> {
                 src_x += 4;
             }
 
-            if remainder == 3 {
-                let s0 = AvxStoreF::from_complex3(unsafe { source.get_unchecked(src_x..) });
-                let tw0 = AvxStoreF::from_complex3(unsafe { twiddle.get_unchecked(src_x..) });
+            if let Some(remainder_mask) = remainder_mask {
+                let s0 = AvxStoreF::from_complex_partial(
+                    unsafe { source.get_unchecked(src_x..) },
+                    remainder_mask,
+                );
+                let tw0 = AvxStoreF::from_complex_partial(
+                    unsafe { twiddle.get_unchecked(src_x..) },
+                    remainder_mask,
+                );
                 let p0 = AvxStoreF::mul_by_complex(s0, tw0);
 
-                p0.write_lo3(unsafe { dst.get_unchecked_mut(src_x..) });
-            } else if remainder == 2 {
-                let s0 = AvxStoreF::from_complex2(unsafe { source.get_unchecked(src_x..) });
-                let tw0 = AvxStoreF::from_complex2(unsafe { twiddle.get_unchecked(src_x..) });
-                let p0 = AvxStoreF::mul_by_complex(s0, tw0);
-
-                p0.write_lo2(unsafe { dst.get_unchecked_mut(src_x..) });
-            } else if remainder == 1 {
-                let s0 = AvxStoreF::from_complex(unsafe { source.get_unchecked(src_x) });
-                let tw0 = AvxStoreF::from_complex(unsafe { twiddle.get_unchecked(src_x) });
-                let p0 = AvxStoreF::mul_by_complex(s0, tw0);
-
-                p0.write_lo1(unsafe { dst.get_unchecked_mut(src_x..) });
+                p0.write_partial(unsafe { dst.get_unchecked_mut(src_x..) }, remainder_mask);
             }
         }
     }
