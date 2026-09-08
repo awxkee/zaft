@@ -232,7 +232,8 @@ impl R2CAlgorithmFactory<f64> for f64 {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn r2c_bluestein(n: usize) -> Result<Arc<dyn R2CFftExecutor<f64> + Send + Sync>, ZaftError> {
-        let min_inner_len = crate::util::checked_bluestein_convolution_len(n)?;
+        // Only N / 2 + 1 bins are needed, so the inner length may be N + N / 2 instead of 2N - 1.
+        let min_inner_len = crate::util::checked_bluestein_rfft_convolution_len(n)?;
         let inner_len_pow2 = min_inner_len
             .checked_next_power_of_two()
             .ok_or(ZaftError::Overflow)?;

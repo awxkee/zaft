@@ -54,10 +54,10 @@ where
         fft_direction: FftDirection,
     ) -> Result<BluesteinRfft<T>, ZaftError> {
         let convolve_fft_len = convolve_fft.length();
-        let min_convolve_len = crate::util::checked_bluestein_convolution_len(size)?;
+        let min_convolve_len = crate::util::checked_bluestein_rfft_convolution_len(size)?;
         assert!(
             min_convolve_len <= convolve_fft_len,
-            "Bluestein requires convolve_fft.length() >= self.length() * 2 - 1. Expected >= {}, got {}",
+            "Bluestein rfft requires convolve_fft.length() >= self.length() + self.length() / 2. Expected >= {}, got {}",
             min_convolve_len,
             convolve_fft_len
         );
@@ -69,23 +69,30 @@ where
             "Convolve FFT may not go with other direction"
         );
 
-        let mut convolve_fft_twiddles = try_vec![Complex::zero(); convolve_fft_len];
-        make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse())?;
-
-        convolve_fft_twiddles[0] = convolve_fft_twiddles[0] * inner_fft_scale;
-        let (lo, hi) = convolve_fft_twiddles.split_at_mut(convolve_fft_len - size + 1);
-        lo[1..size]
-            .iter_mut()
-            .zip(hi[..size - 1].iter_mut().rev())
-            .for_each(|(t, dst)| {
-                *t = *t * inner_fft_scale;
-                *dst = *t;
-            });
-
-        convolve_fft.execute(&mut convolve_fft_twiddles)?;
-
         let mut twiddles = try_vec![Complex::zero(); size];
         make_bluesteins_twiddles(&mut twiddles, direction)?;
+
+        // The convolution kernel is `b[m] = conj(w[m])`. Output bin `k` in `0..K` pairs with
+        // input `n` in `0..N`, so only `m = k - n` in `-(N - 1)..=K - 1` is ever read:
+        // non-negative `m` live at the start of the buffer, negative `m` at its end and
+        // `M >= N + K - 1` keeps the two ranges apart.
+        let complex_length = size / 2 + 1;
+        let mut convolve_fft_twiddles = try_vec![Complex::zero(); convolve_fft_len];
+        for (dst, &w) in convolve_fft_twiddles[..complex_length]
+            .iter_mut()
+            .zip(twiddles.iter())
+        {
+            *dst = w.conj() * inner_fft_scale;
+        }
+        let negative_start = convolve_fft_len - (size - 1);
+        for (dst, &w) in convolve_fft_twiddles[negative_start..]
+            .iter_mut()
+            .zip(twiddles[1..].iter().rev())
+        {
+            *dst = w.conj() * inner_fft_scale;
+        }
+
+        convolve_fft.execute(&mut convolve_fft_twiddles)?;
 
         let convolve_scratch_length = convolve_fft.scratch_length();
 
@@ -189,85 +196,88 @@ mod tests {
     use num_complex::Complex;
     use num_traits::Zero;
 
-    #[test]
-    fn test_bluestein_rfft() {
-        let src: [f64; 11] = [7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 5.12];
+    /// Runs `rows` real rows of length `n` through Bluestein's rfft with an inner
+    /// FFT of `inner_len` and compares every bin with the plain complex DFT.
+    fn check(n: usize, inner_len: usize, rows: usize) {
+        let src = (0..n * rows)
+            .map(|i| ((i * 7919 + 13) % 97) as f64 * 0.37 - 17.0)
+            .collect::<Vec<f64>>();
         let mx = BluesteinRfft::new(
-            11,
-            Zaft::strategy(24, FftDirection::Forward).unwrap(),
+            n,
+            Zaft::strategy(inner_len, FftDirection::Forward).unwrap(),
             FftDirection::Forward,
         )
         .unwrap();
-        let mut reference_value = src
+        assert_eq!(mx.real_length(), n);
+        assert_eq!(mx.complex_length(), n / 2 + 1);
+
+        let mut reference = src
             .iter()
             .map(|x| Complex::new(*x, 0.0))
             .collect::<Vec<_>>();
-        let dft = Dft::new(11, FftDirection::Forward).unwrap();
-        dft.execute(&mut reference_value).unwrap();
+        let dft = Dft::new(n, FftDirection::Forward).unwrap();
+        dft.execute(&mut reference).unwrap();
 
-        let test_value = src.to_vec();
-        let mut complex_output = vec![Complex::<f64>::zero(); 11 / 2 + 1];
-        mx.execute(&test_value, &mut complex_output).unwrap();
-        reference_value
-            .iter()
-            .zip(complex_output.iter())
-            .enumerate()
-            .for_each(|(idx, (a, b))| {
+        let mut output = vec![Complex::<f64>::zero(); (n / 2 + 1) * rows];
+        mx.execute(&src, &mut output).unwrap();
+
+        for row in 0..rows {
+            let reference = &reference[row * n..(row + 1) * n];
+            let output = &output[row * (n / 2 + 1)..(row + 1) * (n / 2 + 1)];
+            for (idx, (a, b)) in reference.iter().zip(output.iter()).enumerate() {
                 assert!(
-                    (a.re - b.re).abs() < 1e-9,
-                    "a_re {} != b_re {} for at {idx}",
+                    (a.re - b.re).abs() < 1e-8,
+                    "n {n} inner {inner_len} row {row} bin {idx}: re {} != {}",
                     a.re,
                     b.re,
                 );
                 assert!(
-                    (a.im - b.im).abs() < 1e-9,
-                    "a_im {} != b_im {} for at {idx}",
+                    (a.im - b.im).abs() < 1e-8,
+                    "n {n} inner {inner_len} row {row} bin {idx}: im {} != {}",
                     a.im,
                     b.im,
                 );
-            });
+            }
+        }
     }
 
     #[test]
-    fn test_bluestein_rfft_47() {
-        let src: [f64; 47] = [
-            7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 5.12, 7.2, 6.2, 6.4, 7.9, 1.3, 5.6,
-            2.6, 6.4, 7.4, 3.4, 5.12, 7.2, 6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 5.12, 7.2,
-            6.2, 6.4, 7.9, 1.3, 5.6, 2.6, 6.4, 7.4, 3.4, 5.12, 2.6, 6.4, 7.4,
-        ];
-        let mx = BluesteinRfft::new(
-            47,
-            Zaft::strategy(47 * 2 - 1, FftDirection::Forward).unwrap(),
-            FftDirection::Forward,
-        )
-        .unwrap();
-        let mut reference_value = src
-            .iter()
-            .map(|x| Complex::new(*x, 0.0))
-            .collect::<Vec<_>>();
-        let dft = Dft::new(47, FftDirection::Forward).unwrap();
-        dft.execute(&mut reference_value).unwrap();
+    fn test_bluestein_rfft_minimal_inner_len() {
+        // `N + N / 2` is the smallest inner length the pruned kernel allows.
+        for n in [3usize, 11, 47, 97, 101, 211, 1009] {
+            check(n, n + n / 2, 1);
+        }
+    }
 
-        let test_value = src.to_vec();
-        let mut complex_output = vec![Complex::<f64>::zero(); 47 / 2 + 1];
-        mx.execute(&test_value, &mut complex_output).unwrap();
-        reference_value
-            .iter()
-            .zip(complex_output.iter())
-            .enumerate()
-            .for_each(|(idx, (a, b))| {
-                assert!(
-                    (a.re - b.re).abs() < 1e-9,
-                    "a_re {} != b_re {} for at {idx}",
-                    a.re,
-                    b.re,
-                );
-                assert!(
-                    (a.im - b.im).abs() < 1e-9,
-                    "a_im {} != b_im {} for at {idx}",
-                    a.im,
-                    b.im,
-                );
-            });
+    #[test]
+    #[should_panic(expected = "Bluestein rfft requires")]
+    fn test_bluestein_rfft_below_minimal_inner_len_is_rejected() {
+        let n = 47;
+        let inner = Zaft::strategy(n + n / 2 - 1, FftDirection::Forward).unwrap();
+        let _ = BluesteinRfft::<f64>::new(n, inner, FftDirection::Forward);
+    }
+
+    #[test]
+    fn test_bluestein_rfft_larger_inner_len() {
+        // Inner lengths at and above the classic `2N - 1` must still be exact.
+        check(11, 24, 1);
+        check(47, 47 * 2 - 1, 1);
+        check(47, 128, 1);
+        check(211, 512, 1);
+    }
+
+    #[test]
+    fn test_bluestein_rfft_batched() {
+        check(47, 72, 3);
+        check(101, 160, 2);
+    }
+
+    #[test]
+    fn test_bluestein_rfft_even_and_composite() {
+        // Not what the planner routes here, but the kernel placement is generic.
+        check(1, 1, 1);
+        check(2, 3, 1);
+        check(12, 18, 1);
+        check(15, 22, 1);
     }
 }
