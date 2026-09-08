@@ -42,7 +42,7 @@ mod real_to_complex;
 #[cfg(not(target_arch = "wasm32"))]
 mod rfft_bluestein;
 #[cfg(not(target_arch = "wasm32"))]
-mod rfft_raders;
+pub(crate) mod rfft_raders;
 mod strategy_c2r;
 mod strategy_r2c;
 
@@ -258,11 +258,11 @@ mod tests {
                 let mut complex_data = vec![Complex::<f32>::default(); data.len() / 2 + 1];
                 forward_r2c
                     .execute(&real_data, &mut complex_data)
-                    .expect(&format!("R2C Failed for size {i}"));
+                    .unwrap_or_else(|_| panic!("R2C Failed for size {i}"));
 
                 inverse_r2c
                     .execute(&complex_data, &mut real_data)
-                    .expect(&format!("C2R Failed for size {i}"));
+                    .unwrap_or_else(|_| panic!("C2R Failed for size {i}"));
 
                 real_data = real_data
                     .iter()
@@ -305,11 +305,11 @@ mod tests {
             let mut complex_data = vec![Complex::<f32>::default(); data.len() / 2 + 1];
             forward_r2c
                 .execute(&real_data, &mut complex_data)
-                .expect(&format!("R2C Failed for size {i}"));
+                .unwrap_or_else(|_| panic!("R2C Failed for size {i}"));
 
             inverse_r2c
                 .execute(&complex_data, &mut real_data)
-                .expect(&format!("C2R Failed for size {i}"));
+                .unwrap_or_else(|_| panic!("C2R Failed for size {i}"));
 
             real_data = real_data
                 .iter()
@@ -356,10 +356,10 @@ mod tests {
             let mut complex_data = vec![Complex::<f64>::default(); data.len() / 2 + 1];
             forward_r2c
                 .execute(&real_data, &mut complex_data)
-                .expect(&format!("R2C Failed for size {i}"));
+                .unwrap_or_else(|_| panic!("R2C Failed for size {i}"));
             inverse_r2c
                 .execute(&complex_data, &mut real_data)
-                .expect(&format!("R2C Failed for size {i}"));
+                .unwrap_or_else(|_| panic!("R2C Failed for size {i}"));
 
             real_data = real_data
                 .iter()

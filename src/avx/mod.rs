@@ -95,7 +95,7 @@ pub(crate) use radix5::AvxFmaRadix5;
 pub(crate) use radix6::AvxFmaRadix6;
 pub(crate) use radix7::AvxFmaRadix7;
 pub(crate) use radix10::{AvxFmaRadix10d, AvxFmaRadix10f};
-pub(crate) use rfft_raders::AvxRadersRFft;
+pub(crate) use rfft_raders::AvxRadersRfftCombiner;
 #[allow(unused)]
 pub(crate) use spectrum_arithmetic::AvxSpectrumArithmetic;
 pub(crate) use transpose::{

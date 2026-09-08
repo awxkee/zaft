@@ -225,11 +225,6 @@ impl NeonStoreD {
     }
 
     #[inline(always)]
-    pub(crate) fn write_ref(&self, to_ref: &mut Complex<f64>) {
-        unsafe { vst1q_f64(to_ref as *mut Complex<f64> as *mut f64, self.v) }
-    }
-
-    #[inline(always)]
     pub(crate) fn write_real(&self, to_ref: &mut [f64]) {
         unsafe { vst1q_f64(to_ref.as_mut_ptr().cast(), self.v) }
     }

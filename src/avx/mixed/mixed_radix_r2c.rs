@@ -900,7 +900,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..10]).as_chunks::<5>().0.iter() {
+        for chunk in reference_value[..10].as_chunks::<5>().0.iter() {
             println!("{:?}", chunk);
         }
 
@@ -947,7 +947,7 @@ mod tests {
 
         println!("DFT -----");
 
-        for chunk in (&reference_value[..10]).as_chunks::<5>().0.iter() {
+        for chunk in reference_value[..10].as_chunks::<5>().0.iter() {
             println!("{:?}", chunk);
         }
 

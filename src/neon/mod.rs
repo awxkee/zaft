@@ -52,6 +52,7 @@ mod radix6_fcma;
 mod radix7;
 #[cfg(feature = "fcma")]
 mod radix7_fcma;
+mod rfft_raders;
 mod spectrum_arithmetic;
 #[cfg(feature = "fcma")]
 mod spectrum_arithmetic_fcma;
@@ -169,6 +170,7 @@ pub(crate) use radix7_fcma::NeonFcmaRadix7;
 pub(crate) use radix10::NeonRadix10;
 #[cfg(feature = "fcma")]
 pub(crate) use radix10_fcma::NeonFcmaRadix10;
+pub(crate) use rfft_raders::NeonRadersRfftCombiner;
 #[allow(unused)]
 pub(crate) use spectrum_arithmetic::NeonSpectrumArithmetic;
 #[allow(unused)]
