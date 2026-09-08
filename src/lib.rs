@@ -408,9 +408,9 @@ pub struct Zaft {}
 impl Zaft {
     fn could_do_split_mixed_radix() -> bool {
         #[cfg(all(target_arch = "x86_64", feature = "avx"))]
-        if std::arch::is_x86_feature_detected!("avx2") && std::arch::is_x86_feature_detected!("fma")
         {
-            return true;
+            std::arch::is_x86_feature_detected!("avx2")
+                && std::arch::is_x86_feature_detected!("fma")
         }
         #[cfg(all(target_arch = "aarch64", feature = "neon"))]
         {
@@ -421,6 +421,7 @@ impl Zaft {
             true
         }
         #[cfg(not(any(
+            all(target_arch = "x86_64", feature = "avx"),
             all(target_arch = "aarch64", feature = "neon"),
             all(target_arch = "wasm32", feature = "wasm")
         )))]
@@ -1720,10 +1721,10 @@ mod tests {
             fn is_power_of_four(n: u64) -> bool {
                 n != 0 && (n & (n - 1)) == 0 && (n & 0x5555_5555_5555_5555) != 0
             }
-            assert_eq!(is_power_of_four(4), true);
-            assert_eq!(is_power_of_four(8), false);
-            assert_eq!(is_power_of_four(16), true);
-            assert_eq!(is_power_of_four(20), false);
+            assert!(is_power_of_four(4));
+            assert!(!is_power_of_four(8));
+            assert!(is_power_of_four(16));
+            assert!(!is_power_of_four(20));
         }
     }
 
@@ -1749,10 +1750,10 @@ mod tests {
                 let reference_clone = data.clone();
                 zaft_exec
                     .execute(&mut data)
-                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute forward FFT for size {i}!"));
                 zaft_inverse
                     .execute(&mut data)
-                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute inverse FFT for size {i}!"));
                 let data_len = 1. / data.len() as f32;
                 for i in data.iter_mut() {
                     *i *= data_len;
@@ -1801,10 +1802,10 @@ mod tests {
                 let reference_clone = data.clone();
                 zaft_exec
                     .execute_out_of_place(&data, &mut scratch)
-                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute forward FFT for size {i}!"));
                 zaft_inverse
                     .execute_out_of_place(&scratch, &mut data)
-                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute inverse FFT for size {i}!"));
                 let data_len = 1. / data.len() as f32;
                 for i in data.iter_mut() {
                     *i *= data_len;
@@ -1852,10 +1853,10 @@ mod tests {
                 let rust_fft_clone = data.clone();
                 zaft_exec
                     .execute(&mut data)
-                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute forward FFT for size {i}!"));
                 zaft_inverse
                     .execute(&mut data)
-                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute inverse FFT for size {i}!"));
                 let data_len = 1. / data.len() as f64;
                 for i in data.iter_mut() {
                     *i *= data_len;
@@ -1904,10 +1905,10 @@ mod tests {
                 let rust_fft_clone = data.clone();
                 zaft_exec
                     .execute_out_of_place(&data, &mut scratch)
-                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute forward FFT for size {i}!"));
                 zaft_inverse
                     .execute_out_of_place(&scratch, &mut data)
-                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute inverse FFT for size {i}!"));
                 let data_len = 1. / data.len() as f64;
                 for i in data.iter_mut() {
                     *i *= data_len;
@@ -1957,10 +1958,10 @@ mod tests {
                 let mut scratch = vec![Complex::zero(); zaft_exec.destructive_scratch_length()];
                 zaft_exec
                     .execute_destructive_with_scratch(&mut data, &mut fwd, &mut scratch)
-                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute forward FFT for size {i}!"));
                 zaft_inverse
                     .execute_destructive_with_scratch(&mut fwd, &mut data, &mut scratch)
-                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute inverse FFT for size {i}!"));
                 let data_len = 1. / data.len() as f64;
                 for i in data.iter_mut() {
                     *i *= data_len;
@@ -2010,10 +2011,10 @@ mod tests {
                 let mut target = vec![Complex::zero(); data.len()];
                 zaft_exec
                     .execute_destructive_with_scratch(&mut data, &mut target, &mut scratch)
-                    .expect(&format!("Failed to execute forward FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute forward FFT for size {i}!"));
                 zaft_inverse
                     .execute_destructive_with_scratch(&mut target, &mut data, &mut scratch)
-                    .expect(&format!("Failed to execute inverse FFT for size {i}!"));
+                    .unwrap_or_else(|_| panic!("Failed to execute inverse FFT for size {i}!"));
                 let data_len = 1. / data.len() as f32;
                 for i in data.iter_mut() {
                     *i *= data_len;

@@ -564,26 +564,20 @@ mod tests {
 
     #[test]
     fn test_factors_splitting() {
+        assert_eq!(split_factors_closest(&[(2, 4), (3, 1), (5, 2)]), (40, 30));
         assert_eq!(
-            split_factors_closest(&vec![(2, 4), (3, 1), (5, 2)]),
-            (40, 30)
-        );
-        assert_eq!(
-            try_greedy_pure_power_split(&vec![(2, 2), (5, 3)]), // 500
+            try_greedy_pure_power_split(&[(2, 2), (5, 3)]), // 500
             Some((100, 5))
         );
         assert_eq!(
-            try_greedy_pure_power_split(&vec![(2, 2), (3, 1), (13, 2)]),
+            try_greedy_pure_power_split(&[(2, 2), (3, 1), (13, 2)]),
             Some((169, 12))
         );
         assert_eq!(
-            try_greedy_pure_power_split(&vec![(2, 4), (3, 1), (5, 2)]),
+            try_greedy_pure_power_split(&[(2, 4), (3, 1), (5, 2)]),
             Some((100, 12))
         );
-        assert_eq!(
-            split_factors_closest(&vec![(2, 2), (3, 1), (13, 2)]),
-            (52, 39)
-        );
+        assert_eq!(split_factors_closest(&[(2, 2), (3, 1), (13, 2)]), (52, 39));
         assert_eq!(
             split_factors_closest(&[(2, 63)]),
             (4_294_967_296, 2_147_483_648)

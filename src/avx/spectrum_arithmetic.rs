@@ -29,21 +29,7 @@
 use crate::avx::mixed::{AvxMaskF, AvxStoreD, AvxStoreF};
 use crate::spectrum_arithmetic::ComplexArith;
 use num_complex::Complex;
-use num_traits::{MulAdd, Num};
 use std::marker::PhantomData;
-use std::ops::{Mul, Neg};
-
-#[inline(always)]
-pub(crate) fn avx_mul_fast<
-    T: Copy + Clone + Num + Neg<Output = T> + Mul<T, Output = T> + MulAdd<T, Output = T>,
->(
-    a: Complex<T>,
-    b: Complex<T>,
-) -> Complex<T> {
-    let re = MulAdd::mul_add(a.re, b.re, -a.im * b.im);
-    let im = MulAdd::mul_add(a.re, b.im, a.im * b.re);
-    Complex::new(re, im)
-}
 
 pub(crate) struct AvxSpectrumArithmetic<T> {
     pub(crate) phantom_data: PhantomData<T>,
@@ -374,145 +360,6 @@ impl AvxSpectrumArithmetic<f32> {
             }
         }
     }
-
-    #[target_feature(enable = "avx2", enable = "fma")]
-    fn mul_conjugate_expand_h2c_impl_f32(&self, dst: &mut [Complex<f32>], b: &[Complex<f32>]) {
-        assert_eq!(dst.len(), b.len());
-        if dst.is_empty() {
-            return;
-        }
-        dst[0] = avx_mul_fast(dst[0], b[0]).conj();
-
-        let (_, rem_dst) = dst.split_at_mut(1);
-        let (mut left, mut right) = rem_dst.split_at_mut(b.len() / 2);
-
-        let conjugate_factors = AvxStoreF::conj_flag();
-
-        let mut forward_twiddles = &b[1..b.len() / 2];
-        let mut backward_twiddles = &b[b.len() / 2..];
-
-        for (((scratch_cell, scratch_cell_rev), twiddle), twiddle_rev) in left
-            .as_chunks_mut::<16>()
-            .0
-            .iter_mut()
-            .zip(right.as_rchunks_mut::<16>().1.iter_mut().rev())
-            .zip(forward_twiddles.as_chunks::<16>().0.iter())
-            .zip(backward_twiddles.as_rchunks::<16>().1.iter().rev())
-        {
-            let cell0 = AvxStoreF::from_complex_ref(scratch_cell);
-            let cell1 = AvxStoreF::from_complex_ref(&scratch_cell[4..]);
-            let cell2 = AvxStoreF::from_complex_ref(&scratch_cell[8..]);
-            let cell3 = AvxStoreF::from_complex_ref(&scratch_cell[12..]);
-
-            let fw0 = cell0
-                .mul_by_complex(AvxStoreF::from_complex_ref(twiddle))
-                .xor(conjugate_factors);
-            let bw0 = cell0
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreF::from_complex_ref(&twiddle_rev[12..]))
-                .xor(conjugate_factors);
-
-            let fw1 = cell1
-                .mul_by_complex(AvxStoreF::from_complex_ref(&twiddle[4..]))
-                .xor(conjugate_factors);
-            let bw1 = cell1
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreF::from_complex_ref(&twiddle_rev[8..]))
-                .xor(conjugate_factors);
-
-            let fw2 = cell2
-                .mul_by_complex(AvxStoreF::from_complex_ref(&twiddle[8..]))
-                .xor(conjugate_factors);
-            let bw2 = cell2
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreF::from_complex_ref(&twiddle_rev[4..]))
-                .xor(conjugate_factors);
-
-            let fw3 = cell3
-                .mul_by_complex(AvxStoreF::from_complex_ref(&twiddle[12..]))
-                .xor(conjugate_factors);
-            let bw3 = cell3
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreF::from_complex_ref(twiddle_rev))
-                .xor(conjugate_factors);
-
-            fw0.write(scratch_cell);
-            fw1.write(&mut scratch_cell[4..]);
-            fw2.write(&mut scratch_cell[8..]);
-            fw3.write(&mut scratch_cell[12..]);
-
-            bw0.write(&mut scratch_cell_rev[12..]);
-            bw1.write(&mut scratch_cell_rev[8..]);
-            bw2.write(&mut scratch_cell_rev[4..]);
-            bw3.write(scratch_cell_rev);
-        }
-
-        let consumed =
-            (left.as_chunks_mut::<16>().0.len() * 16).min(right.as_chunks_mut::<16>().0.len() * 16);
-
-        let r_len = right.len();
-
-        left = &mut left[consumed..];
-        right = &mut right[..r_len - consumed];
-
-        forward_twiddles = &forward_twiddles[consumed..];
-        backward_twiddles = &backward_twiddles[..backward_twiddles.len() - consumed];
-
-        for (((scratch_cell, scratch_cell_rev), twiddle), twiddle_rev) in left
-            .as_chunks_mut::<4>()
-            .0
-            .iter_mut()
-            .zip(right.as_rchunks_mut::<4>().1.iter_mut().rev())
-            .zip(forward_twiddles.as_chunks::<4>().0.iter())
-            .zip(backward_twiddles.as_rchunks::<4>().1.iter().rev())
-        {
-            let cell0 = AvxStoreF::from_complex_ref(scratch_cell);
-
-            let fw0 = cell0
-                .mul_by_complex(AvxStoreF::from_complex_ref(twiddle))
-                .xor(conjugate_factors);
-            let bw0 = cell0
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreF::from_complex_ref(twiddle_rev))
-                .xor(conjugate_factors);
-
-            fw0.write(scratch_cell);
-            bw0.write(scratch_cell_rev);
-        }
-
-        let consumed =
-            (left.as_chunks_mut::<4>().0.len() * 4).min(right.as_chunks_mut::<4>().0.len() * 4);
-
-        let r_len = right.len();
-
-        left = &mut left[consumed..];
-        right = &mut right[..r_len - consumed];
-
-        forward_twiddles = &forward_twiddles[consumed..];
-        backward_twiddles = &backward_twiddles[..backward_twiddles.len() - consumed];
-
-        for (((scratch_cell, scratch_cell_rev), twiddle), twiddle_rev) in left
-            .iter_mut()
-            .zip(right.iter_mut().rev())
-            .zip(forward_twiddles.iter())
-            .zip(backward_twiddles.iter().rev())
-        {
-            let cell = AvxStoreF::from_complex(scratch_cell);
-            let fw = cell
-                .mul_by_complex(AvxStoreF::from_complex(twiddle))
-                .xor(conjugate_factors);
-            let bw = cell
-                .mul_by_conj_a(AvxStoreF::from_complex(twiddle_rev))
-                .xor(conjugate_factors);
-            fw.write_single(scratch_cell);
-            bw.write_single(scratch_cell_rev);
-        }
-
-        if b.len().is_multiple_of(2) {
-            let mid = b.len() / 2;
-            dst[mid] = avx_mul_fast(dst[mid], b[mid]).conj();
-        }
-    }
 }
 impl ComplexArith<f32> for AvxSpectrumArithmetic<f32> {
     fn mul(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [Complex<f32>]) {
@@ -537,12 +384,6 @@ impl ComplexArith<f32> for AvxSpectrumArithmetic<f32> {
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<f32>], b: &[Complex<f32>]) {
         unsafe {
             self.mul_conjugate_in_place_f32(dst, b);
-        }
-    }
-
-    fn mul_conjugate_expand_h2c(&self, dst: &mut [Complex<f32>], b: &[Complex<f32>]) {
-        unsafe {
-            self.mul_conjugate_expand_h2c_impl_f32(dst, b);
         }
     }
 
@@ -796,145 +637,6 @@ impl AvxSpectrumArithmetic<f64> {
             }
         }
     }
-
-    #[target_feature(enable = "avx2", enable = "fma")]
-    fn mul_conjugate_expand_h2c_impl_f64(&self, dst: &mut [Complex<f64>], b: &[Complex<f64>]) {
-        assert_eq!(dst.len(), b.len());
-        if dst.is_empty() {
-            return;
-        }
-        dst[0] = avx_mul_fast(dst[0], b[0]).conj();
-
-        let (_, rem_dst) = dst.split_at_mut(1);
-        let (mut left, mut right) = rem_dst.split_at_mut(b.len() / 2);
-
-        let conjugate_factors = AvxStoreD::conj_flag();
-
-        let mut forward_twiddles = &b[1..b.len() / 2];
-        let mut backward_twiddles = &b[b.len() / 2..];
-
-        for (((scratch_cell, scratch_cell_rev), twiddle), twiddle_rev) in left
-            .as_chunks_mut::<8>()
-            .0
-            .iter_mut()
-            .zip(right.as_rchunks_mut::<8>().1.iter_mut().rev())
-            .zip(forward_twiddles.as_chunks::<8>().0.iter())
-            .zip(backward_twiddles.as_rchunks::<8>().1.iter().rev())
-        {
-            let cell0 = AvxStoreD::from_complex_ref(scratch_cell);
-            let cell1 = AvxStoreD::from_complex_ref(&scratch_cell[2..]);
-            let cell2 = AvxStoreD::from_complex_ref(&scratch_cell[4..]);
-            let cell3 = AvxStoreD::from_complex_ref(&scratch_cell[6..]);
-
-            let fw0 = cell0
-                .mul_by_complex(AvxStoreD::from_complex_ref(twiddle))
-                .xor(conjugate_factors);
-            let bw0 = cell0
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreD::from_complex_ref(&twiddle_rev[6..]))
-                .xor(conjugate_factors);
-
-            let fw1 = cell1
-                .mul_by_complex(AvxStoreD::from_complex_ref(&twiddle[2..]))
-                .xor(conjugate_factors);
-            let bw1 = cell1
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreD::from_complex_ref(&twiddle_rev[4..]))
-                .xor(conjugate_factors);
-
-            let fw2 = cell2
-                .mul_by_complex(AvxStoreD::from_complex_ref(&twiddle[4..]))
-                .xor(conjugate_factors);
-            let bw2 = cell2
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreD::from_complex_ref(&twiddle_rev[2..]))
-                .xor(conjugate_factors);
-
-            let fw3 = cell3
-                .mul_by_complex(AvxStoreD::from_complex_ref(&twiddle[6..]))
-                .xor(conjugate_factors);
-            let bw3 = cell3
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreD::from_complex_ref(twiddle_rev))
-                .xor(conjugate_factors);
-
-            fw0.write(scratch_cell);
-            fw1.write(&mut scratch_cell[2..]);
-            fw2.write(&mut scratch_cell[4..]);
-            fw3.write(&mut scratch_cell[6..]);
-
-            bw0.write(&mut scratch_cell_rev[6..]);
-            bw1.write(&mut scratch_cell_rev[4..]);
-            bw2.write(&mut scratch_cell_rev[2..]);
-            bw3.write(scratch_cell_rev);
-        }
-
-        let consumed =
-            (left.as_chunks_mut::<8>().0.len() * 8).min(right.as_chunks_mut::<8>().0.len() * 8);
-
-        let r_len = right.len();
-
-        left = &mut left[consumed..];
-        right = &mut right[..r_len - consumed];
-
-        forward_twiddles = &forward_twiddles[consumed..];
-        backward_twiddles = &backward_twiddles[..backward_twiddles.len() - consumed];
-
-        for (((scratch_cell, scratch_cell_rev), twiddle), twiddle_rev) in left
-            .as_chunks_mut::<2>()
-            .0
-            .iter_mut()
-            .zip(right.as_rchunks_mut::<2>().1.iter_mut().rev())
-            .zip(forward_twiddles.as_chunks::<2>().0.iter())
-            .zip(backward_twiddles.as_rchunks::<2>().1.iter().rev())
-        {
-            let cell0 = AvxStoreD::from_complex_ref(scratch_cell);
-
-            let fw0 = cell0
-                .mul_by_complex(AvxStoreD::from_complex_ref(twiddle))
-                .xor(conjugate_factors);
-            let bw0 = cell0
-                .reverse_complex()
-                .mul_by_conj_a(AvxStoreD::from_complex_ref(twiddle_rev))
-                .xor(conjugate_factors);
-
-            fw0.write(scratch_cell);
-            bw0.write(scratch_cell_rev);
-        }
-
-        let consumed =
-            (left.as_chunks_mut::<2>().0.len() * 2).min(right.as_chunks_mut::<2>().0.len() * 2);
-
-        let r_len = right.len();
-
-        left = &mut left[consumed..];
-        right = &mut right[..r_len - consumed];
-
-        forward_twiddles = &forward_twiddles[consumed..];
-        backward_twiddles = &backward_twiddles[..backward_twiddles.len() - consumed];
-
-        for (((scratch_cell, scratch_cell_rev), twiddle), twiddle_rev) in left
-            .iter_mut()
-            .zip(right.iter_mut().rev())
-            .zip(forward_twiddles.iter())
-            .zip(backward_twiddles.iter().rev())
-        {
-            let cell = AvxStoreD::from_complex(scratch_cell);
-            let fw = cell
-                .mul_by_complex(AvxStoreD::from_complex(twiddle))
-                .xor(conjugate_factors);
-            let bw = cell
-                .mul_by_conj_a(AvxStoreD::from_complex(twiddle_rev))
-                .xor(conjugate_factors);
-            fw.write_single(scratch_cell);
-            bw.write_single(scratch_cell_rev);
-        }
-
-        if b.len().is_multiple_of(2) {
-            let mid = b.len() / 2;
-            dst[mid] = avx_mul_fast(dst[mid], b[mid]).conj();
-        }
-    }
 }
 
 impl ComplexArith<f64> for AvxSpectrumArithmetic<f64> {
@@ -959,10 +661,6 @@ impl ComplexArith<f64> for AvxSpectrumArithmetic<f64> {
 
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<f64>], b: &[Complex<f64>]) {
         unsafe { self.mul_conjugate_in_place_f64(dst, b) }
-    }
-
-    fn mul_conjugate_expand_h2c(&self, dst: &mut [Complex<f64>], b: &[Complex<f64>]) {
-        unsafe { self.mul_conjugate_expand_h2c_impl_f64(dst, b) }
     }
 
     fn conjugate_mul_by_b(&self, a: &[Complex<f64>], b: &[Complex<f64>], dst: &mut [Complex<f64>]) {
