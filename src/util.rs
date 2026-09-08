@@ -608,6 +608,12 @@ pub(crate) fn checked_bluestein_convolution_len(n: usize) -> Result<usize, ZaftE
         .ok_or(ZaftError::Overflow)
 }
 
+/// Minimal inner convolution length for Bluestein's r2c, `N + K - 1` with `K = N / 2 + 1`.
+#[allow(dead_code)]
+pub(crate) fn checked_bluestein_rfft_convolution_len(n: usize) -> Result<usize, ZaftError> {
+    n.checked_add(n / 2).ok_or(ZaftError::Overflow)
+}
+
 macro_rules! validate_oof_sizes {
     ($src: expr, $dst: expr, $length: expr) => {{
         if !$src.len().is_multiple_of($length) {
