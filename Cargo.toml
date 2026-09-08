@@ -2,7 +2,7 @@ workspace = { members = ["app", "zaft-js", "zaft-py"], exclude = ["fuzz"] }
 
 [package]
 name = "zaft"
-version = "0.3.14"
+version = "0.3.15"
 edition = "2024"
 description = "Fast fourier transform"
 readme = "README.md"
