@@ -170,15 +170,6 @@ impl NeonStoreD {
     }
 
     #[inline(always)]
-    pub(crate) fn load1_ptr(vals: *const f64) -> Self {
-        unsafe {
-            NeonStoreD {
-                v: vcombine_f64(vld1_f64(vals), vdup_n_f64(0.)),
-            }
-        }
-    }
-
-    #[inline(always)]
     pub(crate) fn from_complex_refu(complex: &[MaybeUninit<Complex<f64>>]) -> Self {
         unsafe {
             NeonStoreD {
@@ -309,16 +300,6 @@ impl NeonStoreF {
         unsafe {
             NeonStoreF {
                 v: vld1q_lane_f32::<0>(ptr.as_ptr().cast(), vdupq_n_f32(0.)),
-            }
-        }
-    }
-
-    #[inline]
-    #[cfg(feature = "fcma")]
-    pub(crate) fn load1_ref(ptr: &f32) -> Self {
-        unsafe {
-            NeonStoreF {
-                v: vld1q_lane_f32::<0>(ptr, vdupq_n_f32(0.)),
             }
         }
     }

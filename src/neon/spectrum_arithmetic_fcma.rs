@@ -111,18 +111,18 @@ impl NeonFcmaSpectrumArithmetic<f32> {
             let q0 = NeonStoreF::load(src);
             let q1 = NeonStoreF::load(&src[4..]);
 
-            let [s0, s1] = q0.to_complex();
-            let [s2, s3] = q1.to_complex();
+            let [s0, s1] = q0.zip_complex(q0);
+            let [s2, s3] = q1.zip_complex(q1);
 
             let q0 = NeonStoreF::from_complex_ref(twiddle);
             let q1 = NeonStoreF::from_complex_ref(&twiddle[2..]);
             let q2 = NeonStoreF::from_complex_ref(&twiddle[4..]);
             let q3 = NeonStoreF::from_complex_ref(&twiddle[6..]);
 
-            let p0 = NeonStoreF::fcmul_fcma(s0, q0);
-            let p1 = NeonStoreF::fcmul_fcma(s1, q1);
-            let p2 = NeonStoreF::fcmul_fcma(s2, q2);
-            let p3 = NeonStoreF::fcmul_fcma(s3, q3);
+            let p0 = s0 * q0;
+            let p1 = s1 * q1;
+            let p2 = s2 * q2;
+            let p3 = s3 * q3;
 
             p0.write(dst);
             p1.write(&mut dst[2..]);
@@ -141,10 +141,11 @@ impl NeonFcmaSpectrumArithmetic<f32> {
             .zip(a.as_chunks::<2>().0.iter())
             .zip(b.as_chunks::<2>().0.iter())
         {
-            let s0 = NeonStoreF::load2(src).to_complex()[0];
+            let s0 = NeonStoreF::load2(src);
+            let s0 = s0.zip_complex(s0)[0];
             let q0 = NeonStoreF::from_complex_ref(twiddle);
 
-            let p0 = NeonStoreF::fcmul_fcma(s0, q0);
+            let p0 = s0 * q0;
 
             p0.write(dst);
         }
@@ -154,12 +155,7 @@ impl NeonFcmaSpectrumArithmetic<f32> {
         let b = b.as_chunks::<2>().1;
 
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-            let s0 = NeonStoreF::load1_ref(src);
-            let q0 = NeonStoreF::from_complex(twiddle);
-
-            let p0 = NeonStoreF::fcmul_fcma(s0, q0);
-
-            p0.write_single(dst);
+            *dst = Complex::new(*src * twiddle.re, *src * twiddle.im);
         }
     }
 
@@ -475,18 +471,18 @@ impl NeonFcmaSpectrumArithmetic<f64> {
             let q0 = NeonStoreD::load(src);
             let q2 = NeonStoreD::load(&src[2..]);
 
-            let [s0, s1] = q0.to_complex();
-            let [s2, s3] = q2.to_complex();
+            let [s0, s1] = q0.zip_complex(q0);
+            let [s2, s3] = q2.zip_complex(q2);
 
             let q0 = NeonStoreD::from_complex(&twiddle[0]);
             let q1 = NeonStoreD::from_complex(&twiddle[1]);
             let q2 = NeonStoreD::from_complex(&twiddle[2]);
             let q3 = NeonStoreD::from_complex(&twiddle[3]);
 
-            let p0 = NeonStoreD::fcmul_fcma(s0, q0);
-            let p1 = NeonStoreD::fcmul_fcma(s1, q1);
-            let p2 = NeonStoreD::fcmul_fcma(s2, q2);
-            let p3 = NeonStoreD::fcmul_fcma(s3, q3);
+            let p0 = s0 * q0;
+            let p1 = s1 * q1;
+            let p2 = s2 * q2;
+            let p3 = s3 * q3;
 
             p0.write_single(&mut dst[0]);
             p1.write_single(&mut dst[1]);
@@ -499,11 +495,7 @@ impl NeonFcmaSpectrumArithmetic<f64> {
         let b = b.as_chunks::<4>().1;
 
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-            let s0 = NeonStoreD::load1_ptr(src);
-            let q0 = NeonStoreD::from_complex(twiddle);
-
-            let p0 = NeonStoreD::fcmul_fcma(s0, q0);
-            p0.write_single(dst);
+            *dst = Complex::new(*src * twiddle.re, *src * twiddle.im);
         }
     }
 

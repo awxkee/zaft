@@ -232,15 +232,6 @@ impl AvxStoreD {
 
     #[inline]
     #[target_feature(enable = "avx2")]
-    pub(crate) fn load1_ref(ptr: &f64) -> Self {
-        unsafe {
-            let q0 = _mm_shuffle_pd::<0b00>(_mm_load_sd(ptr), _mm_setzero_pd());
-            AvxStoreD::raw(_mm256_castpd128_pd256(q0))
-        }
-    }
-
-    #[inline]
-    #[target_feature(enable = "avx2")]
     pub(crate) fn set_complex(complex: &Complex<f64>) -> Self {
         AvxStoreD {
             v: _mm256_setr_pd(complex.re, complex.im, complex.re, complex.im),

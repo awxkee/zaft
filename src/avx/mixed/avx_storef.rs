@@ -365,14 +365,6 @@ impl AvxStoreF {
     }
 
     #[inline(always)]
-    pub(crate) fn load1_ref(ptr: &f32) -> Self {
-        unsafe {
-            let q0 = _mm_unpacklo_ps(_mm_load_ss(ptr), _mm_setzero_ps());
-            AvxStoreF::raw(_mm256_castps128_ps256(q0))
-        }
-    }
-
-    #[inline(always)]
     pub(crate) fn from_complex2(complex: &[Complex<f32>]) -> Self {
         unsafe {
             AvxStoreF {
