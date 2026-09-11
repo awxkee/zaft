@@ -111,18 +111,18 @@ impl AvxSpectrumArithmetic<f32> {
             let q0 = AvxStoreF::load(src);
             let q1 = AvxStoreF::load(&src[8..]);
 
-            let [s0, s1] = q0.to_complex();
-            let [s2, s3] = q1.to_complex();
+            let [s0, s1] = q0.zip(q0);
+            let [s2, s3] = q1.zip(q1);
 
             let q0 = AvxStoreF::from_complex_ref(twiddle);
             let q1 = AvxStoreF::from_complex_ref(&twiddle[4..]);
             let q2 = AvxStoreF::from_complex_ref(&twiddle[8..]);
             let q3 = AvxStoreF::from_complex_ref(&twiddle[12..]);
 
-            let p0 = AvxStoreF::mul_by_complex(s0, q0);
-            let p1 = AvxStoreF::mul_by_complex(s1, q1);
-            let p2 = AvxStoreF::mul_by_complex(s2, q2);
-            let p3 = AvxStoreF::mul_by_complex(s3, q3);
+            let p0 = s0 * q0;
+            let p1 = s1 * q1;
+            let p2 = s2 * q2;
+            let p3 = s3 * q3;
 
             p0.write(dst);
             p1.write(&mut dst[4..]);
@@ -141,10 +141,10 @@ impl AvxSpectrumArithmetic<f32> {
             .zip(a.as_chunks::<2>().0.iter())
             .zip(b.as_chunks::<2>().0.iter())
         {
-            let s0 = AvxStoreF::load2_as_complex(src);
+            let s0 = AvxStoreF::load2_as_complex(src).dup_even_odds()[0];
             let q0 = AvxStoreF::from_complex2(twiddle);
 
-            let p0 = AvxStoreF::mul_by_complex(s0, q0);
+            let p0 = s0 * q0;
 
             p0.write_lo2(dst);
         }
@@ -154,12 +154,7 @@ impl AvxSpectrumArithmetic<f32> {
         let b = b.as_chunks::<2>().1;
 
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-            let s0 = AvxStoreF::load1_ref(src);
-            let q0 = AvxStoreF::from_complex(twiddle);
-
-            let p0 = AvxStoreF::mul_by_complex(s0, q0);
-
-            p0.write_single(dst);
+            *dst = Complex::new(*src * twiddle.re, *src * twiddle.im);
         }
     }
 
@@ -451,18 +446,18 @@ impl AvxSpectrumArithmetic<f64> {
             let q0 = AvxStoreD::load(src);
             let q1 = AvxStoreD::load(&src[4..]);
 
-            let [s0, s1] = q0.to_complex();
-            let [s2, s3] = q1.to_complex();
+            let [s0, s1] = q0.zip(q0);
+            let [s2, s3] = q1.zip(q1);
 
             let q0 = AvxStoreD::from_complex_ref(twiddle);
             let q1 = AvxStoreD::from_complex_ref(&twiddle[2..]);
             let q2 = AvxStoreD::from_complex_ref(&twiddle[4..]);
             let q3 = AvxStoreD::from_complex_ref(&twiddle[6..]);
 
-            let p0 = AvxStoreD::mul_by_complex(s0, q0);
-            let p1 = AvxStoreD::mul_by_complex(s1, q1);
-            let p2 = AvxStoreD::mul_by_complex(s2, q2);
-            let p3 = AvxStoreD::mul_by_complex(s3, q3);
+            let p0 = s0 * q0;
+            let p1 = s1 * q1;
+            let p2 = s2 * q2;
+            let p3 = s3 * q3;
 
             p0.write(dst);
             p1.write(&mut dst[2..]);
@@ -475,12 +470,7 @@ impl AvxSpectrumArithmetic<f64> {
         let b = b.as_chunks::<8>().1;
 
         for ((dst, src), twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-            let s0 = AvxStoreD::load1_ref(src);
-            let q0 = AvxStoreD::from_complex(twiddle);
-
-            let p0 = AvxStoreD::mul_by_complex(s0, q0);
-
-            p0.write_single(dst);
+            *dst = Complex::new(*src * twiddle.re, *src * twiddle.im);
         }
     }
 

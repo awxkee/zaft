@@ -46,7 +46,7 @@ pub(crate) trait ComplexArith<T> {
         cut_width: usize,
         dst: &mut [Complex<T>],
     );
-    // complex(a * b)
+    // Real a times complex b: duplicate a into both lanes for a componentwise multiply.
     #[cfg(not(target_arch = "wasm32"))]
     fn mul_expand_to_complex(&self, a: &[T], b: &[Complex<T>], dst: &mut [Complex<T>]);
     // (a*b).conj()
@@ -154,7 +154,7 @@ where
     #[cfg(not(target_arch = "wasm32"))]
     fn mul_expand_to_complex(&self, a: &[T], b: &[Complex<T>], dst: &mut [Complex<T>]) {
         for ((dst, &src), &twiddle) in dst.iter_mut().zip(a.iter()).zip(b.iter()) {
-            *dst = c_mul_fast(Complex::new(src, T::zero()), twiddle);
+            *dst = Complex::new(src * twiddle.re, src * twiddle.im);
         }
     }
 
@@ -169,4 +169,76 @@ where
             *buffer_entry = c_conj_mul_fast(*inner_entry, *twiddle);
         }
     }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    macro_rules! test_real_chirp {
+        ($name:ident, $ty:ty) => {
+            #[test]
+            fn $name() {
+                #[allow(unused_mut)]
+                let mut backends: Vec<Box<dyn ComplexArith<$ty>>> =
+                    vec![Box::new(ScalarSpectrumArithmetic {
+                        phantom_data: PhantomData,
+                    })];
+                #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                backends.push(Box::new(crate::neon::NeonSpectrumArithmetic {
+                    phantom_data: PhantomData,
+                }));
+                #[cfg(all(target_arch = "aarch64", feature = "fcma"))]
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    backends.push(Box::new(crate::neon::NeonFcmaSpectrumArithmetic {
+                        phantom_data: PhantomData,
+                    }));
+                }
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    backends.push(Box::new(crate::avx::AvxSpectrumArithmetic {
+                        phantom_data: PhantomData,
+                    }));
+                }
+                for (backend, ops) in backends.iter().enumerate() {
+                    // Exercise every SIMD remainder and unaligned subslices, with guards
+                    // to catch stores beyond the requested output.
+                    for n in (0..=65).chain([127, 257]) {
+                        for offset in [0, 1, 3] {
+                            let input: Vec<$ty> = (0..n + offset)
+                                .map(|i| ((i * 17 % 31) as $ty - 15.0) * 0.25)
+                                .collect();
+                            let twiddles: Vec<Complex<$ty>> = (0..n + offset)
+                                .map(|i| {
+                                    let angle = i as f64 * 0.37;
+                                    Complex::new(angle.cos() as $ty, angle.sin() as $ty)
+                                })
+                                .collect();
+                            let guard = Complex::new(123.0, -456.0);
+                            let mut output = vec![guard; n + offset + 3];
+                            ops.mul_expand_to_complex(
+                                &input[offset..],
+                                &twiddles[offset..],
+                                &mut output[offset..offset + n],
+                            );
+                            for i in offset..offset + n {
+                                let expected = twiddles[i] * input[i];
+                                assert_eq!(
+                                    output[i], expected,
+                                    "backend {backend}, n {n}, offset {offset}, index {i}"
+                                );
+                            }
+                            assert!(output[..offset].iter().all(|&v| v == guard));
+                            assert!(output[offset + n..].iter().all(|&v| v == guard));
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    test_real_chirp!(real_chirp_f32, f32);
+    test_real_chirp!(real_chirp_f64, f64);
 }

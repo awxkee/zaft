@@ -221,10 +221,29 @@ mod tests {
         let mut output = vec![Complex::<f64>::zero(); (n / 2 + 1) * rows];
         mx.execute(&src, &mut output).unwrap();
 
+        let src_f32 = src.iter().map(|&v| v as f32).collect::<Vec<_>>();
+        let mx_f32 = BluesteinRfft::new(
+            n,
+            Zaft::strategy(inner_len, FftDirection::Forward).unwrap(),
+            FftDirection::Forward,
+        )
+        .unwrap();
+        let mut output_f32 = vec![Complex::<f32>::zero(); (n / 2 + 1) * rows];
+        let mut scratch_f32 = vec![Complex::zero(); mx_f32.complex_scratch_length()];
+        mx_f32
+            .execute_with_scratch(&src_f32, &mut output_f32, &mut scratch_f32)
+            .unwrap();
+
         for row in 0..rows {
             let reference = &reference[row * n..(row + 1) * n];
             let output = &output[row * (n / 2 + 1)..(row + 1) * (n / 2 + 1)];
             for (idx, (a, b)) in reference.iter().zip(output.iter()).enumerate() {
+                let b_f32 = output_f32[row * (n / 2 + 1) + idx];
+                assert!(
+                    (a.re - b_f32.re as f64).abs() < 2e-5 * n as f64
+                        && (a.im - b_f32.im as f64).abs() < 2e-5 * n as f64,
+                    "f32 n {n} inner {inner_len} row {row} bin {idx}: {a:?} != {b_f32:?}",
+                );
                 assert!(
                     (a.re - b.re).abs() < 1e-8,
                     "n {n} inner {inner_len} row {row} bin {idx}: re {} != {}",
