@@ -220,14 +220,8 @@ impl R2CAlgorithmFactory<f32> for f32 {
     #[cfg(not(target_arch = "wasm32"))]
     fn r2c_raders(n: usize) -> Result<Arc<dyn R2CFftExecutor<f32> + Send + Sync>, ZaftError> {
         let convolve_r2c = Zaft::make_r2c_fft_f32(n - 1)?;
-        let convolve_c2r = Zaft::make_c2r_fft_f32((n - 1) / 2)?;
-        let convolve_ifft = Zaft::strategy((n - 1) / 2, FftDirection::Inverse)?;
-        Ok(Arc::new(RadersRfft::new(
-            n,
-            convolve_r2c,
-            convolve_c2r,
-            convolve_ifft,
-        )?))
+        let convolve_c2r = Zaft::make_c2r_fft_f32(n - 1)?;
+        Ok(Arc::new(RadersRfft::new(n, convolve_r2c, convolve_c2r)?))
     }
 
     #[cfg(not(target_arch = "wasm32"))]

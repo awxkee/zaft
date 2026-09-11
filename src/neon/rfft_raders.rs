@@ -30,53 +30,57 @@ use crate::r2c::rfft_raders::{RadersRfftCombiner, combine_scalar};
 use num_complex::Complex;
 use std::arch::aarch64::*;
 
-/// `y[p] = (first + re[p], Re(y[p] * twiddles[p]))` with de-interleaved NEON loads.
+/// Reconstruct complex bins from the two halves of the real convolution.
 pub(crate) struct NeonRadersRfftCombiner {}
 
 impl RadersRfftCombiner<f32> for NeonRadersRfftCombiner {
-    fn combine(&self, y: &mut [Complex<f32>], twiddles: &[Complex<f32>], re: &[f32], first: f32) {
+    fn combine(&self, y: &mut [Complex<f32>], lo: &[f32], hi: &[f32], signs: &[f32], first: f32) {
         let (y_chunks, y_rem) = y.as_chunks_mut::<4>();
-        let (twiddle_chunks, twiddle_rem) = twiddles.as_chunks::<4>();
-        let (re_chunks, re_rem) = re.as_chunks::<4>();
+        let (lo_chunks, lo_rem) = lo.as_chunks::<4>();
+        let (hi_chunks, hi_rem) = hi.as_chunks::<4>();
+        let (sign_chunks, sign_rem) = signs.as_chunks::<4>();
         unsafe {
             let first_v = vdupq_n_f32(first);
-            for ((y, twiddle), re) in y_chunks
+            for (((y, lo), hi), signs) in y_chunks
                 .iter_mut()
-                .zip(twiddle_chunks.iter())
-                .zip(re_chunks.iter())
+                .zip(lo_chunks)
+                .zip(hi_chunks)
+                .zip(sign_chunks)
             {
-                let y_ptr = y.as_mut_ptr().cast::<f32>();
-                let float32x4x2_t(y_re, y_im) = vld2q_f32(y_ptr);
-                let float32x4x2_t(twiddle_re, twiddle_im) = vld2q_f32(twiddle.as_ptr().cast());
-                let re = vld1q_f32(re.as_ptr());
-                let im = vfmsq_f32(vmulq_f32(y_re, twiddle_re), y_im, twiddle_im);
-                vst2q_f32(y_ptr, float32x4x2_t(vaddq_f32(re, first_v), im));
+                let lo = vld1q_f32(lo.as_ptr());
+                let hi = vld1q_f32(hi.as_ptr());
+                let signs = vld1q_f32(signs.as_ptr());
+                let re = vaddq_f32(first_v, vaddq_f32(lo, hi));
+                let im = vmulq_f32(vsubq_f32(lo, hi), signs);
+                vst2q_f32(y.as_mut_ptr().cast(), float32x4x2_t(re, im));
             }
         }
-        combine_scalar(y_rem, twiddle_rem, re_rem, first);
+        combine_scalar(y_rem, lo_rem, hi_rem, sign_rem, first);
     }
 }
 
 impl RadersRfftCombiner<f64> for NeonRadersRfftCombiner {
-    fn combine(&self, y: &mut [Complex<f64>], twiddles: &[Complex<f64>], re: &[f64], first: f64) {
+    fn combine(&self, y: &mut [Complex<f64>], lo: &[f64], hi: &[f64], signs: &[f64], first: f64) {
         let (y_chunks, y_rem) = y.as_chunks_mut::<2>();
-        let (twiddle_chunks, twiddle_rem) = twiddles.as_chunks::<2>();
-        let (re_chunks, re_rem) = re.as_chunks::<2>();
+        let (lo_chunks, lo_rem) = lo.as_chunks::<2>();
+        let (hi_chunks, hi_rem) = hi.as_chunks::<2>();
+        let (sign_chunks, sign_rem) = signs.as_chunks::<2>();
         unsafe {
             let first_v = vdupq_n_f64(first);
-            for ((y, twiddle), re) in y_chunks
+            for (((y, lo), hi), signs) in y_chunks
                 .iter_mut()
-                .zip(twiddle_chunks.iter())
-                .zip(re_chunks.iter())
+                .zip(lo_chunks)
+                .zip(hi_chunks)
+                .zip(sign_chunks)
             {
-                let y_ptr = y.as_mut_ptr().cast::<f64>();
-                let float64x2x2_t(y_re, y_im) = vld2q_f64(y_ptr);
-                let float64x2x2_t(twiddle_re, twiddle_im) = vld2q_f64(twiddle.as_ptr().cast());
-                let re = vld1q_f64(re.as_ptr());
-                let im = vfmsq_f64(vmulq_f64(y_re, twiddle_re), y_im, twiddle_im);
-                vst2q_f64(y_ptr, float64x2x2_t(vaddq_f64(re, first_v), im));
+                let lo = vld1q_f64(lo.as_ptr());
+                let hi = vld1q_f64(hi.as_ptr());
+                let signs = vld1q_f64(signs.as_ptr());
+                let re = vaddq_f64(first_v, vaddq_f64(lo, hi));
+                let im = vmulq_f64(vsubq_f64(lo, hi), signs);
+                vst2q_f64(y.as_mut_ptr().cast(), float64x2x2_t(re, im));
             }
         }
-        combine_scalar(y_rem, twiddle_rem, re_rem, first);
+        combine_scalar(y_rem, lo_rem, hi_rem, sign_rem, first);
     }
 }
