@@ -100,4 +100,4 @@ pub(crate) use sse_f32x4_4xn::{
 };
 pub(crate) use transpose_5x5::{block_transpose_f32x2_5x5, transpose_5x5_f32, transpose_5x5_f64};
 pub(crate) use transpose_real_d::AvxTransposeDReal4x4;
-pub(crate) use transpose_real_s::AvxTransposeFReal4x4;
+pub(crate) use transpose_real_s::{AvxTransposeFReal4x4, transpose_8x8_f32};

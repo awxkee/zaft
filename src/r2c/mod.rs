@@ -33,6 +33,11 @@ mod c2r_factory_d;
 mod c2r_factory_f;
 mod c2r_odd;
 mod c2r_twiddles;
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "avx")
+))]
+pub(crate) mod mixed_radix_c2r;
 mod mixed_radix_r2c;
 mod r2c_factory;
 mod r2c_factory_d;
@@ -49,7 +54,7 @@ mod strategy_r2c;
 use crate::ZaftError;
 pub(crate) use c2r::C2RFftEvenInterceptor;
 pub use c2r::C2RFftExecutor;
-pub(crate) use c2r_factory::C2RAlgorithmFactory;
+pub(crate) use c2r_factory::{C2RAlgorithmFactory, C2rChild};
 #[allow(unused_imports)]
 pub(crate) use c2r_odd::{C2RFftOddInterceptor, C2ROddExpander, C2ROddExpanderFactory};
 use num_complex::Complex;
