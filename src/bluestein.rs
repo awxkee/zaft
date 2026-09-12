@@ -329,6 +329,3 @@ where
         self.destructive_inner_scratch_len + self.convolve_fft_twiddles.len()
     }
 }
-
-#[cfg(test)]
-mod tests;

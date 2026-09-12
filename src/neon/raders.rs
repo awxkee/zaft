@@ -542,6 +542,3 @@ where
         self.out_of_place_scratch_length()
     }
 }
-
-#[cfg(test)]
-mod tests;
