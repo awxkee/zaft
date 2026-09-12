@@ -93,7 +93,7 @@ macro_rules! define_mixed_radix_neon_d {
                     }
                 }
 
-                let width_scratch_length = width_executor.out_of_place_scratch_length();
+                let width_scratch_length = width_executor.destructive_scratch_length();
                 let execution_length = width * ROW_COUNT;
                 let oof_width_scratch_length = if execution_length >= width_executor.scratch_length() {
                     0
