@@ -45,7 +45,8 @@ pub(crate) struct RadersFft<T> {
     input_indices: Vec<usize>,
     output_indices: Vec<usize>,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
-    convolve_scratch_length: usize,
+    // Extra scratch is only needed when the inner FFT cannot use the caller's buffer.
+    extra_scratch_length: usize,
 }
 
 impl<T: FftSample> RadersFft<T>
@@ -59,7 +60,7 @@ where
     ) -> Result<RadersFft<T>, ZaftError> {
         assert!(
             PrimeFactors::from_number(size as u64).is_prime(),
-            "Input length for Rader's must be a prime number"
+            "Input length for Raders must be a prime number"
         );
 
         let direction = convolve_fft.direction();
@@ -71,9 +72,6 @@ where
         let primitive_root =
             primitive_root(size as u64).ok_or(ZaftError::CantFindPrimitiveRootFor(size as u64))?;
 
-        // compute the multiplicative inverse of primative_root mod len and vice versa.
-        // i64::extended_gcd will compute both the inverse of left mod right, and the inverse of right mod left, but we're only goingto use one of them
-        // the primitive root inverse might be negative, if o make it positive by wrapping
         let gcd_data = i64::extended_gcd(&(primitive_root as i64), &(size as i64));
         let primitive_root_inverse = if gcd_data.x >= 0 {
             gcd_data.x
@@ -84,10 +82,13 @@ where
         // precompute the coefficients to use inside the process method
         let inner_fft_scale: T = (1f64 / convolve_fft_len as f64).as_();
         let mut inner_fft_input = try_vec![Complex::zero(); convolve_fft_len];
+        let (first_half, second_half) = inner_fft_input.split_at_mut(convolve_fft_len / 2);
         let mut twiddle_input = 1;
-        for dst in &mut inner_fft_input {
-            let twiddle = compute_twiddle(twiddle_input, size, direction);
-            *dst = twiddle * inner_fft_scale;
+        // For H = (size - 1) / 2, g^H = -1 mod size, so kernel[q + H] = conj(kernel[q]).
+        for (dst, conjugate_dst) in first_half.iter_mut().zip(second_half) {
+            let twiddle = compute_twiddle(twiddle_input, size, direction) * inner_fft_scale;
+            *dst = twiddle;
+            *conjugate_dst = twiddle.conj();
 
             twiddle_input =
                 ((twiddle_input as u64 * primitive_root_inverse) % dividing_len) as usize;
@@ -112,7 +113,12 @@ where
             })
             .collect::<Vec<_>>();
 
-        let convolve_scratch_length = convolve_fft.scratch_length();
+        let inner_scratch_length = convolve_fft.scratch_length();
+        let extra_scratch_length = if inner_scratch_length <= size {
+            0
+        } else {
+            inner_scratch_length
+        };
 
         Ok(RadersFft {
             execution_length: size,
@@ -122,7 +128,7 @@ where
             input_indices,
             output_indices,
             spectrum_ops: T::make_complex_arith(),
-            convolve_scratch_length,
+            extra_scratch_length,
         })
     }
 }
@@ -162,10 +168,16 @@ where
                 *scratch_element = unsafe { *buffer.get_unchecked(buffer_idx) };
             }
 
+            let convolve_scratch = if self.extra_scratch_length == 0 {
+                &mut *chunk
+            } else {
+                &mut *convolve_scratch
+            };
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            *buffer_first = *buffer_first + scratch[0];
+            // Both inner FFTs may overwrite the caller's entire buffer, including DC.
+            let dc = buffer_first_val + scratch[0];
 
             self.spectrum_ops
                 .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
@@ -175,6 +187,8 @@ where
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
+            let (buffer_first, buffer) = chunk.split_first_mut().unwrap();
+            *buffer_first = dc;
             for (scratch_element, &buffer_idx) in scratch.iter().zip(self.output_indices.iter()) {
                 unsafe {
                     *buffer.get_unchecked_mut(buffer_idx) = scratch_element.conj();
@@ -218,12 +232,15 @@ where
                 *scratch_element = unsafe { *buffer.get_unchecked(buffer_idx) };
             }
 
+            let convolve_scratch = if self.extra_scratch_length == 0 {
+                &mut *output_chunk
+            } else {
+                &mut *convolve_scratch
+            };
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            unsafe {
-                *output_chunk.get_unchecked_mut(0) = *buffer_first + scratch[0];
-            }
+            let dc = buffer_first_val + scratch[0];
 
             self.spectrum_ops
                 .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
@@ -233,7 +250,8 @@ where
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            let (_, buffer) = output_chunk.split_first_mut().unwrap();
+            let (buffer_first, buffer) = output_chunk.split_first_mut().unwrap();
+            *buffer_first = dc;
 
             for (scratch_element, &buffer_idx) in scratch.iter().zip(self.output_indices.iter()) {
                 unsafe {
@@ -264,16 +282,16 @@ where
 
     #[inline]
     fn scratch_length(&self) -> usize {
-        self.execution_length + self.convolve_scratch_length
+        self.execution_length + self.extra_scratch_length
     }
 
     #[inline]
     fn out_of_place_scratch_length(&self) -> usize {
-        self.execution_length + self.convolve_scratch_length
+        self.scratch_length()
     }
 
     #[inline]
     fn destructive_scratch_length(&self) -> usize {
-        self.execution_length + self.convolve_scratch_length
+        self.scratch_length()
     }
 }

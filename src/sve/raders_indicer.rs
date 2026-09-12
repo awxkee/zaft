@@ -125,60 +125,59 @@ impl SveLutGather {
 
         let conj_mask = svdup_n_u64(conj_mask_val);
 
-        for (src, idx) in scratch
-            .chunks_exact(vl * 4)
+        for (out, idx) in buffer
+            .chunks_exact_mut(vl * 4)
             .zip(indices.chunks_exact(vl * 4))
         {
             let pg = svptrue_b64();
-            let mut v0 = unsafe { svld1_u64(pg, src.as_ptr().cast()) };
-            let mut v1 = unsafe { svld1_u64(pg, src.get_unchecked(vl..).as_ptr().cast()) };
-            let mut v2 = unsafe { svld1_u64(pg, src.get_unchecked(vl * 2..).as_ptr().cast()) };
-            let mut v3 = unsafe { svld1_u64(pg, src.get_unchecked(vl * 3..).as_ptr().cast()) };
+            let i0 = unsafe { svld1uw_u64(pg, idx.as_ptr()) };
+            let i1 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl..).as_ptr()) };
+            let i2 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl * 2..).as_ptr()) };
+            let i3 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl * 3..).as_ptr()) };
+
+            let mut v0 = unsafe { svld1_gather_u64index_u64(pg, scratch.as_ptr().cast(), i0) };
+            let mut v1 = unsafe { svld1_gather_u64index_u64(pg, scratch.as_ptr().cast(), i1) };
+            let mut v2 = unsafe { svld1_gather_u64index_u64(pg, scratch.as_ptr().cast(), i2) };
+            let mut v3 = unsafe { svld1_gather_u64index_u64(pg, scratch.as_ptr().cast(), i3) };
 
             v0 = sveor_u64_m(pg, v0, conj_mask);
             v1 = sveor_u64_m(pg, v1, conj_mask);
             v2 = sveor_u64_m(pg, v2, conj_mask);
             v3 = sveor_u64_m(pg, v3, conj_mask);
 
-            let i0 = unsafe { svld1uw_u64(pg, idx.as_ptr()) };
-            let i1 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl..).as_ptr()) };
-            let i2 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl * 2..).as_ptr()) };
-            let i3 = unsafe { svld1uw_u64(pg, idx.get_unchecked(vl * 3..).as_ptr()) };
-
             unsafe {
-                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i0, v0);
-                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i1, v1);
-                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i2, v2);
-                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i3, v3);
+                svst1_u64(pg, out.as_mut_ptr().cast(), v0);
+                svst1_u64(pg, out.get_unchecked_mut(vl..).as_mut_ptr().cast(), v1);
+                svst1_u64(pg, out.get_unchecked_mut(vl * 2..).as_mut_ptr().cast(), v2);
+                svst1_u64(pg, out.get_unchecked_mut(vl * 3..).as_mut_ptr().cast(), v3);
             }
         }
 
-        let src_rem = scratch.chunks_exact(vl * 4).remainder();
+        let out_rem = buffer.chunks_exact_mut(vl * 4).into_remainder();
         let idx_rem = indices.chunks_exact(vl * 4).remainder();
 
-        for (src, idx) in src_rem.chunks_exact(vl).zip(idx_rem.chunks_exact(vl)) {
+        for (out, idx) in out_rem.chunks_exact_mut(vl).zip(idx_rem.chunks_exact(vl)) {
             let pg = svptrue_b64();
-            let mut v0 = unsafe { svld1_u64(pg, src.as_ptr().cast()) };
+            let i0 = unsafe { svld1uw_u64(pg, idx.as_ptr()) };
+            let mut v0 = unsafe { svld1_gather_u64index_u64(pg, scratch.as_ptr().cast(), i0) };
 
             v0 = sveor_u64_m(pg, v0, conj_mask);
 
-            let i0 = unsafe { svld1uw_u64(pg, idx.as_ptr()) };
-
             unsafe {
-                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i0, v0);
+                svst1_u64(pg, out.as_mut_ptr().cast(), v0);
             }
         }
 
-        let src_tail = src_rem.chunks_exact(vl).remainder();
+        let out_tail = out_rem.chunks_exact_mut(vl).into_remainder();
         let idx_tail = idx_rem.chunks_exact(vl).remainder();
 
-        if !src_tail.is_empty() {
-            let pg = svwhilelt_b64_u64(0u64, src_tail.len() as u64);
-            let mut v0 = unsafe { svld1_u64(pg, src_tail.as_ptr().cast()) };
-            v0 = sveor_u64_m(pg, v0, conj_mask);
+        if !out_tail.is_empty() {
+            let pg = svwhilelt_b64_u64(0u64, out_tail.len() as u64);
             let i = unsafe { svld1uw_u64(pg, idx_tail.as_ptr()) };
+            let mut v0 = unsafe { svld1_gather_u64index_u64(pg, scratch.as_ptr().cast(), i) };
+            v0 = sveor_u64_m(pg, v0, conj_mask);
             unsafe {
-                svst1_scatter_u64index_u64(pg, buffer.as_mut_ptr().cast(), i, v0);
+                svst1_u64(pg, out_tail.as_mut_ptr().cast(), v0);
             }
         }
     }

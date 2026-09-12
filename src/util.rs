@@ -601,10 +601,12 @@ pub(crate) fn validate_equal_oof_sizes(
     Ok(())
 }
 
+/// The even C2C chirp shares its endpoints at length `2N - 2`; `N = 1` needs one slot.
 #[inline]
 pub(crate) fn checked_bluestein_convolution_len(n: usize) -> Result<usize, ZaftError> {
-    n.checked_mul(2)
-        .and_then(|length| length.checked_sub(1))
+    n.checked_sub(1)
+        .and_then(|length| length.checked_mul(2))
+        .map(|length| length.max(1))
         .ok_or(ZaftError::Overflow)
 }
 
@@ -654,5 +656,19 @@ mod security_validation_tests {
             checked_bluestein_convolution_len(usize::MAX),
             Err(ZaftError::Overflow)
         ));
+    }
+
+    #[test]
+    fn bluestein_convolution_length_boundaries() {
+        assert!(checked_bluestein_convolution_len(0).is_err());
+        assert_eq!(checked_bluestein_convolution_len(1).unwrap(), 1);
+        assert_eq!(checked_bluestein_convolution_len(2).unwrap(), 2);
+        assert_eq!(checked_bluestein_convolution_len(97).unwrap(), 192);
+        let largest_n = usize::MAX / 2 + 1;
+        assert_eq!(
+            checked_bluestein_convolution_len(largest_n).unwrap(),
+            usize::MAX - 1
+        );
+        assert!(checked_bluestein_convolution_len(largest_n + 1).is_err());
     }
 }
