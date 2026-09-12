@@ -94,7 +94,7 @@ where
         let min_convolve_len = crate::util::checked_bluestein_convolution_len(size)?;
         assert!(
             min_convolve_len <= convolve_fft_len,
-            "Bluestein requires convolve_fft.length() >= self.length() * 2 - 1. Expected >= {}, got {}",
+            "Bluestein requires convolve_fft.length() >= max(1, self.length() * 2 - 2). Expected >= {}, got {}",
             min_convolve_len,
             convolve_fft_len
         );
@@ -106,25 +106,30 @@ where
             "Convolve FFT may not go with other direction"
         );
 
-        let mut convolve_fft_twiddles = try_vec![Complex::zero(); convolve_fft_len];
-        make_bluesteins_twiddles(&mut convolve_fft_twiddles[..size], direction.inverse())?;
-
-        // Scale the computed twiddles and copy them to the end of the array
-        convolve_fft_twiddles[0] = convolve_fft_twiddles[0] * inner_fft_scale;
-        let (lo, hi) = convolve_fft_twiddles.split_at_mut(convolve_fft_len - size + 1);
-        lo[1..size]
-            .iter_mut()
-            .zip(hi[..size - 1].iter_mut().rev())
-            .for_each(|(t, dst)| {
-                *t = *t * inner_fft_scale;
-                *dst = *t;
-            });
-
-        convolve_fft.execute(&mut convolve_fft_twiddles)?;
-
-        // also compute some more mundane twiddle factors to start and end with
         let mut twiddles = try_vec![Complex::zero(); size];
         make_bluesteins_twiddles(&mut twiddles, direction)?;
+
+        // The convolution kernel uses the conjugate chirp, scaled and mirrored.
+        let mut convolve_fft_twiddles = try_vec![Complex::zero(); convolve_fft_len];
+        convolve_fft_twiddles[0] = twiddles[0].conj() * inner_fft_scale;
+        let mirrored_end = size.min(convolve_fft_len - size + 1);
+        if mirrored_end < size {
+            // At M = 2N - 2, b[N - 1] and b[-(N - 1)] occupy the same slot.
+            // They are equal because the chirp is even: store once, without summing.
+            convolve_fft_twiddles[mirrored_end] = twiddles[mirrored_end].conj() * inner_fft_scale;
+        }
+        let (head, tail) = convolve_fft_twiddles.split_at_mut(convolve_fft_len - size + 1);
+        for ((dst, mirrored_dst), &twiddle) in head[1..mirrored_end]
+            .iter_mut()
+            .zip(tail.iter_mut().rev())
+            .zip(&twiddles[1..mirrored_end])
+        {
+            let scaled_twiddle = twiddle.conj() * inner_fft_scale;
+            *dst = scaled_twiddle;
+            *mirrored_dst = scaled_twiddle;
+        }
+
+        convolve_fft.execute(&mut convolve_fft_twiddles)?;
 
         let convolve_scratch_length = convolve_fft.scratch_length();
         let destructive_inner_scratch_len = if size >= convolve_scratch_length {

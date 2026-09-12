@@ -48,7 +48,8 @@ pub(crate) struct NeonRadersFft<T> {
     input_indices: Vec<u32>,
     output_indices: Vec<u32>,
     spectrum_ops: Arc<dyn ComplexArith<T> + Send + Sync>,
-    inner_scratch_length: usize,
+    // Extra scratch is only needed when the inner FFT cannot use the caller's buffer.
+    extra_scratch_length: usize,
     indicer: Arc<dyn RadersIndicer<T> + Send + Sync>,
 }
 
@@ -140,59 +141,46 @@ impl RadersIndicer<f32> for NeonRadersIndicer {
         unsafe {
             static CONJ: [f32; 4] = [0.0, -0.0, 0.0, -0.0];
             let conj = vld1q_f32(CONJ.as_ptr());
-            for (src, buffer_idx) in scratch
-                .as_chunks::<6>()
+            for (dst, buffer_idx) in buffer
+                .as_chunks_mut::<6>()
                 .0
-                .iter()
+                .iter_mut()
                 .zip(indices.as_chunks::<6>().0.iter())
             {
-                let mut v0 = vld1q_f32(src.as_ptr().cast());
-                let mut v1 = vld1q_f32(src.get_unchecked(2..).as_ptr().cast());
-                let mut v2 = vld1q_f32(src.get_unchecked(4..).as_ptr().cast());
-
                 let idx0 = buffer_idx[0] as usize;
                 let idx1 = buffer_idx[1] as usize;
                 let idx2 = buffer_idx[2] as usize;
+                let idx3 = buffer_idx[3] as usize;
+                let idx4 = buffer_idx[4] as usize;
+                let idx5 = buffer_idx[5] as usize;
+
+                let mut v0 = vcombine_f32(
+                    vld1_f32(scratch.get_unchecked(idx0..).as_ptr().cast()),
+                    vld1_f32(scratch.get_unchecked(idx1..).as_ptr().cast()),
+                );
+                let mut v1 = vcombine_f32(
+                    vld1_f32(scratch.get_unchecked(idx2..).as_ptr().cast()),
+                    vld1_f32(scratch.get_unchecked(idx3..).as_ptr().cast()),
+                );
+                let mut v2 = vcombine_f32(
+                    vld1_f32(scratch.get_unchecked(idx4..).as_ptr().cast()),
+                    vld1_f32(scratch.get_unchecked(idx5..).as_ptr().cast()),
+                );
 
                 v0 = conjq_f32(v0, conj);
                 v1 = conjq_f32(v1, conj);
                 v2 = conjq_f32(v2, conj);
 
-                let idx3 = buffer_idx[3] as usize;
-                let idx4 = buffer_idx[4] as usize;
-                let idx5 = buffer_idx[5] as usize;
-
-                vst1_f32(
-                    buffer.get_unchecked_mut(idx0..).as_mut_ptr().cast(),
-                    vget_low_f32(v0),
-                );
-                vst1_f32(
-                    buffer.get_unchecked_mut(idx1..).as_mut_ptr().cast(),
-                    vget_high_f32(v0),
-                );
-                vst1_f32(
-                    buffer.get_unchecked_mut(idx2..).as_mut_ptr().cast(),
-                    vget_low_f32(v1),
-                );
-                vst1_f32(
-                    buffer.get_unchecked_mut(idx3..).as_mut_ptr().cast(),
-                    vget_high_f32(v1),
-                );
-                vst1_f32(
-                    buffer.get_unchecked_mut(idx4..).as_mut_ptr().cast(),
-                    vget_low_f32(v2),
-                );
-                vst1_f32(
-                    buffer.get_unchecked_mut(idx5..).as_mut_ptr().cast(),
-                    vget_high_f32(v2),
-                );
+                vst1q_f32(dst.as_mut_ptr().cast(), v0);
+                vst1q_f32(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), v1);
+                vst1q_f32(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), v2);
             }
 
-            let rem_scratch = scratch.as_chunks::<6>().1;
+            let rem = buffer.as_chunks_mut::<6>().1;
             let rem_indices = indices.as_chunks::<6>().1;
 
-            for (scratch_element, &buffer_idx) in rem_scratch.iter().zip(rem_indices.iter()) {
-                *buffer.get_unchecked_mut(buffer_idx as usize) = scratch_element.conj();
+            for (dst, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
+                *dst = scratch.get_unchecked(buffer_idx as usize).conj();
             }
         }
     }
@@ -267,29 +255,32 @@ impl RadersIndicer<f64> for NeonRadersIndicer {
         unsafe {
             static CONJ: [f64; 2] = [0.0, -0.0];
             let conj = vld1q_f64(CONJ.as_ptr());
-            for (src, buffer_idx) in scratch
-                .as_chunks::<6>()
+            for (dst, buffer_idx) in buffer
+                .as_chunks_mut::<6>()
                 .0
-                .iter()
+                .iter_mut()
                 .zip(indices.as_chunks::<6>().0.iter())
             {
-                let mut v0 = vld1q_f64(src.as_ptr().cast());
-                let mut v1 = vld1q_f64(src.get_unchecked(1..).as_ptr().cast());
+                let idx0 = buffer_idx[0] as usize;
+                let idx1 = buffer_idx[1] as usize;
 
-                let idx0 = buffer_idx[0];
-                let idx1 = buffer_idx[1];
+                let mut v0 = vld1q_f64(scratch.get_unchecked(idx0..).as_ptr().cast());
+                let mut v1 = vld1q_f64(scratch.get_unchecked(idx1..).as_ptr().cast());
 
                 v0 = conj_f64(v0, conj);
                 v1 = conj_f64(v1, conj);
 
-                let mut v2 = vld1q_f64(src.get_unchecked(2..).as_ptr().cast());
-                let mut v3 = vld1q_f64(src.get_unchecked(3..).as_ptr().cast());
+                let idx2 = buffer_idx[2] as usize;
+                let idx3 = buffer_idx[3] as usize;
 
-                let mut v4 = vld1q_f64(src.get_unchecked(4..).as_ptr().cast());
-                let mut v5 = vld1q_f64(src.get_unchecked(5..).as_ptr().cast());
+                let mut v2 = vld1q_f64(scratch.get_unchecked(idx2..).as_ptr().cast());
+                let mut v3 = vld1q_f64(scratch.get_unchecked(idx3..).as_ptr().cast());
 
-                let idx2 = buffer_idx[2];
-                let idx3 = buffer_idx[3];
+                let idx4 = buffer_idx[4] as usize;
+                let idx5 = buffer_idx[5] as usize;
+
+                let mut v4 = vld1q_f64(scratch.get_unchecked(idx4..).as_ptr().cast());
+                let mut v5 = vld1q_f64(scratch.get_unchecked(idx5..).as_ptr().cast());
 
                 v2 = conj_f64(v2, conj);
                 v3 = conj_f64(v3, conj);
@@ -297,58 +288,19 @@ impl RadersIndicer<f64> for NeonRadersIndicer {
                 v4 = conj_f64(v4, conj);
                 v5 = conj_f64(v5, conj);
 
-                let idx4 = buffer_idx[4];
-                let idx5 = buffer_idx[5];
-
-                vst1q_f64(
-                    buffer
-                        .get_unchecked_mut(idx0 as usize..)
-                        .as_mut_ptr()
-                        .cast(),
-                    v0,
-                );
-                vst1q_f64(
-                    buffer
-                        .get_unchecked_mut(idx1 as usize..)
-                        .as_mut_ptr()
-                        .cast(),
-                    v1,
-                );
-                vst1q_f64(
-                    buffer
-                        .get_unchecked_mut(idx2 as usize..)
-                        .as_mut_ptr()
-                        .cast(),
-                    v2,
-                );
-                vst1q_f64(
-                    buffer
-                        .get_unchecked_mut(idx3 as usize..)
-                        .as_mut_ptr()
-                        .cast(),
-                    v3,
-                );
-                vst1q_f64(
-                    buffer
-                        .get_unchecked_mut(idx4 as usize..)
-                        .as_mut_ptr()
-                        .cast(),
-                    v4,
-                );
-                vst1q_f64(
-                    buffer
-                        .get_unchecked_mut(idx5 as usize..)
-                        .as_mut_ptr()
-                        .cast(),
-                    v5,
-                );
+                vst1q_f64(dst.as_mut_ptr().cast(), v0);
+                vst1q_f64(dst.get_unchecked_mut(1..).as_mut_ptr().cast(), v1);
+                vst1q_f64(dst.get_unchecked_mut(2..).as_mut_ptr().cast(), v2);
+                vst1q_f64(dst.get_unchecked_mut(3..).as_mut_ptr().cast(), v3);
+                vst1q_f64(dst.get_unchecked_mut(4..).as_mut_ptr().cast(), v4);
+                vst1q_f64(dst.get_unchecked_mut(5..).as_mut_ptr().cast(), v5);
             }
 
-            let rem_scratch = scratch.as_chunks::<6>().1;
+            let rem = buffer.as_chunks_mut::<6>().1;
             let rem_indices = indices.as_chunks::<6>().1;
 
-            for (scratch_element, &buffer_idx) in rem_scratch.iter().zip(rem_indices.iter()) {
-                *buffer.get_unchecked_mut(buffer_idx as usize) = scratch_element.conj();
+            for (dst, &buffer_idx) in rem.iter_mut().zip(rem_indices.iter()) {
+                *dst = scratch.get_unchecked(buffer_idx as usize).conj();
             }
         }
     }
@@ -378,9 +330,6 @@ where
         let primitive_root =
             primitive_root(size as u64).ok_or(ZaftError::CantFindPrimitiveRootFor(size as u64))?;
 
-        // compute the multiplicative inverse of primative_root mod len and vice versa.
-        // i64::extended_gcd will compute both the inverse of left mod right, and the inverse of right mod left, but we're only goingto use one of them
-        // the primtive root inverse might be negative, if o make it positive by wrapping
         let gcd_data = i64::extended_gcd(&(primitive_root as i64), &(size as i64));
         let primitive_root_inverse = if gcd_data.x >= 0 {
             gcd_data.x
@@ -391,10 +340,13 @@ where
         // precompute the coefficients to use inside the process method
         let inner_fft_scale: T = (1f64 / convolve_fft_len as f64).as_();
         let mut inner_fft_input = try_vec![Complex::zero(); convolve_fft_len];
+        let (first_half, second_half) = inner_fft_input.split_at_mut(convolve_fft_len / 2);
         let mut twiddle_input = 1;
-        for dst in &mut inner_fft_input {
-            let twiddle = compute_twiddle(twiddle_input, size, direction);
-            *dst = twiddle * inner_fft_scale;
+        // For H = (size - 1) / 2, g^H = -1 mod size, so kernel[q + H] = conj(kernel[q]).
+        for (dst, conjugate_dst) in first_half.iter_mut().zip(second_half) {
+            let twiddle = compute_twiddle(twiddle_input, size, direction) * inner_fft_scale;
+            *dst = twiddle;
+            *conjugate_dst = twiddle.conj();
 
             twiddle_input =
                 ((twiddle_input as u64 * primitive_root_inverse) % dividing_len) as usize;
@@ -411,15 +363,19 @@ where
             .collect::<Vec<_>>();
 
         let mut output_index = 1;
-        let output_indices = (0..size - 1)
-            .map(|_| {
-                output_index =
-                    ((output_index as u64 * primitive_root_inverse) % dividing_len) as usize;
-                (output_index - 1) as u32
-            })
-            .collect::<Vec<_>>();
+        let mut output_indices = try_vec![0u32; size - 1];
+        // Invert the output permutation so execution gathers into contiguous output slots.
+        for scratch_index in 0..size - 1 {
+            output_index = ((output_index as u64 * primitive_root_inverse) % dividing_len) as usize;
+            output_indices[output_index - 1] = scratch_index as u32;
+        }
 
         let inner_scratch_length = convolve_fft.scratch_length();
+        let extra_scratch_length = if inner_scratch_length <= size {
+            0
+        } else {
+            inner_scratch_length
+        };
 
         Ok(NeonRadersFft {
             execution_length: size,
@@ -429,7 +385,7 @@ where
             input_indices,
             output_indices,
             spectrum_ops: T::make_complex_arith(),
-            inner_scratch_length,
+            extra_scratch_length,
             indicer,
         })
     }
@@ -468,10 +424,16 @@ where
             self.indicer
                 .index_inputs(buffer, scratch, &self.input_indices);
 
+            let convolve_scratch = if self.extra_scratch_length == 0 {
+                &mut *chunk
+            } else {
+                &mut *convolve_scratch
+            };
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            *buffer_first = *buffer_first + scratch[0];
+            // Both inner FFTs may overwrite the caller's entire buffer, including DC.
+            let dc = buffer_first_val + scratch[0];
 
             self.spectrum_ops
                 .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
@@ -481,6 +443,8 @@ where
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
+            let (buffer_first, buffer) = chunk.split_first_mut().unwrap();
+            *buffer_first = dc;
             self.indicer
                 .output_indices(buffer, scratch, &self.output_indices);
         }
@@ -519,12 +483,15 @@ where
             self.indicer
                 .index_inputs(buffer, scratch, &self.input_indices);
 
+            let convolve_scratch = if self.extra_scratch_length == 0 {
+                &mut *output_chunk
+            } else {
+                &mut *convolve_scratch
+            };
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            unsafe {
-                *output_chunk.get_unchecked_mut(0) = *buffer_first + scratch[0];
-            }
+            let dc = buffer_first_val + scratch[0];
 
             self.spectrum_ops
                 .mul_conjugate_in_place(scratch, &self.convolve_fft_twiddles);
@@ -534,7 +501,8 @@ where
             self.convolve_fft
                 .execute_with_scratch(scratch, convolve_scratch)?;
 
-            let (_, buffer) = output_chunk.split_first_mut().unwrap();
+            let (buffer_first, buffer) = output_chunk.split_first_mut().unwrap();
+            *buffer_first = dc;
 
             self.indicer
                 .output_indices(buffer, scratch, &self.output_indices);
@@ -561,7 +529,7 @@ where
 
     #[inline]
     fn scratch_length(&self) -> usize {
-        self.execution_length + self.inner_scratch_length
+        self.execution_length + self.extra_scratch_length
     }
 
     #[inline]

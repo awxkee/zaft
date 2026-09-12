@@ -881,10 +881,8 @@ impl Zaft {
     where
         f64: AsPrimitive<T>,
     {
-        // we want to use bluestein's algorithm. we have a free choice of which inner FFT length to use
-        // the only restriction is that it has to be (2 * len - 1) or larger. So we want the fastest FFT we can compute at or above that size.
-
-        // the most obvious choice is the next-highest power of two, but there's one trick we can pull to get a smaller fft that we can be 100% certain will be faster
+        // The even chirp permits an inner FFT of length 2N - 2 or larger (one for N = 1).
+        // Prefer three quarters of the next power of two when it meets that bound.
         let min_inner_len = crate::util::checked_bluestein_convolution_len(n)?;
         let inner_len_pow2 = min_inner_len
             .checked_next_power_of_two()

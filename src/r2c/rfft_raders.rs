@@ -211,11 +211,10 @@ where
         // Re(b) is H-periodic so C is non-zero on even bins only,
         // Im(b) is H-antiperiodic so S is non-zero on odd bins only.
         let mut convolve_twiddles = c_spectrum;
-        for (dst, &src) in convolve_twiddles
+        for (dst, &src) in convolve_twiddles[1..]
             .iter_mut()
-            .skip(1)
             .step_by(2)
-            .zip(s_spectrum.iter().skip(1).step_by(2))
+            .zip(s_spectrum[1..].iter().step_by(2))
         {
             *dst = src;
         }
