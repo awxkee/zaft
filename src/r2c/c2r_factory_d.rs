@@ -26,8 +26,8 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-use crate::r2c::c2r_factory::C2RAlgorithmFactory;
-use crate::{C2RFftExecutor, FftExecutor, ZaftError};
+use crate::r2c::c2r_factory::{C2RAlgorithmFactory, C2rChild};
+use crate::{C2RFftExecutor, ZaftError};
 use std::sync::Arc;
 
 macro_rules! make_mixed_radix {
@@ -64,7 +64,7 @@ macro_rules! make_mixed_radix {
 
 impl C2RAlgorithmFactory<f64> for f64 {
     fn c2r_mixed_radix3(
-        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+        _width_executor: C2rChild<f64>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<f64> + Send + Sync>>, ZaftError> {
         make_mixed_radix!(
             _width_executor,
@@ -75,7 +75,7 @@ impl C2RAlgorithmFactory<f64> for f64 {
     }
 
     fn c2r_mixed_radix5(
-        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+        _width_executor: C2rChild<f64>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<f64> + Send + Sync>>, ZaftError> {
         make_mixed_radix!(
             _width_executor,
@@ -86,7 +86,7 @@ impl C2RAlgorithmFactory<f64> for f64 {
     }
 
     fn c2r_mixed_radix7(
-        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+        _width_executor: C2rChild<f64>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<f64> + Send + Sync>>, ZaftError> {
         make_mixed_radix!(
             _width_executor,
@@ -97,7 +97,7 @@ impl C2RAlgorithmFactory<f64> for f64 {
     }
 
     fn c2r_mixed_radix9(
-        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+        _width_executor: C2rChild<f64>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<f64> + Send + Sync>>, ZaftError> {
         make_mixed_radix!(
             _width_executor,
@@ -108,7 +108,7 @@ impl C2RAlgorithmFactory<f64> for f64 {
     }
 
     fn c2r_mixed_radix11(
-        _width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
+        _width_executor: C2rChild<f64>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<f64> + Send + Sync>>, ZaftError> {
         make_mixed_radix!(
             _width_executor,

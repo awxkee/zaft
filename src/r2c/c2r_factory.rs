@@ -29,20 +29,34 @@
 use crate::{C2RFftExecutor, FftExecutor, ZaftError};
 use std::sync::Arc;
 
+/// Complex leaves amortize tiny row FFTs over a batch; larger widths use
+/// real inverse children and retain only their half spectra.
+#[cfg_attr(
+    not(any(
+        all(target_arch = "aarch64", feature = "neon"),
+        all(target_arch = "x86_64", feature = "avx")
+    )),
+    allow(dead_code)
+)]
+pub(crate) enum C2rChild<T> {
+    Complex(Arc<dyn FftExecutor<T> + Send + Sync>),
+    Real(Arc<dyn C2RFftExecutor<T> + Send + Sync>),
+}
+
 pub(crate) trait C2RAlgorithmFactory<T> {
     fn c2r_mixed_radix3(
-        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+        width_executor: C2rChild<T>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<T> + Send + Sync>>, ZaftError>;
     fn c2r_mixed_radix5(
-        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+        width_executor: C2rChild<T>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<T> + Send + Sync>>, ZaftError>;
     fn c2r_mixed_radix7(
-        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+        width_executor: C2rChild<T>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<T> + Send + Sync>>, ZaftError>;
     fn c2r_mixed_radix9(
-        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+        width_executor: C2rChild<T>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<T> + Send + Sync>>, ZaftError>;
     fn c2r_mixed_radix11(
-        width_executor: Arc<dyn FftExecutor<T> + Send + Sync>,
+        width_executor: C2rChild<T>,
     ) -> Result<Option<Arc<dyn C2RFftExecutor<T> + Send + Sync>>, ZaftError>;
 }

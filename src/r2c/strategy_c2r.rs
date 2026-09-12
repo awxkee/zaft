@@ -32,6 +32,38 @@ use crate::{C2RFftExecutor, FftDirection, FftSample, Zaft, ZaftError};
 use num_traits::AsPrimitive;
 use std::sync::Arc;
 
+// Keep small row batches together: recursively invoking real children below
+// this size costs more than their reduced arithmetic on the measured NEON path.
+const COMPLEX_LEAF_LIMIT: usize = 512;
+
+fn mixed_radix_child<T: FftSample + C2RTwiddlesFactory<T>>(
+    len: usize,
+    radix: usize,
+) -> Result<crate::r2c::C2rChild<T>, ZaftError>
+where
+    f64: AsPrimitive<T>,
+    usize: AsPrimitive<T>,
+{
+    let width = len / radix;
+    if len <= COMPLEX_LEAF_LIMIT {
+        return Ok(crate::r2c::C2rChild::Complex(Zaft::strategy(
+            width,
+            FftDirection::Inverse,
+        )?));
+    }
+    // Keep non-codelet leaf widths bounded too: a complex leaf still accepts
+    // half-spectrum input through the real interceptor, without deep recursion.
+    let child = if width <= COMPLEX_LEAF_LIMIT {
+        Arc::new(C2RFftOddInterceptor::install(
+            width,
+            Zaft::strategy(width, FftDirection::Inverse)?,
+        )?) as Arc<dyn C2RFftExecutor<T> + Send + Sync>
+    } else {
+        strategy_c2r(width)?
+    };
+    Ok(crate::r2c::C2rChild::Real(child))
+}
+
 pub(crate) fn strategy_c2r<T: FftSample + C2RTwiddlesFactory<T>>(
     len: usize,
 ) -> Result<Arc<dyn C2RFftExecutor<T> + Send + Sync>, ZaftError>
@@ -52,33 +84,35 @@ where
             .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<T> + Send + Sync>)
     } else {
         if Zaft::could_do_split_mixed_radix() {
+            // Tiny direct kernels avoid building a mixed-radix stage.
+            if len <= 32
+                && let Some(fft) = Zaft::plan_butterfly(len, FftDirection::Inverse)
+            {
+                return C2RFftOddInterceptor::install(len, fft?)
+                    .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<T> + Send + Sync>);
+            }
             if len.is_multiple_of(9)
-                && let Some(mx9) =
-                    T::c2r_mixed_radix9(Zaft::strategy(len / 9, FftDirection::Inverse)?)?
+                && let Some(mx9) = T::c2r_mixed_radix9(mixed_radix_child(len, 9)?)?
             {
                 return Ok(mx9);
             }
             if len.is_multiple_of(5)
-                && let Some(mx5) =
-                    T::c2r_mixed_radix5(Zaft::strategy(len / 5, FftDirection::Inverse)?)?
+                && let Some(mx5) = T::c2r_mixed_radix5(mixed_radix_child(len, 5)?)?
             {
                 return Ok(mx5);
             }
             if len.is_multiple_of(7)
-                && let Some(mx7) =
-                    T::c2r_mixed_radix7(Zaft::strategy(len / 7, FftDirection::Inverse)?)?
+                && let Some(mx7) = T::c2r_mixed_radix7(mixed_radix_child(len, 7)?)?
             {
                 return Ok(mx7);
             }
             if len.is_multiple_of(11)
-                && let Some(mx11) =
-                    T::c2r_mixed_radix11(Zaft::strategy(len / 11, FftDirection::Inverse)?)?
+                && let Some(mx11) = T::c2r_mixed_radix11(mixed_radix_child(len, 11)?)?
             {
                 return Ok(mx11);
             }
             if len.is_multiple_of(3)
-                && let Some(mx3) =
-                    T::c2r_mixed_radix3(Zaft::strategy(len / 3, FftDirection::Inverse)?)?
+                && let Some(mx3) = T::c2r_mixed_radix3(mixed_radix_child(len, 3)?)?
             {
                 return Ok(mx3);
             }

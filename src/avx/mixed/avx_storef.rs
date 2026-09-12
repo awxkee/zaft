@@ -420,6 +420,18 @@ impl AvxStoreF {
         unsafe { _mm256_maskstore_ps(to_ref.as_mut_ptr().cast(), mask.v, self.v) }
     }
 
+    /// Stores the selected real lanes without touching following values.
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    pub(crate) fn write_real_partial(&self, output: &mut [f32], mask: AvxMaskF) {
+        debug_assert!(output.len() >= mask.lanes);
+        if mask.lanes == 8 {
+            unsafe { _mm256_storeu_ps(output.as_mut_ptr(), self.v) }
+        } else {
+            unsafe { _mm256_maskstore_ps(output.as_mut_ptr(), mask.v, self.v) }
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn write_single(&self, to_ref: &mut Complex<f32>) {
         unsafe {
@@ -687,6 +699,12 @@ mod tests {
                 _mm256_storeu_ps(loaded.as_mut_ptr(), value.v);
                 assert_eq!(&loaded[..count], &source[..count]);
                 assert_eq!(&loaded[count..], &vec![0.0; 8 - count]);
+
+                let mut stored = [-1.0; 10];
+                value.write_real_partial(&mut stored[1..count + 1], mask);
+                assert_eq!(&stored[1..count + 1], &source[..count]);
+                assert_eq!(stored[0], -1.0);
+                assert!(stored[count + 1..].iter().all(|x| *x == -1.0));
             }
         }
 

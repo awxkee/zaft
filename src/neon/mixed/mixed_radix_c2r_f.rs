@@ -30,13 +30,12 @@
 use crate::err::try_vec;
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::mixed::neon_store::NeonStoreFh;
-use crate::transpose::TransposeExecutorRealInv;
-use crate::transpose::TransposeFactory;
+use crate::r2c::C2rChild;
+use crate::transpose::{TransposeExecutorRealInv, TransposeFactory};
 use crate::util::compute_twiddle;
-use crate::{C2RFftExecutor, FftExecutor, ZaftError};
+use crate::{C2RFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
-use std::sync::Arc;
 /*
    Layout 7x7
    00 01 02 03 04 05 06
@@ -81,65 +80,85 @@ use std::sync::Arc;
 */
 
 macro_rules! define_mixed_radix_neon_f {
-    ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $mul: ident) => {
+    ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $mul: ident, $transpose: ident) => {
+
         use crate::neon::mixed::$bf_name;
         pub(crate) struct $radix_name {
             execution_length: usize,
             twiddles: Vec<NeonStoreF>,
-            width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
+            width_executor: C2rChild<f32>,
             width: usize,
-            transpose_executor: Box<dyn TransposeExecutorRealInv<f32> + Send + Sync>,
+            spectrum_width: usize,
+            stage_len: usize,
+            transpose_executor: Option<Box<dyn TransposeExecutorRealInv<f32> + Send + Sync>>,
             inner_bf: $bf_name,
             width_scratch_length: usize,
         }
 
         impl $radix_name {
-            pub(crate) fn new(
-                width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
-            ) -> Result<Self, ZaftError> {
-                let direction = width_executor.direction();
-
-                let width = width_executor.length();
-
+            pub(crate) fn new(width_executor: C2rChild<f32>) -> Result<Self, ZaftError> {
+                let direction = crate::FftDirection::Inverse;
+                let (width, child_scratch_length, complex_leaf) = match &width_executor {
+                    C2rChild::Complex(child) => (child.length(), child.scratch_length(), true),
+                    C2rChild::Real(child) => (child.real_length(), child.complex_scratch_length(), false),
+                };
+                let spectrum_width = width / 2 + 1;
                 const ROW_COUNT: usize = $row_count;
-                const TWIDDLES_PER_COLUMN: usize = $row_count - 1;
-
-                // derive some info from our inner FFT
-                let len_per_row = width_executor.length();
-
-                let len = len_per_row * ROW_COUNT;
+                const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
                 const COMPLEX_PER_VECTOR: usize = 2;
-
-                let quotient = len_per_row / COMPLEX_PER_VECTOR;
-                let remainder = len_per_row % COMPLEX_PER_VECTOR;
-
-                let num_twiddle_columns = quotient + remainder.div_ceil(COMPLEX_PER_VECTOR);
+                let len = width.checked_mul(ROW_COUNT).ok_or(ZaftError::Overflow)?;
+                let stage_len = if complex_leaf {
+                    len
+                } else {
+                    spectrum_width
+                        .checked_mul(ROW_COUNT)
+                        .ok_or(ZaftError::Overflow)?
+                };
+                let twiddle_width = if complex_leaf { width } else { spectrum_width };
+                let num_twiddle_columns = twiddle_width.div_ceil(COMPLEX_PER_VECTOR);
+                let twiddle_count = num_twiddle_columns
+                    .checked_mul(TWIDDLES_PER_COLUMN)
+                    .ok_or(ZaftError::Overflow)?;
                 let mut twiddles = Vec::new();
                 twiddles
-                    .try_reserve_exact(num_twiddle_columns * TWIDDLES_PER_COLUMN)
-                    .map_err(|_| {
-                        ZaftError::OutOfMemory(num_twiddle_columns * TWIDDLES_PER_COLUMN)
-                    })?;
+                    .try_reserve_exact(twiddle_count)
+                    .map_err(|_| ZaftError::OutOfMemory(twiddle_count))?;
                 for x in 0..num_twiddle_columns {
-                    for y in 1..$row_count {
-                        let mut data: [Complex<f32>; COMPLEX_PER_VECTOR] =
-                            [Complex::zero(); COMPLEX_PER_VECTOR];
-                        for i in 0..COMPLEX_PER_VECTOR {
-                            data[i] =
-                                compute_twiddle(y * (x * COMPLEX_PER_VECTOR + i), len, direction);
+                    for y in 1..ROW_COUNT {
+                        let mut data = [Complex::<f32>::zero(); COMPLEX_PER_VECTOR];
+                        for (i, value) in data.iter_mut().enumerate() {
+                            *value = compute_twiddle(y * (x * COMPLEX_PER_VECTOR + i), len, direction);
                         }
-                        twiddles.push(NeonStoreF::from_complex_ref(data.as_ref()));
+                        twiddles.push(NeonStoreF::from_complex_ref(&data));
                     }
                 }
-
-                let width_scratch_length = width_executor.scratch_length();
-
-                Ok($radix_name {
-                    execution_length: width * ROW_COUNT,
+                // Real children keep one output row as a temporary. Complex
+                // leaves can use the whole output for scratch until transpose.
+                let available_scratch = if complex_leaf {
+                    len / 2
+                } else {
+                    (len - width) / 2
+                };
+                let width_scratch_length = if child_scratch_length <= available_scratch {
+                    0
+                } else {
+                    child_scratch_length
+                };
+                stage_len
+                    .checked_add(width_scratch_length)
+                    .ok_or(ZaftError::Overflow)?;
+                Ok(Self {
+                    execution_length: len,
                     width_executor,
                     width,
+                    spectrum_width,
+                    stage_len,
+                    transpose_executor: if complex_leaf {
+                        Some(f32::transpose_strategy_real_inv(width, ROW_COUNT))
+                    } else {
+                        None
+                    },
                     twiddles,
-                    transpose_executor: f32::transpose_strategy_real_inv(width, $row_count),
                     inner_bf: $bf_name::new(direction),
                     width_scratch_length,
                 })
@@ -155,7 +174,7 @@ macro_rules! define_mixed_radix_neon_f {
                     self.real_length(),
                 )?;
                 let mut scratch = try_vec![Complex::zero(); self.complex_scratch_length()];
-                self.execute_with_scratch(input, output, scratch.as_mut_slice())
+                self.execute_with_scratch(input, output, &mut scratch)
             }
 
             fn execute_with_scratch(
@@ -176,11 +195,9 @@ macro_rules! define_mixed_radix_neon_f {
             fn complex_length(&self) -> usize {
                 self.execution_length / 2 + 1
             }
-
             fn complex_scratch_length(&self) -> usize {
-                self.execution_length + self.width_scratch_length
+                self.stage_len + self.width_scratch_length
             }
-
             fn real_length(&self) -> usize {
                 self.execution_length
             }
@@ -188,7 +205,7 @@ macro_rules! define_mixed_radix_neon_f {
 
         impl $radix_name {
             #[target_feature(enable = $features)]
-            fn process_columns(&self, src: &[Complex<f32>], complex: &mut [Complex<f32>]) {
+            fn process_full_columns(&self, src: &[Complex<f32>], complex: &mut [Complex<f32>]) {
                 const ROW_COUNT: usize = $row_count;
                 const TWIDDLES_PER_COLUMN: usize = $row_count - 1;
                 const COMPLEX_PER_VECTOR: usize = 2;
@@ -425,51 +442,145 @@ macro_rules! define_mixed_radix_neon_f {
             }
 
             #[target_feature(enable = $features)]
+            fn process_columns(&self, src: &[Complex<f32>], complex: &mut [Complex<f32>]) {
+                const ROW_COUNT: usize = $row_count;
+                const TWIDDLES_PER_COLUMN: usize = ROW_COUNT - 1;
+                const COMPLEX_PER_VECTOR: usize = 2;
+                let width = self.width;
+                let k = self.spectrum_width;
+                let conj_flag = NeonStoreF::conj_flag();
+                // Only k=0..floor(width/2) is needed by each real child.
+                // For a mirror row i, X[N-(i*width-x)] = conj(X[i*width-x]).
+                for (c, twiddle_chunk) in self
+                    .twiddles
+                    .as_chunks::<TWIDDLES_PER_COLUMN>()
+                    .0
+                    .iter()
+                    .take(k / COMPLEX_PER_VECTOR)
+                    .enumerate()
+                {
+                    let x = c * COMPLEX_PER_VECTOR;
+                    let mut columns = [NeonStoreF::default(); ROW_COUNT];
+                    for i in 0..=ROW_COUNT / 2 {
+                        columns[i] = NeonStoreF::from_complex_ref(&src[x + width * i..]);
+                    }
+                    for i in 1..=ROW_COUNT / 2 {
+                        let mirror = i * width - x - (COMPLEX_PER_VECTOR - 1);
+                        columns[ROW_COUNT - i] = NeonStoreF::from_complex_ref(&src[mirror..])
+                            .reverse_complex()
+                            .xor(conj_flag);
+                    }
+                    let output = self.inner_bf.exec(columns);
+                    output[0].write(&mut complex[x..]);
+                    for i in 1..ROW_COUNT {
+                        NeonStoreF::$mul(output[i], twiddle_chunk[i - 1])
+                            .write(&mut complex[i * k + x..]);
+                    }
+                }
+
+                if k % COMPLEX_PER_VECTOR != 0 {
+                    let x = k - 1;
+                    let twiddle_chunk = &self.twiddles[self.twiddles.len() - TWIDDLES_PER_COLUMN..];
+                    let mut columns = [NeonStoreFh::default(); ROW_COUNT];
+                    for i in 0..=ROW_COUNT / 2 {
+                        columns[i] = NeonStoreFh::load(&src[i * width + x..]);
+                    }
+                    for i in 1..=ROW_COUNT / 2 {
+                        columns[ROW_COUNT - i] =
+                            NeonStoreFh::load(&src[i * width - x..]).xor(conj_flag.lo());
+                    }
+                    let output = self.inner_bf.exech(columns);
+                    output[0].write(&mut complex[x..]);
+                    for i in 1..ROW_COUNT {
+                        NeonStoreFh::$mul(output[i], twiddle_chunk[i - 1].lo())
+                            .write(&mut complex[i * k + x..]);
+                    }
+                }
+            }
+
+            #[target_feature(enable = $features)]
+            fn transpose_real_rows(&self, input: &[Complex<f32>], output: &mut [f32]) {
+                use crate::neon::transpose::$transpose;
+                const ROW_COUNT: usize = $row_count;
+                const LANES: usize = 4;
+                let input = crate::r2c::mixed_radix_c2r::as_real(input);
+                let stride = self.spectrum_width * 2;
+                let mut x = 0;
+                while x + LANES <= self.width {
+                    let mut rows = [NeonStoreF::default(); ROW_COUNT];
+                    for i in 0..ROW_COUNT {
+                        let physical = (i + ROW_COUNT - 1) % ROW_COUNT;
+                        rows[i] = NeonStoreF::load(&input[physical * stride + x..]);
+                    }
+                    let values = $transpose(rows);
+                    for column in 0..LANES {
+                        for (group, block) in values
+                            .chunks_exact(LANES)
+                            .take(ROW_COUNT / LANES)
+                            .enumerate()
+                        {
+                            block[column]
+                                .write_real(&mut output[(x + column) * ROW_COUNT + group * LANES..]);
+                        }
+                        let tail = &mut output[(x + column) * ROW_COUNT + (ROW_COUNT / 4) * 4..];
+                        if ROW_COUNT % 4 == 1 {
+                            values[(ROW_COUNT / 4) * 4 + column].write_real_lo1(tail);
+                        } else {
+                            values[(ROW_COUNT / 4) * 4 + column].write_real_lo3(tail);
+                        }
+                    }
+                    x += LANES;
+                }
+                while x < self.width {
+                    for i in 0..ROW_COUNT {
+                        output[x * ROW_COUNT + i] = input[((i + ROW_COUNT - 1) % ROW_COUNT) * stride + x];
+                    }
+                    x += 1;
+                }
+            }
+
+            #[target_feature(enable = $features)]
             fn execute_oof_impl(
                 &self,
                 src: &[Complex<f32>],
                 dst: &mut [f32],
                 scratch: &mut [Complex<f32>],
             ) -> Result<(), ZaftError> {
-                if !src.len().is_multiple_of(self.complex_length()) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        src.len(),
-                        self.complex_length(),
-                    ));
-                }
-                if !dst.len().is_multiple_of(self.execution_length) {
-                    return Err(ZaftError::InvalidSizeMultiplier(
-                        dst.len(),
-                        self.execution_length,
-                    ));
-                }
-                if src.len() / self.complex_length() != dst.len() / self.execution_length {
-                    return Err(ZaftError::InvalidSamplesCount(
-                        src.len() / self.complex_length(),
-                        dst.len() / self.execution_length,
-                    ));
-                }
-
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
-                let (scratch_complex, rem_scratch) = scratch.split_at_mut(self.execution_length);
-
-                for (dst_chunk, chunk) in dst
+                let (spectra, width_scratch) = scratch.split_at_mut(self.stage_len);
+                for (output, input) in dst
                     .chunks_exact_mut(self.execution_length)
                     .zip(src.chunks_exact(self.complex_length()))
                 {
-                    self.process_columns(chunk, scratch_complex);
-
-                    let (width_scratch, _) = rem_scratch.split_at_mut(self.width_scratch_length);
-                    self.width_executor
-                        .execute_with_scratch(scratch_complex, width_scratch)?;
-
-                    self.transpose_executor.transpose(
-                        scratch_complex,
-                        dst_chunk,
-                        self.width,
-                        $row_count,
-                    );
+                    match &self.width_executor {
+                        C2rChild::Real(child) => {
+                            self.process_columns(input, spectra);
+                            crate::r2c::mixed_radix_c2r::execute_rows(
+                                child.as_ref(),
+                                spectra,
+                                output,
+                                width_scratch,
+                                $row_count,
+                            )?;
+                            self.transpose_real_rows(spectra, output);
+                        }
+                        C2rChild::Complex(child) => {
+                            self.process_full_columns(input, spectra);
+                            crate::r2c::mixed_radix_c2r::execute_complex_rows(
+                                child.as_ref(),
+                                spectra,
+                                output,
+                                width_scratch,
+                            )?;
+                            self.transpose_executor.as_ref().unwrap().transpose(
+                                spectra,
+                                output,
+                                self.width,
+                                $row_count,
+                            );
+                        }
+                    }
                 }
                 Ok(())
             }
@@ -482,7 +593,8 @@ define_mixed_radix_neon_f!(
     "neon",
     ColumnButterfly3f,
     3,
-    mul_by_complex
+    mul_by_complex,
+    transpose_f32x4_4x3
 );
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f!(
@@ -490,14 +602,16 @@ define_mixed_radix_neon_f!(
     "fcma",
     ColumnFcmaButterfly3f,
     3,
-    fcmul_fcma
+    fcmul_fcma,
+    transpose_f32x4_4x3
 );
 define_mixed_radix_neon_f!(
     NeonC2RMixedRadix5f,
     "neon",
     ColumnButterfly5f,
     5,
-    mul_by_complex
+    mul_by_complex,
+    transpose_f32x4_4x5
 );
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f!(
@@ -505,14 +619,16 @@ define_mixed_radix_neon_f!(
     "fcma",
     ColumnFcmaButterfly5f,
     5,
-    fcmul_fcma
+    fcmul_fcma,
+    transpose_f32x4_4x5
 );
 define_mixed_radix_neon_f!(
     NeonC2RMixedRadix7f,
     "neon",
     ColumnButterfly7f,
     7,
-    mul_by_complex
+    mul_by_complex,
+    transpose_f32x4_4x7
 );
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f!(
@@ -520,14 +636,16 @@ define_mixed_radix_neon_f!(
     "fcma",
     ColumnFcmaButterfly7f,
     7,
-    fcmul_fcma
+    fcmul_fcma,
+    transpose_f32x4_4x7
 );
 define_mixed_radix_neon_f!(
     NeonC2RMixedRadix9f,
     "neon",
     ColumnButterfly9f,
     9,
-    mul_by_complex
+    mul_by_complex,
+    transpose_f32x4_4x9
 );
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f!(
@@ -535,14 +653,16 @@ define_mixed_radix_neon_f!(
     "fcma",
     ColumnFcmaButterfly9f,
     9,
-    fcmul_fcma
+    fcmul_fcma,
+    transpose_f32x4_4x9
 );
 define_mixed_radix_neon_f!(
     NeonC2RMixedRadix11f,
     "neon",
     ColumnButterfly11f,
     11,
-    mul_by_complex
+    mul_by_complex,
+    transpose_f32x4_4x11
 );
 #[cfg(feature = "fcma")]
 define_mixed_radix_neon_f!(
@@ -550,14 +670,15 @@ define_mixed_radix_neon_f!(
     "fcma",
     ColumnFcmaButterfly11f,
     11,
-    fcmul_fcma
+    fcmul_fcma,
+    transpose_f32x4_4x11
 );
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::dft::Dft;
-    use crate::{C2RFftExecutor, FftDirection, FftExecutor, Zaft};
+    use crate::{C2RFftExecutor, FftDirection, FftExecutor};
     use num_complex::Complex;
     use num_traits::Zero;
 
@@ -582,7 +703,8 @@ mod tests {
         }
 
         let local_r2c =
-            NeonC2RMixedRadix3f::new(Zaft::strategy(13, FftDirection::Inverse).unwrap()).unwrap();
+            NeonC2RMixedRadix3f::new(C2rChild::Real(crate::r2c::strategy_c2r(13).unwrap()))
+                .unwrap();
         let mut complex_output = vec![f32::zero(); 39];
         local_r2c.execute(&input_c, &mut complex_output).unwrap();
         println!("complex_output: {:?}", complex_output);
@@ -623,7 +745,7 @@ mod tests {
         }
 
         let local_r2c =
-            NeonC2RMixedRadix7f::new(Zaft::strategy(1, FftDirection::Inverse).unwrap()).unwrap();
+            NeonC2RMixedRadix7f::new(C2rChild::Real(crate::r2c::strategy_c2r(1).unwrap())).unwrap();
         let mut complex_output = vec![f32::zero(); 7];
         local_r2c.execute(&input_c, &mut complex_output).unwrap();
         println!("complex_output: {:?}", complex_output);
@@ -666,7 +788,7 @@ mod tests {
         }
 
         let local_r2c =
-            NeonC2RMixedRadix3f::new(Zaft::strategy(5, FftDirection::Inverse).unwrap()).unwrap();
+            NeonC2RMixedRadix3f::new(C2rChild::Real(crate::r2c::strategy_c2r(5).unwrap())).unwrap();
         let mut complex_output = vec![f32::zero(); 15];
         local_r2c.execute(&input_c, &mut complex_output).unwrap();
         println!("complex_output: {:?}", complex_output);
@@ -709,7 +831,7 @@ mod tests {
         }
 
         let local_r2c =
-            NeonC2RMixedRadix5f::new(Zaft::strategy(3, FftDirection::Inverse).unwrap()).unwrap();
+            NeonC2RMixedRadix5f::new(C2rChild::Real(crate::r2c::strategy_c2r(3).unwrap())).unwrap();
         let mut complex_output = vec![f32::zero(); 15];
         local_r2c.execute(&input_c, &mut complex_output).unwrap();
         println!("complex_output: {:?}", complex_output);
@@ -753,7 +875,7 @@ mod tests {
         }
 
         let local_r2c =
-            NeonC2RMixedRadix7f::new(Zaft::strategy(3, FftDirection::Inverse).unwrap()).unwrap();
+            NeonC2RMixedRadix7f::new(C2rChild::Real(crate::r2c::strategy_c2r(3).unwrap())).unwrap();
         let mut complex_output = vec![f32::zero(); 21];
         local_r2c.execute(&input_c, &mut complex_output).unwrap();
         println!("complex_output: {:?}", complex_output);

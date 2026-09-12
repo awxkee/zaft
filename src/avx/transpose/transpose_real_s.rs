@@ -34,7 +34,7 @@ use std::arch::x86_64::*;
 
 #[inline]
 #[target_feature(enable = "avx2")]
-fn transpose_8x8_f32(store: [AvxStoreF; 8]) -> [AvxStoreF; 8] {
+pub(crate) fn transpose_8x8_f32(store: [AvxStoreF; 8]) -> [AvxStoreF; 8] {
     let t0 = _mm256_unpacklo_ps(store[0].v, store[1].v);
     let t1 = _mm256_unpackhi_ps(store[0].v, store[1].v);
     let t2 = _mm256_unpacklo_ps(store[2].v, store[3].v);
