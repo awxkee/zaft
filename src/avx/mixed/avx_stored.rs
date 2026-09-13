@@ -68,6 +68,19 @@ impl AvxMaskD {
 }
 
 impl AvxStoreD {
+    /// Pack Re(conj(a) * b) from two consecutive complex vectors into one real vector.
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn conjugate_mul_real(a: [Self; 2], b: [Self; 2]) -> Self {
+        let ar = Self::raw(_mm256_unpacklo_pd(a[0].v, a[1].v));
+        let ai = Self::raw(_mm256_unpackhi_pd(a[0].v, a[1].v));
+        let br = Self::raw(_mm256_unpacklo_pd(b[0].v, b[1].v));
+        let bi = Self::raw(_mm256_unpackhi_pd(b[0].v, b[1].v));
+        let re = ar.mul_add(br, ai * bi);
+        // Unpacks yield indices 0, 2, 1, 3.
+        Self::raw(_mm256_permute4x64_pd::<0xd8>(re.v))
+    }
+
     #[inline]
     #[target_feature(enable = "avx2")]
     pub(crate) fn dup(p0: f64) -> AvxStoreD {

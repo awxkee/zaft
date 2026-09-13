@@ -31,11 +31,6 @@ use crate::r2c::R2CFftEvenInterceptor;
 #[cfg(target_arch = "wasm32")]
 use crate::r2c::R2CFftOddInterceptor;
 use crate::r2c::mixed_radix_r2c::MixedRadixR2cOdd;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::util::{
-    ALWAYS_BLUESTEIN_1000, ALWAYS_BLUESTEIN_2000, ALWAYS_BLUESTEIN_3000, ALWAYS_BLUESTEIN_4000,
-    ALWAYS_BLUESTEIN_5000, ALWAYS_BLUESTEIN_6000,
-};
 use crate::{FftDirection, FftSample, R2CFftExecutor, Zaft, ZaftError};
 use num_traits::AsPrimitive;
 use std::sync::Arc;
@@ -69,31 +64,11 @@ fn make_prime<T: FftSample>(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send
 where
     f64: AsPrimitive<T>,
 {
-    let convolve_prime = PrimeFactors::from_number(n as u64 - 1);
-    if n <= 6000 {
-        let bluesteins = [
-            ALWAYS_BLUESTEIN_1000.as_slice(),
-            ALWAYS_BLUESTEIN_2000.as_slice(),
-            ALWAYS_BLUESTEIN_3000.as_slice(),
-            ALWAYS_BLUESTEIN_4000.as_slice(),
-            ALWAYS_BLUESTEIN_5000.as_slice(),
-            ALWAYS_BLUESTEIN_6000.as_slice(),
-        ];
-        let subset = bluesteins[n / 1000];
-        if subset.contains(&n) {
-            return T::r2c_bluestein(n);
-        }
-        return T::r2c_raders(n);
-    }
-    // n-1 may result in Cunningham chain, and we want to avoid compute multiple prime numbers FFT at once
-    let big_factor = convolve_prime.factorization.iter().any(|x| x.0 > 31);
-    let new_prime = if !big_factor {
-        T::r2c_raders(n)
-    } else {
+    if Zaft::prime_uses_bluestein(n) {
         T::r2c_bluestein(n)
-    };
-    let fft_executor = new_prime?;
-    Ok(fft_executor)
+    } else {
+        T::r2c_raders(n)
+    }
 }
 
 pub(crate) fn strategy_r2c<T: FftSample>(

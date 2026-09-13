@@ -58,15 +58,15 @@ pub(crate) fn make_bluesteins_twiddles<T: Float + FftTrigonometry + 'static>(
 where
     f64: AsPrimitive<T>,
 {
-    let twice_len = destination
-        .len()
-        .checked_mul(2)
-        .ok_or(ZaftError::Overflow)?;
+    let len = destination.len();
+    let twice_len = len.checked_mul(2).ok_or(ZaftError::Overflow)?;
+    // Include the even-length midpoint, which has no distinct mirrored partner.
+    let computed_len = len / 2 + 1;
 
-    if destination.len() < u32::MAX as usize {
+    if len < u32::MAX as usize {
         let twice_len_divider = DividerU64::new(twice_len as u64);
 
-        for (i, e) in destination.iter_mut().enumerate() {
+        for (i, e) in destination[..computed_len].iter_mut().enumerate() {
             let i_squared = i as u64 * i as u64;
             let i_mod = i_squared % twice_len_divider;
             *e = compute_twiddle(i_mod as usize, twice_len, direction);
@@ -74,10 +74,24 @@ where
     } else {
         let twice_len_divider = DividerU128::new(twice_len as u128);
 
-        for (i, e) in destination.iter_mut().enumerate() {
+        for (i, e) in destination[..computed_len].iter_mut().enumerate() {
             let i_squared = i as u128 * i as u128;
             let i_mod = i_squared % twice_len_divider;
             *e = compute_twiddle(i_mod as usize, twice_len, direction);
+        }
+    }
+
+    // For either direction, w[N - i] = (-1)^N w[i]. Generate the remaining
+    // chirp by symmetry instead of evaluating another trigonometric pair.
+    let (computed, mirrored) = destination.split_at_mut(computed_len);
+    let source = computed[1..1 + mirrored.len()].iter().rev();
+    if len.is_multiple_of(2) {
+        for (dst, &src) in mirrored.iter_mut().zip(source) {
+            *dst = src;
+        }
+    } else {
+        for (dst, &src) in mirrored.iter_mut().zip(source) {
+            *dst = -src;
         }
     }
 
@@ -88,7 +102,7 @@ impl<T: FftSample> BluesteinFft<T>
 where
     f64: AsPrimitive<T>,
 {
-    pub fn new(
+    pub(crate) fn new(
         size: usize,
         convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
         fft_direction: FftDirection,

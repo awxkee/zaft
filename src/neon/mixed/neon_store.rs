@@ -49,6 +49,12 @@ pub(crate) struct NeonStoreFh {
 }
 
 impl NeonStoreD {
+    /// Sum adjacent lanes from self, followed by adjacent lanes from other.
+    #[inline(always)]
+    pub(crate) fn pairwise_add(self, other: Self) -> Self {
+        unsafe { Self::raw(vpaddq_f64(self.v, other.v)) }
+    }
+
     #[inline]
     pub(crate) fn raw(r: float64x2_t) -> NeonStoreD {
         NeonStoreD { v: r }
@@ -270,6 +276,12 @@ impl NeonStoreD {
 }
 
 impl NeonStoreF {
+    /// Sum adjacent lanes from self, followed by adjacent lanes from other.
+    #[inline(always)]
+    pub(crate) fn pairwise_add(self, other: Self) -> Self {
+        unsafe { Self::raw(vpaddq_f32(self.v, other.v)) }
+    }
+
     #[inline]
     pub(crate) fn raw(r: float32x4_t) -> NeonStoreF {
         NeonStoreF { v: r }

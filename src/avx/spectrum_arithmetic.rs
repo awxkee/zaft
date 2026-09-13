@@ -35,6 +35,63 @@ pub(crate) struct AvxSpectrumArithmetic<T> {
     pub(crate) phantom_data: PhantomData<T>,
 }
 
+macro_rules! real_projection {
+    ($ty:ty, $store:ty, $width:literal, $half:literal, $block:literal) => {
+        impl AvxSpectrumArithmetic<$ty> {
+            #[inline]
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn project_real(a: &[Complex<$ty>; $width], b: &[Complex<$ty>; $width]) -> $store {
+                let a0 = <$store>::from_complex_ref(a);
+                let a1 = <$store>::from_complex_ref(&a[$half..]);
+                let b0 = <$store>::from_complex_ref(b);
+                let b1 = <$store>::from_complex_ref(&b[$half..]);
+                <$store>::conjugate_mul_real([a0, a1], [b0, b1])
+            }
+
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn conjugate_mul_real_doubled_impl(
+                &self,
+                a: &[Complex<$ty>],
+                b: &[Complex<$ty>],
+                dst: &mut [$ty],
+            ) {
+                assert_eq!(a.len(), dst.len());
+                assert_eq!(b.len(), dst.len());
+                let (aa, a) = a.as_chunks::<$block>();
+                let (bb, b) = b.as_chunks::<$block>();
+                let (dd, dst) = dst.as_chunks_mut::<$block>();
+                for ((a, b), dst) in aa.iter().zip(bb).zip(dd) {
+                    let a = a.as_chunks::<$width>().0;
+                    let b = b.as_chunks::<$width>().0;
+                    // Four independent chains let loads/shuffles overlap the FMAs.
+                    let p0 = Self::project_real(&a[0], &b[0]);
+                    let p1 = Self::project_real(&a[1], &b[1]);
+                    let p2 = Self::project_real(&a[2], &b[2]);
+                    let p3 = Self::project_real(&a[3], &b[3]);
+                    (p0 + p0).write_real(dst);
+                    (p1 + p1).write_real(&mut dst[$width..]);
+                    (p2 + p2).write_real(&mut dst[2 * $width..]);
+                    (p3 + p3).write_real(&mut dst[3 * $width..]);
+                }
+                let (aa, a) = a.as_chunks::<$width>();
+                let (bb, b) = b.as_chunks::<$width>();
+                let (dd, dst) = dst.as_chunks_mut::<$width>();
+                for ((a, b), dst) in aa.iter().zip(bb).zip(dd) {
+                    let re = Self::project_real(a, b);
+                    (re + re).write_real(dst);
+                }
+                for ((dst, a), b) in dst.iter_mut().zip(a).zip(b) {
+                    let re = a.re.mul_add(b.re, a.im * b.im);
+                    *dst = re + re;
+                }
+            }
+        }
+    };
+}
+
+real_projection!(f32, AvxStoreF, 8, 4, 32);
+real_projection!(f64, AvxStoreD, 4, 2, 16);
+
 impl AvxSpectrumArithmetic<f32> {
     #[target_feature(enable = "avx2", enable = "fma")]
     fn mul_f32_avx(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [Complex<f32>]) {
@@ -357,6 +414,10 @@ impl AvxSpectrumArithmetic<f32> {
     }
 }
 impl ComplexArith<f32> for AvxSpectrumArithmetic<f32> {
+    fn conjugate_mul_real_doubled(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [f32]) {
+        unsafe { self.conjugate_mul_real_doubled_impl(a, b, dst) }
+    }
+
     fn mul(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [Complex<f32>]) {
         unsafe { self.mul_f32_avx(a, b, dst) }
     }
@@ -630,6 +691,10 @@ impl AvxSpectrumArithmetic<f64> {
 }
 
 impl ComplexArith<f64> for AvxSpectrumArithmetic<f64> {
+    fn conjugate_mul_real_doubled(&self, a: &[Complex<f64>], b: &[Complex<f64>], dst: &mut [f64]) {
+        unsafe { self.conjugate_mul_real_doubled_impl(a, b, dst) }
+    }
+
     fn mul(&self, a: &[Complex<f64>], b: &[Complex<f64>], dst: &mut [Complex<f64>]) {
         unsafe { self.mul_f64_avx(a, b, dst) }
     }

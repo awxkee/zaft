@@ -26,6 +26,8 @@
  * // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+use crate::prime_factors::PrimeFactors;
+use crate::r2c::c2r_bluestein::BluesteinC2r;
 use crate::r2c::c2r_twiddles::C2RTwiddlesFactory;
 use crate::r2c::{C2RFftEvenInterceptor, C2RFftOddInterceptor, OneSizedRealFft};
 use crate::{C2RFftExecutor, FftDirection, FftSample, Zaft, ZaftError};
@@ -35,6 +37,32 @@ use std::sync::Arc;
 // Keep small row batches together: recursively invoking real children below
 // this size costs more than their reduced arithmetic on the measured NEON path.
 const COMPLEX_LEAF_LIMIT: usize = 512;
+
+fn odd_leaf<T: FftSample>(len: usize) -> Result<Arc<dyn C2RFftExecutor<T> + Send + Sync>, ZaftError>
+where
+    f64: AsPrimitive<T>,
+{
+    // Preserve direct codelets before considering the shared prime policy.
+    if let Some(fft) = Zaft::plan_butterfly(len, FftDirection::Inverse) {
+        return C2RFftOddInterceptor::install(len, fft?)
+            .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<T> + Send + Sync>);
+    }
+    if PrimeFactors::from_number(len as u64).is_prime() {
+        #[cfg(not(target_arch = "wasm32"))]
+        let use_bluestein = Zaft::prime_uses_bluestein(len);
+        // The complex wasm planner already uses Bluestein for all remaining primes.
+        #[cfg(target_arch = "wasm32")]
+        let use_bluestein = true;
+        if use_bluestein {
+            let min_len = crate::util::checked_bluestein_rfft_convolution_len(len)?;
+            let inner_len = crate::bluestein::choose_bluestein_inner_len(min_len)?;
+            let inner = Zaft::strategy(inner_len, FftDirection::Inverse)?;
+            return Ok(Arc::new(BluesteinC2r::new(len, inner)?));
+        }
+    }
+    C2RFftOddInterceptor::install(len, Zaft::strategy(len, FftDirection::Inverse)?)
+        .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<T> + Send + Sync>)
+}
 
 fn mixed_radix_child<T: FftSample + C2RTwiddlesFactory<T>>(
     len: usize,
@@ -51,13 +79,9 @@ where
             FftDirection::Inverse,
         )?));
     }
-    // Keep non-codelet leaf widths bounded too: a complex leaf still accepts
-    // half-spectrum input through the real interceptor, without deep recursion.
+    // Stop real recursion at small widths while retaining the prime policy.
     let child = if width <= COMPLEX_LEAF_LIMIT {
-        Arc::new(C2RFftOddInterceptor::install(
-            width,
-            Zaft::strategy(width, FftDirection::Inverse)?,
-        )?) as Arc<dyn C2RFftExecutor<T> + Send + Sync>
+        odd_leaf(width)?
     } else {
         strategy_c2r(width)?
     };
@@ -118,7 +142,6 @@ where
             }
         }
 
-        C2RFftOddInterceptor::install(len, Zaft::strategy(len, FftDirection::Inverse)?)
-            .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<T> + Send + Sync>)
+        odd_leaf(len)
     }
 }

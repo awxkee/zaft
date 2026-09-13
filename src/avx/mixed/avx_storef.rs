@@ -137,6 +137,21 @@ impl SseStoreF {
 }
 
 impl AvxStoreF {
+    /// Pack Re(conj(a) * b) from two consecutive complex vectors into one real vector.
+    #[inline]
+    #[target_feature(enable = "avx2", enable = "fma")]
+    pub(crate) fn conjugate_mul_real(a: [Self; 2], b: [Self; 2]) -> Self {
+        let ar = Self::raw(_mm256_shuffle_ps::<0x88>(a[0].v, a[1].v));
+        let ai = Self::raw(_mm256_shuffle_ps::<0xdd>(a[0].v, a[1].v));
+        let br = Self::raw(_mm256_shuffle_ps::<0x88>(b[0].v, b[1].v));
+        let bi = Self::raw(_mm256_shuffle_ps::<0xdd>(b[0].v, b[1].v));
+        let re = ar.mul_add(br, ai * bi);
+        // Shuffles yield pairs in order 0, 2, 1, 3. Restore contiguous outputs.
+        Self::raw(_mm256_castpd_ps(_mm256_permute4x64_pd::<0xd8>(
+            _mm256_castps_pd(re.v),
+        )))
+    }
+
     #[inline(always)]
     pub(crate) fn neg(&self) -> AvxStoreF {
         unsafe {
@@ -418,6 +433,11 @@ impl AvxStoreF {
             return self.write(to_ref);
         }
         unsafe { _mm256_maskstore_ps(to_ref.as_mut_ptr().cast(), mask.v, self.v) }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_real(&self, output: &mut [f32]) {
+        unsafe { _mm256_storeu_ps(output.as_mut_ptr(), self.v) }
     }
 
     /// Stores the selected real lanes without touching following values.
