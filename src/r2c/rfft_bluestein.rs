@@ -190,6 +190,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::bluestein::BluesteinFft;
     use crate::dft::Dft;
     use crate::r2c::rfft_bluestein::BluesteinRfft;
     use crate::{FftDirection, FftExecutor, R2CFftExecutor, Zaft};
@@ -197,7 +198,7 @@ mod tests {
     use num_traits::Zero;
 
     /// Runs `rows` real rows of length `n` through Bluestein's rfft with an inner
-    /// FFT of `inner_len` and compares every bin with the plain complex DFT.
+    /// FFT of `inner_len` and compares every bin with a complex reference transform.
     fn check(n: usize, inner_len: usize, rows: usize) {
         let src = (0..n * rows)
             .map(|i| ((i * 7919 + 13) % 97) as f64 * 0.37 - 17.0)
@@ -215,8 +216,26 @@ mod tests {
             .iter()
             .map(|x| Complex::new(*x, 0.0))
             .collect::<Vec<_>>();
-        let dft = Dft::new(n, FftDirection::Forward).unwrap();
-        dft.execute(&mut reference).unwrap();
+        if n <= 4096 {
+            Dft::new(n, FftDirection::Forward)
+                .unwrap()
+                .execute(&mut reference)
+                .unwrap();
+        } else {
+            // Use a different embedding for the large reference transforms.
+            BluesteinFft::new(
+                n,
+                Zaft::strategy((2 * n - 2).next_power_of_two(), FftDirection::Forward).unwrap(),
+                FftDirection::Forward,
+            )
+            .unwrap()
+            .execute(&mut reference)
+            .unwrap();
+        }
+        let tolerance = reference
+            .iter()
+            .map(|x| x.norm() * 1e-11)
+            .fold(1e-8, f64::max);
 
         let mut output = vec![Complex::<f64>::zero(); (n / 2 + 1) * rows];
         mx.execute(&src, &mut output).unwrap();
@@ -245,13 +264,13 @@ mod tests {
                     "f32 n {n} inner {inner_len} row {row} bin {idx}: {a:?} != {b_f32:?}",
                 );
                 assert!(
-                    (a.re - b.re).abs() < 1e-8,
+                    (a.re - b.re).abs() < tolerance,
                     "n {n} inner {inner_len} row {row} bin {idx}: re {} != {}",
                     a.re,
                     b.re,
                 );
                 assert!(
-                    (a.im - b.im).abs() < 1e-8,
+                    (a.im - b.im).abs() < tolerance,
                     "n {n} inner {inner_len} row {row} bin {idx}: im {} != {}",
                     a.im,
                     b.im,
@@ -265,6 +284,16 @@ mod tests {
         // `N + N / 2` is the smallest inner length the pruned kernel allows.
         for n in [3usize, 11, 47, 97, 101, 211, 1009] {
             check(n, n + n / 2, 1);
+        }
+    }
+
+    #[test]
+    fn test_bluestein_rfft_selected_inner_len() {
+        for n in [
+            1, 2, 3, 47, 53, 59, 103, 149, 223, 263, 317, 439, 709, 1019, 32771, 65539,
+        ] {
+            let inner_len = crate::bluestein::choose_bluestein_inner_len(n + n / 2).unwrap();
+            check(n, inner_len, 2);
         }
     }
 

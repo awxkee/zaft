@@ -37,6 +37,9 @@ use num_complex::Complex;
 use num_traits::{AsPrimitive, Float, Zero};
 use std::sync::Arc;
 
+mod inner_len;
+pub(crate) use inner_len::choose_bluestein_inner_len;
+
 pub(crate) struct BluesteinFft<T> {
     convolve_fft: Arc<dyn FftExecutor<T> + Send + Sync>,
     convolve_fft_twiddles: Vec<Complex<T>>,

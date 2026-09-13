@@ -66,6 +66,8 @@ pub(crate) use real_to_complex::R2CFftEvenInterceptor;
 pub use real_to_complex::R2CFftExecutor;
 #[cfg(target_arch = "wasm32")]
 pub(crate) use real_to_complex::R2CFftOddInterceptor;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) use rfft_bluestein::BluesteinRfft;
 use std::marker::PhantomData;
 pub(crate) use strategy_c2r::strategy_c2r;
 pub(crate) use strategy_r2c::strategy_r2c;
