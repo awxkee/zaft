@@ -834,7 +834,25 @@ impl Zaft {
         if let Some(cached) = T::has_cached_prime(n, direction) {
             return Ok(cached);
         }
-        let convolve_prime = PrimeFactors::from_number(n as u64 - 1);
+        if n <= 6000 {
+            if Zaft::prime_uses_bluestein(n) {
+                return Zaft::make_bluestein(n, direction);
+            }
+            return Zaft::make_raders(n, direction);
+        }
+        let new_prime = if Zaft::prime_uses_bluestein(n) {
+            Zaft::make_bluestein(n, direction)
+        } else {
+            Zaft::make_raders(n, direction)
+        };
+        let fft_executor = new_prime?;
+        T::put_prime_to_cache(direction, fft_executor.clone());
+        Ok(fft_executor)
+    }
+
+    /// Shared C2C/R2C/C2R policy for primes not handled by direct codelets.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn prime_uses_bluestein(n: usize) -> bool {
         if n <= 6000 {
             let bluesteins = [
                 ALWAYS_BLUESTEIN_1000.as_slice(),
@@ -844,22 +862,13 @@ impl Zaft {
                 ALWAYS_BLUESTEIN_5000.as_slice(),
                 ALWAYS_BLUESTEIN_6000.as_slice(),
             ];
-            let subset = bluesteins[n / 1000];
-            if subset.contains(&n) {
-                return Zaft::make_bluestein(n, direction);
-            }
-            return Zaft::make_raders(n, direction);
+            return bluesteins[n / 1000].contains(&n);
         }
-        // n-1 may result in Cunningham chain, and we want to avoid compute multiple prime numbers FFT at once
-        let big_factor = convolve_prime.factorization.iter().any(|x| x.0 > 31);
-        let new_prime = if !big_factor {
-            Zaft::make_raders(n, direction)
-        } else {
-            Zaft::make_bluestein(n, direction)
-        };
-        let fft_executor = new_prime?;
-        T::put_prime_to_cache(direction, fft_executor.clone());
-        Ok(fft_executor)
+        // Avoid recursively transforming large primes in a Rader convolution.
+        PrimeFactors::from_number(n as u64 - 1)
+            .factorization
+            .iter()
+            .any(|x| x.0 > 31)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

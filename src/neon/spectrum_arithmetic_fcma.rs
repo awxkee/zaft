@@ -382,6 +382,10 @@ impl NeonFcmaSpectrumArithmetic<f32> {
 }
 
 impl ComplexArith<f32> for NeonFcmaSpectrumArithmetic<f32> {
+    fn conjugate_mul_real_doubled(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [f32]) {
+        super::spectrum_arithmetic::conjugate_mul_real_doubled_f32(a, b, dst);
+    }
+
     fn mul(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [Complex<f32>]) {
         unsafe { self.mul_f32(a, b, dst) }
     }
@@ -646,6 +650,10 @@ impl NeonFcmaSpectrumArithmetic<f64> {
 }
 
 impl ComplexArith<f64> for NeonFcmaSpectrumArithmetic<f64> {
+    fn conjugate_mul_real_doubled(&self, a: &[Complex<f64>], b: &[Complex<f64>], dst: &mut [f64]) {
+        super::spectrum_arithmetic::conjugate_mul_real_doubled_f64(a, b, dst);
+    }
+
     fn mul(&self, a: &[Complex<f64>], b: &[Complex<f64>], dst: &mut [Complex<f64>]) {
         unsafe { self.mul_f64(a, b, dst) }
     }

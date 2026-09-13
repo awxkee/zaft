@@ -36,7 +36,55 @@ pub(crate) struct NeonSpectrumArithmetic<T> {
     pub(crate) phantom_data: PhantomData<T>,
 }
 
+// Keep real/imaginary pairs interleaved: ordinary loads and pairwise adds
+// avoid the deinterleaving loads needed by a lane-wise FMA implementation.
+macro_rules! real_projection {
+    ($name:ident, $ty:ty, $store:ty, $width:literal, $half:literal, $block:literal) => {
+        pub(super) fn $name(a: &[Complex<$ty>], b: &[Complex<$ty>], dst: &mut [$ty]) {
+            assert_eq!(a.len(), dst.len());
+            assert_eq!(b.len(), dst.len());
+            let (aa, a) = a.as_chunks::<$block>();
+            let (bb, b) = b.as_chunks::<$block>();
+            let (dd, dst) = dst.as_chunks_mut::<$block>();
+            for ((a, b), dst) in aa.iter().zip(bb).zip(dd) {
+                // Two independent output vectors expose multiply/add parallelism.
+                // Chunk sizes cover every complete load and store.
+                for i in [0, $width] {
+                    let a0 = <$store>::from_complex_ref(&a[i..]);
+                    let a1 = <$store>::from_complex_ref(&a[i + $half..]);
+                    let b0 = <$store>::from_complex_ref(&b[i..]);
+                    let b1 = <$store>::from_complex_ref(&b[i + $half..]);
+                    let re = (a0 * b0).pairwise_add(a1 * b1);
+                    (re + re).write_real(&mut dst[i..]);
+                }
+            }
+            let (aa, a) = a.as_chunks::<$width>();
+            let (bb, b) = b.as_chunks::<$width>();
+            let (dd, dst) = dst.as_chunks_mut::<$width>();
+            for ((a, b), dst) in aa.iter().zip(bb).zip(dd) {
+                let a0 = <$store>::from_complex_ref(a);
+                let a1 = <$store>::from_complex_ref(&a[$half..]);
+                let b0 = <$store>::from_complex_ref(b);
+                let b1 = <$store>::from_complex_ref(&b[$half..]);
+                let re = (a0 * b0).pairwise_add(a1 * b1);
+                (re + re).write_real(dst);
+            }
+            for ((dst, a), b) in dst.iter_mut().zip(a).zip(b) {
+                let re = a.re * b.re + a.im * b.im;
+                *dst = re + re;
+            }
+        }
+    };
+}
+
+real_projection!(conjugate_mul_real_doubled_f32, f32, NeonStoreF, 4, 2, 8);
+real_projection!(conjugate_mul_real_doubled_f64, f64, NeonStoreD, 2, 1, 4);
+
 impl ComplexArith<f32> for NeonSpectrumArithmetic<f32> {
+    fn conjugate_mul_real_doubled(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [f32]) {
+        conjugate_mul_real_doubled_f32(a, b, dst);
+    }
+
     fn mul(&self, a: &[Complex<f32>], b: &[Complex<f32>], dst: &mut [Complex<f32>]) {
         for ((dst, src), twiddle) in dst
             .as_chunks_mut::<8>()
@@ -340,6 +388,10 @@ impl ComplexArith<f32> for NeonSpectrumArithmetic<f32> {
 }
 
 impl ComplexArith<f64> for NeonSpectrumArithmetic<f64> {
+    fn conjugate_mul_real_doubled(&self, a: &[Complex<f64>], b: &[Complex<f64>], dst: &mut [f64]) {
+        conjugate_mul_real_doubled_f64(a, b, dst);
+    }
+
     fn mul(&self, a: &[Complex<f64>], b: &[Complex<f64>], dst: &mut [Complex<f64>]) {
         for ((dst, src), twiddle) in dst
             .as_chunks_mut::<4>()

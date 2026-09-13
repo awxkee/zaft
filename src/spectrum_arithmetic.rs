@@ -53,6 +53,8 @@ pub(crate) trait ComplexArith<T> {
     fn mul_conjugate_in_place(&self, dst: &mut [Complex<T>], b: &[Complex<T>]);
     // a.conj() * b
     fn conjugate_mul_by_b(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [Complex<T>]);
+    // 2 * Re(a.conj() * b). All three slices must have the same length.
+    fn conjugate_mul_real_doubled(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [T]);
 }
 
 pub(crate) trait ComplexArithFactory<T> {
@@ -169,6 +171,15 @@ where
             *buffer_entry = c_conj_mul_fast(*inner_entry, *twiddle);
         }
     }
+
+    fn conjugate_mul_real_doubled(&self, a: &[Complex<T>], b: &[Complex<T>], dst: &mut [T]) {
+        assert_eq!(a.len(), dst.len());
+        assert_eq!(b.len(), dst.len());
+        for ((dst, a), b) in dst.iter_mut().zip(a).zip(b) {
+            let re = a.re * b.re + a.im * b.im;
+            *dst = re + re;
+        }
+    }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -241,4 +252,141 @@ mod tests {
 
     test_real_chirp!(real_chirp_f32, f32);
     test_real_chirp!(real_chirp_f64, f64);
+
+    macro_rules! test_real_projection {
+        ($name:ident, $ty:ty) => {
+            #[test]
+            fn $name() {
+                #[allow(unused_mut)]
+                let mut backends: Vec<(Box<dyn ComplexArith<$ty>>, bool)> = vec![(
+                    Box::new(ScalarSpectrumArithmetic {
+                        phantom_data: PhantomData,
+                    }),
+                    false,
+                )];
+                #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+                backends.push((
+                    Box::new(crate::neon::NeonSpectrumArithmetic {
+                        phantom_data: PhantomData,
+                    }),
+                    false,
+                ));
+                #[cfg(all(target_arch = "aarch64", feature = "fcma"))]
+                if std::arch::is_aarch64_feature_detected!("fcma") {
+                    backends.push((
+                        Box::new(crate::neon::NeonFcmaSpectrumArithmetic {
+                            phantom_data: PhantomData,
+                        }),
+                        false,
+                    ));
+                }
+                #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+                if std::arch::is_x86_feature_detected!("avx2")
+                    && std::arch::is_x86_feature_detected!("fma")
+                {
+                    backends.push((
+                        Box::new(crate::avx::AvxSpectrumArithmetic {
+                            phantom_data: PhantomData,
+                        }),
+                        true,
+                    ));
+                }
+                for (backend, (ops, fused)) in backends.iter().enumerate() {
+                    // Every unrolled/vector remainder, independently unaligned
+                    // inputs/output, and guards beyond the requested stores.
+                    for n in (0..=97).chain([127, 257]) {
+                        for offset in [0, 1, 3] {
+                            let a_offset = (offset + 1) % 4;
+                            let b_offset = (offset + 2) % 4;
+                            let a: Vec<_> = (0..n + a_offset)
+                                .map(|i| {
+                                    Complex::new(
+                                        ((i * 17 % 97) as $ty - 48.0) / 63.0,
+                                        ((i * 31 % 101) as $ty - 50.0) / 63.0,
+                                    )
+                                })
+                                .collect();
+                            let b: Vec<_> = (0..n + b_offset)
+                                .map(|i| {
+                                    Complex::new(
+                                        (i as f64 * 0.37).cos() as $ty,
+                                        (i as f64 * 0.37).sin() as $ty,
+                                    )
+                                })
+                                .collect();
+                            let guard = 123.0;
+                            let mut output = vec![guard; n + offset + 3];
+                            ops.conjugate_mul_real_doubled(
+                                &a[a_offset..],
+                                &b[b_offset..],
+                                &mut output[offset..offset + n],
+                            );
+                            for i in 0..n {
+                                let a = a[a_offset + i];
+                                let b = b[b_offset + i];
+                                let re = if *fused {
+                                    a.re.mul_add(b.re, a.im * b.im)
+                                } else {
+                                    a.re * b.re + a.im * b.im
+                                };
+                                assert_eq!(
+                                    output[offset + i].to_bits(),
+                                    (re + re).to_bits(),
+                                    "backend {backend}, n {n}, offset {offset}, index {i}"
+                                );
+                            }
+                            assert!(output[..offset].iter().all(|&v| v == guard));
+                            assert!(output[offset + n..].iter().all(|&v| v == guard));
+                        }
+                    }
+                    // Cancellation distinguishes FMA from two separately rounded
+                    // products. Include zeros, subnormals and non-finite values.
+                    let cases = [
+                        (
+                            Complex::new(1.0 + <$ty>::EPSILON, -1.0),
+                            Complex::new(1.0 - <$ty>::EPSILON, 1.0),
+                        ),
+                        (Complex::new(-0.0, -0.0), Complex::new(1.0, 1.0)),
+                        (
+                            Complex::new(<$ty>::MIN_POSITIVE, 0.0),
+                            Complex::new(0.5, 0.0),
+                        ),
+                        (Complex::new(<$ty>::INFINITY, 1.0), Complex::new(1.0, 0.0)),
+                        (Complex::new(<$ty>::NAN, 1.0), Complex::new(1.0, 1.0)),
+                    ];
+                    // Rotate cases across all vector lanes and the scalar tail.
+                    for shift in 0..cases.len() {
+                        let a: Vec<_> = (0..65)
+                            .map(|i| cases[(i + shift) % cases.len()].0)
+                            .collect();
+                        let b: Vec<_> = (0..65)
+                            .map(|i| cases[(i + shift) % cases.len()].1)
+                            .collect();
+                        let mut output = vec![0.0; a.len()];
+                        ops.conjugate_mul_real_doubled(&a, &b, &mut output);
+                        for ((actual, a), b) in output.into_iter().zip(a).zip(b) {
+                            let re = if *fused {
+                                a.re.mul_add(b.re, a.im * b.im)
+                            } else {
+                                a.re * b.re + a.im * b.im
+                            };
+                            let expected = re + re;
+                            if expected.is_nan() {
+                                assert!(actual.is_nan());
+                            } else {
+                                assert_eq!(
+                                    actual.to_bits(),
+                                    expected.to_bits(),
+                                    "backend {backend}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    test_real_projection!(real_projection_f32, f32);
+    test_real_projection!(real_projection_f64, f64);
 }
