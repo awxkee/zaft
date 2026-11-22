@@ -1026,6 +1026,17 @@ impl Zaft {
         None
     }
 
+    fn preferred_butterfly<T: FftSample>(
+        n: usize,
+        direction: FftDirection,
+    ) -> Option<Result<Arc<dyn FftExecutor<T> + Send + Sync>, ZaftError>> {
+        if n <= 512 || matches!(n, 576 | 1024 | 1152 | 1296 | 1536 | 1800 | 2048) {
+            Self::plan_butterfly(n, direction)
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn strategy<T: FftSample>(
         n: usize,
         fft_direction: FftDirection,
@@ -1036,16 +1047,7 @@ impl Zaft {
         if n == 0 {
             return Err(ZaftError::ZeroSizedFft);
         }
-        if (n <= 512
-            || n == 576
-            || n == 1024
-            || n == 1152
-            || n == 1296
-            || n == 1536
-            || n == 1800
-            || n == 2048)
-            && let Some(bf) = Zaft::plan_butterfly(n, fft_direction)
-        {
+        if let Some(bf) = Zaft::preferred_butterfly(n, fft_direction) {
             return bf;
         }
         let prime_factors = PrimeFactors::from_number(n as u64);

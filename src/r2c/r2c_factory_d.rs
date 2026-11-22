@@ -36,6 +36,32 @@ use crate::{FftDirection, Zaft};
 use crate::{FftExecutor, R2CFftExecutor, ZaftError};
 use std::sync::Arc;
 
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "avx")
+))]
+pub(super) fn can_fuse_even_r2c_f64(length: usize) -> bool {
+    if length < 1024 || !length.is_power_of_two() {
+        return false;
+    }
+    let packed_length = length / 2;
+    // Use fusion where the complex planner already chooses radix 8. The
+    // packed lengths below these ranges can use fixed-size codelets.
+    #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+    {
+        #[cfg(feature = "fcma")]
+        if std::arch::is_aarch64_feature_detected!("fcma") {
+            return false;
+        }
+        packed_length.trailing_zeros() % 3 != 1
+    }
+    #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+    {
+        use crate::util::{has_valid_avx, has_valid_avx512vl};
+        packed_length >= 2048 && packed_length != 4096 && has_valid_avx() && !has_valid_avx512vl()
+    }
+}
+
 macro_rules! make_default_butterfly {
     ($scalar_name: ident) => {{
         use crate::FftDirection;
@@ -142,6 +168,26 @@ macro_rules! make_vec_default_butterfly2 {
 }
 
 impl R2CAlgorithmFactory<f64> for f64 {
+    #[cfg(any(
+        all(target_arch = "aarch64", feature = "neon"),
+        all(target_arch = "x86_64", feature = "avx")
+    ))]
+    fn fused_even_r2c(
+        length: usize,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<f64> + Send + Sync>>, ZaftError> {
+        if !can_fuse_even_r2c_f64(length) {
+            return Ok(None);
+        }
+
+        let width = Zaft::strategy(length / 16, FftDirection::Forward)?;
+        #[cfg(all(target_arch = "aarch64", feature = "neon"))]
+        let child = crate::neon::NeonMixedRadix8::new(width)?;
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        let child = crate::avx::AvxMixedRadix8d::new(width)?;
+        let plan = super::fused_even_r2c::FusedEvenR2c::new(child)?;
+        Ok(Some(Arc::new(plan)))
+    }
+
     fn r2c_butterfly1() -> Arc<dyn R2CFftExecutor<f64> + Send + Sync> {
         Arc::new(OneSizedRealFft {
             phantom_data: Default::default(),

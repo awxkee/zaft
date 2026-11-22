@@ -865,6 +865,10 @@ define_mixed_radix_neon_d!(
     8,
     mul_by_complex
 );
+
+#[path = "even_r2c.rs"]
+mod even_r2c;
+
 define_mixed_radix_neon_d!(
     NeonMixedRadix9,
     "neon",

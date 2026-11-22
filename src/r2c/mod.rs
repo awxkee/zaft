@@ -38,6 +38,11 @@ mod c2r_twiddles;
     all(target_arch = "aarch64", feature = "neon"),
     all(target_arch = "x86_64", feature = "avx")
 ))]
+mod fused_even_r2c;
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "avx")
+))]
 pub(crate) mod mixed_radix_c2r;
 mod mixed_radix_r2c;
 mod r2c_factory;
@@ -58,6 +63,11 @@ pub use c2r::C2RFftExecutor;
 pub(crate) use c2r_factory::{C2RAlgorithmFactory, C2rChild};
 #[allow(unused_imports)]
 pub(crate) use c2r_odd::{C2RFftOddInterceptor, C2ROddExpander, C2ROddExpanderFactory};
+#[cfg(any(
+    all(target_arch = "aarch64", feature = "neon"),
+    all(target_arch = "x86_64", feature = "avx")
+))]
+pub(crate) use fused_even_r2c::FusedEvenR2cPlan;
 use num_complex::Complex;
 use num_traits::AsPrimitive;
 pub(crate) use r2c_factory::R2CAlgorithmFactory;
