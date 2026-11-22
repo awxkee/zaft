@@ -57,11 +57,49 @@
 use crate::err::try_vec;
 use crate::neon::mixed::NeonStoreD;
 use crate::r2c::C2rChild;
+use crate::r2c::mixed_radix_c2r::{C2RPairPacking, peaks_are_balanced};
 use crate::transpose::{TransposeExecutorRealInv, TransposeFactory};
 use crate::util::compute_twiddle;
 use crate::{C2RFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
+use std::arch::aarch64::{vabsq_f64, vdupq_n_f64, vmaxq_f64, vmaxvq_f64};
+
+impl C2RPairPacking for f64 {
+    #[inline]
+    fn pack_pair(a: &[Complex<f64>], b: &[Complex<f64>], packed: &mut [Complex<f64>]) -> bool {
+        // SAFETY: The AArch64 mixed-radix plans use NEON.
+        unsafe { pack_f64(a, b, packed) }
+    }
+}
+
+#[inline]
+#[target_feature(enable = "neon")]
+fn pack_f64(a: &[Complex<f64>], b: &[Complex<f64>], packed: &mut [Complex<f64>]) -> bool {
+    let (positive, negative) = packed.split_at_mut(a.len());
+    positive[0] = Complex::new(a[0].re, b[0].re);
+    let mut a_peaks = vdupq_n_f64(a[0].re.abs());
+    let mut b_peaks = vdupq_n_f64(b[0].re.abs());
+    let negate_imag = NeonStoreD::conj_flag();
+    let negate_real = negate_imag.reverse_complex_elements();
+
+    for (((a, b), positive), negative) in a[1..]
+        .iter()
+        .zip(&b[1..])
+        .zip(&mut positive[1..])
+        .zip(negative.iter_mut().rev())
+    {
+        let a = NeonStoreD::from_complex(a);
+        let b = NeonStoreD::from_complex(b);
+        a_peaks = vmaxq_f64(a_peaks, vabsq_f64(a.v));
+        b_peaks = vmaxq_f64(b_peaks, vabsq_f64(b.v));
+
+        let swapped_b = b.reverse_complex_elements();
+        (a + swapped_b.xor(negate_real)).write_single(positive);
+        (swapped_b + a.xor(negate_imag)).write_single(negative);
+    }
+    peaks_are_balanced(vmaxvq_f64(a_peaks), vmaxvq_f64(b_peaks))
+}
 
 macro_rules! define_mixed_radix_neon_d {
     ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $mul: ident, $transpose: ident) => {
@@ -85,6 +123,11 @@ macro_rules! define_mixed_radix_neon_d {
                 let (width, child_scratch_length, complex_leaf) = match &width_executor {
                     C2rChild::Complex(child) => (child.length(), child.scratch_length(), true),
                     C2rChild::Real(child) => (child.real_length(), child.complex_scratch_length(), false),
+                    C2rChild::Paired { real, complex } => (
+                        real.real_length(),
+                        real.complex_scratch_length().max(complex.scratch_length()),
+                        false,
+                    ),
                 };
                 let spectrum_width = width / 2 + 1;
                 const ROW_COUNT: usize = $row_count;
@@ -430,6 +473,27 @@ macro_rules! define_mixed_radix_neon_d {
                                 width_scratch,
                                 $row_count,
                             )?;
+                            self.transpose_real_rows(spectra, output);
+                        }
+                        C2rChild::Paired { real, complex } => {
+                            self.process_columns(input, spectra);
+                            if !crate::r2c::mixed_radix_c2r::execute_paired_rows(
+                                real.as_ref(),
+                                complex.as_ref(),
+                                spectra,
+                                output,
+                                width_scratch,
+                                $row_count,
+                            )? {
+                                self.process_columns(input, spectra);
+                                crate::r2c::mixed_radix_c2r::execute_rows(
+                                    real.as_ref(),
+                                    spectra,
+                                    output,
+                                    width_scratch,
+                                    $row_count,
+                                )?;
+                            }
                             self.transpose_real_rows(spectra, output);
                         }
                         C2rChild::Complex(child) => {

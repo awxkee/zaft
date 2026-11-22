@@ -2,7 +2,7 @@ workspace = { members = ["app", "zaft-js", "zaft-py"], exclude = ["fuzz"] }
 
 [package]
 name = "zaft"
-version = "0.3.16"
+version = "0.3.17"
 edition = "2024"
 description = "Fast fourier transform"
 readme = "README.md"
@@ -11,7 +11,6 @@ license = "BSD-3-Clause OR Apache-2.0"
 authors = ["Radzivon Bartoshyk"]
 documentation = "https://github.com/awxkee/zaft"
 categories = ["algorithms", "science"]
-homepage = "https://github.com/awxkee/zaft"
 repository = "https://github.com/awxkee/zaft"
 exclude = ["*.jpg", "/assets", "*.png", "*.sh", "/assets/*", ".github"]
 rust-version = "1.89.0"

@@ -29,12 +29,49 @@
 #![allow(clippy::modulo_one)]
 use crate::err::try_vec;
 use crate::neon::mixed::neon_store::NeonStoreF;
-use crate::transpose::{TransposeExecutor, TransposeFactory};
+use crate::neon::util::v_transpose_complex_f32;
 use crate::util::compute_twiddle;
 use crate::{FftExecutor, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
-use num_traits::Zero;
+use num_traits::{Float, Zero};
 use std::sync::Arc;
+
+#[inline(always)]
+fn transpose_spectrum_tail<T: Float, const RADIX: usize, const RETAINED: usize>(
+    src: &[Complex<T>],
+    dst: &mut [Complex<T>],
+    width: usize,
+    first_column: usize,
+) {
+    let (columns, center) = dst.as_chunks_mut::<RADIX>();
+    debug_assert_eq!(src.len(), RETAINED * width);
+    debug_assert_eq!(first_column + columns.len(), width / 2);
+    debug_assert_eq!(
+        center.len(),
+        if width.is_multiple_of(2) { 1 } else { RETAINED }
+    );
+
+    for (x, column) in (first_column..).zip(columns) {
+        let mirrored_x = width - 1 - x;
+        // The first RETAINED bins come from column x. Hermitian symmetry
+        // supplies the others from column width - 1 - x in reverse row order.
+        let (retained, mirrored) = column.split_at_mut(RETAINED);
+        for (y, value) in retained.iter_mut().enumerate() {
+            *value = unsafe { *src.get_unchecked(y * width + x) };
+        }
+        for (y, value) in (1..RETAINED).rev().zip(mirrored) {
+            *value = unsafe { src.get_unchecked(y * width + mirrored_x).conj() };
+        }
+    }
+
+    // At even widths only the Nyquist bin remains. At odd widths the
+    // center column ends at the last retained bin.
+    for (y, value) in center.iter_mut().enumerate() {
+        unsafe {
+            *value = *src.get_unchecked(y * width + width / 2);
+        }
+    }
+}
 
 macro_rules! define_mixed_radix_neon_d_rdft {
     ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
@@ -44,8 +81,6 @@ macro_rules! define_mixed_radix_neon_d_rdft {
             twiddles: Vec<NeonStoreD>,
             width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             width: usize,
-            height: usize,
-            transpose_executor: Box<dyn TransposeExecutor<f64> + Send + Sync>,
             inner_bf: $bf_name,
             width_scratch_length: usize,
             second_stage_len: usize,
@@ -90,8 +125,6 @@ macro_rules! define_mixed_radix_neon_d_rdft {
                     }
                 }
 
-                let to_remove_second_stage = (width - 1) / 2;
-
                 let second_stage_len = $complex_row_count * width;
                 let execution_length = width * ROW_COUNT;
                 let width_scratch_length = if execution_length / 2 + 1 >= width_executor.scratch_length() {
@@ -104,12 +137,7 @@ macro_rules! define_mixed_radix_neon_d_rdft {
                     execution_length,
                     width_executor,
                     width,
-                    height: ROW_COUNT,
                     twiddles,
-                    transpose_executor: f64::transpose_strategy(
-                        width - to_remove_second_stage,
-                        $complex_row_count,
-                    ),
                     inner_bf: $bf_name::new(),
                     width_scratch_length,
                     second_stage_len,
@@ -288,15 +316,6 @@ macro_rules! define_mixed_radix_neon_d_rdft {
                     ));
                 }
 
-                let to_remove_second_stage = (self.width - 1) / 2;
-                let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
-                    ((self.width - 1) / 2) + 1
-                } else {
-                    (self.width - 1) / 2
-                };
-                let to_remove = (self.height - 1) / 2;
-                let complex_height = self.height - to_remove;
-
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
                 let (scratch_complex1, rem_scratch) = scratch.split_at_mut(self.second_stage_len);
@@ -316,49 +335,17 @@ macro_rules! define_mixed_radix_neon_d_rdft {
                         width_scratch
                     })?;
 
-                    // Split into three regions:
-                    // 1. Regular columns x=0..nyquist_x
-                    // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
-                    // 3. Conjugate tail
-
-                    let nyquist_x = if self.width.is_multiple_of(2) {
-                        Some(self.width / 2)
-                    } else {
-                        None
-                    };
-                    let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
-                    self.transpose_executor.transpose_strided(
-                        scratch_complex1,
-                        self.width,
-                        dst_chunk,
-                        self.height,
-                        regular_cols, // only regular columns, uniform complex_height rows each
-                        complex_height,
-                    );
-
-                    if let Some(nx) = nyquist_x {
-                        let input_index = nx; // x=nyquist_x, y=0
-                        let output_index = nx * self.height; // y=0 + nyquist_x * height
-                        unsafe {
-                            *dst_chunk.get_unchecked_mut(output_index) =
-                                *scratch_complex1.get_unchecked(input_index);
-                        }
-                    }
-
-                    // conjugated tail
-                    for x in (self.width - to_remove_second_stage_tail)..self.width {
-                        for y in 1..complex_height {
-                            let input_index = x + y * self.width;
-                            let output_index = self.execution_length - (y + x * self.height);
-
-                            unsafe {
-                                *dst_chunk.get_unchecked_mut(output_index) =
-                                    scratch_complex1.get_unchecked(input_index).conj();
-                            }
-                        }
-                    }
+                    self.transpose_spectrum(scratch_complex1, dst_chunk);
                 }
                 Ok(())
+            }
+
+            #[inline]
+            #[target_feature(enable = $features)]
+            fn transpose_spectrum(&self, src: &[Complex<f64>], dst: &mut [Complex<f64>]) {
+                transpose_spectrum_tail::<_, $row_count, $complex_row_count>(
+                    src, dst, self.width, 0,
+                );
             }
         }
     };
@@ -371,8 +358,6 @@ macro_rules! define_mixed_radix_neon_f_rdft {
             twiddles: Vec<NeonStoreF>,
             width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             width: usize,
-            height: usize,
-            transpose_executor: Box<dyn TransposeExecutor<f32> + Send + Sync>,
             inner_bf: $bf_name,
             width_scratch_length: usize,
             second_stage_len: usize,
@@ -417,8 +402,6 @@ macro_rules! define_mixed_radix_neon_f_rdft {
                     }
                 }
 
-                let to_remove_second_stage = (width - 1) / 2;
-
                 let second_stage_len = $complex_row_count * width;
                 let execution_length = width * ROW_COUNT;
                 let width_scratch_length = if execution_length / 2 + 1 >= width_executor.scratch_length() {
@@ -431,12 +414,7 @@ macro_rules! define_mixed_radix_neon_f_rdft {
                     execution_length,
                     width_executor,
                     width,
-                    height: ROW_COUNT,
                     twiddles,
-                    transpose_executor: f32::transpose_strategy(
-                        width - to_remove_second_stage,
-                        $complex_row_count,
-                    ),
                     inner_bf: $bf_name::new(),
                     width_scratch_length,
                     second_stage_len,
@@ -656,15 +634,6 @@ macro_rules! define_mixed_radix_neon_f_rdft {
                     ));
                 }
 
-                let to_remove_second_stage = (self.width - 1) / 2;
-                let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
-                    ((self.width - 1) / 2) + 1
-                } else {
-                    (self.width - 1) / 2
-                };
-                let to_remove = (self.height - 1) / 2;
-                let complex_height = self.height - to_remove;
-
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
                 let (scratch_complex1, rem_scratch) = scratch.split_at_mut(self.second_stage_len);
@@ -684,49 +653,51 @@ macro_rules! define_mixed_radix_neon_f_rdft {
                         width_scratch
                     })?;
 
-                    // Split into three regions:
-                    // 1. Regular columns x=0..nyquist_x
-                    // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
-                    // 3. Conjugate tail
-
-                    let nyquist_x = if self.width.is_multiple_of(2) {
-                        Some(self.width / 2)
-                    } else {
-                        None
-                    };
-                    let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
-                    self.transpose_executor.transpose_strided(
-                        scratch_complex1,
-                        self.width,
-                        dst_chunk,
-                        self.height,
-                        regular_cols, // only regular columns, uniform complex_height rows each
-                        complex_height,
-                    );
-
-                    if let Some(nx) = nyquist_x {
-                        let input_index = nx; // x=nyquist_x, y=0
-                        let output_index = nx * self.height; // y=0 + nyquist_x * height
-                        unsafe {
-                            *dst_chunk.get_unchecked_mut(output_index) =
-                                *scratch_complex1.get_unchecked(input_index);
-                        }
-                    }
-
-                    // conjugated tail
-                    for x in (self.width - to_remove_second_stage_tail)..self.width {
-                        for y in 1..complex_height {
-                            let input_index = x + y * self.width;
-                            let output_index = self.execution_length - (y + x * self.height);
-
-                            unsafe {
-                                *dst_chunk.get_unchecked_mut(output_index) =
-                                    scratch_complex1.get_unchecked(input_index).conj();
-                            }
-                        }
-                    }
+                    self.transpose_spectrum(scratch_complex1, dst_chunk);
                 }
                 Ok(())
+            }
+
+            #[inline]
+            #[target_feature(enable = $features)]
+            fn transpose_spectrum(&self, src: &[Complex<f32>], dst: &mut [Complex<f32>]) {
+                const RADIX: usize = $row_count;
+                const RETAINED: usize = $complex_row_count;
+                let width = self.width;
+                let paired_columns = (width / 4) * 2;
+                let (paired, tail) = dst.split_at_mut(paired_columns * RADIX);
+                let columns = paired.as_chunks_mut::<RADIX>().0;
+                let conj = NeonStoreF::conj_flag();
+
+                debug_assert_eq!(src.len(), RETAINED * width);
+                for (pair, [left, right]) in columns.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+                    let x = pair * 2;
+                    let mirrored_x = width - x - 2;
+                    let mut bins = [NeonStoreF::default(); RADIX];
+                    let (retained, mirrored) = bins.split_at_mut(RETAINED);
+
+                    // Both input pairs are inside their respective rows.
+                    for (y, bin) in retained.iter_mut().enumerate() {
+                        *bin = NeonStoreF::from_complex_ref(unsafe { src.get_unchecked(y * width + x..) });
+                    }
+                    for (y, bin) in (1..RETAINED).rev().zip(mirrored) {
+                        *bin = NeonStoreF::from_complex_ref(unsafe { src.get_unchecked(y * width + mirrored_x..) })
+                            .reverse_complex()
+                            .xor(conj);
+                    }
+
+                    // Each vector contains the same bin for two output columns.
+                    // Transpose adjacent bins to store each column contiguously.
+                    for (y, &[a, b]) in bins.as_chunks::<2>().0.iter().enumerate() {
+                        let (lo, hi) = unsafe { v_transpose_complex_f32(a.v, b.v) };
+                        NeonStoreF::raw(lo).write(&mut left[y * 2..]);
+                        NeonStoreF::raw(hi).write(&mut right[y * 2..]);
+                    }
+                    bins[RADIX - 1].write_lo(&mut left[RADIX - 1..]);
+                    bins[RADIX - 1].write_hi(&mut right[RADIX - 1..]);
+                }
+
+                transpose_spectrum_tail::<_, RADIX, RETAINED>(src, tail, width, paired_columns);
             }
         }
     };

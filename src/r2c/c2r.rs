@@ -69,17 +69,20 @@ pub(crate) struct C2RFftEvenInterceptor<T> {
     length: usize,
     complex_length: usize,
     twiddles_handler: Arc<dyn C2RTwiddlesHandler<T> + Send + Sync>,
-    intercept_scratch_length: usize,
+    complex_scratch_len: usize,
 }
 
-impl<T: FftSample + C2RTwiddlesFactory<T>> C2RFftEvenInterceptor<T>
+impl<T: FftSample> C2RFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
     pub(crate) fn install(
         length: usize,
         intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
-    ) -> Result<Self, ZaftError> {
+    ) -> Result<Self, ZaftError>
+    where
+        T: C2RTwiddlesFactory<T>,
+    {
         assert_eq!(length % 2, 0, "R2C must be even in even interceptor");
         assert_eq!(
             intercept.length(),
@@ -102,16 +105,44 @@ where
             *twiddle = compute_twiddle(i + 1, length, FftDirection::Inverse);
         }
 
-        let intercept_scratch_length = intercept.destructive_scratch_length();
+        let complex_length = length / 2 + 1;
+        let complex_scratch_len = if intercept.scratch_length() == 0 {
+            0
+        } else {
+            complex_length + intercept.destructive_scratch_length()
+        };
 
         Ok(Self {
             intercept,
             twiddles,
             length,
-            complex_length: length / 2 + 1,
+            complex_length,
             twiddles_handler: T::make_c2r_twiddles_handler(),
-            intercept_scratch_length,
+            complex_scratch_len,
         })
+    }
+
+    fn prepare_inverse_input(&self, input: &[Complex<T>], packed: &mut [Complex<T>]) {
+        let (dc, nyquist) = (input[0], input[input.len() - 1]);
+        let first_sum = dc + nyquist;
+        let first_diff = dc - nyquist;
+        packed[0] = Complex::new(first_sum.re - first_sum.im, first_diff.re - first_diff.im);
+
+        let middle = input.len() / 2;
+        let (left_input, right_input) = input.split_at(middle);
+        let (left, right) = packed.split_at_mut(middle);
+        self.twiddles_handler.handle(
+            &self.twiddles,
+            &left_input[1..],
+            &right_input[..right_input.len() - 1],
+            &mut left[1..],
+            right,
+        );
+
+        if input.len() % 2 == 1 {
+            let center = input[middle];
+            packed[middle] = (center + center).conj();
+        }
     }
 }
 
@@ -143,76 +174,38 @@ where
             self.real_length(),
         )?;
 
-        // we want to do unsafe cast here, we'll need to ensure everything is correct for this one
         assert_eq!(align_of::<T>(), align_of::<Complex<T>>());
         assert_eq!(size_of::<T>() * 2, size_of::<Complex<T>>());
 
         let scratch = validate_scratch!(scratch, self.complex_scratch_length());
-        let (scratch, intercept_scratch) = scratch.split_at_mut(self.complex_length);
-
-        for (input, output) in input
+        let packed_length = self.length / 2;
+        // SAFETY: The output length is even and Complex<T> has two consecutive
+        // scalars with the alignment checked above.
+        let packed_output =
+            unsafe { std::slice::from_raw_parts_mut(output.as_mut_ptr().cast(), output.len() / 2) };
+        let blocks = input
             .chunks_exact(self.complex_length)
-            .zip(output.chunks_exact_mut(self.length))
-        {
-            if let Some(first_item) = scratch.get_mut(0) {
-                first_item.re = input[0].re;
-                first_item.im = 0.0f64.as_();
+            .zip(packed_output.chunks_exact_mut(packed_length));
+
+        if scratch.is_empty() {
+            for (input, packed) in blocks {
+                self.prepare_inverse_input(input, packed);
             }
-            if let Some(last_item) = scratch.last_mut() {
-                last_item.re = input.last().unwrap().re;
-                last_item.im = 0.0f64.as_();
+            if !packed_output.is_empty() {
+                self.intercept
+                    .execute_with_scratch(packed_output, scratch)?;
             }
-
-            let (mut input_left, mut input_right) = scratch.split_at_mut(input.len() / 2);
-            let (mut input_left_source, mut input_right_source) = input.split_at(input.len() / 2);
-
-            match (
-                input_left.first_mut(),
-                input_right.last_mut(),
-                input_left_source.first(),
-                input_right_source.last(),
-            ) {
-                (Some(first_out), Some(_), Some(first_input), Some(last_input)) => {
-                    let first_sum = *first_input + *last_input;
-                    let first_diff = *first_input - *last_input;
-
-                    *first_out = Complex {
-                        re: first_sum.re - first_sum.im,
-                        im: first_diff.re - first_diff.im,
-                    };
-
-                    input_left = &mut input_left[1..];
-                    input_left_source = &input_left_source[1..];
-                    let right_len = input_right.len();
-                    input_right = &mut input_right[..right_len - 1];
-                    input_right_source = &input_right_source[..right_len - 1];
-                }
-                _ => return Ok(()),
-            };
-
-            self.twiddles_handler.handle(
-                &self.twiddles,
-                input_left_source,
-                input_right_source,
-                input_left,
-                input_right,
-            );
-
-            if scratch.len() % 2 == 1 {
-                let center_element = input[input.len() / 2];
-                let doubled = center_element + center_element;
-                scratch[input.len() / 2] = doubled.conj();
+        } else {
+            let (packed, intercept_scratch) = scratch.split_at_mut(self.complex_length);
+            let packed = &mut packed[..packed_length];
+            for (input, output) in blocks {
+                self.prepare_inverse_input(input, packed);
+                self.intercept.execute_destructive_with_scratch(
+                    packed,
+                    output,
+                    intercept_scratch,
+                )?;
             }
-
-            let casted_output = unsafe {
-                std::slice::from_raw_parts_mut(output.as_mut_ptr().cast(), output.len() / 2)
-            };
-
-            self.intercept.execute_destructive_with_scratch(
-                &mut scratch[..output.len() / 2],
-                casted_output,
-                intercept_scratch,
-            )?;
         }
 
         Ok(())
@@ -228,6 +221,33 @@ where
 
     #[inline]
     fn complex_scratch_length(&self) -> usize {
-        self.complex_length + self.intercept_scratch_length
+        self.complex_scratch_len
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scratch_free_even_inverse_batch() {
+        let plan = crate::Zaft::make_c2r_fft_f64(4).unwrap();
+        assert_eq!(plan.complex_scratch_length(), 0);
+
+        let input = [
+            Complex::new(7.0, 2.0),
+            Complex::new(1.5, -0.25),
+            Complex::new(-3.0, 5.0),
+            Complex::new(-7.0, -2.0),
+            Complex::new(-1.5, 0.25),
+            Complex::new(3.0, -5.0),
+        ];
+        let mut output = [100.0; 10];
+        plan.execute_with_scratch(&input, &mut output[1..9], &mut [])
+            .unwrap();
+        assert_eq!(
+            output,
+            [100.0, 0.0, 13.5, -6.0, 12.5, 0.0, -13.5, 6.0, -12.5, 100.0]
+        );
     }
 }

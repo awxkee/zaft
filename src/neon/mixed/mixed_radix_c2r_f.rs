@@ -31,11 +31,13 @@ use crate::err::try_vec;
 use crate::neon::mixed::NeonStoreF;
 use crate::neon::mixed::neon_store::NeonStoreFh;
 use crate::r2c::C2rChild;
+use crate::r2c::mixed_radix_c2r::{C2RPairPacking, pack_bin, peaks_are_balanced};
 use crate::transpose::{TransposeExecutorRealInv, TransposeFactory};
 use crate::util::compute_twiddle;
 use crate::{C2RFftExecutor, ZaftError};
 use num_complex::Complex;
 use num_traits::Zero;
+use std::arch::aarch64::{vabsq_f32, vdupq_n_f32, vmaxq_f32, vmaxvq_f32};
 /*
    Layout 7x7
    00 01 02 03 04 05 06
@@ -79,6 +81,58 @@ use num_traits::Zero;
     03*02*01*
 */
 
+impl C2RPairPacking for f32 {
+    #[inline]
+    fn pack_pair(a: &[Complex<f32>], b: &[Complex<f32>], packed: &mut [Complex<f32>]) -> bool {
+        // SAFETY: The AArch64 mixed-radix plans use NEON.
+        unsafe { pack_f32(a, b, packed) }
+    }
+}
+
+#[inline]
+#[target_feature(enable = "neon")]
+fn pack_f32(a: &[Complex<f32>], b: &[Complex<f32>], packed: &mut [Complex<f32>]) -> bool {
+    let (positive, negative) = packed.split_at_mut(a.len());
+    positive[0] = Complex::new(a[0].re, b[0].re);
+    let mut a_peaks = vdupq_n_f32(a[0].re.abs());
+    let mut b_peaks = vdupq_n_f32(b[0].re.abs());
+    let negate_imag = NeonStoreF::conj_flag();
+    let negate_real = negate_imag.reverse_complex_elements();
+
+    let (a_bins, a_tail) = a[1..].as_chunks::<2>();
+    let (b_bins, b_tail) = b[1..].as_chunks::<2>();
+    let (positive_bins, positive_tail) = positive[1..].as_chunks_mut::<2>();
+    let (negative_tail, negative_bins) = negative.split_at_mut(a_tail.len());
+    for (((a, b), positive), negative) in a_bins
+        .iter()
+        .zip(b_bins)
+        .zip(positive_bins)
+        .zip(negative_bins.as_chunks_mut::<2>().0.iter_mut().rev())
+    {
+        let a = NeonStoreF::from_complex_ref(a);
+        let b = NeonStoreF::from_complex_ref(b);
+        a_peaks = vmaxq_f32(a_peaks, vabsq_f32(a.v));
+        b_peaks = vmaxq_f32(b_peaks, vabsq_f32(b.v));
+
+        // Pack A + iB. Negative frequencies use conjugate(A) + i*conjugate(B)
+        // and are written in reverse bin order.
+        let swapped_b = b.reverse_complex_elements();
+        (a + swapped_b.xor(negate_real)).write(positive);
+        (swapped_b + a.xor(negate_imag))
+            .reverse_complex()
+            .write(negative);
+    }
+
+    let mut a_peak = vmaxvq_f32(a_peaks);
+    let mut b_peak = vmaxvq_f32(b_peaks);
+    if let ([a], [b], [positive], [negative]) = (a_tail, b_tail, positive_tail, negative_tail) {
+        a_peak = a_peak.max(a.re.abs()).max(a.im.abs());
+        b_peak = b_peak.max(b.re.abs()).max(b.im.abs());
+        (*positive, *negative) = pack_bin(*a, *b);
+    }
+    peaks_are_balanced(a_peak, b_peak)
+}
+
 macro_rules! define_mixed_radix_neon_f {
     ($radix_name: ident, $features: literal, $bf_name: ident, $row_count: expr, $mul: ident, $transpose: ident) => {
 
@@ -101,6 +155,11 @@ macro_rules! define_mixed_radix_neon_f {
                 let (width, child_scratch_length, complex_leaf) = match &width_executor {
                     C2rChild::Complex(child) => (child.length(), child.scratch_length(), true),
                     C2rChild::Real(child) => (child.real_length(), child.complex_scratch_length(), false),
+                    C2rChild::Paired { real, complex } => (
+                        real.real_length(),
+                        real.complex_scratch_length().max(complex.scratch_length()),
+                        false,
+                    ),
                 };
                 let spectrum_width = width / 2 + 1;
                 const ROW_COUNT: usize = $row_count;
@@ -563,6 +622,27 @@ macro_rules! define_mixed_radix_neon_f {
                                 width_scratch,
                                 $row_count,
                             )?;
+                            self.transpose_real_rows(spectra, output);
+                        }
+                        C2rChild::Paired { real, complex } => {
+                            self.process_columns(input, spectra);
+                            if !crate::r2c::mixed_radix_c2r::execute_paired_rows(
+                                real.as_ref(),
+                                complex.as_ref(),
+                                spectra,
+                                output,
+                                width_scratch,
+                                $row_count,
+                            )? {
+                                self.process_columns(input, spectra);
+                                crate::r2c::mixed_radix_c2r::execute_rows(
+                                    real.as_ref(),
+                                    spectra,
+                                    output,
+                                    width_scratch,
+                                    $row_count,
+                                )?;
+                            }
                             self.transpose_real_rows(spectra, output);
                         }
                         C2rChild::Complex(child) => {

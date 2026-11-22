@@ -29,8 +29,8 @@
 use crate::prime_factors::PrimeFactors;
 use crate::r2c::c2r_bluestein::BluesteinC2r;
 use crate::r2c::c2r_twiddles::C2RTwiddlesFactory;
-use crate::r2c::{C2RFftEvenInterceptor, C2RFftOddInterceptor, OneSizedRealFft};
-use crate::{C2RFftExecutor, FftDirection, FftSample, Zaft, ZaftError};
+use crate::r2c::{C2RFftEvenInterceptor, C2RFftOddInterceptor, C2rChild, OneSizedRealFft};
+use crate::{C2RFftExecutor, FftDirection, FftExecutor, FftSample, Zaft, ZaftError};
 use num_traits::AsPrimitive;
 use std::sync::Arc;
 
@@ -38,14 +38,15 @@ use std::sync::Arc;
 // this size costs more than their reduced arithmetic on the measured NEON path.
 const COMPLEX_LEAF_LIMIT: usize = 512;
 
-fn odd_leaf<T: FftSample>(len: usize) -> Result<Arc<dyn C2RFftExecutor<T> + Send + Sync>, ZaftError>
+fn odd_complex_leaf<T: FftSample>(
+    len: usize,
+) -> Result<Option<Arc<dyn FftExecutor<T> + Send + Sync>>, ZaftError>
 where
     f64: AsPrimitive<T>,
 {
     // Preserve direct codelets before considering the shared prime policy.
     if let Some(fft) = Zaft::plan_butterfly(len, FftDirection::Inverse) {
-        return C2RFftOddInterceptor::install(len, fft?)
-            .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<T> + Send + Sync>);
+        return fft.map(Some);
     }
     if PrimeFactors::from_number(len as u64).is_prime() {
         #[cfg(not(target_arch = "wasm32"))]
@@ -54,38 +55,49 @@ where
         #[cfg(target_arch = "wasm32")]
         let use_bluestein = true;
         if use_bluestein {
-            let min_len = crate::util::checked_bluestein_rfft_convolution_len(len)?;
-            let inner_len = crate::bluestein::choose_bluestein_inner_len(min_len)?;
-            let inner = Zaft::strategy(inner_len, FftDirection::Inverse)?;
-            return Ok(Arc::new(BluesteinC2r::new(len, inner)?));
+            return Ok(None);
         }
     }
-    C2RFftOddInterceptor::install(len, Zaft::strategy(len, FftDirection::Inverse)?)
-        .map(|x| Arc::new(x) as Arc<dyn C2RFftExecutor<T> + Send + Sync>)
+    Zaft::strategy(len, FftDirection::Inverse).map(Some)
+}
+
+fn odd_bluestein_leaf<T: FftSample>(
+    len: usize,
+) -> Result<Arc<dyn C2RFftExecutor<T> + Send + Sync>, ZaftError>
+where
+    f64: AsPrimitive<T>,
+{
+    let min_len = crate::util::checked_bluestein_rfft_convolution_len(len)?;
+    let inner_len = crate::bluestein::choose_bluestein_inner_len(min_len)?;
+    let inner = Zaft::strategy(inner_len, FftDirection::Inverse)?;
+    Ok(Arc::new(BluesteinC2r::new(len, inner)?))
 }
 
 fn mixed_radix_child<T: FftSample + C2RTwiddlesFactory<T>>(
     len: usize,
     radix: usize,
-) -> Result<crate::r2c::C2rChild<T>, ZaftError>
+) -> Result<C2rChild<T>, ZaftError>
 where
     f64: AsPrimitive<T>,
     usize: AsPrimitive<T>,
 {
     let width = len / radix;
     if len <= COMPLEX_LEAF_LIMIT {
-        return Ok(crate::r2c::C2rChild::Complex(Zaft::strategy(
+        return Ok(C2rChild::Complex(Zaft::strategy(
             width,
             FftDirection::Inverse,
         )?));
     }
-    // Stop real recursion at small widths while retaining the prime policy.
-    let child = if width <= COMPLEX_LEAF_LIMIT {
-        odd_leaf(width)?
-    } else {
-        strategy_c2r(width)?
+    if width > COMPLEX_LEAF_LIMIT {
+        return strategy_c2r(width).map(C2rChild::Real);
+    }
+    // The compact stage can share a complex inverse between each pair of
+    // rows when the real leaf would already perform a full complex inverse.
+    let Some(complex) = odd_complex_leaf(width)? else {
+        return odd_bluestein_leaf(width).map(C2rChild::Real);
     };
-    Ok(crate::r2c::C2rChild::Real(child))
+    let real = Arc::new(C2RFftOddInterceptor::install(width, Arc::clone(&complex))?);
+    Ok(C2rChild::Paired { real, complex })
 }
 
 pub(crate) fn strategy_c2r<T: FftSample + C2RTwiddlesFactory<T>>(
@@ -142,6 +154,9 @@ where
             }
         }
 
-        odd_leaf(len)
+        match odd_complex_leaf(len)? {
+            Some(complex) => Ok(Arc::new(C2RFftOddInterceptor::install(len, complex)?)),
+            None => odd_bluestein_leaf(len),
+        }
     }
 }
