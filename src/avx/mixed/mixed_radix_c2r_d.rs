@@ -105,6 +105,11 @@ macro_rules! define_mixed_radix_avx_d {
                 let (width, child_scratch_length, complex_leaf) = match &width_executor {
                     C2rChild::Complex(child) => (child.length(), child.scratch_length(), true),
                     C2rChild::Real(child) => (child.real_length(), child.complex_scratch_length(), false),
+                    C2rChild::Paired { real, complex } => (
+                        real.real_length(),
+                        real.complex_scratch_length().max(complex.scratch_length()),
+                        false,
+                    ),
                 };
                 let spectrum_width = width / 2 + 1;
                 const ROW_COUNT: usize = $row_count;
@@ -578,6 +583,27 @@ macro_rules! define_mixed_radix_avx_d {
                                 width_scratch,
                                 $row_count,
                             )?;
+                            self.transpose_real_rows(spectra, output);
+                        }
+                        C2rChild::Paired { real, complex } => {
+                            self.process_columns(input, spectra);
+                            if !crate::r2c::mixed_radix_c2r::execute_paired_rows(
+                                real.as_ref(),
+                                complex.as_ref(),
+                                spectra,
+                                output,
+                                width_scratch,
+                                $row_count,
+                            )? {
+                                self.process_columns(input, spectra);
+                                crate::r2c::mixed_radix_c2r::execute_rows(
+                                    real.as_ref(),
+                                    spectra,
+                                    output,
+                                    width_scratch,
+                                    $row_count,
+                                )?;
+                            }
                             self.transpose_real_rows(spectra, output);
                         }
                         C2rChild::Complex(child) => {

@@ -93,7 +93,7 @@ pub(crate) fn vfcmulq_fcma_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_
 #[inline(always)]
 pub(crate) fn vfcmulq_f64(lhs: float64x2_t, rhs: float64x2_t) -> float64x2_t {
     unsafe {
-        let temp = vcombine_f64(vneg_f64(vget_high_f64(lhs)), vget_low_f64(lhs));
+        let temp = vextq_f64::<1>(vnegq_f64(lhs), lhs);
         let sum = vmulq_laneq_f64::<0>(lhs, rhs);
         vfmaq_laneq_f64::<1>(sum, temp, rhs)
     }

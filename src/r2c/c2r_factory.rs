@@ -41,6 +41,10 @@ use std::sync::Arc;
 pub(crate) enum C2rChild<T> {
     Complex(Arc<dyn FftExecutor<T> + Send + Sync>),
     Real(Arc<dyn C2RFftExecutor<T> + Send + Sync>),
+    Paired {
+        real: Arc<dyn C2RFftExecutor<T> + Send + Sync>,
+        complex: Arc<dyn FftExecutor<T> + Send + Sync>,
+    },
 }
 
 pub(crate) trait C2RAlgorithmFactory<T> {

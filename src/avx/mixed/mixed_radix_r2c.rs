@@ -27,13 +27,48 @@
  * // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 use crate::avx::mixed::{AvxMaskF, AvxStoreD, AvxStoreF};
+use crate::avx::transpose::{transpose_4x3, transpose_f32x2_4x4_aos, transpose_f64x2_2x2d};
 use crate::err::try_vec;
-use crate::transpose::{TransposeExecutor, TransposeFactory};
 use crate::util::compute_twiddle;
 use crate::{FftExecutor, R2CFftExecutor, ZaftError};
 use num_complex::Complex;
-use num_traits::Zero;
+use num_traits::{Float, Zero};
 use std::sync::Arc;
+
+#[inline(always)]
+fn transpose_spectrum_tail<T: Float, const RADIX: usize, const RETAINED: usize>(
+    src: &[Complex<T>],
+    dst: &mut [Complex<T>],
+    width: usize,
+    first_column: usize,
+) {
+    let (columns, center) = dst.as_chunks_mut::<RADIX>();
+    debug_assert_eq!(src.len(), RETAINED * width);
+    debug_assert_eq!(first_column + columns.len(), width / 2);
+    debug_assert_eq!(
+        center.len(),
+        if width.is_multiple_of(2) { 1 } else { RETAINED }
+    );
+
+    for (x, column) in (first_column..).zip(columns) {
+        let mirrored_x = width - 1 - x;
+        let (retained, mirrored) = column.split_at_mut(RETAINED);
+        for (y, value) in retained.iter_mut().enumerate() {
+            *value = unsafe { *src.get_unchecked(y * width + x) };
+        }
+        for (y, value) in (1..RETAINED).rev().zip(mirrored) {
+            *value = unsafe { src.get_unchecked(y * width + mirrored_x).conj() };
+        }
+    }
+
+    // An even width ends at the Nyquist bin. For an odd width, copy the
+    // retained bins in the final column.
+    for (y, value) in center.iter_mut().enumerate() {
+        unsafe {
+            *value = *src.get_unchecked(y * width + width / 2);
+        }
+    }
+}
 
 macro_rules! define_mixed_radix_avx_d_rdft {
     ($radix_name: ident, $bf_name: ident, $row_count: expr, $complex_row_count: expr, $mul: ident) => {
@@ -43,8 +78,6 @@ macro_rules! define_mixed_radix_avx_d_rdft {
             twiddles: Vec<AvxStoreD>,
             width_executor: Arc<dyn FftExecutor<f64> + Send + Sync>,
             width: usize,
-            height: usize,
-            transpose_executor: Box<dyn TransposeExecutor<f64> + Send + Sync>,
             inner_bf: $bf_name,
             width_scratch_length: usize,
             second_stage_len: usize,
@@ -96,8 +129,6 @@ macro_rules! define_mixed_radix_avx_d_rdft {
                     }
                 }
 
-                let to_remove_second_stage = (width - 1) / 2;
-
                 let second_stage_len = $complex_row_count * width;
                 let execution_length = width * ROW_COUNT;
                 let width_scratch_length = if execution_length / 2 + 1 >= width_executor.scratch_length() {
@@ -110,12 +141,7 @@ macro_rules! define_mixed_radix_avx_d_rdft {
                     execution_length,
                     width_executor,
                     width,
-                    height: ROW_COUNT,
                     twiddles,
-                    transpose_executor: f64::transpose_strategy(
-                        width - to_remove_second_stage,
-                        $complex_row_count,
-                    ),
                     inner_bf: $bf_name::new(),
                     width_scratch_length,
                     second_stage_len,
@@ -334,15 +360,6 @@ macro_rules! define_mixed_radix_avx_d_rdft {
                     ));
                 }
 
-                let to_remove_second_stage = (self.width - 1) / 2;
-                let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
-                    ((self.width - 1) / 2) + 1
-                } else {
-                    (self.width - 1) / 2
-                };
-                let to_remove = (self.height - 1) / 2;
-                let complex_height = self.height - to_remove;
-
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
                 let (scratch_complex1, rem_scratch) = scratch.split_at_mut(self.second_stage_len);
@@ -362,49 +379,52 @@ macro_rules! define_mixed_radix_avx_d_rdft {
                         width_scratch
                     })?;
 
-                    // Split into three regions:
-                    // 1. Regular columns x=0..nyquist_x
-                    // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
-                    // 3. Conjugate tail
-
-                    let nyquist_x = if self.width % 2 == 0 {
-                        Some(self.width / 2)
-                    } else {
-                        None
-                    };
-                    let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
-                    self.transpose_executor.transpose_strided(
-                        scratch_complex1,
-                        self.width,
-                        dst_chunk,
-                        self.height,
-                        regular_cols, // only regular columns, uniform complex_height rows each
-                        complex_height,
-                    );
-
-                    if let Some(nx) = nyquist_x {
-                        let input_index = nx; // x=nyquist_x, y=0
-                        let output_index = nx * self.height; // y=0 + nyquist_x * height
-                        unsafe {
-                            *dst_chunk.get_unchecked_mut(output_index) =
-                                *scratch_complex1.get_unchecked(input_index);
-                        }
-                    }
-
-                    // conjugated tail
-                    for x in (self.width - to_remove_second_stage_tail)..self.width {
-                        for y in 1..complex_height {
-                            let input_index = x + y * self.width;
-                            let output_index = self.execution_length - (y + x * self.height);
-
-                            unsafe {
-                                *dst_chunk.get_unchecked_mut(output_index) =
-                                    scratch_complex1.get_unchecked(input_index).conj();
-                            }
-                        }
-                    }
+                    self.transpose_spectrum(scratch_complex1, dst_chunk);
                 }
                 Ok(())
+            }
+
+            #[inline]
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn transpose_spectrum(&self, src: &[Complex<f64>], dst: &mut [Complex<f64>]) {
+                const RADIX: usize = $row_count;
+                const RETAINED: usize = $complex_row_count;
+                let width = self.width;
+                let vector_columns = width / 4 * 2;
+                let (vectors, tail) = dst.split_at_mut(vector_columns * RADIX);
+                let (columns, _) = vectors.as_chunks_mut::<RADIX>();
+                let conj = AvxStoreD::conj_flag();
+
+                debug_assert_eq!(src.len(), RETAINED * width);
+                for (group, [left, right]) in columns.as_chunks_mut::<2>().0.iter_mut().enumerate() {
+                    let x = group * 2;
+                    let mirrored_x = width - x - 2;
+                    let mut bins = [AvxStoreD::zero(); RADIX];
+                    let (retained, mirrored) = bins.split_at_mut(RETAINED);
+
+                    // Each load stays inside its row. The mirrored pair comes
+                    // from the opposite end of the spectrum in reverse order.
+                    for (y, bin) in retained.iter_mut().enumerate() {
+                        *bin = AvxStoreD::from_complex_ref(unsafe { src.get_unchecked(y * width + x..) });
+                    }
+                    for (y, bin) in (1..RETAINED).rev().zip(mirrored) {
+                        *bin = AvxStoreD::from_complex_ref(unsafe {
+                            src.get_unchecked(y * width + mirrored_x..)
+                        })
+                        .reverse_complex()
+                        .xor(conj);
+                    }
+
+                    for (row, &bins) in bins.as_chunks::<2>().0.iter().enumerate() {
+                        let [a, b] = transpose_f64x2_2x2d(bins);
+                        a.write(&mut left[row * 2..]);
+                        b.write(&mut right[row * 2..]);
+                    }
+                    bins[RADIX - 1].write_lo(&mut left[RADIX - 1..]);
+                    bins[RADIX - 1].write_hi(&mut right[RADIX - 1..]);
+                }
+
+                transpose_spectrum_tail::<_, RADIX, RETAINED>(src, tail, width, vector_columns);
             }
         }
     };
@@ -418,8 +438,6 @@ macro_rules! define_mixed_radix_avx_f_rdft {
             twiddles: Vec<AvxStoreF>,
             width_executor: Arc<dyn FftExecutor<f32> + Send + Sync>,
             width: usize,
-            height: usize,
-            transpose_executor: Box<dyn TransposeExecutor<f32> + Send + Sync>,
             inner_bf: $bf_name,
             width_scratch_length: usize,
             second_stage_len: usize,
@@ -471,8 +489,6 @@ macro_rules! define_mixed_radix_avx_f_rdft {
                     }
                 }
 
-                let to_remove_second_stage = (width - 1) / 2;
-
                 let second_stage_len = $complex_row_count * width;
                 let execution_length = width * ROW_COUNT;
                 let width_scratch_length = if execution_length / 2 + 1 >= width_executor.scratch_length() {
@@ -485,12 +501,7 @@ macro_rules! define_mixed_radix_avx_f_rdft {
                     execution_length,
                     width_executor,
                     width,
-                    height: ROW_COUNT,
                     twiddles,
-                    transpose_executor: f32::transpose_strategy(
-                        width - to_remove_second_stage,
-                        $complex_row_count,
-                    ),
                     inner_bf: $bf_name::new(),
                     width_scratch_length,
                     second_stage_len,
@@ -712,15 +723,6 @@ macro_rules! define_mixed_radix_avx_f_rdft {
                     ));
                 }
 
-                let to_remove_second_stage = (self.width - 1) / 2;
-                let to_remove_second_stage_tail = if self.width.is_multiple_of(2) {
-                    ((self.width - 1) / 2) + 1
-                } else {
-                    (self.width - 1) / 2
-                };
-                let to_remove = (self.height - 1) / 2;
-                let complex_height = self.height - to_remove;
-
                 use crate::util::validate_scratch;
                 let scratch = validate_scratch!(scratch, self.complex_scratch_length());
                 let (scratch_complex1, rem_scratch) = scratch.split_at_mut(self.second_stage_len);
@@ -740,49 +742,67 @@ macro_rules! define_mixed_radix_avx_f_rdft {
                         width_scratch
                     })?;
 
-                    // Split into three regions:
-                    // 1. Regular columns x=0..nyquist_x
-                    // 2. Nyquist column x=nyquist_x      → only y=0, scalar copy (even width only)
-                    // 3. Conjugate tail
-
-                    let nyquist_x = if self.width % 2 == 0 {
-                        Some(self.width / 2)
-                    } else {
-                        None
-                    };
-                    let regular_cols = nyquist_x.unwrap_or(self.width - to_remove_second_stage);
-                    self.transpose_executor.transpose_strided(
-                        scratch_complex1,
-                        self.width,
-                        dst_chunk,
-                        self.height,
-                        regular_cols, // only regular columns, uniform complex_height rows each
-                        complex_height,
-                    );
-
-                    if let Some(nx) = nyquist_x {
-                        let input_index = nx; // x=nyquist_x, y=0
-                        let output_index = nx * self.height; // y=0 + nyquist_x * height
-                        unsafe {
-                            *dst_chunk.get_unchecked_mut(output_index) =
-                                *scratch_complex1.get_unchecked(input_index);
-                        }
-                    }
-
-                    // conjugated tail
-                    for x in (self.width - to_remove_second_stage_tail)..self.width {
-                        for y in 1..complex_height {
-                            let input_index = x + y * self.width;
-                            let output_index = self.execution_length - (y + x * self.height);
-
-                            unsafe {
-                                *dst_chunk.get_unchecked_mut(output_index) =
-                                    scratch_complex1.get_unchecked(input_index).conj();
-                            }
-                        }
-                    }
+                    self.transpose_spectrum(scratch_complex1, dst_chunk);
                 }
                 Ok(())
+            }
+
+            #[inline]
+            #[target_feature(enable = "avx2", enable = "fma")]
+            fn transpose_spectrum(&self, src: &[Complex<f32>], dst: &mut [Complex<f32>]) {
+                const RADIX: usize = $row_count;
+                const RETAINED: usize = $complex_row_count;
+                let width = self.width;
+                let vector_columns = width / 8 * 4;
+                let (vectors, tail) = dst.split_at_mut(vector_columns * RADIX);
+                let (columns, _) = vectors.as_chunks_mut::<RADIX>();
+                let conj = AvxStoreF::conj_flag();
+
+                debug_assert_eq!(src.len(), RETAINED * width);
+                for (group, columns) in columns.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                    let x = group * 4;
+                    let mirrored_x = width - x - 4;
+                    let mut bins = [AvxStoreF::zero(); RADIX];
+                    let (retained, mirrored) = bins.split_at_mut(RETAINED);
+
+                    // Each load stays inside its row. The mirrored group comes
+                    // from the opposite end of the spectrum in reverse order.
+                    for (y, bin) in retained.iter_mut().enumerate() {
+                        *bin = AvxStoreF::from_complex_ref(unsafe { src.get_unchecked(y * width + x..) });
+                    }
+                    for (y, bin) in (1..RETAINED).rev().zip(mirrored) {
+                        *bin = AvxStoreF::from_complex_ref(unsafe {
+                            src.get_unchecked(y * width + mirrored_x..)
+                        })
+                        .reverse_complex()
+                        .xor(conj);
+                    }
+
+                    let (groups, remaining) = bins.as_chunks::<4>();
+                    for (row, &bins) in groups.iter().enumerate() {
+                        for (column, vector) in columns.iter_mut().zip(transpose_f32x2_4x4_aos(bins)) {
+                            vector.write(&mut column[row * 4..]);
+                        }
+                    }
+                    let last_row = groups.len() * 4;
+                    match remaining {
+                        [single] => {
+                            let mut values = [Complex::zero(); 4];
+                            single.write(&mut values);
+                            for (column, value) in columns.iter_mut().zip(values) {
+                                column[last_row] = value;
+                            }
+                        }
+                        &[a, b, c] => {
+                            for (column, vector) in columns.iter_mut().zip(transpose_4x3([a, b, c])) {
+                                vector.write_lo3(&mut column[last_row..]);
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+
+                transpose_spectrum_tail::<_, RADIX, RETAINED>(src, tail, width, vector_columns);
             }
         }
     };

@@ -342,10 +342,7 @@ impl NeonRadix4<f64> {
                         let t2 = vaddq_f64(b, d);
                         let mut t3 = vsubq_f64(b, d);
                         t3 = vreinterpretq_f64_u64(veorq_u64(
-                            vreinterpretq_u64_f64(vcombine_f64(
-                                vget_high_f64(t3),
-                                vget_low_f64(t3),
-                            )),
+                            vreinterpretq_u64_f64(vextq_f64::<1>(t3, t3)),
                             v_i_multiplier,
                         ));
 

@@ -34,8 +34,9 @@
 //! Y_r(W-k) = conj(Y_r(k)). Each row therefore needs only W/2+1 complex
 //! values and a real inverse child, followed by a real transpose.
 
-use crate::{C2RFftExecutor, ZaftError};
+use crate::{C2RFftExecutor, FftExecutor, ZaftError};
 use num_complex::Complex;
+use num_traits::Float;
 
 #[inline]
 pub(crate) fn as_real<T>(values: &[Complex<T>]) -> &[T] {
@@ -48,6 +49,13 @@ pub(crate) fn as_real<T>(values: &[Complex<T>]) -> &[T] {
 fn as_real_mut<T>(values: &mut [Complex<T>]) -> &mut [T] {
     // SAFETY: As above, with an exclusive reborrow of the complex slice.
     unsafe { std::slice::from_raw_parts_mut(values.as_mut_ptr().cast(), values.len() * 2) }
+}
+
+#[inline]
+fn as_complex_mut<T>(values: &mut [T]) -> &mut [Complex<T>] {
+    // SAFETY: Complex<T> has the layout described above. Any odd trailing
+    // scalar is excluded, so the complex view stays inside the real slice.
+    unsafe { std::slice::from_raw_parts_mut(values.as_mut_ptr().cast(), values.len() / 2) }
 }
 
 /// Execute the real inverse children in half-spectrum storage. Physical rows
@@ -64,15 +72,9 @@ pub(crate) fn execute_rows<T: Copy>(
     let k = child.complex_length();
     let (first_row, remaining_output) = output.split_at_mut(width);
     let child_scratch = if scratch.is_empty() {
-        // SAFETY: Complex<T> has the scalar alignment and two adjacent fields.
         // The constructor checks that this remaining output block can hold the
-        // child's scratch. An odd trailing scalar is excluded from the view.
-        unsafe {
-            std::slice::from_raw_parts_mut(
-                remaining_output.as_mut_ptr().cast(),
-                remaining_output.len() / 2,
-            )
-        }
+        // child's scratch.
+        as_complex_mut(remaining_output)
     } else {
         scratch
     };
@@ -91,18 +93,158 @@ pub(crate) fn execute_rows<T: Copy>(
     Ok(())
 }
 
+#[cfg(target_arch = "x86_64")]
+#[inline]
+fn peak_magnitude<T: Float>(row: &[Complex<T>]) -> T {
+    // The real inverse uses only the real component of the DC bin.
+    let (groups, tail) = as_real(&row[1..]).as_chunks::<4>();
+    // Independent lane maxima let the compiler vectorize the scan.
+    let mut peaks = [T::zero(); 4];
+    for group in groups {
+        for (peak, &value) in peaks.iter_mut().zip(group) {
+            *peak = peak.max(value.abs());
+        }
+    }
+    peaks
+        .into_iter()
+        .chain(tail.iter().map(|value| value.abs()))
+        .fold(row[0].re.abs(), T::max)
+}
+
+#[inline]
+pub(crate) fn peaks_are_balanced<T: Float>(a: T, b: T) -> bool {
+    // Roundoff at the louder row's scale can cost the quieter row roughly
+    // half its significant bits once the peaks differ by this ratio.
+    let max_peak_ratio = T::epsilon().sqrt().recip();
+    a.is_finite() && b.is_finite() && a.max(b) <= a.min(b) * max_peak_ratio
+}
+
+#[inline]
+pub(crate) fn pack_bin<T: Float>(a: Complex<T>, b: Complex<T>) -> (Complex<T>, Complex<T>) {
+    (
+        Complex::new(a.re - b.im, a.im + b.re),
+        Complex::new(a.re + b.im, b.re - a.im),
+    )
+}
+
+pub(crate) trait C2RPairPacking: Float {
+    fn pack_pair(a: &[Complex<Self>], b: &[Complex<Self>], packed: &mut [Complex<Self>]) -> bool;
+}
+
+#[cfg(target_arch = "x86_64")]
+impl<T: Float> C2RPairPacking for T {
+    #[inline]
+    fn pack_pair(a: &[Complex<T>], b: &[Complex<T>], packed: &mut [Complex<T>]) -> bool {
+        if !peaks_are_balanced(peak_magnitude(a), peak_magnitude(b)) {
+            return false;
+        }
+        let (positive, negative) = packed.split_at_mut(a.len());
+        positive[0] = Complex::new(a[0].re, b[0].re);
+        for (((&a, &b), positive), negative) in a[1..]
+            .iter()
+            .zip(&b[1..])
+            .zip(&mut positive[1..])
+            .zip(negative.iter_mut().rev())
+        {
+            (*positive, *negative) = pack_bin(a, b);
+        }
+        true
+    }
+}
+
+#[inline]
+fn try_pack_pairs<T: C2RPairPacking>(
+    row_spectra: &[Complex<T>],
+    packed: &mut [Complex<T>],
+    width: usize,
+) -> bool {
+    let k = width / 2 + 1;
+    for (rows, packed) in row_spectra
+        .chunks_exact(2 * k)
+        .zip(packed.chunks_exact_mut(width))
+    {
+        let (a, b) = rows.split_at(k);
+        if !T::pack_pair(a, b, packed) {
+            return false;
+        }
+    }
+    true
+}
+
+#[inline]
+fn unpack_pairs<T: Copy>(packed: &[Complex<T>], rows: &mut [Complex<T>], width: usize) {
+    let k = width / 2 + 1;
+    for (packed, rows) in packed.chunks_exact(width).zip(rows.chunks_exact_mut(2 * k)) {
+        let (a, b) = rows.split_at_mut(k);
+        for ((a, b), sample) in as_real_mut(a)[..width]
+            .iter_mut()
+            .zip(&mut as_real_mut(b)[..width])
+            .zip(packed)
+        {
+            *a = sample.re;
+            *b = sample.im;
+        }
+    }
+}
+
+/// Execute compact rows in pairs when their magnitudes allow it.
+/// A false result means the paired inverse produced nonfinite values and the
+/// caller must rebuild the spectra before executing the rows independently.
+#[inline]
+pub(crate) fn execute_paired_rows<T: C2RPairPacking>(
+    real: &dyn C2RFftExecutor<T>,
+    complex: &dyn FftExecutor<T>,
+    spectra: &mut [Complex<T>],
+    output: &mut [T],
+    scratch: &mut [Complex<T>],
+    height: usize,
+) -> Result<bool, ZaftError> {
+    let width = real.real_length();
+    let k = real.complex_length();
+    debug_assert!(height % 2 == 1 && width % 2 == 1 && complex.length() == width);
+    debug_assert_eq!(spectra.len(), k * height);
+    debug_assert_eq!(output.len(), width * height);
+
+    let (zero_row, pairs) = spectra.split_at_mut(k);
+    let (paired_output, zero_output) = output.split_at_mut(output.len() - width);
+    let packed = as_complex_mut(paired_output);
+    if !try_pack_pairs(pairs, packed, width) {
+        // Packing leaves the original spectra available for the fallback.
+        execute_rows(real, spectra, output, scratch, height)?;
+        return Ok(true);
+    }
+    // Once packed, the original pair spectra are dead. They cover the same
+    // scratch requirement as the output tail reserved by the constructor.
+    let child_scratch = if scratch.is_empty() { pairs } else { scratch };
+    complex.execute_with_scratch(packed, child_scratch)?;
+    // Keep the reduction over contiguous values so it can vectorize
+    // independently of the deinterleave below.
+    let finite = as_real(packed)
+        .iter()
+        .fold(true, |finite, sample| finite & sample.is_finite());
+    if !finite {
+        return Ok(false);
+    }
+    real.execute_with_scratch(zero_row, zero_output, child_scratch)?;
+
+    // Match execute_rows' physical order so the same SIMD transpose applies.
+    let (pairs, last_row) = spectra.split_at_mut((height - 1) * k);
+    unpack_pairs(packed, pairs, width);
+    as_real_mut(last_row)[..width].copy_from_slice(zero_output);
+    Ok(true)
+}
+
 /// Execute a batch of small complex FFTs, reusing output for child scratch.
 #[inline]
 pub(crate) fn execute_complex_rows<T>(
-    child: &dyn crate::FftExecutor<T>,
+    child: &dyn FftExecutor<T>,
     spectra: &mut [Complex<T>],
     output: &mut [T],
     scratch: &mut [Complex<T>],
 ) -> Result<(), ZaftError> {
     let child_scratch = if scratch.is_empty() {
-        // SAFETY: The constructor checks capacity; Complex<T> has the same
-        // scalar alignment. This exclusive view ends before the final transpose.
-        unsafe { std::slice::from_raw_parts_mut(output.as_mut_ptr().cast(), output.len() / 2) }
+        // The constructor checks capacity. This view ends before the transpose.
+        as_complex_mut(output)
     } else {
         scratch
     };
@@ -113,8 +255,8 @@ pub(crate) fn execute_complex_rows<T>(
 mod tests {
     use super::*;
     use crate::dft::Dft;
-    use crate::r2c::C2RAlgorithmFactory;
-    use crate::{FftDirection, FftExecutor, Zaft};
+    use crate::r2c::{C2RAlgorithmFactory, C2RFftOddInterceptor, C2rChild};
+    use crate::{FftDirection, Zaft};
     use std::sync::Arc;
 
     struct ExtraScratch<T> {
@@ -158,16 +300,15 @@ mod tests {
                     // All residues of the SIMD half-row length, including widths
                     // smaller than a vector, and both transpose tail lengths.
                     for width in (1..=33).step_by(2).chain([63, 65]) {
-                        for complex_leaf in [false, true] {
-                            let child = if complex_leaf {
-                                crate::r2c::C2rChild::Complex(
-                                    Zaft::strategy::<$ty>(width, FftDirection::Inverse).unwrap(),
-                                )
-                            } else {
-                                crate::r2c::C2rChild::Real(
-                                    crate::r2c::strategy_c2r::<$ty>(width).unwrap(),
-                                )
-                            };
+                        let complex = Zaft::strategy::<$ty>(width, FftDirection::Inverse).unwrap();
+                        let real = Arc::new(
+                            C2RFftOddInterceptor::install(width, Arc::clone(&complex)).unwrap(),
+                        );
+                        for child in [
+                            C2rChild::Real(crate::r2c::strategy_c2r::<$ty>(width).unwrap()),
+                            C2rChild::Complex(Arc::clone(&complex)),
+                            C2rChild::Paired { real, complex },
+                        ] {
                             let plan = match radix {
                                 3 => <$ty>::c2r_mixed_radix3(child),
                                 5 => <$ty>::c2r_mixed_radix5(child),
@@ -306,6 +447,66 @@ mod tests {
 
     check_compact!(compact_c2r_f32, f32, 1e-4);
     check_compact!(compact_c2r_f64, f64, 1e-11);
+
+    #[test]
+    fn paired_c2r_preserves_quiet_rows() {
+        if !Zaft::could_do_split_mixed_radix() {
+            return;
+        }
+        let n = 2187;
+        let plan = Zaft::make_c2r_fft_f32(n).unwrap();
+        let mut input = vec![Complex::default(); plan.complex_length()];
+        input[1].re = 1.0;
+        input[5].re = 1e7;
+        input[5 + n / 3].re = -1e7;
+        let mut output = vec![f32::NAN; n];
+        plan.execute(&input, &mut output).unwrap();
+
+        // The two large bins differ by n/3, so they cancel at every third sample.
+        for (index, &actual) in output.iter().enumerate().step_by(3) {
+            let angle = std::f64::consts::TAU * index as f64 / n as f64;
+            let expected = (2.0 * angle.cos()) as f32;
+            assert!(
+                (actual - expected).abs() < 1e-4,
+                "sample {index}: expected {expected}, got {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn paired_c2r_falls_back_for_nonfinite_rows() {
+        if !Zaft::could_do_split_mixed_radix() {
+            return;
+        }
+        let width = 243;
+        let n = 9 * width;
+        let k = n / 2 + 1;
+        let complex = Zaft::strategy::<f64>(width, FftDirection::Inverse).unwrap();
+        let real = Arc::new(C2RFftOddInterceptor::install(width, complex).unwrap());
+        let separate = f64::c2r_mixed_radix9(C2rChild::Real(real))
+            .unwrap()
+            .unwrap();
+        let paired = Zaft::make_c2r_fft_f64(n).unwrap();
+
+        let mut input = vec![Complex::default(); 3 * k];
+        input[1] = Complex::new(f64::INFINITY, 0.0);
+        input[k + 1] = Complex::new(f64::MAX, 0.0);
+        input[2 * k + 2] = Complex::new(0.25, -0.75);
+        let mut expected = vec![0.0; 3 * n];
+        let mut actual = vec![0.0; 3 * n];
+        separate.execute(&input, &mut expected).unwrap();
+        paired.execute(&input, &mut actual).unwrap();
+        for (a, b) in actual[..2 * n].iter().zip(&expected) {
+            assert!(a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan()));
+        }
+        for (a, b) in actual[2 * n..].iter().zip(&expected[2 * n..]) {
+            assert!((a - b).abs() <= 1e-11);
+        }
+        assert_eq!(
+            paired.complex_scratch_length(),
+            separate.complex_scratch_length()
+        );
+    }
 
     #[test]
     fn recursive_c2r_scratch_and_roundtrip() {
