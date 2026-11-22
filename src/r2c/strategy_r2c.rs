@@ -85,8 +85,6 @@ where
         return Ok(butterfly);
     }
 
-    let prime_factors = PrimeFactors::from_number(len as u64);
-
     fn pick_odd_factor(number: u64, factors: &[(u64, u32)]) -> u64 {
         // we want to pick some of smooth and very fast factors first, to perform fast first stage
         // and remove reasonable amount of work then, as well we want to consider that strided
@@ -106,9 +104,13 @@ where
     }
 
     if len.is_multiple_of(2) {
-        R2CFftEvenInterceptor::install(len, Zaft::strategy(len / 2, FftDirection::Forward)?)
+        if let Some(fused) = T::fused_even_r2c(len)? {
+            return Ok(fused);
+        }
+        R2CFftEvenInterceptor::plan(len)
             .map(|x| Arc::new(x) as Arc<dyn R2CFftExecutor<T> + Send + Sync>)
     } else {
+        let prime_factors = PrimeFactors::from_number(len as u64);
         if prime_factors.is_prime() {
             #[cfg(not(target_arch = "wasm32"))]
             return make_prime(len);

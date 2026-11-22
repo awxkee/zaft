@@ -46,6 +46,11 @@ pub(crate) trait R2CAlgorithmFactory<T> {
     fn r2c_butterfly13() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly16() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
     fn r2c_butterfly32() -> Arc<dyn R2CFftExecutor<T> + Send + Sync>;
+    fn fused_even_r2c(
+        _length: usize,
+    ) -> Result<Option<Arc<dyn R2CFftExecutor<T> + Send + Sync>>, ZaftError> {
+        Ok(None)
+    }
     #[cfg(not(target_arch = "wasm32"))]
     fn r2c_raders(n: usize) -> Result<Arc<dyn R2CFftExecutor<T> + Send + Sync>, ZaftError>;
     #[cfg(not(target_arch = "wasm32"))]

@@ -28,6 +28,9 @@
  */
 #![allow(unused_unsafe)]
 
+#[path = "even_r2c.rs"]
+mod even_r2c;
+
 use crate::avx::mixed::avx_stored::{AvxMaskD, AvxStoreD};
 use crate::avx::mixed::avx_storef::{AvxMaskF, AvxStoreF};
 use crate::avx::mixed::butterflies::{

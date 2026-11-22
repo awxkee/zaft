@@ -29,7 +29,7 @@
 use crate::err::try_vec;
 use crate::r2c::r2c_twiddles::R2CTwiddlesHandler;
 use crate::util::{compute_twiddle, validate_scratch};
-use crate::{FftDirection, FftExecutor, FftSample, ZaftError};
+use crate::{FftDirection, FftExecutor, FftSample, Zaft, ZaftError};
 use num_complex::Complex;
 use num_traits::{AsPrimitive, Zero};
 use std::sync::Arc;
@@ -72,6 +72,7 @@ pub(crate) struct R2CFftEvenInterceptor<T> {
     complex_length: usize,
     twiddles_handler: Arc<dyn R2CTwiddlesHandler<T> + Send + Sync>,
     complex_scratch_len: usize,
+    zero_copy: bool,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -180,9 +181,42 @@ impl<T: FftSample> R2CFftEvenInterceptor<T>
 where
     f64: AsPrimitive<T>,
 {
-    pub(crate) fn install(
+    pub(crate) fn plan(length: usize) -> Result<Self, ZaftError> {
+        let width = length / 2;
+
+        if Self::prefer_zero_copy(width)
+            && let Some(intercept) = Zaft::preferred_butterfly(width, FftDirection::Forward)
+        {
+            return Self::install(length, intercept?, true);
+        }
+
+        Self::install(length, Zaft::strategy(width, FftDirection::Forward)?, false)
+    }
+
+    fn prefer_zero_copy(_width: usize) -> bool {
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            use std::any::TypeId;
+
+            // These child widths consistently took longer out of place in
+            // single-transform or batched AVX2 measurements on AMD EPYC.
+            let prefer_packing = if TypeId::of::<T>() == TypeId::of::<f32>() {
+                matches!(_width, 14 | 24 | 25 | 29 | 30 | 37 | 64 | 72)
+            } else {
+                matches!(_width, 25 | 169)
+            };
+            crate::util::has_valid_avx() && !prefer_packing
+        }
+        #[cfg(not(all(target_arch = "x86_64", feature = "avx")))]
+        {
+            cfg!(all(target_arch = "aarch64", feature = "neon"))
+        }
+    }
+
+    fn install(
         length: usize,
         intercept: Arc<dyn FftExecutor<T> + Send + Sync>,
+        prefer_zero_copy: bool,
     ) -> Result<Self, ZaftError> {
         assert_eq!(
             intercept.direction(),
@@ -196,26 +230,39 @@ where
             "Underlying interceptor must have a half-length of real values"
         );
 
-        let twiddles_count = if length.is_multiple_of(4) {
-            length / 4
-        } else {
-            length / 4 + 1
-        };
-        let mut twiddles = try_vec![Complex::<T>::zero(); twiddles_count - 1];
-        for (i, twiddle) in twiddles.iter_mut().enumerate() {
-            *twiddle = compute_twiddle(i + 1, length, FftDirection::Forward) * 0.5f64.as_();
-        }
-
         let scratch_len = intercept.scratch_length();
+        let zero_copy = prefer_zero_copy
+            && intercept.out_of_place_scratch_length() <= scratch_len
+            && std::mem::align_of::<T>() == std::mem::align_of::<Complex<T>>()
+            && std::mem::size_of::<T>() * 2 == std::mem::size_of::<Complex<T>>();
 
         Ok(Self {
             intercept,
-            twiddles,
+            twiddles: even_r2c_twiddles(length)?,
             length,
             complex_length: length / 2 + 1,
             twiddles_handler: T::make_r2c_twiddles_handler(),
             complex_scratch_len: scratch_len,
+            zero_copy,
         })
+    }
+}
+
+pub(super) fn even_r2c_twiddles<T: FftSample>(length: usize) -> Result<Vec<Complex<T>>, ZaftError>
+where
+    f64: AsPrimitive<T>,
+{
+    let mut twiddles = try_vec![Complex::<T>::zero(); length.div_ceil(4) - 1];
+    for (i, twiddle) in twiddles.iter_mut().enumerate() {
+        *twiddle = compute_twiddle(i + 1, length, FftDirection::Forward) * 0.5f64.as_();
+    }
+    Ok(twiddles)
+}
+
+#[inline]
+pub(super) fn pack_real_input<T: Copy>(input: &[T], packed: &mut [Complex<T>]) {
+    for (dst, &[re, im]) in packed.iter_mut().zip(input.as_chunks::<2>().0) {
+        *dst = Complex::new(re, im);
     }
 }
 
@@ -253,16 +300,23 @@ where
             .chunks_exact(self.length)
             .zip(output.chunks_exact_mut(self.complex_length))
         {
-            for (dst, input_pair) in output
-                .iter_mut()
-                .zip(input.as_chunks::<2>().0.iter())
-                .take(self.length / 2)
-            {
-                *dst = Complex::new(input_pair[0], input_pair[1]);
+            let packed_output = &mut output[..self.length / 2];
+            if self.zero_copy {
+                // SAFETY: Complex<T> is repr(C) with two adjacent T fields and
+                // the plan checked their size and alignment. Each input block
+                // has an even length and the FFT only reads this view.
+                let packed_input =
+                    unsafe { std::slice::from_raw_parts(input.as_ptr().cast(), input.len() / 2) };
+                self.intercept.execute_out_of_place_with_scratch(
+                    packed_input,
+                    packed_output,
+                    scratch,
+                )?;
+            } else {
+                pack_real_input(input, packed_output);
+                self.intercept
+                    .execute_with_scratch(packed_output, scratch)?;
             }
-
-            self.intercept
-                .execute_with_scratch(&mut output[..self.length / 2], scratch)?;
 
             let (mut output_left, mut output_right) = output.split_at_mut(output.len() / 2);
 
@@ -315,10 +369,85 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(
+        all(target_arch = "aarch64", feature = "neon"),
+        all(target_arch = "x86_64", feature = "avx")
+    ))]
+    use super::R2CFftEvenInterceptor;
     use super::{R2CFftExecutor, R2CFftOddInterceptor};
     use crate::dft::Dft;
     use crate::{FftDirection, FftExecutor, Zaft};
     use num_complex::Complex;
+
+    #[cfg(any(
+        all(target_arch = "aarch64", feature = "neon"),
+        all(target_arch = "x86_64", feature = "avx")
+    ))]
+    #[test]
+    fn even_interceptor_uses_zero_copy_for_fixed_simd_children() {
+        macro_rules! compare {
+            ($ty:ty) => {
+                for length in [14, 256] {
+                    let plan = R2CFftEvenInterceptor::<$ty>::plan(length).unwrap();
+                    let child = Zaft::strategy(length / 2, FftDirection::Forward).unwrap();
+                    let baseline = R2CFftEvenInterceptor::install(length, child, false).unwrap();
+                    assert_eq!(plan.zero_copy, Zaft::could_do_split_mixed_radix());
+                    assert_eq!(
+                        plan.complex_scratch_length(),
+                        baseline.complex_scratch_length()
+                    );
+
+                    let values: [$ty; 6] = [
+                        -0.0,
+                        0.0,
+                        0.25,
+                        -0.75,
+                        <$ty>::MIN_POSITIVE,
+                        <$ty>::from_bits(1),
+                    ];
+                    let input = (0..3 * length + 2)
+                        .map(|i| values[i % values.len()])
+                        .collect::<Vec<_>>();
+                    let original = input.clone();
+                    let guard = Complex::new(42.0, -19.0);
+                    let output_len = 3 * plan.complex_length();
+                    let mut expected = vec![guard; output_len + 2];
+                    let mut actual = expected.clone();
+                    let mut scratch = vec![guard; plan.complex_scratch_length()];
+                    baseline
+                        .execute_with_scratch(
+                            &input[1..=3 * length],
+                            &mut expected[1..=output_len],
+                            &mut scratch,
+                        )
+                        .unwrap();
+                    plan.execute_with_scratch(
+                        &input[1..=3 * length],
+                        &mut actual[1..=output_len],
+                        &mut scratch,
+                    )
+                    .unwrap();
+                    for (old, new) in expected.iter().zip(&actual) {
+                        assert_eq!(old.re.to_bits(), new.re.to_bits());
+                        assert_eq!(old.im.to_bits(), new.im.to_bits());
+                    }
+                    for (old, new) in original.iter().zip(&input) {
+                        assert_eq!(old.to_bits(), new.to_bits());
+                    }
+                }
+                let general = R2CFftEvenInterceptor::<$ty>::plan(66).unwrap();
+                assert!(!general.zero_copy);
+            };
+        }
+        compare!(f32);
+        compare!(f64);
+
+        #[cfg(all(target_arch = "x86_64", feature = "avx"))]
+        {
+            assert!(!R2CFftEvenInterceptor::<f32>::plan(74).unwrap().zero_copy);
+            assert!(!R2CFftEvenInterceptor::<f64>::plan(50).unwrap().zero_copy);
+        }
+    }
 
     #[test]
     fn test_odd_interceptor_prime_lengths() {
